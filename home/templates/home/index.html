@@ -1,0 +1,234 @@
+{% extends "core/base.html" %}
+{% block title %}Control Panel — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .home-header { margin-bottom: 24px; }
+  .home-title { font-size: 34px; font-weight: 850; margin: 0 0 6px 0; color: #111827; letter-spacing: 0; }
+  .home-title span { background: linear-gradient(90deg, #2563eb, #0f766e, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .home-subtitle { color: #6b7280; font-size: 14px; margin: 0; }
+  .home-period { color: #4f46e5; font-weight: 600; }
+
+  .section-header { display: flex; align-items: center; gap: 10px; margin: 28px 0 14px 0; }
+  .section-title { font-size: 15px; font-weight: 850; background: linear-gradient(90deg, #111827, #2563eb, #0f766e); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 0.4px; text-transform: uppercase; margin: 0; }
+  .section-pill { padding: 2px 10px; background: #e0e7ff; color: #4338ca; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 720px)  { .kpi-grid { grid-template-columns: 1fr; } }
+
+  /* ── KPI cards ── */
+  .kpi-card { position: relative; padding: 14px 16px; border-radius: 14px; color: #fff; height: 190px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); transition: transform .15s, box-shadow .15s; overflow: hidden; }
+  .kpi-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(145deg, rgba(255,255,255,0.24), rgba(255,255,255,0) 42%, rgba(0,0,0,0.12)); pointer-events: none; }
+  .kpi-card > * { position: relative; z-index: 1; }
+  .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .kpi-card[data-glimpse-source] { cursor: pointer; }
+  .kpi-card[data-glimpse-source]:focus-visible { outline: 3px solid #111827; outline-offset: 3px; }
+  .kpi-card.no-data { opacity: 0.82; }
+  .kpi-card.gradient-blue   { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+  .kpi-card.gradient-green  { background: linear-gradient(135deg, #10b981, #0d9488); }
+  .kpi-card.gradient-orange { background: linear-gradient(135deg, #f97316, #ea580c); }
+  .kpi-card.gradient-red    { background: linear-gradient(135deg, #ef4444, #dc2626); }
+  .kpi-card.gradient-purple { background: linear-gradient(135deg, #a855f7, #7c3aed); }
+  .kpi-card.gradient-indigo { background: linear-gradient(135deg, #6366f1, #4338ca); }
+  .kpi-card.gradient-grey   { background: linear-gradient(135deg, #6b7280, #4b5563); }
+  .kpi-head { display: flex; align-items: flex-start; justify-content: space-between; }
+  .kpi-icon { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .kpi-icon .material-icons { font-size: 20px; }
+  .kpi-trend { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .kpi-trend.up   { background: rgba(255,255,255,0.22); }
+  .kpi-trend.down { background: rgba(0,0,0,0.18); }
+  .kpi-trend.flat { background: rgba(255,255,255,0.12); }
+  .kpi-label { font-size: 13px; font-weight: 850; letter-spacing: 0.3px; text-transform: uppercase; opacity: 0.95; margin-top: 4px; }
+  .kpi-value { font-size: 26px; font-weight: 850; line-height: 1.08; }
+  .kpi-month-values { display: grid; gap: 5px; margin-top: 0; }
+  .kpi-month-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 9px; background: rgba(255,255,255,0.14); }
+  .kpi-month-row.current { background: rgba(255,255,255,0.24); }
+  .kpi-month-row span { font-size: 11px; font-weight: 700; opacity: 0.88; }
+  .kpi-month-row strong { font-size: 17px; font-weight: 850; line-height: 1.05; text-align: right; white-space: nowrap; }
+  .kpi-sub   { font-size: 11px; opacity: 0.85; }
+  .kpi-footer { margin-top: auto; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.18); display: flex; justify-content: space-between; font-size: 10px; opacity: 0.9; }
+  .cogs-inline-form { display: grid; grid-template-columns: 68px 1fr 64px; gap: 6px; margin-top: 2px; }
+  .cogs-inline-form select,
+  .cogs-inline-form input,
+  .cogs-inline-form button { min-width: 0; height: 30px; border: 1px solid rgba(255,255,255,0.32); border-radius: 8px; font: inherit; font-size: 11px; font-weight: 750; }
+  .cogs-inline-form select,
+  .cogs-inline-form input { color: #111827; background: rgba(255,255,255,0.92); padding: 0 9px; outline: none; }
+  .cogs-inline-form button { color: #fff; background: rgba(17,24,39,0.28); cursor: pointer; }
+  .cogs-inline-form button:disabled { opacity: 0.58; cursor: wait; }
+  @media (max-width: 420px) { .cogs-inline-form { grid-template-columns: 72px 1fr; } .cogs-inline-form button { grid-column: 1 / -1; } }
+
+  .glimpse-modal { position: fixed; inset: 0; z-index: 70; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(17,24,39,0.42); }
+  .glimpse-modal.show { display: flex; }
+  .glimpse-panel { width: min(720px, 100%); max-height: min(680px, calc(100vh - 48px)); overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 24px 70px rgba(17,24,39,0.24); }
+  .glimpse-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #e5e7eb; }
+  .glimpse-title { margin: 0; font-size: 18px; font-weight: 850; color: #111827; letter-spacing: 0; }
+  .glimpse-close { width: 34px; height: 34px; border: 0; border-radius: 8px; background: #f3f4f6; color: #374151; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .glimpse-body { padding: 14px 20px 20px; }
+  .glimpse-table { width: 100%; border-collapse: collapse; }
+  .glimpse-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #6b7280; text-align: right; padding: 9px 8px; border-bottom: 1px solid #e5e7eb; }
+  .glimpse-table th:first-child, .glimpse-table td:first-child { text-align: left; }
+  .glimpse-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #111827; font-size: 14px; }
+  .glimpse-table td:first-child { font-weight: 760; }
+  .glimpse-diff.up { color: #047857; }
+  .glimpse-diff.down { color: #dc2626; }
+  .glimpse-diff.flat { color: #6b7280; }
+  .glimpse-empty { padding: 22px; color: #6b7280; text-align: center; }
+  @media (max-width: 560px) { .glimpse-modal { padding: 14px; } .glimpse-head { padding: 16px; } .glimpse-body { padding: 10px 14px 16px; } .glimpse-table th, .glimpse-table td { font-size: 12px; padding: 10px 5px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="home-header">
+  <h1 class="home-title">Welcome, <span>{{ display_name }}</span></h1>
+</div>
+
+{# ── P&L Metrics ── #}
+<div class="section-header">
+  <span class="section-title">P &amp; L Metrics</span>
+  <span class="section-pill">KPIs</span>
+</div>
+<div class="kpi-grid">
+  {% if can_sales %}
+  {% include "home/_kpi_card.html" with kpi=kpis.total_sales_volume only %}
+  {% endif %}
+  {% if can_realise %}
+  {% include "home/_kpi_card.html" with kpi=kpis.avg_realisation only %}
+  {% endif %}
+  {% if can_cogs %}
+  {% include "home/_kpi_card.html" with kpi=kpis.cogs only %}
+  {% endif %}
+  {% if can_expenses %}
+  {% include "home/_kpi_card.html" with kpi=kpis.opex only %}
+  {% endif %}
+  {% if can_salaries %}
+  {% include "home/_kpi_card.html" with kpi=kpis.salaries only %}
+  {% endif %}
+</div>
+
+{# ── Balance Sheet ── #}
+{% if can_inventory %}
+<div class="section-header">
+  <span class="section-title">Balance Sheet</span>
+  <span class="section-pill">1 KPI</span>
+</div>
+<div class="kpi-grid">
+  {% include "home/_kpi_card.html" with kpi=kpis.inventory is_inventory=True only %}
+</div>
+{% endif %}
+
+<div class="glimpse-modal" id="kpiGlimpseModal" aria-hidden="true">
+  <div class="glimpse-panel" role="dialog" aria-modal="true" aria-labelledby="kpiGlimpseTitle">
+    <div class="glimpse-head">
+      <h2 class="glimpse-title" id="kpiGlimpseTitle">KPI Difference</h2>
+      <button class="glimpse-close" type="button" id="kpiGlimpseClose" aria-label="Close">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <div class="glimpse-body" id="kpiGlimpseBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    function bindCogsCard(card) {
+      var form = card.querySelector('[data-cogs-form]');
+      if (!form) return;
+      var valueEl = card.querySelector('[data-cogs-value]');
+      var subEl = card.querySelector('[data-cogs-sub]');
+      var statusEl = card.querySelector('[data-cogs-status]');
+      var litersEl = card.querySelector('[data-cogs-liters]');
+      var button = form.querySelector('button');
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var params = new URLSearchParams();
+        params.set('from_date', card.dataset.fromDate || '');
+        params.set('to_date', card.dataset.toDate || '');
+        params.set('param_type', form.param_type.value || '');
+        params.set('otp', form.otp.value || '');
+
+        button.disabled = true;
+        fetch('/api/cogs/?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (response) { return response.json(); })
+          .then(function (payload) {
+            var cogs = payload.cogs || {};
+            if (litersEl) litersEl.textContent = cogs.total_liter_display || '-';
+            if (cogs.opt_missing) {
+              if (valueEl) valueEl.textContent = cogs.total_liter_display || '-';
+              if (subEl) subEl.textContent = 'Enter OTP to view COGS';
+              if (statusEl) statusEl.textContent = 'COGS locked';
+            } else {
+              if (valueEl) valueEl.textContent = cogs.total_cogs_display || '-';
+              if (subEl) subEl.textContent = (cogs.cogs_per_liter_display || '-') + ' · ' + (cogs.total_liter_display || '-');
+              if (statusEl) statusEl.textContent = 'COGS visible';
+            }
+          })
+          .catch(function () {
+            if (subEl) subEl.textContent = 'Unable to load COGS';
+          })
+          .finally(function () {
+            button.disabled = false;
+          });
+      });
+    }
+
+    document.querySelectorAll('.cogs-kpi-card').forEach(bindCogsCard);
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    var modal = document.getElementById('kpiGlimpseModal');
+    var modalTitle = document.getElementById('kpiGlimpseTitle');
+    var modalBody = document.getElementById('kpiGlimpseBody');
+    var modalClose = document.getElementById('kpiGlimpseClose');
+
+    function openGlimpse(card) {
+      var sourceId = card.dataset.glimpseSource;
+      var source = sourceId ? document.getElementById(sourceId) : null;
+      if (!source || !modal) return;
+      var rows = [];
+      try { rows = JSON.parse(source.textContent || '[]'); } catch (e) { rows = []; }
+      modalTitle.textContent = (card.dataset.glimpseTitle || 'KPI') + ' Difference';
+      modalBody.innerHTML = rows.length ? (
+        '<table class="glimpse-table"><thead><tr><th>Category</th><th>Current</th><th>Last</th><th>Difference</th></tr></thead><tbody>' +
+        rows.map(function (row) {
+          var direction = row.direction || 'flat';
+          return '<tr><td>' + escapeHtml(row.label) + '</td><td>' + escapeHtml(row.current) + '</td><td>' + escapeHtml(row.last) + '</td><td class="glimpse-diff ' + escapeHtml(direction) + '">' + escapeHtml(row.diff) + '</td></tr>';
+        }).join('') +
+        '</tbody></table>'
+      ) : '<div class="glimpse-empty">No category difference available for this KPI.</div>';
+      modal.classList.add('show');
+      modal.setAttribute('aria-hidden', 'false');
+      modalClose.focus();
+    }
+
+    function closeGlimpse() {
+      if (!modal) return;
+      modal.classList.remove('show');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.querySelectorAll('.kpi-card[data-glimpse-source]').forEach(function (card) {
+      card.addEventListener('click', function (event) {
+        if (event.target.closest('form, button, input, select, a')) return;
+        openGlimpse(card);
+      });
+      card.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openGlimpse(card);
+        }
+      });
+    });
+    if (modalClose) modalClose.addEventListener('click', closeGlimpse);
+    if (modal) modal.addEventListener('click', function (event) { if (event.target === modal) closeGlimpse(); });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeGlimpse(); });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "core/base.html" %}
+{% block title %}Salaries Dashboard - Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+.dash-page{min-height:100%;background:#f5f3ff;background-image:radial-gradient(#d8d1ff 1px,transparent 1px);background-size:24px 24px;margin:-28px -32px;padding:32px 38px;color:#0f172a}
+.dash-title{display:flex;align-items:center;gap:12px;margin-bottom:22px}.dash-title h1{font-size:24px;line-height:1;margin:0;font-weight:800}.title-mark{width:5px;height:28px;border-radius:4px;background:#635bff}.title-pill{font-size:13px;font-weight:700;color:#3730a3;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:4px 12px}
+.filter-bar{background:rgba(255,255,255,.92);border:1px solid #ddd6fe;border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:repeat(5,minmax(140px,1fr)) auto;gap:14px;box-shadow:0 16px 40px rgba(79,70,229,.08);margin-bottom:10px}
+.fg label{display:block;font-size:13px;font-weight:750;color:#37305f;margin-bottom:7px}.fg input,.fg select{width:100%;height:52px;border:1px solid #ddd6fe;border-radius:12px;background:#fff;padding:0 14px;font:inherit;font-size:15px;color:#0f172a;outline:none}.fg input:focus,.fg select:focus{border-color:#635bff;box-shadow:0 0 0 3px rgba(99,91,255,.12)}
+.btn{height:52px;border:0;border-radius:13px;padding:0 24px;font:inherit;font-weight:800;cursor:pointer;align-self:end;background:#4f46e5;color:#fff;box-shadow:0 3px 0 #1e1b4b}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:28px;margin:10px 6px 24px}.kcard{position:relative;overflow:hidden;border-radius:22px;padding:22px;color:#fff;min-height:150px;box-shadow:0 20px 34px rgba(79,70,229,.18)}.kcard:before,.kcard:after{content:"";position:absolute;border-radius:50%;background:rgba(255,255,255,.14)}.kcard:before{width:132px;height:132px;right:-28px;top:-22px}.kcard:after{width:136px;height:136px;right:30px;bottom:-66px}.k-purple{background:linear-gradient(135deg,#7c3aed,#9333ea)}.k-indigo{background:linear-gradient(135deg,#3730a3,#6366f1)}.k-teal{background:linear-gradient(135deg,#0f766e,#2dd4bf)}.klabel{position:relative;z-index:1;font-size:13px;font-weight:900;letter-spacing:1.8px;text-transform:uppercase}.kvalue{position:relative;z-index:1;font-size:32px;font-weight:900;margin-top:8px}.ksub{position:relative;z-index:1;margin-top:8px;padding-top:9px;border-top:1px solid rgba(255,255,255,.2);font-size:13px;opacity:.75}
+.panel{background:rgba(255,255,255,.94);border:1px solid #ddd6fe;border-radius:18px;overflow:hidden;box-shadow:0 16px 40px rgba(79,70,229,.08)}.panel-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #ddd6fe}.panel-head h2{margin:0;font-size:22px}.hint{font-size:14px;color:#312e81}
+.group{border-bottom:1px solid #e9e5ff}.gmain{display:grid;grid-template-columns:6px 1fr 140px 150px 28px;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}.bar{width:5px;height:54px;border-radius:6px;background:#635bff}.gtitle{font-size:19px;font-weight:850}.gmeta{font-size:14px;color:#312e81;margin-top:3px}.metric{text-align:right;color:#312e81}.metric b{display:block;color:#111827;font-size:16px}.amount{font-size:25px;font-weight:900;text-align:right}.chev{font-size:18px;color:#94a3b8}.rows{display:none;background:#fbfaff;padding:0 20px 18px 44px}.group.open .rows{display:block}.group.open .chev{transform:rotate(180deg)}
+.detail-table{width:100%;border-collapse:collapse;font-size:13px}.detail-table th{text-align:left;padding:9px 8px;color:#64748b;border-bottom:1px solid #e5e7eb}.detail-table td{padding:9px 8px;border-bottom:1px solid #eef2ff}.num{text-align:right}.muted{color:#64748b}.empty{padding:38px;text-align:center;color:#64748b}
+@media(max-width:1000px){.filter-bar,.cards{grid-template-columns:1fr 1fr}.gmain{grid-template-columns:6px 1fr 120px 28px}.metric.hide-sm{display:none}}@media(max-width:720px){.dash-page{margin:-28px -32px;padding:22px 18px}.filter-bar,.cards{grid-template-columns:1fr}.gmain{grid-template-columns:6px 1fr 28px}.metric,.amount{display:none}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash-page">
+  <div class="dash-title"><span class="title-mark"></span><h1>Salary Dashboard</h1><span class="title-pill">Salary expenses grouped by account</span></div>
+  <div class="filter-bar">
+    <div class="fg"><label>Month</label><select id="monthSelect" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>Year</label><select id="yearSelect" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>From Date</label><input type="date" id="fromDate" value="{{ from_date }}"></div>
+    <div class="fg"><label>To Date</label><input type="date" id="toDate" value="{{ to_date }}"></div>
+    <div class="fg"><label>Account Name</label><input type="search" id="accountName" placeholder="Search salary account"></div>
+    <button class="btn" onclick="loadSalary()">Apply</button>
+  </div>
+  <div class="cards">
+    <div class="kcard k-purple"><div class="klabel">Total Salary</div><div class="kvalue" id="kTotal">-</div><div class="ksub" id="kRows">- rows</div></div>
+    <div class="kcard k-indigo"><div class="klabel">Accounts</div><div class="kvalue" id="kAccounts">-</div><div class="ksub">Salary heads</div></div>
+    <div class="kcard k-teal"><div class="klabel">Highest Account</div><div class="kvalue" id="kHigh">-</div><div class="ksub" id="kHighName">-</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Salary by Account (SAP)</h2><span class="hint">Click an account to expand salary rows</span></div>
+    <div id="groups"><div class="empty">Loading salary data...</div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var salaryGroups=[];
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fmt(n){return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(Number(n)||0))}
+function pad(n){return String(n).padStart(2,'0')}
+function monthEnd(y,m){return new Date(y,m,0).getDate()}
+function initPeriodControls(){
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  monthSelect.innerHTML=months.map(function(m,i){return '<option value="'+(i+1)+'">'+m+'</option>'}).join('');
+  var currentYear=new Date().getFullYear(),startYear=currentYear-5,endYear=currentYear+1,html='';
+  for(var y=endYear;y>=startYear;y--)html+='<option value="'+y+'">'+y+'</option>';
+  yearSelect.innerHTML=html;
+  syncMonthYearFromDates();
+  fromDate.addEventListener('change',syncMonthYearFromDates);
+  toDate.addEventListener('change',syncMonthYearFromDates);
+}
+function syncMonthYearFromDates(){
+  if(!fromDate.value)return;
+  var parts=fromDate.value.split('-');
+  yearSelect.value=parts[0];
+  monthSelect.value=String(Number(parts[1]));
+}
+function applyMonthYearRange(){
+  var y=Number(yearSelect.value),m=Number(monthSelect.value);
+  if(!y||!m)return;
+  fromDate.value=y+'-'+pad(m)+'-01';
+  toDate.value=y+'-'+pad(m)+'-'+pad(monthEnd(y,m));
+}
+function q(){var p=new URLSearchParams();p.set('from_date',fromDate.value);p.set('to_date',toDate.value);if(accountName.value)p.set('account_name',accountName.value);return p.toString()}
+async function loadSalary(){
+  groups.innerHTML='<div class="empty">Loading salary data...</div>';
+  var res=await fetch('/api/salary-detail/?'+q());var data=await res.json();salaryGroups=data.groups||[];
+  var k=data.kpis||{};kTotal.textContent=k.total_salary_display||'-';kRows.textContent=fmt(k.row_count)+' salary rows';kAccounts.textContent=fmt(k.account_count);
+  var high=salaryGroups[0]||{};kHigh.textContent=high.total_display||'-';kHighName.textContent=high.account||'-';
+  renderGroups();
+}
+function renderGroups(){
+  if(!salaryGroups.length){groups.innerHTML='<div class="empty">No salary rows found for this period.</div>';return}
+  groups.innerHTML=salaryGroups.map(function(g,i){return '<div class="group" id="g'+i+'"><div class="gmain" onclick="toggleGroup('+i+')"><span class="bar" style="background:'+['#635bff','#0ea5e9','#f59e0b','#10b981'][i%4]+'"></span><div><div class="gtitle">'+esc(g.account)+'</div><div class="gmeta">'+fmt(g.row_count)+' salary entries</div></div><div class="metric hide-sm">Rows <b>'+fmt(g.row_count)+'</b></div><div class="amount">'+esc(g.total_display||'-')+'</div><div class="chev">▼</div></div><div class="rows">'+renderRows(g.rows||[])+'</div></div>'}).join('');
+}
+function renderRows(rows){return '<table class="detail-table"><thead><tr><th>Date</th><th>Budget</th><th>Branch</th><th>Ledger</th><th>Remarks</th><th class="num">Amount</th></tr></thead><tbody>'+rows.map(function(r){return '<tr><td>'+esc(r.doc_date||'')+'</td><td><b>'+esc(r.budget||'')+'</b><div class="muted">'+esc(r.sub_budget||'')+'</div></td><td>'+esc(r.branch||'')+'</td><td>'+esc(r.ledger||r.account_name||'')+'</td><td>'+esc(r.remarks||'')+'</td><td class="num"><b>'+esc(r.amount_display||'')+'</b></td></tr>'}).join('')+'</tbody></table>'}
+function toggleGroup(i){document.getElementById('g'+i).classList.toggle('open')}
+document.addEventListener('DOMContentLoaded',function(){initPeriodControls();loadSalary()});
+</script>
+{% endblock %}

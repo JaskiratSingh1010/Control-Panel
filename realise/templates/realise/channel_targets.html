@@ -1,0 +1,780 @@
+{% extends "core/base.html" %}
+{% block title %}Channel Targets - Realise{% endblock %}
+
+{% block extra_styles %}
+<style>
+  *{box-sizing:border-box}
+  .tv-shell{font-family:"Segoe UI",Arial,sans-serif;margin:0;background:#f4f6f9;color:#1f2933}
+  .tv-header{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:16px 24px;border-radius:12px 12px 0 0;margin:0 24px}
+  .tv-header h1{margin:0;font-size:20px;font-weight:700}
+  .tv-header p{margin:4px 0 0;font-size:13px;opacity:.88}
+  .tv-banner{margin:16px 24px 0;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:700}
+  .tv-banner.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#047857}
+  .tv-banner.err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;
+    padding:16px 24px;background:#fff;margin:0 24px 0;border-radius:0;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);border-bottom:1px solid #eceff1;
+  }
+  .field{display:flex;flex-direction:column}
+  .field>label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin-bottom:6px}
+  .field input[type=text],.field select{
+    padding:9px 10px;font-size:14px;border:1px solid #cbd2d9;border-radius:8px;background:#fff;min-width:180px;
+  }
+  .field input[type=text]{min-width:240px}
+  .field input[type=text]:focus,.field select:focus,.target-input:focus,.drill-btn:focus{
+    outline:2px solid rgba(37,99,235,.18);border-color:#2563eb;
+  }
+  .field.grow{flex:1 1 auto;min-width:220px}
+  .field.grow select{width:100%}
+  .spacer{flex:1 1 auto}
+  .summary{font-size:13px;color:#64748b;align-self:center}
+  .summary b{color:#1d4ed8}
+  .btn{padding:9px 16px;font-size:14px;border:none;border-radius:8px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+  .btn-reset{background:#e5e7eb;color:#1f2937}
+  .btn-reset:hover{background:#d1d5db}
+  .btn-save{background:#2563eb;color:#fff}
+  .btn-save:hover{background:#1d4ed8}
+
+  .drill{position:relative}
+  .field.drill-field{flex:1 1 360px}
+  .drill-btn{
+    display:flex;align-items:center;gap:10px;width:100%;min-width:360px;justify-content:space-between;
+    padding:9px 12px;font-size:14px;
+    background:#fff;border:1px solid #cbd2d9;color:#1f2933;font-weight:600;border-radius:8px;
+  }
+  .drill-btn .caret{color:#64748b;font-size:11px}
+  .drill-btn .picked{font-weight:700;color:#1d4ed8}
+  .drill-panel{
+    position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:340px;
+    background:#fff;border:1px solid #cbd2d9;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);
+    display:none;
+  }
+  .drill-panel.open{display:block}
+  .drill-panel .dp-head{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eceff1}
+  .drill-panel .dp-head a{color:#2563eb;font-size:13px;font-weight:700;cursor:pointer}
+  .drill-panel .dp-list{max-height:300px;overflow:auto;padding:6px 0}
+  .dp-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}
+  .dp-item:hover{background:#f4f6f9}
+  .dp-item input{width:17px;height:17px;cursor:pointer}
+  .dp-item .dp-name{flex:1 1 auto;font-size:14px;letter-spacing:.02em}
+  .dp-item .dp-sub{font-size:11px;color:#94a3b8}
+  .dp-item .pos{
+    flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:#2563eb;color:#fff;
+    font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;
+  }
+  .dp-item.checked .pos{display:inline-flex}
+  .drill-panel .dp-foot{padding:10px 14px;border-top:1px solid #eceff1}
+  .btn-apply{width:100%;background:#2563eb;color:#fff}
+  .btn-apply:hover{background:#1d4ed8}
+
+  .grid-wrap{
+    margin:0 24px;background:#fff;border-radius:0 0 10px 10px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:auto;max-height:72vh;
+  }
+  .row{display:flex;align-items:center;border-bottom:1px solid #eceff1;font-size:13px}
+  .row.head{
+    position:sticky;top:0;z-index:2;background:#1f3a5f;color:#fff;
+    font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;
+  }
+  .c-tree{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;padding:8px 12px;white-space:nowrap}
+  .c-count{flex:0 0 90px;text-align:center;padding:8px 12px}
+  .c-target{flex:0 0 150px;text-align:center;padding:6px 12px;border-left:1px solid #eceff1}
+  .row.head .c-target{border-left:1px solid rgba(255,255,255,.2)}
+  .node > .row:hover:not(.head){background:#eef4ff}
+  .twirl{display:inline-flex;width:16px;justify-content:center;color:#64748b;transition:transform .12s;flex:0 0 16px;font-size:10px;cursor:pointer}
+  .node.open > .row .twirl{transform:rotate(90deg)}
+  .twirl.leaf{visibility:hidden}
+  .dim-tag{font-size:10px;text-transform:uppercase;letter-spacing:.03em;background:#e5e7eb;color:#52606d;border-radius:4px;padding:1px 5px;flex:0 0 auto}
+  .dim-tag.main_group{background:#dbeafe;color:#1d4ed8}
+  .dim-tag.state{background:#dcfce7;color:#15803d}
+  .dim-tag.sales_person{background:#fef3c7;color:#b45309}
+  .node-label{overflow:hidden;text-overflow:ellipsis}
+  .cnt{background:#2563eb;color:#fff;border-radius:10px;padding:1px 9px;font-size:11px;font-weight:700}
+  .children{display:none}
+  .node.open>.children{display:block}
+  .target-input{
+    width:100%;max-width:150px;padding:6px 8px;font-size:13px;border:1px solid #cbd2d9;border-radius:6px;
+    text-align:right;background:#fff;font-variant-numeric:tabular-nums;
+  }
+  .target-input.filled{background:#eafaf1;border-color:#7bcfa3}
+  .empty{text-align:center;padding:40px;color:#7b8794}
+  .footer-actions{display:flex;gap:12px;justify-content:flex-end;padding:16px 24px 24px;background:#fff;margin:0 24px 24px;border-radius:0 0 10px 10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+  @media (max-width:680px){
+    .toolbar,.footer-actions{margin:0 12px}
+    .tv-header{margin:0 12px;border-radius:12px 12px 0 0}
+    .tv-banner{margin:12px 12px 0}
+    .grid-wrap{margin:0 12px 12px}
+    .toolbar{padding:14px}
+    .footer-actions{padding:14px;flex-wrap:wrap}
+    .c-count{flex-basis:82px}
+    .c-target{flex-basis:120px}
+    .drill-btn{min-width:240px}
+    .drill-panel{width:min(340px,calc(100vw - 40px))}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tv-shell">
+  <div class="tv-header">
+    <h1>Update Targets</h1>
+    <p>Use the same drill-order behavior as the vendor view, with the current Realise theme.</p>
+  </div>
+
+  {% if save_success %}
+  <div class="tv-banner ok">Targets saved successfully.</div>
+  {% elif error_message %}
+  <div class="tv-banner err">{{ error_message }}</div>
+  {% endif %}
+
+  <form method="get" id="periodForm">
+    <div class="toolbar">
+      <div class="field drill-field">
+        <label>Drill By</label>
+        <div class="drill">
+          <button type="button" class="drill-btn" id="drillBtn">
+            <span class="picked" id="drillLabel">-</span>
+            <span class="caret">&#9660;</span>
+          </button>
+          <div class="drill-panel" id="drillPanel">
+            <div class="dp-head">
+              <a id="selAll">Select All</a>
+              <a id="clrAll">Clear All</a>
+            </div>
+            <div class="dp-list" id="dpList"></div>
+            <div class="dp-foot"><button type="button" class="btn btn-apply" id="applyBtn">Apply</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fSearch">Search</label>
+        <input id="fSearch" type="text" placeholder="Find by group / state / person...">
+      </div>
+      <div class="field">
+        <label for="filterDim">Filter By</label>
+        <select id="filterDim"></select>
+      </div>
+      <div class="field">
+        <label for="filterValue">Filter Value</label>
+        <select id="filterValue"></select>
+      </div>
+      <div class="field">
+        <label for="hmonth">Month</label>
+        <select id="hmonth" name="month" onchange="document.getElementById('periodForm').submit()">
+          {% for value, label in month_options %}
+          <option value="{{ value }}" {% if target_month == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="hyear">Year</label>
+        <select id="hyear" name="year" onchange="document.getElementById('periodForm').submit()">
+          {% for value in year_options %}
+          <option value="{{ value }}" {% if target_year == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="hsegment">Segment</label>
+        <select id="hsegment" name="segment" onchange="document.getElementById('periodForm').submit()">
+          <option value="" {% if not product_segment %}selected{% endif %}>All</option>
+          <option value="PREMIUM" {% if product_segment == 'PREMIUM' %}selected{% endif %}>Premium</option>
+          <option value="COMMODITY" {% if product_segment == 'COMMODITY' %}selected{% endif %}>Commodity</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-reset" id="btnReset">Clear</button>
+      <div class="spacer"></div>
+      <div class="summary">Total: <b id="totalCount">0</b> · Visible: <b id="visCount">0</b></div>
+    </div>
+  </form>
+
+  <div class="grid-wrap">
+    <div class="row head">
+      <div class="c-tree">Hierarchy</div>
+      <div class="c-count">Count</div>
+      <div class="c-target">Target (Ltrs)</div>
+      <div class="c-target">Target Realise</div>
+    </div>
+    <div id="tree"></div>
+  </div>
+
+  <form method="post" id="saveForm">
+    {% csrf_token %}
+    <input type="hidden" name="form_mode" value="hier">
+    <input type="hidden" name="hier_order" id="saveHierOrder" value="{{ hier_order }}">
+    <input type="hidden" name="month" value="{{ target_month }}">
+    <input type="hidden" name="year" value="{{ target_year }}">
+    <input type="hidden" name="segment" value="{{ product_segment }}">
+    <div id="savePairs"></div>
+    <div class="footer-actions">
+      <a class="btn btn-reset" href="{% url 'realise:dashboard' %}#slide2">Back to Dashboard</a>
+      <button type="button" class="btn btn-save" id="saveBtn">Save Targets</button>
+    </div>
+  </form>
+</div>
+
+{{ hier_master_rows|json_script:"ocrd-master-data" }}
+{{ saved_target_map|json_script:"saved-target-map" }}
+
+<script>
+(function(){
+  "use strict";
+  const MASTER = JSON.parse(document.getElementById("ocrd-master-data").textContent || "[]");
+  const SAVED = JSON.parse(document.getElementById("saved-target-map").textContent || "{}");
+  // Channel groups GT/MT/ROI as themselves; everything else (E-COM, CSD, HORECA…) as REST.
+  function channelOf(group){ const g=String(group||"").toUpperCase(); return (g==="GT"||g==="MT"||g==="ROI")?g:"REST"; }
+  MASTER.forEach(r => { r.channel = channelOf(r.main_group); });
+  const DIMS = [
+    { key:"channel", name:"CHANNEL", tag:"Channel", sub:"GT / MT / ROI / REST" },
+    { key:"main_group", name:"MAIN GROUP", tag:"Main Group", sub:"GT / MT / ROI / HORECA / CSD …" },
+    { key:"state", name:"STATE", tag:"State", sub:"full state names" },
+    { key:"sales_person", name:"CONTACT PERSON", tag:"Person", sub:"assigned territory owner" }
+  ];
+  const DMETA = {}; DIMS.forEach(d => DMETA[d.key] = d);
+  const defaultOrder = ["channel","main_group","state","sales_person"];
+  const storageKey = "realise-target-drill-state";
+  let persisted = {};
+  try { persisted = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch(_) {}
+
+  let order = Array.isArray(persisted.order) && persisted.order.length ? persisted.order.filter(k => DMETA[k]) : defaultOrder.slice();
+  let chosen = order.slice();
+  let query = String(persisted.query || "").toLowerCase();
+  let activeFilterKey = DMETA[persisted.filterKey] ? persisted.filterKey : (order[0] || "");
+  let activeFilterValue = String(persisted.filterValue || "");
+  // Two parallel target metrics: L = litres, R = realise. Same distribute/roll-up logic.
+  const targetsL = new Map(), targetsR = new Map();
+  const MAPS = { L: targetsL, R: targetsR };
+  // Canons that already exist in the DB. We must re-POST these even after they're
+  // cleared to 0/blank, otherwise the server never hears about the deletion and the
+  // old value survives. (prepareSave only walks the live maps, which drop cleared keys.)
+  const initialKeys = new Set();
+  Object.keys(SAVED).forEach(key => {
+    const canon = savedKeyToCanon(key), v = SAVED[key] || {};
+    const l = Number(v.ltrs), r = Number(v.realise);
+    if (isFinite(l) && l > 0) targetsL.set(canon, round2(l));
+    if (isFinite(r) && r > 0) targetsR.set(canon, round2(r));
+    if ((isFinite(l) && l > 0) || (isFinite(r) && r > 0)) initialKeys.add(canon);
+  });
+
+  // Saved keys arrive as "main_group|state|sales_person"; resolve them to the
+  // same canonical cell the tree uses, so saved values match in any drill order
+  // (including older rows saved with a blank main group).
+  function savedKeyToCanon(triple){
+    const parts = String(triple || "").split("|");
+    return cellToCanon(completeCell({ main_group:parts[0] || "", state:parts[1] || "", sales_person:parts[2] || "" }));
+  }
+
+  const treeEl = document.getElementById("tree");
+  const drillBtn = document.getElementById("drillBtn");
+  const drillPanel = document.getElementById("drillPanel");
+  const dpList = document.getElementById("dpList");
+  const filterDimEl = document.getElementById("filterDim");
+  const filterValueEl = document.getElementById("filterValue");
+  const searchEl = document.getElementById("fSearch");
+  const saveBtn = document.getElementById("saveBtn");
+  const saveForm = document.getElementById("saveForm");
+  const savePairs = document.getElementById("savePairs");
+  const saveHierOrder = document.getElementById("saveHierOrder");
+  let rootNodes = [];
+
+  // Commodity is owned by one person (Surjeet Singh) and its targets live in the
+  // per-product MonthlyTarget store (same one Slide 1 uses), NOT the channel
+  // TargetNode hierarchy. So when Segment = Commodity we skip the whole drill tree
+  // and show an editor for Surjeet Singh's commodity products instead.
+  const COMMODITY_PERSON = "Surjeet Singh";
+  if (((document.getElementById("hsegment") || {}).value || "") === "COMMODITY") {
+    setupCommodityEditor();
+    return;
+  }
+
+  function csrfToken(){ return (document.querySelector('meta[name="csrf-token"]') || {}).content || ""; }
+  function commodityPeriod(){
+    return {
+      month: parseInt((document.getElementById("hmonth") || {}).value || 0, 10) || (new Date().getMonth() + 1),
+      year:  parseInt((document.getElementById("hyear")  || {}).value || 0, 10) || new Date().getFullYear()
+    };
+  }
+  function setupCommodityEditor(){
+    // Hide channel-only toolbar controls; keep Month / Year / Segment.
+    [drillBtn && drillBtn.closest(".field"), searchEl && searchEl.closest(".field"),
+     filterDimEl && filterDimEl.closest(".field"), filterValueEl && filterValueEl.closest(".field"),
+     document.getElementById("btnReset"), document.querySelector(".summary")]
+      .forEach(function(el){ if (el) el.style.display = "none"; });
+    var head = document.querySelector(".grid-wrap .row.head .c-count");
+    if (head) head.textContent = "";
+    var p = commodityPeriod();
+    treeEl.innerHTML = '<div class="empty">Loading commodity products…</div>';
+    fetch("/realise/api/targets/?month=" + p.month + "&year=" + p.year, { headers: { "X-CSRFToken": csrfToken() } })
+      .then(function(r){ return r.ok ? r.json() : { data: {} }; })
+      .then(function(payload){ renderCommodityEditor(payload.data || {}); })
+      .catch(function(){ renderCommodityEditor({}); });
+    saveBtn.addEventListener("click", saveCommodityTargets);
+  }
+  function renderCommodityEditor(data){
+    var keys = Object.keys(data).filter(function(k){ return k.indexOf("COMMODITY|") === 0; });
+    if (!keys.length) {
+      ["BLENDED", "COTTON SEED", "MUSTARD", "RICE BRAN", "SOYABEAN", "SUNFLOWER"]
+        .forEach(function(s){ keys.push("COMMODITY|" + s); });
+    }
+    keys.sort(function(a, b){
+      var la = (data[a] && data[a].tgt_ltrs) || 0, lb = (data[b] && data[b].tgt_ltrs) || 0;
+      return lb - la || a.localeCompare(b);
+    });
+    var html = '<div class="node"><div class="row">'
+      + '<div class="c-tree"><span class="dim-tag sales_person">Person</span>'
+      + '<span class="node-label">' + escapeHtml(COMMODITY_PERSON) + '</span></div>'
+      + '<div class="c-count"></div><div class="c-target"></div><div class="c-target"></div></div></div>';
+    keys.forEach(function(k){
+      var sub = k.split("|")[1] || k, d = data[k] || {};
+      var l = (d.tgt_ltrs != null) ? d.tgt_ltrs : "", rt = (d.tgt_rate != null) ? d.tgt_rate : "";
+      html += '<div class="node ct-prod-row" data-key="' + escapeAttr(k) + '">'
+        + '<div class="row">'
+        + '<div class="c-tree" style="padding-left:34px"><span class="dim-tag main_group">Commodity</span>'
+        + '<span class="node-label">' + escapeHtml(sub) + '</span></div>'
+        + '<div class="c-count"></div>'
+        + '<div class="c-target"><input class="target-input' + (l ? " filled" : "") + '" data-f="ltrs" inputmode="decimal" value="' + l + '"></div>'
+        + '<div class="c-target"><input class="target-input' + (rt ? " filled" : "") + '" data-f="rate" inputmode="decimal" value="' + rt + '"></div>'
+        + '</div></div>';
+    });
+    treeEl.innerHTML = html;
+  }
+  function saveCommodityTargets(){
+    var rows = document.querySelectorAll("#tree .ct-prod-row"), targets = [];
+    rows.forEach(function(row){
+      targets.push({
+        key: row.getAttribute("data-key"),
+        tgt_ltrs: parseFloat(row.querySelector('[data-f="ltrs"]').value) || 0,
+        tgt_rate: parseFloat(row.querySelector('[data-f="rate"]').value) || 0
+      });
+    });
+    var p = commodityPeriod();
+    saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+    fetch("/realise/api/save-targets/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify({ month: p.month, year: p.year, targets: targets })
+    })
+      .then(function(r){ if (!r.ok) throw new Error("save failed"); return r.json(); })
+      .then(function(){ window.location.reload(); })
+      .catch(function(){ saveBtn.disabled = false; saveBtn.textContent = "Save Targets"; alert("Could not save commodity targets."); });
+  }
+
+  function persistState(){
+    localStorage.setItem(storageKey, JSON.stringify({
+      order: order,
+      query: query,
+      filterKey: activeFilterKey,
+      filterValue: activeFilterValue
+    }));
+  }
+
+  function displayName(key, value){
+    return String(value || "").trim() || "(Blank)";
+  }
+  // Label shown in the tree: a blank contact person reads as OTHERS.
+  function nodeLabel(node){
+    if (node.key === "sales_person" && node.value === "(Blank)") return "OTHERS";
+    return node.value;
+  }
+
+  function rowMatchesSearch(row){
+    if(!query) return true;
+    return [row.main_group, row.state, row.sales_person].join(" ").toLowerCase().includes(query);
+  }
+
+  // Resolve a partial {main_group,state,sales_person} to its full territory cell
+  // when the non-blank fields identify exactly one row. This makes a target map
+  // to the SAME canonical key no matter which drill order set it (so a value
+  // entered under Person>State also shows under Main Group>Person>State, etc.).
+  function completeCell(part){
+    const matches = MASTER.filter(r =>
+      (!part.main_group   || r.main_group   === part.main_group) &&
+      (!part.state        || r.state        === part.state) &&
+      (!part.sales_person || r.sales_person === part.sales_person));
+    if (matches.length === 1) {
+      return { main_group:matches[0].main_group, state:matches[0].state, sales_person:matches[0].sales_person };
+    }
+    return part;
+  }
+  function cellToCanon(cell){
+    const pieces = [];
+    if (cell.main_group)   pieces.push("main_group=" + cell.main_group);
+    if (cell.state)        pieces.push("state=" + cell.state);
+    if (cell.sales_person) pieces.push("sales_person=" + cell.sales_person);
+    return pieces.sort().join("|");
+  }
+  function canonKey(path){
+    // Channel is a display-only grouping (derived from main_group); "(Blank)" -> "".
+    const part = { main_group:"", state:"", sales_person:"" };
+    path.forEach(p => { if (p.key in part) part[p.key] = (p.value === "(Blank)" ? "" : p.value); });
+    return cellToCanon(completeCell(part));
+  }
+
+  function groupValues(rows, key){
+    const s = new Set();
+    rows.forEach(r => {
+      const val = displayName(key, r[key]);
+      if (val) s.add(val);
+    });
+    const arr = Array.from(s);
+    if (key === "channel") {
+      const ord = { GT:0, MT:1, ROI:2, REST:3 };
+      return arr.sort((a,b) => (ord[a]==null?9:ord[a]) - (ord[b]==null?9:ord[b]));
+    }
+    return arr.sort((a,b) => a.localeCompare(b));
+  }
+
+  function renderDpList(){
+    dpList.innerHTML = "";
+    DIMS.forEach(d => {
+      const pos = chosen.indexOf(d.key);
+      const item = document.createElement("label");
+      item.className = "dp-item" + (pos !== -1 ? " checked" : "");
+      item.innerHTML =
+        '<input type="checkbox" ' + (pos !== -1 ? 'checked' : '') + '>' +
+        '<span class="dp-name">' + d.name + '<div class="dp-sub">' + d.sub + '</div></span>' +
+        '<span class="pos">' + (pos !== -1 ? pos + 1 : '') + '</span>';
+      const cb = item.querySelector("input");
+      cb.addEventListener("change", () => {
+        if (cb.checked) {
+          if (chosen.indexOf(d.key) === -1) chosen.push(d.key);
+        } else {
+          chosen = chosen.filter(k => k !== d.key);
+        }
+        renderDpList();
+      });
+      dpList.appendChild(item);
+    });
+  }
+
+  function updateDrillLabel(){
+    document.getElementById("drillLabel").textContent =
+      order.length ? order.map(k => DMETA[k].tag).join(" > ") : "— none —";
+  }
+
+  function getFilterValues(key){
+    return groupValues(MASTER, key);
+  }
+
+  function syncFilterControls(){
+    const nextKey = order.includes(activeFilterKey) ? activeFilterKey : (order[0] || "");
+    activeFilterKey = nextKey;
+    filterDimEl.innerHTML = "";
+    if (!order.length) {
+      filterDimEl.innerHTML = '<option value="">No drill dimension</option>';
+      filterValueEl.innerHTML = '<option value="">All</option>';
+      filterDimEl.disabled = true;
+      filterValueEl.disabled = true;
+      activeFilterValue = "";
+      return;
+    }
+    order.forEach(key => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = DMETA[key].name;
+      if (key === activeFilterKey) opt.selected = true;
+      filterDimEl.appendChild(opt);
+    });
+    filterDimEl.disabled = false;
+
+    const values = getFilterValues(activeFilterKey);
+    if (!values.includes(activeFilterValue)) activeFilterValue = "";
+    filterValueEl.innerHTML = '<option value="">All</option>';
+    values.forEach(value => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = value;
+      if (value === activeFilterValue) opt.selected = true;
+      filterValueEl.appendChild(opt);
+    });
+    filterValueEl.disabled = false;
+  }
+
+  function applyDimensionFilter(rows){
+    if (!activeFilterKey || !activeFilterValue) return rows;
+    return rows.filter(r => displayName(activeFilterKey, r[activeFilterKey]) === activeFilterValue);
+  }
+
+  // Advance past drill levels that don't distinguish this subset: a single value
+  // that is blank, or already shown by an ancestor (e.g. Channel GT then Main
+  // Group GT — skip the redundant repeat; REST keeps its many sub-groups).
+  function effectiveDepth(rows, depth, ancestorVals){
+    while (depth < order.length) {
+      const key = order[depth];
+      const distinct = Array.from(new Set(rows.map(r => String(r[key] || "").trim())));
+      if (distinct.length === 1 && (distinct[0] === "" || ancestorVals.has(distinct[0]))) { depth++; continue; }
+      break;
+    }
+    return depth;
+  }
+  function buildModel(rows, depth, parentPath, ancestorVals){
+    ancestorVals = ancestorVals || new Set();
+    depth = effectiveDepth(rows, depth, ancestorVals);
+    if (depth >= order.length) return [];
+    const key = order[depth];
+    const groupHidden = order.indexOf("main_group") === -1;
+    return groupValues(rows, key).map(val => {
+      const subset = rows.filter(r => displayName(key, r[key]) === val);
+      const path = parentPath.concat([{ key:key, value:val }]);
+      const childAnc = new Set(ancestorVals); childAnc.add(String(subset[0] ? subset[0][key] : "").trim());
+      const children = buildModel(subset, depth + 1, path, childAnc);
+      const isLeaf = children.length === 0;
+      const node = { key:key, value:val, path:path, count:subset.length, isLeaf:isLeaf, children:children, tL:null, tR:null, inL:null, inR:null, extraGroup:null };
+      if (groupHidden && key !== "main_group") {
+        const grp = new Set(subset.map(r => displayName("main_group", r.main_group)));
+        if (grp.size === 1) node.extraGroup = subset[0].main_group;
+      }
+      return node;
+    });
+  }
+
+  function computeTargets(node){
+    if (!node.isLeaf) node.children.forEach(computeTargets);
+    // Litres (L): a parent is the SUM of its children.
+    if (node.isLeaf) { const v = MAPS.L.get(canonKey(node.path)); node.tL = (v === undefined ? null : v); }
+    else {
+      let sum = 0, any = false;
+      node.children.forEach(c => { if (c.tL !== null) { sum += c.tL; any = true; } });
+      node.tL = any ? round2(sum) : null;
+    }
+    // Realise (R): a per-litre rate -> a parent is the LITRES-WEIGHTED AVERAGE of
+    // its children (falls back to a simple average when no litres are set).
+    if (node.isLeaf) { const v = MAPS.R.get(canonKey(node.path)); node.tR = (v === undefined ? null : v); }
+    else {
+      let wsum = 0, w = 0, simple = 0, n = 0, any = false;
+      node.children.forEach(c => {
+        if (c.tR === null) return;
+        any = true; simple += c.tR; n++;
+        const wt = (c.tL !== null && c.tL > 0) ? c.tL : 0;
+        wsum += c.tR * wt; w += wt;
+      });
+      node.tR = !any ? null : (w > 0 ? round2(wsum / w) : round2(simple / n));
+    }
+  }
+
+  function computeAll(){ rootNodes.forEach(computeTargets); }
+
+  function distribute(node, value, m){
+    if (node.isLeaf) {
+      if (value === null) MAPS[m].delete(canonKey(node.path));
+      else MAPS[m].set(canonKey(node.path), round2(value));
+      return;
+    }
+    if (value === null) { node.children.forEach(c => distribute(c, null, m)); return; }
+    // Realise is a rate: the same rate applies to every leaf below.
+    if (m === "R") { node.children.forEach(c => distribute(c, value, m)); return; }
+    // Litres is a quantity: split proportionally by leaf count.
+    const total = node.children.reduce((s,c) => s + c.count, 0) || node.children.length;
+    let allocated = 0;
+    node.children.forEach((c, i) => {
+      let share;
+      if (i === node.children.length - 1) share = round2(value - allocated);
+      else { share = round2(value * (c.count || 1) / total); allocated += share; }
+      distribute(c, share, m);
+    });
+  }
+
+  function applyEdit(node, raw, m, skipInput){
+    distribute(node, parseNum(raw), m);
+    computeAll();
+    refreshInputs(skipInput);
+  }
+
+  function walk(nodes, fn){ nodes.forEach(n => { fn(n); if (n.children.length) walk(n.children, fn); }); }
+  function refreshInputs(skip){
+    walk(rootNodes, n => {
+      ["L","R"].forEach(m => {
+        const inp = n["in"+m];
+        if (!inp || inp === skip) return;
+        inp.value = fmt(n["t"+m]);
+        inp.classList.toggle("filled", n["t"+m] !== null && n["t"+m] !== 0);
+      });
+    });
+  }
+
+  function renderNode(node, depth, autoOpen){
+    const wrap = document.createElement("div");
+    wrap.className = "node";
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const cTree = document.createElement("div");
+    cTree.className = "c-tree";
+    cTree.style.paddingLeft = (12 + depth * 18) + "px";
+    const lbl = nodeLabel(node);
+    cTree.innerHTML =
+      '<span class="twirl' + (node.isLeaf ? ' leaf' : '') + '">&#9654;</span>' +
+      '<span class="dim-tag ' + node.key + '">' + escapeHtml(DMETA[node.key].tag) + '</span>' +
+      '<span class="node-label" title="' + escapeAttr(lbl) + '">' + escapeHtml(lbl) + '</span>' +
+      (node.extraGroup ? '<span class="dim-tag main_group">' + escapeHtml(node.extraGroup) + '</span>' : '');
+
+    const cCount = document.createElement("div");
+    cCount.className = "c-count";
+    cCount.innerHTML = '<span class="cnt">' + node.count + '</span>';
+
+    function makeInput(m){
+      const inp = document.createElement("input");
+      inp.className = "target-input";
+      inp.type = "text"; inp.placeholder = "-";
+      inp.setAttribute("inputmode", "decimal");
+      inp.value = fmt(node["t"+m]);
+      if (node["t"+m] !== null && node["t"+m] !== 0) inp.classList.add("filled");
+      inp.addEventListener("click", e => e.stopPropagation());
+      inp.addEventListener("input", () => applyEdit(node, inp.value, m, inp));
+      inp.addEventListener("blur", () => { inp.value = fmt(node["t"+m]); });
+      node["in"+m] = inp;
+      const cell = document.createElement("div");
+      cell.className = "c-target";
+      cell.appendChild(inp);
+      return cell;
+    }
+
+    row.appendChild(cTree); row.appendChild(cCount);
+    row.appendChild(makeInput("L")); row.appendChild(makeInput("R"));
+    wrap.appendChild(row);
+
+    if (!node.isLeaf) {
+      const childWrap = document.createElement("div");
+      childWrap.className = "children";
+      wrap.appendChild(childWrap);
+      let built = false;
+      const build = () => { node.children.forEach(c => childWrap.appendChild(renderNode(c, depth + 1, autoOpen))); built = true; };
+      const toggle = () => {
+        if (wrap.classList.contains("open")) { wrap.classList.remove("open"); return; }
+        if (!built) build();
+        wrap.classList.add("open");
+      };
+      cTree.querySelector(".twirl").addEventListener("click", e => { e.stopPropagation(); toggle(); });
+      row.addEventListener("click", toggle);
+      if (autoOpen) { build(); wrap.classList.add("open"); }
+    }
+    return wrap;
+  }
+
+  function buildTree(){
+    const scoped = applyDimensionFilter(MASTER);
+    const base = query ? scoped.filter(rowMatchesSearch) : scoped;
+    treeEl.innerHTML = "";
+    rootNodes = [];
+    if (!order.length) {
+      treeEl.innerHTML = '<div class="empty">Select at least one drill dimension.</div>';
+    } else if (!base.length) {
+      treeEl.innerHTML = '<div class="empty">No rows match the current filters.</div>';
+    } else {
+      rootNodes = buildModel(base, 0, []);
+      computeAll();
+      const frag = document.createDocumentFragment();
+      rootNodes.forEach(n => frag.appendChild(renderNode(n, 0, !!query)));
+      treeEl.appendChild(frag);
+    }
+    document.getElementById("totalCount").textContent = MASTER.length;
+    document.getElementById("visCount").textContent = base.length;
+    persistState();
+  }
+
+  function prepareSave(){
+    savePairs.innerHTML = "";
+    saveHierOrder.value = order.join(",");
+    function addHidden(name, value){
+      const i = document.createElement("input");
+      i.type = "hidden"; i.name = name; i.value = value;
+      savePairs.appendChild(i);
+    }
+    // Seed with the originally-loaded keys so cleared targets are still emitted
+    // (as 0) and the server can delete them — otherwise the old value persists.
+    const keys = new Set(initialKeys);
+    targetsL.forEach((_v, k) => keys.add(k));
+    targetsR.forEach((_v, k) => keys.add(k));
+    keys.forEach(canon => {
+      addHidden("node_key", toTripleKey(canon));
+      addHidden("node_val", String(targetsL.get(canon) || 0));
+      addHidden("node_realise", String(targetsR.get(canon) || 0));
+    });
+    saveForm.submit();
+  }
+
+  function toTripleKey(canon){
+    const parts = { main_group:"", state:"", sales_person:"" };
+    String(canon || "").split("|").forEach(piece => {
+      const idx = piece.indexOf("=");
+      if (idx === -1) return;
+      const key = piece.slice(0, idx);
+      const val = piece.slice(idx + 1);
+      if (parts.hasOwnProperty(key)) parts[key] = val;
+    });
+    return [parts.main_group, parts.state, parts.sales_person].join("|");
+  }
+
+  function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+  function parseNum(raw){
+    const s = String(raw).replace(/,/g, "").trim();
+    if (s === "") return null;
+    const n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+  function fmt(n){ return (n === null || n === undefined) ? "" : n.toLocaleString("en-IN", { maximumFractionDigits: 2 }); }
+  function escapeHtml(s){ return String(s).replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c])); }
+  function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
+
+  drillBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    chosen = order.slice();
+    renderDpList();
+    drillPanel.classList.toggle("open");
+  });
+  drillPanel.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", () => drillPanel.classList.remove("open"));
+  document.getElementById("selAll").addEventListener("click", () => { chosen = DIMS.map(d => d.key); renderDpList(); });
+  document.getElementById("clrAll").addEventListener("click", () => { chosen = []; renderDpList(); });
+  document.getElementById("applyBtn").addEventListener("click", () => {
+    if (!chosen.length) { alert("Select at least one drill dimension."); return; }
+    order = chosen.slice();
+    activeFilterKey = order[0] || "";
+    activeFilterValue = "";
+    drillPanel.classList.remove("open");
+    updateDrillLabel();
+    syncFilterControls();
+    buildTree();
+  });
+  filterDimEl.addEventListener("change", e => {
+    activeFilterKey = e.target.value;
+    activeFilterValue = "";
+    syncFilterControls();
+    buildTree();
+  });
+  filterValueEl.addEventListener("change", e => {
+    activeFilterValue = e.target.value;
+    buildTree();
+  });
+  let t;
+  searchEl.value = persisted.query || "";
+  searchEl.addEventListener("input", e => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      query = e.target.value.trim().toLowerCase();
+      buildTree();
+    }, 220);
+  });
+  document.getElementById("btnReset").addEventListener("click", () => {
+    query = "";
+    searchEl.value = "";
+    order = defaultOrder.slice();
+    chosen = order.slice();
+    activeFilterKey = order[1] || order[0] || "";
+    activeFilterValue = "";
+    updateDrillLabel();
+    syncFilterControls();
+    buildTree();
+  });
+  saveBtn.addEventListener("click", prepareSave);
+
+  updateDrillLabel();
+  renderDpList();
+  if (!activeFilterKey && order.length) activeFilterKey = order[0];
+  syncFilterControls();
+  buildTree();
+})();
+</script>
+{% endblock %}

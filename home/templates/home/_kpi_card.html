@@ -1,0 +1,59 @@
+<div class="kpi-card gradient-{{ kpi.gradient }}{% if not kpi.has_data %} no-data{% endif %}{% if kpi.extra.is_cogs %} cogs-kpi-card{% endif %}"
+     {% if kpi.extra.is_cogs %}data-from-date="{{ kpi.extra.from_date }}" data-to-date="{{ kpi.extra.to_date }}"{% endif %}
+     {% if kpi.extra.glimpse_rows and not is_inventory %}role="button" tabindex="0" data-glimpse-source="{{ kpi.extra.glimpse_id }}" data-glimpse-title="{{ kpi.extra.glimpse_title|default:kpi.label }}"{% endif %}>
+  <div class="kpi-head">
+    <div class="kpi-icon"><span class="material-icons">{{ kpi.icon }}</span></div>
+    {% if kpi.trend is not None %}
+      {% if kpi.trend > 0 %}
+        <span class="kpi-trend up">&#9650; +{{ kpi.trend }}%</span>
+      {% elif kpi.trend < 0 %}
+        <span class="kpi-trend down">&#9660; {{ kpi.trend }}%</span>
+      {% else %}
+        <span class="kpi-trend flat">&#8213; 0%</span>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="kpi-label">{{ kpi.label }}</div>
+  {% if kpi.current_value %}
+    <div class="kpi-month-values">
+      <div class="kpi-month-row current">
+        <span>Current month value</span>
+        <strong>{{ kpi.current_value }}</strong>
+      </div>
+      <div class="kpi-month-row">
+        <span>Last month value</span>
+        <strong>{{ kpi.last_value }}</strong>
+      </div>
+    </div>
+  {% else %}
+    <div class="kpi-value"{% if kpi.extra.is_cogs %} data-cogs-value{% endif %}>{{ kpi.value }}</div>
+  {% endif %}
+  {% if is_inventory %}
+    <div class="kpi-sub">{{ kpi.status|default:kpi.sub_value }}</div>
+  {% endif %}
+
+  {% if kpi.extra.is_cogs %}
+    <form class="cogs-inline-form" data-cogs-form>
+      <select name="param_type" aria-label="COGS type">
+        <option value=""{% if not kpi.extra.param_type %} selected{% endif %}>Blank</option>
+        <option value="A"{% if kpi.extra.param_type == "A" %} selected{% endif %}>A</option>
+        <option value="Y"{% if kpi.extra.param_type == "Y" %} selected{% endif %}>Y</option>
+      </select>
+      <input name="otp" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter OTP" aria-label="COGS OTP">
+      <button type="submit">Apply</button>
+    </form>
+  {% endif %}
+
+  {% if is_inventory %}
+  <div class="kpi-footer">
+    {% if is_inventory %}
+      <span>{{ kpi.extra.warehouse_count|default:"0" }} Warehouses</span>
+      <span>{{ kpi.extra.unit_count|default:"—" }} units</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% if kpi.extra.glimpse_rows and not is_inventory %}
+  {{ kpi.extra.glimpse_rows|json_script:kpi.extra.glimpse_id }}
+{% endif %}

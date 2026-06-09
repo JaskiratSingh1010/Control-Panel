@@ -1,0 +1,117 @@
+{% extends "core/base.html" %}
+{% block title %}Expenses Dashboard - Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+.dash-page{min-height:100%;background:#f5f3ff;background-image:radial-gradient(#d8d1ff 1px,transparent 1px);background-size:24px 24px;margin:-28px -32px;padding:32px 38px;color:#0f172a}
+.dash-title{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.dash-title h1{font-size:24px;line-height:1;margin:0;font-weight:800}
+.title-mark{width:5px;height:28px;border-radius:4px;background:#635bff}
+.title-pill{font-size:13px;font-weight:700;color:#3730a3;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:4px 12px}
+.filter-bar{background:rgba(255,255,255,.92);border:1px solid #ddd6fe;border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:repeat(6,minmax(118px,1fr));gap:14px;box-shadow:0 16px 40px rgba(79,70,229,.08);margin-bottom:10px}
+.fg label{display:block;font-size:13px;font-weight:750;color:#37305f;margin-bottom:7px}
+.fg input,.fg select{width:100%;height:52px;border:1px solid #ddd6fe;border-radius:12px;background:#fff;padding:0 14px;font:inherit;font-size:15px;color:#0f172a;outline:none}
+.fg input:focus,.fg select:focus{border-color:#635bff;box-shadow:0 0 0 3px rgba(99,91,255,.12)}
+.btn{height:52px;border:0;border-radius:13px;padding:0 20px;font:inherit;font-weight:800;cursor:pointer;align-self:end}
+.btn-primary{background:#4f46e5;color:#fff;box-shadow:0 3px 0 #1e1b4b}
+.btn-ghost{background:#fff;color:#4f46e5;border:1px solid #635bff}
+.filter-actions{display:flex;gap:14px;align-items:end;justify-content:flex-end;grid-column:span 2}
+.filter-actions .btn{width:auto;min-width:130px;white-space:normal;line-height:1.1}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:28px;margin:10px 6px 24px}
+.kcard{position:relative;overflow:hidden;border-radius:22px;padding:22px;color:#fff;min-height:150px;box-shadow:0 20px 34px rgba(79,70,229,.18)}
+.kcard:before,.kcard:after{content:"";position:absolute;border-radius:50%;background:rgba(255,255,255,.14)}
+.kcard:before{width:132px;height:132px;right:-28px;top:-22px}.kcard:after{width:136px;height:136px;right:30px;bottom:-66px}
+.k-purple{background:linear-gradient(135deg,#7c3aed,#9333ea)}.k-indigo{background:linear-gradient(135deg,#3730a3,#6366f1)}.k-teal{background:linear-gradient(135deg,#0f766e,#2dd4bf)}.k-blue{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.klabel{position:relative;z-index:1;font-size:13px;font-weight:900;letter-spacing:1.8px;text-transform:uppercase}.kvalue{position:relative;z-index:1;font-size:32px;font-weight:900;margin-top:8px}.ksub{position:relative;z-index:1;margin-top:8px;padding-top:9px;border-top:1px solid rgba(255,255,255,.2);font-size:13px;opacity:.75}
+.panel{background:rgba(255,255,255,.94);border:1px solid #ddd6fe;border-radius:18px;overflow:hidden;box-shadow:0 16px 40px rgba(79,70,229,.08)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid #ddd6fe}.panel-head h2{margin:0;font-size:22px}.hint{font-size:14px;color:#312e81}
+.group{border-bottom:1px solid #e9e5ff}.gmain{display:grid;grid-template-columns:6px 1fr 130px 150px 150px 28px;gap:18px;align-items:center;padding:18px 20px;cursor:pointer}.bar{width:5px;height:54px;border-radius:6px;background:#635bff}.gtitle{font-size:19px;font-weight:850}.gmeta{font-size:14px;color:#312e81;margin-top:3px}.metric{text-align:right;color:#312e81}.metric b{display:block;color:#111827;font-size:16px}.amount{font-size:25px;font-weight:900;text-align:right}.chev{font-size:18px;color:#94a3b8}.rows{display:none;background:#fbfaff;padding:0 20px 18px 44px}.group.open .rows{display:block}.group.open .chev{transform:rotate(180deg)}
+.detail-table{width:100%;border-collapse:collapse;font-size:13px}.detail-table th{text-align:left;padding:9px 8px;color:#64748b;border-bottom:1px solid #e5e7eb}.detail-table td{padding:9px 8px;border-bottom:1px solid #eef2ff}.num{text-align:right}.muted{color:#64748b}.empty{padding:38px;text-align:center;color:#64748b}.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.42);z-index:500;align-items:center;justify-content:center}.modal.show{display:flex}.modal-box{width:min(720px,92vw);max-height:80vh;overflow:auto;background:#fff;border-radius:18px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.3)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.modal-head h3{margin:0}.budget-row{display:grid;grid-template-columns:1fr 180px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #eef2ff}.budget-row input{height:42px;border:1px solid #ddd6fe;border-radius:10px;padding:0 12px;text-align:right;font:inherit}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+@media(max-width:1350px){.filter-bar{grid-template-columns:repeat(3,minmax(150px,1fr))}.filter-actions{grid-column:1/-1;justify-content:flex-start}}@media(max-width:1100px){.filter-bar{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}.gmain{grid-template-columns:6px 1fr 120px 28px}.metric.hide-sm{display:none}}@media(max-width:720px){.dash-page{margin:-28px -32px;padding:22px 18px}.filter-bar,.cards{grid-template-columns:1fr}.filter-actions{grid-column:auto;flex-direction:column;align-items:stretch}.filter-actions .btn{width:100%}.gmain{grid-template-columns:6px 1fr 28px}.metric,.amount{display:none}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash-page">
+  <div class="dash-title"><span class="title-mark"></span><h1>Expenses Dashboard</h1><span class="title-pill">Grouped by Budget Head - Salary on separate page</span></div>
+  <div class="filter-bar">
+    <div class="fg"><label>Month</label><select id="monthSelect" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>Year</label><select id="yearSelect" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>From Date</label><input type="date" id="fromDate" value="{{ from_date }}"></div>
+    <div class="fg"><label>To Date</label><input type="date" id="toDate" value="{{ to_date }}"></div>
+    <div class="fg"><label>Account Name</label><input type="search" id="accountName" placeholder="Search account"></div>
+    <div class="fg"><label>Expense Type</label><select id="expenseType"><option value="all">All</option><option value="direct">Direct</option><option value="indirect">Indirect</option></select></div>
+    <div class="filter-actions">
+      <button class="btn btn-primary" onclick="loadExpenses()">Apply</button>
+      <button class="btn btn-ghost" onclick="openBudgetModal()">Update Budget</button>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="kcard k-purple"><div class="klabel">Total Expenses</div><div class="kvalue" id="kTotal">-</div><div class="ksub">Excl. salary</div></div>
+    <div class="kcard k-indigo"><div class="klabel">Highest Account</div><div class="kvalue" id="kHigh">-</div><div class="ksub" id="kHighName">-</div></div>
+    <div class="kcard k-teal"><div class="klabel">Budget vs Actual</div><div class="kvalue" id="kVariance">-</div><div class="ksub" id="kBudget">Budget: -</div></div>
+    <div class="kcard k-blue"><div class="klabel">Lowest Account</div><div class="kvalue" id="kLow">-</div><div class="ksub" id="kLowName">-</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>Expenses by Budget Head (SAP)</h2><span class="hint">Click a budget head to expand its expense rows</span></div>
+    <div id="groups"><div class="empty">Loading expenses...</div></div>
+  </div>
+</div>
+<div class="modal" id="budgetModal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>Update Monthly Budgets</h3><button class="btn btn-ghost" style="height:40px" onclick="closeBudgetModal()">Close</button></div>
+    <div id="budgetRows"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeBudgetModal()">Cancel</button><button class="btn btn-primary" onclick="saveBudgets()">Save Budgets</button></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var expenseGroups=[];
+function csrf(){return document.querySelector('meta[name="csrf-token"]').content}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fmt(n){return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(Number(n)||0))}
+function pad(n){return String(n).padStart(2,'0')}
+function monthEnd(y,m){return new Date(y,m,0).getDate()}
+function initPeriodControls(){
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  monthSelect.innerHTML=months.map(function(m,i){return '<option value="'+(i+1)+'">'+m+'</option>'}).join('');
+  var currentYear=new Date().getFullYear(),startYear=currentYear-5,endYear=currentYear+1,html='';
+  for(var y=endYear;y>=startYear;y--)html+='<option value="'+y+'">'+y+'</option>';
+  yearSelect.innerHTML=html;
+  syncMonthYearFromDates();
+  fromDate.addEventListener('change',syncMonthYearFromDates);
+  toDate.addEventListener('change',syncMonthYearFromDates);
+}
+function syncMonthYearFromDates(){
+  if(!fromDate.value)return;
+  var parts=fromDate.value.split('-');
+  yearSelect.value=parts[0];
+  monthSelect.value=String(Number(parts[1]));
+}
+function applyMonthYearRange(){
+  var y=Number(yearSelect.value),m=Number(monthSelect.value);
+  if(!y||!m)return;
+  fromDate.value=y+'-'+pad(m)+'-01';
+  toDate.value=y+'-'+pad(m)+'-'+pad(monthEnd(y,m));
+}
+function q(){var p=new URLSearchParams();p.set('from_date',fromDate.value);p.set('to_date',toDate.value);if(accountName.value)p.set('account_name',accountName.value);if(expenseType.value)p.set('expense_type',expenseType.value);return p.toString()}
+async function loadExpenses(){
+  groups.innerHTML='<div class="empty">Loading expenses...</div>';
+  var res=await fetch('/api/expenses-detail/?'+q());var data=await res.json();expenseGroups=data.groups||[];
+  var k=data.kpis||{};kTotal.textContent=k.total_spent_display||'-';kHigh.textContent=k.highest_spend_display||'-';kHighName.textContent=k.highest_spend_account||'-';kLow.textContent=k.lowest_spend_display||'-';kLowName.textContent=k.lowest_spend_account||'-';kVariance.textContent=k.budget_vs_actual_display||'-';kBudget.textContent='Budget: '+(k.budget_total_display||'-');
+  renderGroups();
+}
+function renderGroups(){
+  if(!expenseGroups.length){groups.innerHTML='<div class="empty">No expenses found for this period.</div>';return}
+  groups.innerHTML=expenseGroups.map(function(g,i){var variance=(Number(g.variance)||0);return '<div class="group" id="g'+i+'"><div class="gmain" onclick="toggleGroup('+i+')"><span class="bar" style="background:'+['#635bff','#0ea5e9','#f59e0b','#10b981','#ef4444'][i%5]+'"></span><div><div class="gtitle">'+esc(g.category)+'</div><div class="gmeta">'+fmt(g.row_count)+' expense entries</div></div><div class="metric hide-sm">Budget <b>'+esc(g.budget_total_display||'-')+'</b></div><div class="metric hide-sm">Variance <b style="color:'+(variance>0?'#ef4444':'#059669')+'">'+esc(g.variance_display||'-')+'</b></div><div class="amount">'+esc(g.total_display||'-')+'</div><div class="chev">▼</div></div><div class="rows">'+renderRows(g.rows||[])+'</div></div>'}).join('');
+}
+function renderRows(rows){return '<table class="detail-table"><thead><tr><th>Date</th><th>Account</th><th>Branch</th><th>Variety</th><th>Type</th><th class="num">Amount</th></tr></thead><tbody>'+rows.map(function(r){return '<tr><td>'+esc(r.doc_date||'')+'</td><td><b>'+esc(r.account_name||r.ledger||'')+'</b><div class="muted">'+esc(r.remarks||'')+'</div></td><td>'+esc(r.branch||'')+'</td><td>'+esc(r.variety||'')+'</td><td>'+esc(r.expense_type||'')+'</td><td class="num"><b>'+esc(r.amount_display||'')+'</b></td></tr>'}).join('')+'</tbody></table>'}
+function toggleGroup(i){document.getElementById('g'+i).classList.toggle('open')}
+async function openBudgetModal(){budgetModal.classList.add('show');var month=Number(fromDate.value.slice(5,7)),year=Number(fromDate.value.slice(0,4));var res=await fetch('/api/expenses-budgets/?month='+month+'&year='+year);var data=await res.json();var saved=data.budgets||{};budgetRows.innerHTML=expenseGroups.map(function(g){return '<div class="budget-row"><strong>'+esc(g.category)+'</strong><input type="number" data-budget="'+esc(g.category)+'" value="'+(saved[g.category]||g.budget_total||0)+'"></div>'}).join('')||'<div class="empty">Load expenses first.</div>'}
+function closeBudgetModal(){budgetModal.classList.remove('show')}
+async function saveBudgets(){var month=Number(fromDate.value.slice(5,7)),year=Number(fromDate.value.slice(0,4)),budgets={};document.querySelectorAll('#budgetRows input').forEach(function(i){budgets[i.dataset.budget]=Number(i.value)||0});await fetch('/api/expenses-budgets-update/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({month:month,year:year,budgets:budgets})});closeBudgetModal();loadExpenses()}
+document.addEventListener('DOMContentLoaded',function(){initPeriodControls();loadExpenses()});
+</script>
+{% endblock %}

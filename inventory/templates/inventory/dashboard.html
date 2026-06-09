@@ -1,0 +1,2925 @@
+{% extends "core/base.html" %}
+{% block title %}Inventory Dashboard{% endblock %}
+
+{% block extra_styles %}
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+    :root {
+      --bg: #f4f5f7;
+      --side: #ffffff;
+      --side-solid: #4f46e5;
+      --side-ac: #7c3aed;
+      --side-ac-strong: #eef2ff;
+      --card: #fff; 
+      --tx: #111;
+      --tx2: #444;
+      --mt: #8b8fa3;
+      --bd: #ebebef;
+      --ac: #0ea5e9;
+      --font: 'Nunito', sans-serif;
+      --r: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    .inv-dashboard { font-family: var(--font); background: var(--bg); color: var(--tx); display: flex; height: 100%; min-height: 100vh; overflow: hidden; font-size: 15px }
+
+    /* ── SIDEBAR ── */
+    .side {
+      width: 220px;
+      min-width: 220px;
+      background: var(--side);
+      border-right: 1px solid var(--bd);
+      display: flex;
+      flex-direction: column;
+      transition: width .3s, min-width .3s;
+      overflow: hidden;
+      flex-shrink: 0
+    }
+
+    .side.collapsed {
+      width: 0;
+      min-width: 0
+    }
+
+    .side-hd {
+      padding: 20px 16px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--bd);
+      white-space: nowrap
+    }
+
+    .side-logo {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #6366f1, #7c3aed);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0
+    }
+
+    .side-hd div h1 {
+      font-size: 15px;
+      font-weight: 800;
+      color: #111827
+    }
+
+    .side-hd div span {
+      font-size: 8px;
+      color: var(--side-solid);
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase
+    }
+
+    .side-nav {
+      flex: 1;
+      padding: 6px 8px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      white-space: nowrap
+    }
+
+    .ng {
+      font-size: 9px;
+      font-weight: 800;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 16px 10px 5px
+    }
+
+    .ni {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: .15s;
+      margin: 2px 0
+    }
+
+    .ni:hover {
+      background: var(--side-solid);
+      color: #fff
+    }
+
+    .ni.on {
+      background: var(--side-solid);
+      color: #fff;
+      border-left: 3px solid var(--side-solid);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, .12)
+    }
+
+    .ni .i {
+      width: 20px;
+      text-align: center;
+      font-size: 14px
+    }
+
+    /* ── MAIN ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0
+    }
+
+    .top {
+      padding: 10px 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--bd);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap
+    }
+
+    .side-toggle {
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(79, 70, 229, .3);
+      transition: .2s;
+      flex-shrink: 0
+    }
+
+    .side-toggle:hover {
+      transform: scale(1.05)
+    }
+
+    .top-t {
+      font-size: 16px;
+      font-weight: 800;
+      margin-right: auto;
+      letter-spacing: -.3px
+    }
+
+    .pls {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap
+    }
+
+    .pl {
+      padding: 5px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 2px solid var(--bd);
+      border-radius: 20px;
+      cursor: pointer;
+      background: transparent;
+      font-family: var(--font);
+      color: var(--mt);
+      transition: .15s
+    }
+
+    .pl:hover {
+      border-color: var(--ac);
+      color: var(--ac)
+    }
+
+    .pl.on {
+      background: var(--ac);
+      border-color: var(--ac);
+      color: #fff
+    }
+
+    .pl.premium.on {
+      background: #9d174d;
+      border-color: #9d174d
+    }
+
+    .pl.commodity.on {
+      background: #1e40af;
+      border-color: #1e40af
+    }
+
+    .sep {
+      width: 1px;
+      height: 20px;
+      background: var(--bd);
+      flex-shrink: 0
+    }
+
+    .btn {
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--tx);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font)
+    }
+
+    .ct {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 22px
+    }
+
+    .sec {
+      display: none
+    }
+
+    .sec.on {
+      display: block
+    }
+
+    @keyframes fu {
+      from {
+        opacity: 0;
+        transform: translateY(6px)
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    .sec.on>* {
+      animation: fu .3s ease both
+    }
+
+    /* ── KPI CARDS ── */
+    .kg {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px
+    }
+
+    .kc {
+      border-radius: var(--r);
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: .25s;
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+      border: 0
+    }
+
+    .kc:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .12)
+    }
+
+    .kc-l {
+      font-size: 11px;
+      font-weight: 700;
+      opacity: .85;
+      text-transform: uppercase;
+      letter-spacing: .5px
+    }
+
+    .kc-v {
+      font-size: 26px;
+      font-weight: 800;
+      margin-top: 5px;
+      letter-spacing: -1px
+    }
+
+    .kc-s {
+      font-size: 11px;
+      opacity: .65;
+      margin-top: 5px;
+      line-height: 1.3;
+      font-weight: 500
+    }
+
+    .kc-bg {
+      position: absolute;
+      right: -8px;
+      bottom: -8px;
+      font-size: 55px;
+      opacity: .1
+    }
+
+    .k1 {
+      background: linear-gradient(135deg, #0ea5e9, #06b6d4)
+    }
+
+    .k2 {
+      background: linear-gradient(135deg, #059669, #10b981)
+    }
+
+    .k3 {
+      background: linear-gradient(135deg, #dc2626, #ef4444)
+    }
+
+    .k4 {
+      background: linear-gradient(135deg, #d97706, #f59e0b)
+    }
+
+    .k5 {
+      background: linear-gradient(135deg, #e11d48, #f43f5e)
+    }
+
+    .note {
+      background: #fefce8;
+      border: 1.5px solid #fde047;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #854d0e;
+      margin-bottom: 14px;
+      line-height: 1.6;
+      font-weight: 500
+    }
+
+    .note b {
+      color: #713f12;
+      font-weight: 800
+    }
+
+    /* ── CHARTS ── */
+    .cg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px
+    }
+
+    .cb {
+      background: var(--card);
+      border-radius: var(--r);
+      padding: 18px;
+      border: 1px solid var(--bd)
+    }
+
+    .ch {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--tx);
+      margin-bottom: 12px
+    }
+
+    .cw {
+      position: relative;
+      height: 220px
+    }
+
+    /* ── TABLES ── */
+    .tc {
+      background: var(--card);
+      border-radius: var(--r);
+      border: 1px solid var(--bd);
+      overflow: hidden;
+      margin-bottom: 14px
+    }
+
+    .tb {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--bd);
+      flex-wrap: wrap
+    }
+
+    .tb h3 {
+      font-size: 13px;
+      font-weight: 800;
+      margin-right: auto
+    }
+
+    .sr {
+      padding: 6px 10px;
+      font-size: 12px;
+      border: 2px solid var(--bd);
+      border-radius: 10px;
+      width: 170px;
+      font-family: var(--font);
+      font-weight: 500;
+      outline: none;
+      background: var(--bg);
+      transition: .15s
+    }
+
+    .sr:focus {
+      border-color: var(--ac);
+      background: #fff
+    }
+
+    .cnt {
+      font-size: 11px;
+      color: var(--mt);
+      font-weight: 700
+    }
+
+    .ts {
+      max-height: 430px;
+      overflow-y: auto
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2
+    }
+
+    th {
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--mt);
+      background: #fafafa;
+      border-bottom: 2px solid var(--bd)
+    }
+
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f5f5f5;
+      font-weight: 500
+    }
+
+    tr:hover td {
+      background: #fafaff
+    }
+
+    .m {
+      font-size: 13px;
+      font-weight: 700
+    }
+
+    .R {
+      text-align: right
+    }
+
+    .bd {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 7px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .2px
+    }
+
+    .b-ok {
+      background: #d1fae5;
+      color: #059669
+    }
+
+    .b-w {
+      background: #fef3c7;
+      color: #d97706
+    }
+
+    .b-d {
+      background: #fee2e2;
+      color: #dc2626
+    }
+
+    .b-i {
+      background: #e0f2fe;
+      color: #0369a1
+    }
+
+    .b-p {
+      background: #fce7f3;
+      color: #9d174d
+    }
+
+    .b-c {
+      background: #dbeafe;
+      color: #1e40af
+    }
+
+    .dr {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--ac);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      font-family: var(--font)
+    }
+
+    /* ── WAREHOUSE MERGED TABLE ── */
+    .wh-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px
+    }
+
+    .wh-row {
+      cursor: pointer;
+      transition: .15s
+    }
+
+    .wh-row:hover td {
+      background: #f5f5ff
+    }
+
+    .wh-row td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--bd);
+      font-weight: 600
+    }
+
+    .wh-row .wh-chevron {
+      transition: transform .2s;
+      display: inline-block;
+      font-size: 12px;
+      color: var(--mt);
+      margin-right: 6px
+    }
+
+    .wh-row.open .wh-chevron {
+      transform: rotate(90deg)
+    }
+
+    .wh-items-row {
+      display: none
+    }
+
+    .wh-items-row.open {
+      display: table-row
+    }
+
+    .wh-items-row td {
+      padding: 0;
+      border-bottom: 1px solid var(--bd)
+    }
+
+    .wh-items-inner {
+      background: #fafbff;
+      padding: 0 0 6px 0
+    }
+
+    .wh-items-inner table {
+      font-size: 12px
+    }
+
+    .wh-items-inner th {
+      background: #f0f4ff;
+      font-size: 9px
+    }
+
+    .wh-items-inner td {
+      border-bottom: 1px solid #eff0f5;
+      padding: 7px 12px
+    }
+
+    .wh-search-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center
+    }
+
+    .wh-search-wrap input {
+      padding: 5px 10px 5px 30px;
+      font-size: 12px;
+      border: 2px solid var(--bd);
+      border-radius: 10px;
+      font-family: var(--font);
+      font-weight: 500;
+      outline: none;
+      background: var(--bg);
+      width: 180px;
+      transition: .15s
+    }
+
+    .wh-search-wrap input:focus {
+      border-color: var(--ac);
+      background: #fff
+    }
+
+    .wh-search-wrap .si {
+      position: absolute;
+      left: 8px;
+      font-size: 13px;
+      color: var(--mt)
+    }
+
+    /* ── EXPANDABLE CATEGORY TABLE ── */
+    .cat-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px
+    }
+
+    .cat-row {
+      cursor: pointer;
+      transition: .15s
+    }
+
+    .cat-row:hover td {
+      background: #f5f5ff
+    }
+
+    .cat-row td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--bd);
+      font-weight: 600
+    }
+
+    .cat-row .cat-chevron {
+      transition: transform .2s;
+      display: inline-block;
+      font-size: 12px;
+      color: var(--mt)
+    }
+
+    .cat-row.open .cat-chevron {
+      transform: rotate(90deg)
+    }
+
+    .cat-items-row {
+      display: none
+    }
+
+    .cat-items-row.open {
+      display: table-row
+    }
+
+    .cat-items-row td {
+      padding: 0;
+      border-bottom: 1px solid var(--bd)
+    }
+
+    .cat-items-inner {
+      background: #fafbff;
+      padding: 0 0 4px 0
+    }
+
+    .cat-items-inner table {
+      font-size: 12px
+    }
+
+    .cat-items-inner th {
+      background: #f0f4ff;
+      font-size: 9px
+    }
+
+    .cat-items-inner td {
+      border-bottom: 1px solid #eff0f5;
+      padding: 7px 12px
+    }
+
+    /* ── TOOLTIP ── */
+    .tip {
+      position: relative;
+      display: inline-block
+    }
+
+    .tip .tip-txt {
+      visibility: hidden;
+      background: #1e293b;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 7px 10px;
+      position: absolute;
+      z-index: 99;
+      bottom: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 220px;
+      line-height: 1.5;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+      opacity: 0;
+      transition: .15s
+    }
+
+    .tip:hover .tip-txt {
+      visibility: visible;
+      opacity: 1
+    }
+
+    .tip-icon {
+      color: var(--mt);
+      font-size: 12px;
+      cursor: help;
+      margin-left: 3px
+    }
+
+    /* ── MODAL ── */
+    .mo {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, .4);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px)
+    }
+
+    .mo.sh {
+      display: flex
+    }
+
+    .md {
+      background: var(--card);
+      border-radius: 18px;
+      width: 900px;
+      max-width: 92vw;
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, .15)
+    }
+
+    .md-h {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--bd);
+      display: flex;
+      align-items: center
+    }
+
+    .md-h h3 {
+      font-size: 14px;
+      font-weight: 800;
+      flex: 1
+    }
+
+    .md-x {
+      background: #f4f4f5;
+      border: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--mt);
+      font-weight: 700
+    }
+
+    .md-x:hover {
+      background: #e5e5e5
+    }
+
+    .md-b {
+      flex: 1;
+      overflow-y: auto
+    }
+
+    /* ── CHAT ── */
+    .cf {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      border: none;
+      font-size: 19px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(80, 70, 229, .35);
+      z-index: 90;
+      transition: .2s
+    }
+
+    .cf:hover {
+      transform: scale(1.1)
+    }
+
+    .cp {
+      display: none;
+      position: fixed;
+      bottom: 72px;
+      right: 18px;
+      width: 360px;
+      max-height: 460px;
+      background: var(--card);
+      border-radius: 18px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, .12);
+      z-index: 91;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--bd)
+    }
+
+    .cp.op {
+      display: flex
+    }
+
+    .cp-h {
+      padding: 12px 16px;
+      background: var(--side-solid);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      border-radius: 18px 18px 0 0
+    }
+
+    .cp-h span {
+      flex: 1
+    }
+
+    .cp-x {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, .3);
+      font-size: 14px;
+      cursor: pointer
+    }
+
+    .cp-b {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      max-height: 310px;
+      min-height: 140px
+    }
+
+    .cm {
+      margin-bottom: 7px;
+      font-size: 13px;
+      line-height: 1.5;
+      font-weight: 500
+    }
+
+    .cm.u {
+      text-align: right
+    }
+
+    .cm.u .bl {
+      background: var(--ac);
+      color: #fff;
+      display: inline-block;
+      padding: 5px 11px;
+      border-radius: 11px 11px 2px 11px;
+      max-width: 82%
+    }
+
+    .cm.a .bl {
+      background: #f4f4f5;
+      display: inline-block;
+      padding: 7px 11px;
+      border-radius: 11px 11px 11px 2px;
+      max-width: 88%;
+      text-align: left
+    }
+
+    .cp-i {
+      display: flex;
+      border-top: 1px solid var(--bd);
+      padding: 7px
+    }
+
+    .cp-i input {
+      flex: 1;
+      border: 2px solid var(--bd);
+      border-radius: 9px;
+      padding: 7px 10px;
+      font-size: 13px;
+      font-family: var(--font);
+      font-weight: 500;
+      outline: none;
+      background: var(--bg)
+    }
+
+    .cp-i input:focus {
+      border-color: var(--ac)
+    }
+
+    .cp-i button {
+      margin-left: 5px;
+      padding: 7px 14px;
+      background: var(--ac);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: var(--font)
+    }
+
+    .ld {
+      text-align: center;
+      padding: 28px;
+      color: var(--mt);
+      font-size: 13px;
+      font-weight: 600
+    }
+
+    .ld::before {
+      content: '';
+      display: block;
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 12px;
+      border: 3px solid var(--bd);
+      border-top-color: var(--ac);
+      border-radius: 50%;
+      animation: spin .8s linear infinite
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .em {
+      text-align: center;
+      padding: 22px;
+      color: var(--mt);
+      font-size: 13px;
+      font-weight: 500
+    }
+
+    /* ── TRACE ── */
+    .pt-list-item {
+      padding: 9px 14px;
+      border-bottom: 1px solid #f5f5f5;
+      cursor: pointer;
+      transition: .1s
+    }
+
+    .pt-list-item:hover {
+      background: #f0f0ff
+    }
+
+    .pt-list-item.active {
+      background: #eef2ff
+    }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--bd);
+      margin-bottom: 16px
+    }
+
+    .tab {
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--mt);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: .15s
+    }
+
+    .tab:hover {
+      color: var(--tx)
+    }
+
+    .tab.on {
+      color: var(--ac);
+      border-bottom-color: var(--ac)
+    }
+
+    .tab-pane {
+      display: none
+    }
+
+    .tab-pane.on {
+      display: block
+    }
+
+    /* ── ABC-XYZ ── */
+    .combo-kpis {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 16px
+    }
+
+    .combo-kpi {
+      border-radius: 12px;
+      padding: 13px 15px;
+      color: #fff;
+      cursor: pointer;
+      transition: .2s;
+      border: 3px solid transparent
+    }
+
+    .combo-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, .12)
+    }
+
+    .combo-kpi.active {
+      border-color: rgba(255, 255, 255, .6);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, .2)
+    }
+
+    .combo-kpi .ck-combo {
+      font-size: 22px;
+      font-weight: 800
+    }
+
+    .combo-kpi .ck-label {
+      font-size: 9px;
+      font-weight: 700;
+      opacity: .75;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-top: 2px
+    }
+
+    .combo-kpi .ck-skus {
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 7px
+    }
+
+    .combo-kpi .ck-val {
+      font-size: 11px;
+      opacity: .7;
+      font-weight: 600
+    }
+
+    .ck-ax {
+      background: linear-gradient(135deg, #059669, #10b981)
+    }
+
+    .ck-az {
+      background: linear-gradient(135deg, #dc2626, #ef4444)
+    }
+
+    .ck-bx {
+      background: linear-gradient(135deg, #d97706, #f59e0b)
+    }
+
+    .ck-cx {
+      background: linear-gradient(135deg, #7c3aed, #8b5cf6)
+    }
+
+    .ck-cz {
+      background: linear-gradient(135deg, #6d28d9, #a78bfa)
+    }
+
+    .matrix-wrap {
+      background: var(--card);
+      border-radius: var(--r);
+      border: 1px solid var(--bd);
+      padding: 18px 20px;
+      margin-bottom: 16px
+    }
+
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: 48px 1fr 1fr 1fr;
+      gap: 5px
+    }
+
+    .mx-corner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 4px;
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--mt)
+    }
+
+    .mx-col-hd {
+      text-align: center;
+      padding: 6px 4px;
+      border-radius: 7px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase
+    }
+
+    .mx-col-x {
+      background: #d1fae5;
+      color: #065f46
+    }
+
+    .mx-col-y {
+      background: #fef3c7;
+      color: #92400e
+    }
+
+    .mx-col-z {
+      background: #fee2e2;
+      color: #991b1b
+    }
+
+    .mx-row-hd {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 800
+    }
+
+    .mx-row-a {
+      background: #fee2e2;
+      color: #991b1b
+    }
+
+    .mx-row-b {
+      background: #fef3c7;
+      color: #92400e
+    }
+
+    .mx-row-c {
+      background: #d1fae5;
+      color: #065f46
+    }
+
+    .mx-cell {
+      border-radius: 9px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: .2s;
+      border: 2px solid transparent;
+      min-height: 70px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px
+    }
+
+    .mx-cell:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .1)
+    }
+
+    .mx-cell.highlight {
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, .08)
+    }
+
+    .mx-cell .mc-combo {
+      font-size: 14px;
+      font-weight: 800
+    }
+
+    .mx-cell .mc-skus {
+      font-size: 10px;
+      font-weight: 700;
+      opacity: .7
+    }
+
+    .mx-cell .mc-val {
+      font-size: 10px;
+      font-weight: 800;
+      margin-top: auto
+    }
+
+    .cell-ax {
+      background: #d1fae5;
+      color: #065f46
+    }
+
+    .cell-ay {
+      background: #ecfdf5;
+      color: #065f46
+    }
+
+    .cell-az {
+      background: #f0fdf4;
+      color: #065f46
+    }
+
+    .cell-bx {
+      background: #fef3c7;
+      color: #92400e
+    }
+
+    .cell-by {
+      background: #fffbeb;
+      color: #92400e
+    }
+
+    .cell-bz {
+      background: #fefce8;
+      color: #92400e
+    }
+
+    .cell-cx {
+      background: #ede9fe;
+      color: #4c1d95
+    }
+
+    .cell-cy {
+      background: #f5f3ff;
+      color: #4c1d95
+    }
+
+    .cell-cz {
+      background: #faf5ff;
+      color: #4c1d95
+    }
+
+    .cell-ax.highlight {
+      border-color: #059669
+    }
+
+    .cell-az.highlight {
+      border-color: #dc2626
+    }
+
+    .cell-bx.highlight {
+      border-color: #d97706
+    }
+
+    .cell-cx.highlight {
+      border-color: #7c3aed
+    }
+
+    .cell-cz.highlight {
+      border-color: #9333ea
+    }
+
+    .matrix-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px
+    }
+
+    .ml-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--tx2)
+    }
+
+    .ml-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 3px
+    }
+
+    .CC {
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--tx2)
+    }
+
+    .CC b {
+      color: var(--tx)
+    }
+
+    /* ── PLANNING ── */
+    .alert-red {
+      background: #fee2e2;
+      color: #991b1b;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800
+    }
+
+    .alert-amber {
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800
+    }
+
+    .alert-green {
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800
+    }
+
+    .trend-r {
+      color: #059669;
+      font-weight: 800
+    }
+
+    .trend-f {
+      color: #dc2626;
+      font-weight: 800
+    }
+
+    .trend-s {
+      color: #4f46e5;
+      font-weight: 700
+    }
+
+    .trend-flat {
+      color: #8b8fa3;
+      font-weight: 700
+    }
+
+    /* ── TRACE BUTTON ── */
+    .trace-btn {
+      padding: 3px 9px;
+      font-size: 10px;
+      font-weight: 700;
+      background: #ede9fe;
+      color: #6d28d9;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: .15s;
+      white-space: nowrap
+    }
+
+    .trace-btn:hover {
+      background: #6d28d9;
+      color: #fff
+    }
+
+    /* ── DATE RANGE ── */
+    .date-inp {
+      padding: 4px 8px;
+      font-size: 12px;
+      border: 2px solid var(--bd);
+      border-radius: 8px;
+      font-family: var(--font);
+      outline: none;
+      color: var(--tx);
+      background: #fff
+    }
+
+    .date-inp:focus {
+      border-color: var(--ac)
+    }
+
+    select.filter-sel {
+      padding: 5px 10px;
+      border: 2px solid var(--bd);
+      border-radius: 18px;
+      font-size: 12px;
+      font-family: var(--font);
+      font-weight: 700;
+      outline: none;
+      background: #fff;
+      color: var(--mt);
+      cursor: pointer
+    }
+
+    /* ── INVENTORY VALUE BLUR (AUTH) ── */
+    .inv-val-wrap{display:inline-block;position:relative;cursor:default}
+    .inv-lock{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:13px;pointer-events:none}
+    .inv-dashboard.locked .inv-val{filter:blur(7px);user-select:none}
+    .inv-dashboard.locked .inv-val-wrap{cursor:pointer}
+    .inv-dashboard.locked .inv-lock{display:block}
+  
+    .schema-badge{margin:8px 8px 0;padding:8px 10px;border-radius:10px;background:#f9fafb;border:1px solid var(--bd);white-space:nowrap}
+    .schema-badge label{font-size:9px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px}
+    .schema-btns{display:flex;gap:3px}
+    .schema-btn{flex:1;padding:4px 0;font-size:10px;font-weight:700;border:1.5px solid var(--bd);border-radius:7px;cursor:pointer;background:#fff;color:#6b7280;font-family:var(--font);transition:.15s;text-align:center}
+    .schema-btn:hover{border-color:var(--side-solid);color:var(--side-solid)}
+    .schema-btn.on{background:var(--side-solid);border-color:var(--side-solid);color:#fff}
+    .oil-only.pls{display:none}
+    .oil-only.sep{display:none}
+    .oil-only{display:none}</style>
+{% endblock %}
+
+{% block content %}
+<div class="inv-dashboard" id="inventoryDashboard"><div class="side" id="sidebar">
+    <div class="side-hd">
+      <div class="side-logo" id="divLogo">J</div>
+      <div>
+        <h1 id="divTitle">Jivo Oil</h1><span>Inventory Control</span>
+      </div>
+    </div>
+    <!-- Division Switcher -->
+    <div id="divSwitcher" style="margin: 12px 8px 4px; padding: 5px; background: #f9fafb; border: 1px solid #ebebef; border-radius: 10px; display: flex; gap: 4px;">
+      <button id="divBtnOils" style="flex:1; padding: 7px 0; background: #5046e5; color: #fff; border: none; border-radius: 7px; font-size: 11px; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(80,70,229,0.4);" onclick="switchDivision('oils')">OILS</button>
+      <button id="divBtnBev" style="flex:1; padding: 7px 0; background: transparent; color: #6b7280; border: 1px solid transparent; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s;" onclick="switchDivision('beverages')">BEVERAGES</button>
+    </div>
+    <div class="schema-badge oil-only" id="schemaBadge">
+      <label>Database</label>
+      <div class="schema-btns">
+        <button class="schema-btn on" onclick="setSchema('jivo_oil',this)">Jivo Oil</button>
+        <button class="schema-btn" onclick="setSchema('jivo_mart',this)">Jivo Mart</button>
+      </div>
+    </div>
+<nav class="side-nav">
+      <div class="ng">Overview</div>
+      <div class="ni on" data-s="dash"><span class="i">📊</span>Dashboard</div>
+      <div class="ng">Stock</div>
+      <div class="ni" data-s="stock"><span class="i">🏭</span>Stock & Warehouses</div>
+      <div class="ni" data-s="move"><span class="i">📈</span>Stock Movement</div>
+      <div class="ng">Analysis</div>
+      <div class="ni" data-s="movers"><span class="i">⚡</span>Moving / Non-Moving</div>
+      <div class="ni" data-s="billing"><span class="i">🧾</span>FG Not Billed</div>
+      <div class="ni" data-s="abc"><span class="i">🏷️</span>ABC-XYZ Analysis</div>
+      <div class="ni" data-s="aging"><span class="i">⏳</span>Aging Analysis</div>
+      <div class="ng">Traceability</div>
+      <div class="ni" data-s="trace"><span class="i">🔍</span>Item Trace</div>
+      <div class="ng">Planning</div>
+      <div class="ni" data-s="planning"><span class="i">🧠</span>Inventory Planning</div>
+    </nav>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      <button class="side-toggle" onclick="toggleSide()">☰</button>
+      <div class="top-t" id="pt">Dashboard</div>
+      <div class="pls" id="cpls">
+        <button class="pl on" data-c="">All</button>
+        <button class="pl" data-c="FINISHED">Finished</button>
+        <button class="pl" data-c="RAW MATERIAL">Raw Material</button>
+        <button class="pl" data-c="PACKAGING MATERIAL">Packaging</button>
+      </div>
+      <button class="btn" onclick="load()">↻ Refresh</button>
+      <div class="sep"></div>
+      <button class="btn" id="lockBtn" onclick="toggleLock()" title="Toggle value visibility">🔓</button>
+    </div>
+
+    <div class="ct">
+
+      <!-- DASHBOARD -->
+      <div class="sec on" id="s-dash">
+        <div id="dK"></div>
+        <div id="dN" class="note" style="display:none"></div>
+        <div class="cg">
+          <div class="cb">
+            <div class="ch">Inventory by Category</div>
+            <div class="cw"><canvas id="cPie"></canvas></div>
+          </div>
+          <div class="cb">
+            <div class="ch">Movement Classification (30d)</div>
+            <div class="cw"><canvas id="cMov"></canvas></div>
+          </div>
+          <div class="cb">
+            <div class="ch">FG Not Billed — Risk</div>
+            <div class="cw"><canvas id="cBill"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STOCK + WAREHOUSE MERGED -->
+      <div class="sec" id="s-stock">
+        <!-- Top controls -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <div class="wh-search-wrap">
+            <span class="si">🔍</span>
+            <input id="whSearch" placeholder="Search warehouse..." oninput="_idbDeb(whFilterTable)">
+          </div>
+          <select id="whOwnerFilter" class="filter-sel" onchange="whFilterTable()">
+            <option value="">All Owners</option>
+          </select>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)" id="whTotalKPIs"></span>
+        </div>
+        <div class="tc">
+          <div class="tb">
+            <h3>🏭 Warehouses — click to expand items</h3>
+            <span class="cnt" id="whC"></span>
+          </div>
+          <div class="ts" id="whT" style="max-height:600px">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOVEMENT -->
+      <div class="sec" id="s-move">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <div class="pls" id="mvD">
+            <button class="pl" data-v="7">7d</button><button class="pl" data-v="15">15d</button>
+            <button class="pl on" data-v="30">30d</button><button class="pl" data-v="60">60d</button><button class="pl"
+              data-v="90">90d</button>
+          </div>
+          <div class="sep"></div>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">From:</span>
+          <input type="date" id="mvDateFrom" class="date-inp">
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">To:</span>
+          <input type="date" id="mvDateTo" class="date-inp">
+          <button onclick="mvApplyDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Apply</button>
+          <button onclick="mvClearDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:#f4f4f5;color:var(--mt);border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Clear</button>
+          <div class="sep"></div>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">Days:</span>
+          <input type="number" id="mvDaysInput" min="1" max="999" placeholder="N" style="width:64px;padding:4px 8px;font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:8px;font-family:var(--font)" onkeydown="if(event.key==='Enter')mvApplyDaysInput()">
+          <div class="sep"></div>
+          <select id="mvWhsFilter" class="filter-sel" onchange="rMV()">
+            <option value="">All Warehouses</option>
+          </select>
+          <input class="sr" id="mvS" placeholder="Search item/category..." oninput="_idbDeb(rMV)" style="width:200px">
+        </div>
+        <div id="mvN" class="note" style="display:none"></div>
+        <div class="tc">
+          <div class="tb">
+            <h3 id="mvH">Daily Movement</h3><span class="cnt" id="mvC"></span>
+          </div>
+          <div class="ts" id="mvT">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOVERS -->
+      <div class="sec" id="s-movers">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <div class="pls" id="moP"><button class="pl on" data-v="30">30d</button><button class="pl"
+              data-v="60">60d</button><button class="pl" data-v="90">90d</button></div>
+          <div class="sep"></div>
+          <div class="pls" id="moStatus"><button class="pl on" data-v="all">All</button><button class="pl"
+              data-v="NON-MOVING">Non-Moving</button><button class="pl" data-v="SLOW">Slow</button><button class="pl"
+              data-v="MEDIUM">Medium</button><button class="pl" data-v="FAST">Fast</button></div><div class="sep oil-only"></div><div class="pls oil-only" id="moTF"><button class="pl on" data-v="all">All Types</button><button class="pl premium" data-v="PREMIUM">Premium</button><button class="pl commodity" data-v="COMMODITY">Commodity</button></div>
+          <div class="sep"></div>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">From:</span>
+          <input type="date" id="moDateFrom" class="date-inp">
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">To:</span>
+          <input type="date" id="moDateTo" class="date-inp">
+          <button onclick="moApplyDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Apply</button>
+          <button onclick="moClearDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:#f4f4f5;color:var(--mt);border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Clear</button>
+          <div class="sep"></div>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">Days:</span>
+          <input type="number" id="moDaysInput" min="1" max="999" placeholder="N" style="width:64px;padding:4px 8px;font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:8px;font-family:var(--font)" onkeydown="if(event.key==='Enter')moApplyDaysInput()">
+        </div>
+        <div id="moK"></div>
+        <div id="moN" class="note" style="display:none"></div>
+        <div class="tc">
+          <div class="tb">
+            <h3>Category Breakdown</h3><input class="sr" id="moS" placeholder="Search items..."
+              oninput="_idbDeb(moSearchItems)"><span class="cnt" id="moC"></span>
+          </div>
+          <div class="ts" id="moTableWrap">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BILLING -->
+      <div class="sec" id="s-billing">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <div class="pls" id="biP"><button class="pl on" data-v="30">30d</button><button class="pl"
+              data-v="60">60d</button><button class="pl" data-v="90">90d</button></div>
+          <div class="sep"></div>
+          <div class="pls oil-only" id="biTF"><button class="pl on" data-v="all">All Types</button><button class="pl premium" data-v="PREMIUM">Premium</button><button class="pl commodity" data-v="COMMODITY">Commodity</button></div><div class="sep"></div><span style="font-size:12px;font-weight:700;color:var(--mt)">Custom range:</span>
+          <input type="date" id="biDateFrom" class="date-inp">
+          <input type="date" id="biDateTo" class="date-inp">
+          <button onclick="biApplyCustomDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Apply</button>
+          <button onclick="biClearCustomDate()"
+            style="padding:4px 12px;font-size:12px;font-weight:700;background:#f4f4f5;color:var(--mt);border:none;border-radius:8px;cursor:pointer;font-family:var(--font)">Clear</button>
+          <div class="sep"></div>
+          <span style="font-size:12px;font-weight:700;color:var(--mt)">Days:</span>
+          <input type="number" id="biDaysInput" min="1" max="999" placeholder="N" style="width:64px;padding:4px 8px;font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:8px;font-family:var(--font)" onkeydown="if(event.key==='Enter')biApplyDaysInput()">
+        </div>
+        <div id="biK"></div>
+        <div id="biN" class="note" style="display:none"></div>
+        <div class="tc">
+          <div class="tb">
+            <h3>Category Breakdown</h3><input class="sr" id="biS" placeholder="Search items..."
+              oninput="_idbDeb(biSearchItems)"><span class="cnt" id="biC"></span>
+          </div>
+          <div class="ts" id="biTableWrap">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABC-XYZ -->
+      <div class="sec" id="s-abc">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap"><div class="pls oil-only" id="abTF"><button class="pl on" data-v="all">All Types</button><button class="pl premium" data-v="PREMIUM">Premium</button><button class="pl commodity" data-v="COMMODITY">Commodity</button></div>
+        </div>
+        <!-- Column explanation -->
+        <div class="CC">
+          <b>📖 Column Guide:</b>&nbsp;&nbsp;
+          <b>AVG/MO</b> = Average units sold per month (last 3 months) &nbsp;·&nbsp;
+          <b>COV</b> = Coefficient of Variation — how erratic demand is (0 = perfectly stable, &gt;1 = very erratic)
+          &nbsp;·&nbsp;
+          <b>CUM%</b> = Cumulative % of total stock value — used to classify A (0–80%), B (80–95%), C (95–100%)
+        </div>
+        <div class="combo-kpis">
+          <div class="combo-kpi ck-ax" id="kpi-AX" onclick="abFilterCombo('AX',this)">
+            <div class="ck-combo">AX</div>
+            <div class="ck-label">Star Products</div>
+            <div class="ck-skus" id="kAX-s">–</div>
+            <div class="ck-val" id="kAX-v">–</div>
+          </div>
+          <div class="combo-kpi ck-az" id="kpi-AZ" onclick="abFilterCombo('AZ',this)">
+            <div class="ck-combo">AZ</div>
+            <div class="ck-label">Critical Risk</div>
+            <div class="ck-skus" id="kAZ-s">–</div>
+            <div class="ck-val" id="kAZ-v">–</div>
+          </div>
+          <div class="combo-kpi ck-bx" id="kpi-BX" onclick="abFilterCombo('BX',this)">
+            <div class="ck-combo">BX</div>
+            <div class="ck-label">Stable Mid-Tier</div>
+            <div class="ck-skus" id="kBX-s">–</div>
+            <div class="ck-val" id="kBX-v">–</div>
+          </div>
+          <div class="combo-kpi ck-cx" id="kpi-CX" onclick="abFilterCombo('CX',this)">
+            <div class="ck-combo">CX</div>
+            <div class="ck-label">Low-Value Stable</div>
+            <div class="ck-skus" id="kCX-s">–</div>
+            <div class="ck-val" id="kCX-v">–</div>
+          </div>
+          <div class="combo-kpi ck-cz" id="kpi-CZ" onclick="abFilterCombo('CZ',this)">
+            <div class="ck-combo">CZ</div>
+            <div class="ck-label">Review / Eliminate</div>
+            <div class="ck-skus" id="kCZ-s">–</div>
+            <div class="ck-val" id="kCZ-v">–</div>
+          </div>
+        </div>
+        <div id="abN" class="note" style="display:none"></div>
+        <div class="tc">
+          <div class="tb">
+            <h3>Category Breakdown</h3>
+            <div class="pls" id="abF"><button class="pl on" data-v="all">All</button><button class="pl"
+                data-v="AX">AX</button><button class="pl" data-v="AY">AY</button><button class="pl"
+                data-v="AZ">AZ</button><button class="pl" data-v="BX">BX</button><button class="pl"
+                data-v="BY">BY</button><button class="pl" data-v="BZ">BZ</button><button class="pl"
+                data-v="CX">CX</button><button class="pl" data-v="CY">CY</button><button class="pl"
+                data-v="CZ">CZ</button></div>
+            <input class="sr" id="abS" placeholder="Search items..." oninput="_idbDeb(abSearchItems)"><span class="cnt"
+              id="abC"></span>
+          </div>
+          <div class="ts" id="abTableWrap">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGING -->
+      <div class="sec" id="s-aging">
+        <div class="note" style="display:block"><b>ℹ️ Aging = how long stock has been sitting</b> — based on the first
+          receipt date per item per warehouse from OINM. 0-30d = recently received · 90+d = sitting over 3 months.</div>
+        <div class="tc">
+          <div class="tb">
+            <h3>Aging Analysis</h3><span class="cnt" id="agC"></span>
+          </div>
+          <div class="ts" id="agT">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ITEM TRACE -->
+      <div class="sec" id="s-trace">
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start">
+          <div
+            style="background:var(--card);border-radius:var(--r);border:1px solid var(--bd);overflow:hidden;position:sticky;top:0">
+            <div style="padding:12px 14px;border-bottom:1px solid var(--bd);background:#fafafa">
+              <div style="font-size:13px;font-weight:800;margin-bottom:8px">🔍 Item Trace</div>
+              <div class="pls" id="traceCatF" style="margin-bottom:8px">
+                <button class="pl on" onclick="traceCatChanged('FINISHED',this)">FG</button>
+                <button class="pl" onclick="traceCatChanged('PACKAGING MATERIAL',this)">PM</button>
+                <button class="pl" onclick="traceCatChanged('RAW MATERIAL',this)">RM</button>
+              </div>
+              <select id="traceSGSelect" onchange="traceSGChanged()"
+                style="width:100%;padding:7px 10px;border:2px solid var(--bd);border-radius:9px;font-size:12px;font-family:var(--font);font-weight:600;outline:none;background:#fff;margin-bottom:7px;color:var(--tx)">
+                <option value="">All Sub-Groups</option>
+              </select>
+              <input id="traceBrowse" placeholder="Filter items..."
+                style="width:100%;padding:7px 10px;border:2px solid var(--bd);border-radius:9px;font-size:12px;font-family:var(--font);font-weight:500;outline:none;background:#fff"
+                oninput="_idbDeb(traceFilterList)">
+              <div style="margin-top:7px;font-size:11px;color:var(--mt);font-weight:600" id="traceListCount"></div>
+            </div>
+            <div id="traceList" style="max-height:calc(100vh - 360px);overflow-y:auto">
+              <div class="ld">Loading...</div>
+            </div>
+          </div>
+          <div id="traceRight">
+            <div style="text-align:center;padding:60px 20px;color:var(--mt)">
+              <div style="font-size:48px;margin-bottom:12px">🔍</div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:6px">Select an Item</div>
+              <div style="font-size:13px">Choose FG / PM / RM, pick a sub-group, then click any item</div>
+              <div
+                style="margin-top:16px;background:#fefce8;border:1.5px solid #fde047;border-radius:10px;padding:10px 14px;font-size:12px;color:#854d0e;text-align:left;line-height:1.7">
+                <b>ℹ️ What is Inventory Adj.?</b><br>
+                Inventory Adjustments (TransType 162) are manual corrections — e.g. <b>stock revaluation</b> (price
+                changes without qty movement), <b>year-end COGS journals</b>, or <b>discrepancy corrections</b>. They
+                appear in OINM but do not represent physical goods movement.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLANNING -->
+      <div class="sec" id="s-planning">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><div class="pls oil-only" id="plTF"><button class="pl on" data-v="all">All Types</button><button class="pl premium" data-v="PREMIUM">Premium</button><button class="pl commodity" data-v="COMMODITY">Commodity</button></div>
+          <div class="sep"></div>
+          <select id="plSG" onchange="lPlan()"
+            style="padding:5px 12px;border:2px solid var(--bd);border-radius:18px;font-size:12px;font-family:var(--font);font-weight:700;outline:none;background:#fff;color:var(--mt);cursor:pointer">
+            <option value="">All Categories</option>
+          </select>
+          <button class="chat-only" onclick="planAI()"
+            style="padding:5px 14px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:var(--font)">🧠
+            AI Analysis</button>
+        </div>
+        <div id="planKPIs"></div>
+        <div id="planAIBox"
+          style="display:none;background:var(--card);border-radius:var(--r);border:1px solid var(--bd);padding:16px 20px;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:800;margin-bottom:10px">🧠 AI Inventory Analysis</div>
+          <div id="planAIText" style="font-size:13px;line-height:1.7;color:var(--tx2)">Generating...</div>
+        </div>
+        <div class="tc">
+          <div class="tb">
+            <h3>30-Day Inventory Plan</h3>
+            <div class="pls" id="plAlert"><button class="pl on" data-v="all">All</button><button class="pl"
+                data-v="critical">🔴 Critical</button><button class="pl" data-v="warning">🟡 Warning</button><button
+                class="pl" data-v="ok">✅ OK</button></div>
+            <input class="sr" id="plS" placeholder="Search..." oninput="_idbDeb(rPlan)"><span class="cnt" id="plC"></span>
+          </div>
+          <div class="ts" id="plT">
+            <div class="ld">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="mo" id="modal">
+    <div class="md">
+      <div class="md-h">
+        <h3 id="mT">Detail</h3><button class="md-x" onclick="xM()">✕</button>
+      </div>
+      <div class="md-b">
+        <div class="ts" id="mB"></div>
+      </div>
+    </div>
+  </div>
+  {% if inventory_can_edit %}<button class="cf" onclick="tc()">AI</button><div class="cp" id="cP">
+    <div class="cp-h"><span>AI Assistant</span><button class="cp-x" onclick="tc()">✕</button></div>
+    <div class="cp-b" id="cB">
+      <div class="cm a">
+        <div class="bl">Ask about inventory, planning, or any analysis.</div>
+      </div>
+    </div>
+    <div class="cp-i"><input id="cI" placeholder="Ask..." onkeydown="if(event.key==='Enter')sC()"><button
+        onclick="sC()">Send</button></div>
+  </div>{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script>window.inventoryUser = window.loginUser || {{ login_user_json|safe }};
+    // Debounce search inputs: rebuild the table only after the user pauses typing
+    // (~200ms) instead of on every keystroke. Keyed by function name.
+    var _idbT = {};
+    function _idbDeb(fn){ clearTimeout(_idbT[fn.name]); _idbT[fn.name] = setTimeout(fn, 200); }
+    window.inventoryUser.can_chat = !!(
+      window.inventoryUser.inventory_can_edit ||
+      (window.inventoryUser.permissions && window.inventoryUser.permissions.inventory_can_edit)
+    );
+    window.inventoryUser.can_manage = !!(
+      window.inventoryUser.inventory_can_edit ||
+      (window.inventoryUser.permissions && window.inventoryUser.permissions.inventory_can_edit)
+    );
+
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set('plugins.datalabels', { display: false });
+    Chart.defaults.font.family = 'Nunito'; Chart.defaults.font.weight = 600; Chart.defaults.font.size = 13;
+
+    // ── STATE ──
+    let S = 'dash', C = '', SCH = 'jivo_oil', ch = {}, DIVISION = 'oils';
+    let moDays = 30, moType = 'all', moStatusF = 'all', moSGData = [], moItemCache = {}, moDateFrom = '', moDateTo = '';
+    let biDays = 30, biType = 'all', biSGData = [], biItemCache = {}, biCustomFrom = '', biCustomTo = '', biCustomApplied = false;
+    let abType = 'all', abComboF = 'all', abSGData = [], abItemCache = {};
+    let plD = [], plType = 'all', plAlertF = 'all';
+    let whAllData = [], whItemCache = {};
+    let traceCategory = 'FINISHED', traceSG = null, traceAllItems = [], traceCode = '', traceName = '', traceDays = 0, traceMonth = '', traceTypeFilter = [];
+    let mvD_data = [], mvDays = 30, mvCustomFrom = '', mvCustomTo = '', mvCustomApplied = false;
+
+    // ── FORMATTERS ──
+    function F(n) { if (n == null) return '–'; n = +n; if (isNaN(n)) return '–'; let s = n < 0 ? '-' : ''; n = Math.abs(n); if (n >= 1e7) return s + '₹' + (n / 1e7).toFixed(2) + ' Cr'; if (n >= 1e5) return s + '₹' + (n / 1e5).toFixed(2) + ' L'; if (n >= 1e3) return s + '₹' + (n / 1e3).toFixed(1) + 'K'; return s + '₹' + n.toLocaleString('en-IN') }
+    function Fs(n) { if (!n) return '0'; n = +n; if (n >= 1e7) return (n / 1e7).toFixed(1) + 'Cr'; if (n >= 1e5) return (n / 1e5).toFixed(1) + 'L'; if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K'; return n + '' }
+    function N(n) { if (n == null) return '–'; return (+n).toLocaleString('en-IN') }
+    function FV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${F(n)}</span><span class="inv-lock">🔒</span></span>`}
+    function FsV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${Fs(n)}</span><span class="inv-lock">🔒</span></span>`}
+
+    const RECLASSIFY_RULES = [
+      { keyword: 'YELLOW MUSTARD', type: 'PREMIUM' }, { keyword: 'EXTRA VIRGIN COCONUT', type: 'PREMIUM' },
+      { keyword: 'EXTRA VIRGIN', type: 'PREMIUM' }, { keyword: 'SLICED OLIVE', type: 'PREMIUM' },
+      { keyword: 'LE CHEF', type: 'PREMIUM' }, { keyword: 'COLD PRESS', type: 'PREMIUM' },
+      { keyword: 'EXTRA LIGHT', type: 'PREMIUM' }, { keyword: 'POMACE', type: 'PREMIUM' },
+      { keyword: 'OLIVE', type: 'PREMIUM' }, { keyword: 'GROUNDNUT', type: 'PREMIUM' },
+      { keyword: 'COCONUT', type: 'PREMIUM' }, { keyword: 'SESAME', type: 'PREMIUM' }, { keyword: 'GHEE', type: 'PREMIUM' },
+    ];
+    function reclassifyType(t, n) { if (!n) return t; const u = n.toUpperCase(); for (const r of RECLASSIFY_RULES) { if (u.includes(r.keyword)) return r.type; } return t; }
+    function typBadge(t, n) { const e = reclassifyType(t, n); if (!e || e === '–') return ''; return e === 'PREMIUM' ? `<span class="bd b-p">Premium</span>` : `<span class="bd b-c">Commodity</span>` }
+    function moBadge(s) { const m = { 'NON-MOVING': 'b-d', 'SLOW': 'b-w', 'MEDIUM': 'b-i', 'FAST': 'b-ok' }; return `<span class="bd ${m[s] || 'b-i'}">${s}</span>` }
+    function trendBadge(t) { if (!t) return ''; const m = { RISING: 'trend-r', FALLING: 'trend-f', STABLE: 'trend-s', FLAT: 'trend-flat' }; const i = { RISING: '↑', FALLING: '↓', STABLE: '→', FLAT: '—' }; return `<span class="${m[t] || 'trend-flat'}">${i[t] || ''} ${t}</span>` }
+
+        function getCSRF() { return document.querySelector('meta[name="csrf-token"]').content; }
+    function api(u) {
+      let url = '/inventory/' + DIVISION + u;
+      const qIdx0 = url.indexOf('?');
+      let path0 = qIdx0 >= 0 ? url.slice(0, qIdx0) : url;
+      let qs0 = qIdx0 >= 0 ? url.slice(qIdx0 + 1) : '';
+      path0 = path0.replace(/_/g, '-');
+      if (!path0.endsWith('/')) path0 += '/';
+      if (DIVISION === 'oils') qs0 += (qs0 ? '&' : '') + 'schema=' + encodeURIComponent(SCH);
+      return fetch(path0 + (qs0 ? '?' + qs0 : '')).then(r => r.json()).then(d => d.data || []).catch(() => []);
+    }
+    function dc(i) { if (ch[i]) { ch[i].destroy(); delete ch[i] } }
+    function mc(i, c) { dc(i); const x = document.getElementById(i); if (!x) return; ch[i] = new Chart(x.getContext('2d'), c) }
+    function oM(t) { document.getElementById('mT').textContent = t; document.getElementById('modal').classList.add('sh') }
+    function xM() { document.getElementById('modal').classList.remove('sh') }
+    function toggleSide() { const s = document.getElementById('sidebar'), btn = document.querySelector('.side-toggle'); s.classList.toggle('collapsed'); btn.textContent = s.classList.contains('collapsed') ? '☰' : '✕' }
+    function setOilOnlyVisible(show) {
+      document.querySelectorAll('.oil-only').forEach(el => {
+        if (!show) { el.style.display = 'none'; return; }
+        if (el.classList.contains('schema-badge')) el.style.display = 'block';
+        else if (el.classList.contains('pls')) el.style.display = 'flex';
+        else if (el.classList.contains('sep')) el.style.display = 'block';
+        else el.style.display = '';
+      });
+    }
+    function switchDivision(div) {
+      const changed = div !== DIVISION;
+      DIVISION = div;
+      const logo = document.getElementById('divLogo');
+      const title = document.getElementById('divTitle');
+      const oilsBtn = document.getElementById('divBtnOils');
+      const bevBtn = document.getElementById('divBtnBev');
+      if (div === 'oils') { setOilOnlyVisible(true);
+        logo.textContent = 'J'; logo.style.background = 'linear-gradient(135deg,#6366f1,#7c3aed)'; logo.style.fontSize = '17px';
+        title.textContent = 'Jivo Oil';
+        oilsBtn.style.background = '#5046e5'; oilsBtn.style.color = '#fff'; oilsBtn.style.boxShadow = '0 2px 8px rgba(80,70,229,0.4)'; oilsBtn.style.fontWeight = '800';
+        bevBtn.style.background = 'transparent'; bevBtn.style.color = '#6b7280'; bevBtn.style.boxShadow = 'none'; bevBtn.style.fontWeight = '700';
+      } else { setOilOnlyVisible(false);
+        logo.textContent = '🥤'; logo.style.background = 'linear-gradient(135deg,#0ea5e9,#06b6d4)'; logo.style.fontSize = '20px';
+        title.textContent = 'Jivo Beverages';
+        oilsBtn.style.background = 'transparent'; oilsBtn.style.color = '#6b7280'; oilsBtn.style.boxShadow = 'none'; oilsBtn.style.fontWeight = '700';
+        bevBtn.style.background = '#5046e5'; bevBtn.style.color = '#fff'; bevBtn.style.boxShadow = '0 2px 8px rgba(80,70,229,0.4)'; bevBtn.style.fontWeight = '800';
+      }
+      if (!changed) return;
+      moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; mvD_data = []; whAllData = [];
+      load();
+    }
+
+    document.querySelectorAll('.ni').forEach(n => n.onclick = () => {
+      document.querySelectorAll('.ni').forEach(x => x.classList.remove('on')); n.classList.add('on');
+      document.querySelectorAll('.sec').forEach(x => x.classList.remove('on')); S = n.dataset.s;
+      document.getElementById('s-' + S).classList.add('on');
+      document.getElementById('pt').textContent = n.textContent.trim();
+      load();
+    });
+    document.querySelectorAll('#cpls .pl').forEach(p => p.onclick = () => {
+      document.querySelectorAll('#cpls .pl').forEach(x => x.classList.remove('on')); p.classList.add('on'); C = p.dataset.c;
+      moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; load()
+    });
+    function setSchema(s, btn) { SCH = s; document.querySelectorAll('.schema-btn').forEach(b => b.classList.remove('on')); btn.classList.add('on'); moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; mvD_data = []; whAllData = []; load(); }
+    function pg(id, cb) { document.querySelectorAll(`#${id} .pl`).forEach(p => p.onclick = () => { document.querySelectorAll(`#${id} .pl`).forEach(x => x.classList.remove('on')); p.classList.add('on'); cb(p.dataset.v) }) }
+    function load() { ({ dash: lD, stock: lWHStock, move: lMV, movers: lMO, billing: lBI, abc: lABCXYZ, aging: lAG, trace: lTrace, planning: lPlan })[S]?.() }
+
+    // ════ DASHBOARD ════
+    async function lD() {
+      const k = (await api('/api/kpi' + (C ? '?category=' + encodeURIComponent(C) : '')))[0] || {};
+      const cat = await api('/api/categories' + (C ? '?category=' + encodeURIComponent(C) : ''));
+      const ms = await api('/api/movers_summary?days=30' + (C ? '&category=' + encodeURIComponent(C) : ''));
+      const bi = await api('/api/not_billed_summary');
+      const nm = ms.find(x => x.Status === 'NON-MOVING') || { Count: 0, Value: 0 };
+      const b30 = bi.find(x => x.Period === '30 Days') || { NotBilledSKUs: 0, NotBilledValue: 0 };
+      document.getElementById('dK').innerHTML = `<div class="kg">
+   <div class="kc k1" onclick="drillStock()"><div class="kc-l">Total Inventory Value</div><div class="kc-v">${FV(k.TotalValue)}</div><div class="kc-s">${N(k.TotalSKUs)} items in stock · Click to drill</div><div class="kc-bg">💰</div></div>
+   <div class="kc k2" onclick="drillStock()"><div class="kc-l">Total Stock Quantity</div><div class="kc-v">${N(k.TotalQty)}</div><div class="kc-s">Units across all warehouses</div><div class="kc-bg">📦</div></div>
+   <div class="kc k3" onclick="drillOOS()"><div class="kc-l">Out of Stock SKUs</div><div class="kc-v">${N(k.OutOfStockSKUs)}</div><div class="kc-s">Zero stock · Click for list</div><div class="kc-bg">⚠️</div></div>
+   <div class="kc k4" onclick="goTo('movers')"><div class="kc-l">Non-Moving (30d)</div><div class="kc-v">${N(nm.Count)}</div><div class="kc-s">${FsV(nm.Value)} capital stuck</div><div class="kc-bg">🔒</div></div>
+   <div class="kc k5" onclick="goTo('billing')"><div class="kc-l">FG Not Billed (30d)</div><div class="kc-v">${N(b30.NotBilledSKUs)}</div><div class="kc-s">${FsV(b30.NotBilledValue)} unbilled</div><div class="kc-bg">🧾</div></div>
+  </div>`;
+      const nt = document.getElementById('dN'); let ins = [];
+      if (nm.Count > 0) ins.push(`<b>${N(nm.Count)} items (${FV(nm.Value)})</b> — zero movement in 30 days`);
+      if (b30.NotBilledSKUs > 0) ins.push(`<b>${N(b30.NotBilledSKUs)} finished goods (${FV(b30.NotBilledValue)})</b> — not invoiced in 30 days`);
+      if (ins.length) { nt.style.display = ''; nt.innerHTML = '<b>⚠ Attention Required:</b><br>' + ins.join('<br>') } else { nt.style.display = 'none' }
+      mc('cPie', {
+        type: 'doughnut', data: { labels: cat.map(c => c.Category), datasets: [{ data: cat.map(c => c.Value || 0), backgroundColor: ['#6366f1', '#f59e0b', '#06b6d4'], borderWidth: 3, borderColor: '#fff', borderRadius: 6, hoverOffset: 8 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { font: { size: 12, weight: 700, family: 'Nunito' }, padding: 12, usePointStyle: true } }, datalabels: { display: true, color: '#fff', font: { weight: 800, size: 13, family: 'Nunito' }, formatter: (v, c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return t > 0 ? Math.round(v / t * 100) + '%' : '' } } } }
+      });
+      const mC = { 'FAST': '#10b981', 'MEDIUM': '#6366f1', 'SLOW': '#f59e0b', 'NON-MOVING': '#ef4444' };
+      const mS = [...ms].sort((a, b) => (b.Value || 0) - (a.Value || 0));
+      mc('cMov', {
+        type: 'bar', data: { labels: mS.map(s => s.Status), datasets: [{ data: mS.map(s => s.Value || 0), backgroundColor: mS.map(s => mC[s.Status] || '#d1d5db'), borderRadius: 8, barThickness: 28 }] },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'right', color: '#374151', font: { weight: 800, size: 12, family: 'Nunito' }, formatter: v => Fs(v) } },
+          scales: { x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Nunito', size: 11, weight: 700 } } }, y: { grid: { display: false }, ticks: { font: { size: 12, weight: 800, family: 'Nunito' } } } }
+        }
+      });
+      mc('cBill', {
+        type: 'bar', data: { labels: bi.map(b => b.Period), datasets: [{ data: bi.map(b => b.NotBilledValue || 0), backgroundColor: ['#ef4444', '#f59e0b', '#6366f1'], borderRadius: 8, barThickness: 40 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', color: '#374151', font: { weight: 800, size: 12, family: 'Nunito' }, formatter: v => Fs(v) } },
+          scales: { y: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Nunito', size: 11, weight: 700 } } }, x: { grid: { display: false }, ticks: { font: { size: 12, weight: 700, family: 'Nunito' } } } }
+        }
+      });
+    }
+    function goTo(s) { document.querySelectorAll('.ni').forEach(x => { x.classList.remove('on'); if (x.dataset.s === s) x.classList.add('on') }); document.querySelectorAll('.sec').forEach(x => x.classList.remove('on')); S = s; document.getElementById('s-' + s).classList.add('on'); document.getElementById('pt').textContent = document.querySelector(`.ni[data-s="${s}"]`).textContent.trim(); load() }
+    async function drillStock() {
+      const label = C || 'All Categories';
+      oM('Stock Position — ' + label);
+      document.getElementById('mB').innerHTML = '<div class="ld">⏳ Fetching from SAP... please wait</div>';
+      const d = await api('/api/stock_position' + (C ? '?category=' + encodeURIComponent(C) : ''));
+      document.getElementById('mB').innerHTML = d.length ? mkT(d) : '<div class="em">No items found for ' + label + ' — check if items exist in SAP with U_Unit=BEVERAGES</div>';
+    }
+    async function drillOOS() {
+      oM('Out of Stock SKUs');
+      document.getElementById('mB').innerHTML = '<div class="ld">⏳ Fetching from SAP... please wait</div>';
+      const d = await api('/api/out_of_stock' + (C ? '?category=' + encodeURIComponent(C) : ''));
+      document.getElementById('mB').innerHTML = d.length ?
+        `<table><thead><tr><th>Category</th><th>Item Code</th><th>Item Name</th><th class="R">On Hand</th></tr></thead><tbody>` +
+        d.map(r => `<tr><td>${r.Category}</td><td class="m">${r.ItemCode}</td><td>${r.ItemName}</td><td class="R m">${N(r.TotalOnHand)}</td></tr>`).join('') + '</tbody></table>' :
+        '<div class="em">No out of stock items</div>';
+    }
+    function mkT(d) { return `<table><thead><tr><th>Category</th><th>Item Code</th><th>Item Name</th><th>WH</th><th>Owner</th><th class="R">On Hand</th><th class="R">On Order</th><th class="R">Available</th><th class="R">Value</th></tr></thead><tbody>` + d.map(r => `<tr><td>${r.Category || ''}</td><td class="m">${r.ItemCode}</td><td>${r.ItemName}</td><td class="m">${r.WhsCode}</td><td>${r.OwnerName || '–'}</td><td class="R m">${N(r.OnHand)}</td><td class="R m">${N(r.OnOrder)}</td><td class="R m">${N(r.Available)}</td><td class="R m">${FV(r.StockValue)}</td></tr>`).join('') + '</tbody></table>' }
+
+    // ════ MERGED WAREHOUSE + STOCK ════
+    async function lWHStock() {
+      whItemCache = {};
+      // Load owners for filter
+      const owners = await api('/api/warehouse_owners');
+      const ownerSel = document.getElementById('whOwnerFilter');
+      ownerSel.innerHTML = '<option value="">All Owners</option>';
+      owners.forEach(o => { const op = document.createElement('option'); op.value = o.OwnerName; op.textContent = o.OwnerName; ownerSel.appendChild(op) });
+
+      // Load warehouse movement filter dropdown
+      const mvWhsSel = document.getElementById('mvWhsFilter');
+      if (mvWhsSel.options.length <= 1) {
+        const whs = await api('/api/warehouses');
+        whs.forEach(w => { const o = document.createElement('option'); o.value = w.WhsCode; o.textContent = `${w.WhsCode} — ${w.WhsName}`; mvWhsSel.appendChild(o) });
+      }
+
+      const cat = C ? `?category=${encodeURIComponent(C)}` : '';
+      whAllData = await api(`/api/warehouse_summary${cat}`);
+      whFilterTable();
+    }
+    function whFilterTable() {
+      const q = (document.getElementById('whSearch').value || '').toLowerCase();
+      const owner = (document.getElementById('whOwnerFilter').value || '');
+      let d = whAllData;
+      if (q) d = d.filter(r => r.WhsCode.toLowerCase().includes(q) || r.WhsName.toLowerCase().includes(q) || r.OwnerName.toLowerCase().includes(q));
+      if (owner) d = d.filter(r => r.OwnerName === owner);
+      const totalVal = d.reduce((s, r) => s + (r.Value || 0), 0);
+      const totalSKUs = d.reduce((s, r) => s + (r.SKUs || 0), 0);
+      document.getElementById('whTotalKPIs').textContent = `${d.length} warehouses · ${N(totalSKUs)} SKUs · ${F(totalVal)}`;
+      document.getElementById('whC').textContent = d.length + ' warehouses';
+      renderWhTable(d);
+    }
+    function renderWhTable(data) {
+      const wrap = document.getElementById('whT');
+      if (!data.length) { wrap.innerHTML = '<div class="em">No warehouses found</div>'; return }
+      let html = `<table class="wh-table"><thead><tr>
+   <th style="width:20px"></th>
+   <th>Warehouse Code</th><th>Warehouse Name</th><th>Owner</th>
+   <th class="R">SKUs</th><th class="R">Qty</th><th class="R">On Order</th>
+   <th class="R">Value</th>
+  </tr></thead><tbody>`;
+      data.forEach((v, idx) => {
+        const vid = `wh-${v.WhsCode.replace(/[^a-z0-9]/gi, '_')}`;
+        html += `<tr class="wh-row" onclick="whToggle('${v.WhsCode}','${vid}',this)">
+     <td><span class="wh-chevron">›</span></td>
+     <td><span class="m" style="color:var(--ac)">${v.WhsCode}</span></td>
+     <td style="font-weight:700">${v.WhsName || '–'}</td>
+     <td style="font-size:12px;color:var(--tx2)">${v.OwnerName || '–'}</td>
+     <td class="R m">${N(v.SKUs)}</td>
+     <td class="R m">${N(v.Qty)}</td>
+     <td class="R m" style="color:#4f46e5">${N(v.OnOrder)}</td>
+     <td class="R m" style="font-weight:800;color:#059669">${FV(v.Value)}</td>
+    </tr>
+    <tr class="wh-items-row" id="${vid}-items"><td colspan="8">
+     <div class="wh-items-inner" id="${vid}-inner"><div class="ld" style="padding:10px">Loading items...</div></div>
+    </td></tr>`;
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    }
+    async function whToggle(whsCode, vid, row) {
+      const itemRow = document.getElementById(`${vid}-items`);
+      const inner = document.getElementById(`${vid}-inner`);
+      const isOpen = row.classList.contains('open');
+      // close all
+      document.querySelectorAll('#whT .wh-row').forEach(r => r.classList.remove('open'));
+      document.querySelectorAll('#whT .wh-items-row').forEach(r => r.classList.remove('open'));
+      if (isOpen) return;
+      row.classList.add('open'); itemRow.classList.add('open');
+      if (whItemCache[whsCode]) { inner.innerHTML = whItemCache[whsCode]; return }
+      const cat = C ? `&category=${encodeURIComponent(C)}` : '';
+      const d = await api(`/api/warehouse_items?whs=${encodeURIComponent(whsCode)}${cat}`);
+      const html = d.length ? `
+   <div style="padding:8px 14px;font-size:11px;font-weight:700;color:var(--mt)">
+    ${d.length} items in ${whsCode}
+   </div>
+   <table><thead><tr>
+    <th>Category</th><th>Item Code</th><th>Item Name</th><th>Sub-Group</th><th>Type</th>
+    <th class="R">On Hand</th><th class="R">On Order</th>
+    <th class="R">Available</th><th class="R">Value</th>
+   </tr></thead><tbody>`+
+        d.map(r => `<tr>
+    <td><span class="bd b-i" style="font-size:9px">${r.Category || '–'}</span></td>
+    <td class="m" style="color:var(--ac)">${r.ItemCode}</td>
+    <td>${r.ItemName || ''}</td>
+    <td style="font-size:11px;color:var(--mt)">${r.SubGroup || '–'}</td>
+    <td>${typBadge(r.ItemType, r.ItemName)}</td>
+    <td class="R m">${N(r.OnHand)}</td>
+    <td class="R m" style="color:#4f46e5">${N(r.OnOrder)}</td>
+    <td class="R m" style="color:${(r.Available || 0) < 0 ? '#dc2626' : '#059669'}">${N(r.Available)}</td>
+    <td class="R m" style="font-weight:800">${FV(r.StockValue)}</td>
+   </tr>`).join('') + '</tbody></table>' :
+        '<div class="em" style="padding:12px">No items in this warehouse</div>';
+      whItemCache[whsCode] = html; inner.innerHTML = html;
+    }
+
+    // ════ MOVEMENT ════
+    async function lMV() {
+      pg('mvD', v => { if (!mvCustomApplied) { mvDays = +v; lMVFetch() } });
+      // init warehouse dropdown if needed
+      const sel = document.getElementById('mvWhsFilter');
+      if (sel.options.length <= 1) {
+        const whs = await api('/api/warehouses');
+        whs.forEach(w => { const o = document.createElement('option'); o.value = w.WhsCode; o.textContent = `${w.WhsCode} — ${w.WhsName}`; sel.appendChild(o) });
+      }
+      lMVFetch();
+    }
+    async function lMVFetch() {
+      let url = `/api/movement?days=${mvDays}`;
+      if (C) url += `&category=${encodeURIComponent(C)}`;
+      if (mvCustomFrom && mvCustomTo) url += `&date_from=${mvCustomFrom}&date_to=${mvCustomTo}`;
+      mvD_data = await api(url);
+      const label = mvCustomFrom && mvCustomTo ? `${mvCustomFrom} → ${mvCustomTo}` : `${mvDays} Days`;
+      document.getElementById('mvH').textContent = `Daily Movement — ${label}`;
+      const tI = mvD_data.reduce((s, x) => s + (x.InValue || 0), 0), tO = mvD_data.reduce((s, x) => s + (x.OutValue || 0), 0);
+      const nt = document.getElementById('mvN'); nt.style.display = '';
+      nt.innerHTML = mvD_data.length ? `<b>Summary:</b> In: ${FV(tI)} · Out: ${FV(tO)} · Net: ${FV(tI - tO)}` : '<b>No data</b>';
+      rMV();
+    }
+    function mvApplyDate() {
+      mvCustomFrom = document.getElementById('mvDateFrom').value;
+      mvCustomTo = document.getElementById('mvDateTo').value;
+      if (mvCustomFrom && mvCustomTo) { mvCustomApplied = true; lMVFetch() }
+    }
+    function mvClearDate() {
+      mvCustomFrom = ''; mvCustomTo = ''; mvCustomApplied = false;
+      document.getElementById('mvDateFrom').value = ''; document.getElementById('mvDateTo').value = '';
+      lMVFetch();
+    }
+    function rMV() {
+      const q = (document.getElementById('mvS').value || '').toLowerCase();
+      const whsF = (document.getElementById('mvWhsFilter').value || '');
+      let d = mvD_data;
+      if (whsF) d = d.filter(r => r.WhsCode === whsF);
+      if (q) d = d.filter(r => String(r.ItemCode || '').toLowerCase().includes(q) || String(r.ItemName || '').toLowerCase().includes(q) || String(r.Category || '').toLowerCase().includes(q) || String(r.SubGroup || '').toLowerCase().includes(q) || String(r.Date || '').includes(q) || String(r.WhsCode || '').toLowerCase().includes(q));
+      document.getElementById('mvC').textContent = d.length + ' rows';
+      document.getElementById('mvT').innerHTML = d.length ?
+        `<table><thead><tr><th>Date</th><th>WH Code</th><th>Warehouse</th><th>Category</th><th>Sub-Group</th><th>Item Code</th><th>Item Name</th><th class="R">In Qty</th><th class="R">Out Qty</th><th class="R">In Value</th><th class="R">Out Value</th><th class="R">Net</th></tr></thead><tbody>` +
+        d.map(r => `<tr>
+    <td class="m">${r.Date || ''}</td>
+    <td class="m" style="color:var(--ac)">${r.WhsCode || ''}</td>
+    <td style="font-size:12px;color:var(--tx2)">${r.WhsName || ''}</td>
+    <td><span class="bd b-i" style="font-size:9px">${r.Category || '–'}</span></td>
+    <td>${r.SubGroup || '–'}</td>
+    <td class="m">${r.ItemCode || ''}</td>
+    <td>${r.ItemName || ''}</td>
+    <td class="R m">${N(r.InQty)}</td><td class="R m">${N(r.OutQty)}</td>
+    <td class="R m">${FV(r.InValue)}</td><td class="R m">${FV(r.OutValue)}</td>
+    <td class="R m" style="color:${(r.InValue || 0) - (r.OutValue || 0) >= 0 ? '#059669' : '#ef4444'}">${FV((r.InValue || 0) - (r.OutValue || 0))}</td>
+   </tr>`).join('') + '</tbody></table>' :
+        '<div class="em">No data</div>';
+    }
+
+    // ════ MOVERS ════
+    async function lMO() {
+      pg('moP', v => { moDays = +v; moItemCache = {}; moDateFrom = ''; moDateTo = ''; if (document.getElementById('moDateFrom')) document.getElementById('moDateFrom').value = ''; if (document.getElementById('moDateTo')) document.getElementById('moDateTo').value = ''; lMOSGs(); });
+      pg('moStatus', v => { moStatusF = v; moItemCache = {}; renderMoTable(); }); if(document.getElementById('moTF')) pg('moTF', v => { moType = v; moItemCache = {}; lMOSGs(); });
+
+      const sum = await api(`/api/movers_summary?days=${moDays}` + (C ? '&category=' + encodeURIComponent(C) : ''));
+      const g = s => sum.find(x => x.Status === s) || { Count: 0, Value: 0 };
+      const nm = g('NON-MOVING'), sl = g('SLOW'), md = g('MEDIUM'), fa = g('FAST');
+      document.getElementById('moK').innerHTML = `<div class="kg">
+   <div class="kc k3"><div class="kc-l">Non-Moving (${moDays}d)</div><div class="kc-v">${N(nm.Count)}</div><div class="kc-s">${FsV(nm.Value)} stuck</div><div class="kc-bg">🔒</div></div>
+   <div class="kc k4"><div class="kc-l">Slow</div><div class="kc-v">${N(sl.Count)}</div><div class="kc-s">${FsV(sl.Value)}</div><div class="kc-bg">🐌</div></div>
+   <div class="kc k1"><div class="kc-l">Medium</div><div class="kc-v">${N(md.Count)}</div><div class="kc-s">${FsV(md.Value)}</div><div class="kc-bg">⚡</div></div>
+   <div class="kc k2"><div class="kc-l">Fast</div><div class="kc-v">${N(fa.Count)}</div><div class="kc-s">${FsV(fa.Value)}</div><div class="kc-bg">🚀</div></div>
+  </div>`;
+      const nt = document.getElementById('moN');
+      if (nm.Count > 0) { nt.style.display = ''; nt.innerHTML = `<b>⚠ ${N(nm.Count)} items</b> — ZERO movement in ${moDays} days — <b>${FV(nm.Value)}</b> stuck.` } else { nt.style.display = 'none' }
+      await lMOSGs();
+    }
+    async function lMOSGs() {
+      const cat = C || 'FINISHED';
+      const t = '';
+      const moDtP = moDateFrom && moDateTo ? `&date_from=${moDateFrom}&date_to=${moDateTo}` : ''; moSGData = await api(`/api/movers_by_subgroup?days=${moDays}&category=${encodeURIComponent(cat)}${moDtP}`);
+      moItemCache = {}; renderMoTable();
+    }
+    function renderMoTable() {
+      const wrap = document.getElementById('moTableWrap');
+      if (!moSGData.length) { wrap.innerHTML = '<div class="em">No data</div>'; document.getElementById('moC').textContent = '0'; return }
+      const openRows = [];
+      document.querySelectorAll('#moTableWrap .cat-row.open').forEach(row => {
+        const onclickAttr = row.getAttribute('onclick');
+        if (onclickAttr) {
+          const match = onclickAttr.match(/moToggleSG\('(.*?)',\s*\d+,\s*this\)/);
+          if (match) openRows.push(match[1]);
+        }
+      });
+
+      let h = `<table class="cat-table"><thead><tr>
+   <th style="width:24px"></th>
+   <th>Sub-Group</th>
+   <th class="R">Total SKUs</th><th class="R" style="color:#ef4444">Non-Moving</th>
+   <th class="R" style="color:#f59e0b">Slow</th><th class="R" style="color:#0ea5e9">Medium</th>
+   <th class="R" style="color:#10b981">Fast</th>
+   <th class="R">Stock Value</th><th class="R" style="color:#dc2626">Stuck Value</th>
+  </tr></thead><tbody>`;
+      moSGData.forEach((v, idx) => {
+        const sgSafe = v.SubGroup.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        h += `<tr class="cat-row" onclick="moToggleSG('${sgSafe}',${idx},this)">
+     <td><span class="cat-chevron">›</span></td>
+     <td style="font-weight:700">${v.SubGroup}</td>
+     <td class="R m">${N(v.TotalSKUs)}</td>
+     <td class="R m" style="color:#ef4444">${N(v.NonMovingSKUs)}</td>
+     <td class="R m" style="color:#f59e0b">${N(v.SlowSKUs)}</td>
+     <td class="R m" style="color:#0ea5e9">${N(v.MediumSKUs)}</td>
+     <td class="R m" style="color:#10b981">${N(v.FastSKUs)}</td>
+     <td class="R m">${FsV(v.StockValue)}</td>
+     <td class="R m" style="color:${v.StuckValue > 0 ? '#dc2626' : 'var(--mt)'}">
+      ${v.StuckValue > 0 ? FsV(v.StuckValue) : '–'}
+     </td>
+    </tr>
+    <tr class="cat-items-row" id="mo-items-${idx}"><td colspan="9"><div class="cat-items-inner" id="mo-inner-${idx}"><div class="ld" style="padding:12px">Loading...</div></div></td></tr>`;
+      });
+      h += '</tbody></table>';
+      wrap.innerHTML = h;
+      document.getElementById('moC').textContent = moSGData.reduce((s, v) => s + v.TotalSKUs, 0) + ' SKUs';
+      if (openRows.length > 0) {
+        setTimeout(() => {
+          const rows = document.querySelectorAll('#moTableWrap .cat-row');
+          rows.forEach(row => {
+            const onclickAttr = row.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.includes(`moToggleSG('${openRows[0]}'`)) {
+              row.click();
+            }
+          });
+        }, 10);
+      }
+    }
+    async function moToggleSG(sg, idx, row) {
+      const itemRow = document.getElementById(`mo-items-${idx}`);
+      const inner = document.getElementById(`mo-inner-${idx}`);
+      const isOpen = row.classList.contains('open');
+      document.querySelectorAll('#moTableWrap .cat-row').forEach(r => r.classList.remove('open'));
+      document.querySelectorAll('#moTableWrap .cat-items-row').forEach(r => r.classList.remove('open'));
+      if (isOpen) return;
+      row.classList.add('open'); itemRow.classList.add('open');
+
+      const cacheKey = sg + '|' + (moStatusF || 'all') + '|' + (typeof moDateFrom !== 'undefined' ? moDateFrom : '');
+      if (moItemCache[cacheKey]) { inner.innerHTML = moItemCache[cacheKey]; return }
+      const cat = C || 'FINISHED';
+      const dateP = (typeof moDateFrom !== 'undefined' && moDateFrom && moDateTo) ? `&date_from=${moDateFrom}&date_to=${moDateTo}` : '';
+      const statusP = (moStatusF && moStatusF !== 'all') ? `&status=${encodeURIComponent(moStatusF)}` : '';
+      const d = await api(`/api/movers?days=${moDays}&category=${encodeURIComponent(cat)}&subgroup=${encodeURIComponent(sg)}${dateP}${statusP}`);
+      const html = buildMoItemsHtml(d);
+      moItemCache[cacheKey] = html;
+      inner.innerHTML = html;
+    }
+    function buildMoItemsHtml(d) {
+      if (!d || !d.length) return '<div class="em" style="padding:16px">No items found</div>';
+      return '<table><thead><tr><th>Status</th><th>Sub-Group</th><th>Item Code</th><th>Item Name</th><th class="R">Stock</th><th class="R">' + moDays + 'd Out</th><th class="R">Value</th><th class="R">Days Left</th><th>Last Move</th><th>Action</th></tr></thead><tbody>' +
+        d.map(function (r) {
+          var nm = r.ItemName || '';
+          var code = r.ItemCode || '';
+          var safeName = nm.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+          var lastMove = r.LastMoveDate ? r.LastMoveDate : '<span style="color:#dc2626">Never</span>';
+          var dsl = r.DaysOfStockLeft < 0 ? '∞' : N(r.DaysOfStockLeft);
+          var outKey = 'Out' + moDays + 'd';
+          return '<tr>' +
+            '<td>' + moBadge(r.MovementStatus) + '</td>' +
+            '<td style="font-size:12px;color:var(--mt)">' + (r.SubGroup || '–') + '</td>' +
+            '<td class="m">' + code + '</td>' +
+            '<td>' + nm + '</td>' +
+            '<td class="R m">' + N(r.TotalOnHand) + '</td>' +
+            '<td class="R m">' + N(r[outKey]) + '</td>' +
+            '<td class="R m">' + FV(r.StockValue) + '</td>' +
+            '<td class="R m">' + dsl + '</td>' +
+            '<td class="m">' + lastMove + '</td>' +
+            '<td><button class="trace-btn" onclick="goToTrace(this.dataset.code,this.dataset.name)" data-code="' + code + '" data-name="' + safeName + '">🔍 Trace</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table>';
+    }
+
+
+    function goToTrace(code, name) {
+      traceCode = code; traceName = name; traceCategory = 'FINISHED';
+      goTo('trace');
+      setTimeout(async () => {
+        document.querySelectorAll('#traceCatF .pl').forEach(p => { p.classList.remove('on'); if (p.textContent.trim() === 'FG') p.classList.add('on'); });
+        await traceLoadSGDropdown(); await traceLoadList();
+        setTimeout(() => {
+          const match = Array.from(document.querySelectorAll('#traceList .pt-list-item')).find(e => e.querySelector('.item-code')?.textContent === code);
+          if (match) { match.classList.add('active'); match.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          tracePickItem(code, name, null);
+        }, 500);
+      }, 200);
+    }
+
+    // ════ BILLING ════
+    async function lBI() {
+      pg('biP', v => { biDays = +v; biCustomFrom = ''; biCustomTo = ''; biItemCache = {}; lBI() }); if(document.getElementById('biTF')) pg('biTF', v => { biType = v; biItemCache = {}; lBISGs(); });
+
+      const sum = await api('/api/not_billed_summary');
+      document.getElementById('biK').innerHTML = `<div class="kg">` + sum.map((s, i) => `<div class="kc k${i === 0 ? 3 : i === 1 ? 4 : 1}"><div class="kc-l">FG Not Billed · ${s.Period}</div><div class="kc-v">${N(s.NotBilledSKUs)}</div><div class="kc-s">${FsV(s.NotBilledValue)}</div><div class="kc-bg">🧾</div></div>`).join('') + '</div>';
+      const c = sum.find(s => s.Period === biDays + ' Days') || {};
+      const nt = document.getElementById('biN');
+      if (c.NotBilledSKUs > 0) { nt.style.display = ''; nt.innerHTML = `<b>⚠ ${N(c.NotBilledSKUs)} finished goods</b> worth <b>${FV(c.NotBilledValue)}</b> — not invoiced in ${biDays} days <i style="font-size:11px">(items created &lt;30d excluded)</i>` } else { nt.style.display = 'none' }
+      await lBISGs();
+    }
+    function biApplyCustomDate() { biCustomFrom = document.getElementById('biDateFrom').value; biCustomTo = document.getElementById('biDateTo').value; if (biCustomFrom && biCustomTo) { biItemCache = {}; lBISGs() } }
+    function biClearCustomDate() { biCustomFrom = ''; biCustomTo = ''; document.getElementById('biDateFrom').value = ''; document.getElementById('biDateTo').value = ''; biItemCache = {}; lBISGs() }
+    async function lBISGs() {
+      const biDtP = biCustomFrom && biCustomTo ? `&date_from=${biCustomFrom}&date_to=${biCustomTo}` : '';
+      biSGData = await api(`/api/not_billed_by_subgroup?days=${biDays}${biDtP}`);
+      biItemCache = {}; renderBiTable();
+    }
+    function renderBiTable() {
+      const wrap = document.getElementById('biTableWrap');
+      if (!biSGData.length) { wrap.innerHTML = '<div class="em">No data</div>'; document.getElementById('biC').textContent = '0'; return }
+      let html = `<table class="cat-table"><thead><tr><th style="width:24px"></th><th>Sub-Group</th><th class="R">Total SKUs</th><th class="R" style="color:#ef4444">Not Billed</th><th class="R">Total Value</th><th class="R" style="color:#dc2626">Unbilled Value</th></tr></thead><tbody>`;
+      biSGData.forEach((v, idx) => {
+        html += `<tr class="cat-row" onclick="biToggleSG('${v.SubGroup.replace(/'/g, "\\'")}',${idx},this)">
+     <td><span class="cat-chevron">›</span></td>
+     <td style="font-weight:700">${v.SubGroup}</td>
+     <td class="R m">${N(v.TotalSKUs)}</td>
+     <td class="R m" style="color:#ef4444">${N(v.NotBilledSKUs)}</td>
+     <td class="R m">${FsV(v.TotalValue)}</td>
+     <td class="R m" style="color:#dc2626">${FsV(v.NotBilledValue)}</td>
+    </tr>
+    <tr class="cat-items-row" id="bi-items-${idx}"><td colspan="6"><div class="cat-items-inner" id="bi-inner-${idx}"><div class="ld" style="padding:12px">Loading...</div></div></td></tr>`;
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+      document.getElementById('biC').textContent = biSGData.reduce((s, v) => s + v.NotBilledSKUs, 0) + ' unbilled';
+    }
+    async function biToggleSG(sg, idx, row) {
+      const itemRow = document.getElementById(`bi-items-${idx}`);
+      const inner = document.getElementById(`bi-inner-${idx}`);
+      const isOpen = row.classList.contains('open');
+      document.querySelectorAll('#biTableWrap .cat-row').forEach(r => r.classList.remove('open'));
+      document.querySelectorAll('#biTableWrap .cat-items-row').forEach(r => r.classList.remove('open'));
+      if (isOpen) return;
+      row.classList.add('open'); itemRow.classList.add('open');
+      if (biItemCache[sg]) { inner.innerHTML = biItemCache[sg]; return }
+      const t = '';
+      const dateP = biCustomFrom && biCustomTo ? `&date_from=${biCustomFrom}&date_to=${biCustomTo}` : '';
+      const d = await api(`/api/not_billed?days=${biDays}&subgroup=${encodeURIComponent(sg)}${dateP}`);
+      const html = d.length ? `<table><thead><tr><th>Type</th><th>Item Code</th><th>Item Name</th><th class="R">Stock</th><th class="R">Value</th><th>Last Bill Date</th><th>Days Since Billed</th><th>Customer</th><th></th></tr></thead><tbody>` +
+        d.map(r => `<tr><td>${typBadge(r.ItemType)}</td><td class="m">${r.ItemCode}</td><td>${r.ItemName || ''}</td><td class="R m">${N(r.CurrentStock)}</td><td class="R m">${FV(r.StockValue)}</td><td class="m">${r.LastBillDate || '<span style="color:#dc2626">Never</span>'}</td><td class="m">${r.LastBilledAgo || '–'}</td><td>${r.LastCustomer || '–'}</td><td><button class="trace-btn" onclick="goToTrace(this.dataset.code,this.dataset.name)" data-code="${r.ItemCode}" data-name="${r.ItemName || ''}">🔍 Trace</button></td></tr>`).join('') + '</tbody></table>' : '<div class="em" style="padding:12px">All billed ✓</div>';
+      biItemCache[sg] = html; inner.innerHTML = html;
+    }
+    function biSearchItems() { }
+
+    // ════ ABC-XYZ ════
+    const CC = { AX: '#d1fae5', AY: '#ecfdf5', AZ: '#fee2e2', BX: '#fef3c7', BY: '#fffbeb', BZ: '#fefce8', CX: '#ede9fe', CY: '#f5f3ff', CZ: '#faf5ff' };
+    const CT = { AX: '#065f46', AY: '#065f46', AZ: '#991b1b', BX: '#92400e', BY: '#92400e', BZ: '#92400e', CX: '#4c1d95', CY: '#4c1d95', CZ: '#4c1d95' };
+
+    async function lABCXYZ() {
+
+      const sum = await api('/api/abcxyz_summary');
+      const sm = {}; sum.forEach(r => { sm[r.ABCXYZClass] = { skus: r.SKUs || 0, value: r.Value || 0 } });
+      ['AX', 'AZ', 'BX', 'CX', 'CZ'].forEach(c => { const d = sm[c] || { skus: 0, value: 0 }; document.getElementById(`k${c}-s`).textContent = `${N(d.skus)} SKUs`; document.getElementById(`k${c}-v`).textContent = F(d.value) });
+      const ax = sm['AX'] || {}, az = sm['AZ'] || {}, cz = sm['CZ'] || {};
+      const nt = document.getElementById('abN'); const ins = [];
+      if (ax.skus > 0) ins.push(`<b>${N(ax.skus)} AX items (${FV(ax.value)})</b> — high-value stable demand`);
+      if (az.skus > 0) ins.push(`<b>${N(az.skus)} AZ items (${FV(az.value)})</b> — high-value erratic: review urgently`);
+      if (cz.skus > 0) ins.push(`<b>${N(cz.skus)} CZ items (${FV(cz.value)})</b> — elimination candidates`);
+      if (ins.length) { nt.style.display = ''; nt.innerHTML = '<b>⚠ Insights:</b><br>' + ins.join('<br>') } else { nt.style.display = 'none' }
+      await lABSGs();
+    }
+    async function lABSGs() {
+      const t = '';
+      abSGData = await api('/api/abcxyz_by_subgroup' + (DIVISION === 'oils' && abType !== 'all' ? '?item_type=' + abType : ''));
+      abItemCache = {}; abComboF = 'all';
+      // reset pill filter
+      document.querySelectorAll('#abF .pl').forEach(p => { p.classList.remove('on'); if (p.dataset.v === 'all') p.classList.add('on') });
+      // reset kpi card active
+      document.querySelectorAll('.combo-kpi').forEach(el => el.classList.remove('active'));
+      renderAbTable();
+    }
+    function abFilterCombo(combo, el) {
+      const openRow = document.querySelector('#abTableWrap .cat-row.open');
+      const openIdx = openRow ? parseInt(openRow.dataset.idx) : null;
+      const wasActive = el?.classList.contains('active');
+      document.querySelectorAll('.combo-kpi').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('#abF .pl').forEach(p => { p.classList.remove('on'); if (p.dataset.v === 'all') p.classList.add('on') });
+      if (!wasActive && el) {
+        el.classList.add('active');
+        document.querySelectorAll('#abF .pl').forEach(p => { p.classList.remove('on'); if (p.dataset.v === combo) p.classList.add('on') });
+        abComboF = combo;
+      } else {
+        abComboF = 'all';
+      }
+      abItemCache = {};
+      renderAbTable();
+      if (openIdx !== null) { setTimeout(() => { const r = document.querySelector(`#abTableWrap .cat-row[data-idx="${openIdx}"]`); if (r) r.click() }, 50); }
+    }
+
+    // pill filter also triggers combo reset
+    if(document.getElementById('abTF')) pg('abTF', v => { abType = v; abItemCache = {}; lABCXYZ(); });
+    function pg_ab(v) {
+      document.querySelectorAll('.combo-kpi').forEach(el => el.classList.remove('active'));
+      abComboF = v; abItemCache = {}; renderAbTable();
+    }
+    // Override abF pills
+    function setupAbPills() {
+      document.querySelectorAll('#abF .pl').forEach(p => p.onclick = () => {
+        const openRow = document.querySelector('#abTableWrap .cat-row.open');
+        const openIdx = openRow ? parseInt(openRow.dataset.idx) : null;
+        document.querySelectorAll('#abF .pl').forEach(x => x.classList.remove('on')); p.classList.add('on');
+        document.querySelectorAll('.combo-kpi').forEach(el => el.classList.remove('active'));
+        abComboF = p.dataset.v; abItemCache = {}; renderAbTable();
+        if (openIdx !== null) { setTimeout(() => { const r = document.querySelector(`#abTableWrap .cat-row[data-idx="${openIdx}"]`); if (r) r.click() }, 50); }
+      });
+    }
+
+    function renderAbTable() {
+      const wrap = document.getElementById('abTableWrap');
+      if (!abSGData.length) { wrap.innerHTML = '<div class="em">No data</div>'; document.getElementById('abC').textContent = '0'; return }
+      let html = `<table class="cat-table"><thead><tr><th style="width:24px"></th><th>Sub-Group</th><th class="R">SKUs</th><th class="R" style="color:#ef4444">A (Top 80%)</th><th class="R" style="color:#f59e0b">B</th><th class="R" style="color:#10b981">C</th><th class="R" style="color:#059669">X (Stable)</th><th class="R" style="color:#d97706">Y</th><th class="R" style="color:#dc2626">Z (Erratic)</th><th class="R">Value</th></tr></thead><tbody>`;
+      abSGData.forEach((v, idx) => {
+        html += `<tr class="cat-row" data-idx="${idx}" data-sg="${v.SubGroup}" onclick="abToggleSG('${v.SubGroup.replace(/'/g, "\\'")}',${idx},this)">
+     <td><span class="cat-chevron">›</span></td>
+     <td style="font-weight:700">${v.SubGroup}</td>
+     <td class="R m">${N(v.TotalSKUs)}</td>
+     <td class="R m" style="color:#ef4444">${N(v.A_Count)}</td>
+     <td class="R m" style="color:#f59e0b">${N(v.B_Count)}</td>
+     <td class="R m" style="color:#10b981">${N(v.C_Count)}</td>
+     <td class="R m" style="color:#059669">${N(v.X_Count)}</td>
+     <td class="R m" style="color:#d97706">${N(v.Y_Count)}</td>
+     <td class="R m" style="color:#dc2626">${N(v.Z_Count)}</td>
+     <td class="R m">${FsV(v.StockValue)}</td>
+    </tr>
+    <tr class="cat-items-row" id="ab-items-${idx}"><td colspan="10"><div class="cat-items-inner" id="ab-inner-${idx}"><div class="ld" style="padding:12px">Loading...</div></div></td></tr>`;
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+      document.getElementById('abC').textContent = abSGData.reduce((s, v) => s + v.TotalSKUs, 0) + ' SKUs';
+      setupAbPills();
+    }
+    async function abToggleSG(sg, idx, row) {
+      const itemRow = document.getElementById(`ab-items-${idx}`);
+      const inner = document.getElementById(`ab-inner-${idx}`);
+      const isOpen = row.classList.contains('open');
+      document.querySelectorAll('#abTableWrap .cat-row').forEach(r => r.classList.remove('open'));
+      document.querySelectorAll('#abTableWrap .cat-items-row').forEach(r => r.classList.remove('open'));
+      if (isOpen) return;
+      row.classList.add('open'); itemRow.classList.add('open');
+      const cacheKey = sg + '|' + abComboF;
+      if (abItemCache[cacheKey]) { inner.innerHTML = abItemCache[cacheKey]; return }
+      const t = '';
+      const comboP = abComboF !== 'all' ? `&combo=${encodeURIComponent(abComboF)}` : '';
+      const d = await api(`/api/abcxyz?subgroup=${encodeURIComponent(sg)}${comboP}`);
+      const html = d.length ? `<table><thead><tr><th>ABC</th><th>XYZ</th><th>Combo</th><th>Type</th><th title="Value rank">Rank</th><th>Item Code</th><th>Item Name</th><th class="R">Stock</th><th class="R">Value</th>
+   <th class="R"><span class="tip">AVG/MO<span class="tip-txt">Average units sold per month over last 3 months</span></span></th>
+   <th class="R"><span class="tip">COV<span class="tip-txt">Coefficient of Variation — demand variability. 0 = perfectly stable, &gt;1 = very erratic</span></span></th>
+   <th class="R"><span class="tip">CUM%<span class="tip-txt">Cumulative % of total stock value. A = 0–80%, B = 80–95%, C = 95–100%</span></span></th>
+   <th></th>
+  </tr></thead><tbody>`+
+        d.map(r => {
+          const aC = r.ABCClass === 'A' ? 'b-d' : r.ABCClass === 'B' ? 'b-w' : 'b-ok'; const xC = r.XYZClass === 'X' ? 'b-ok' : r.XYZClass === 'Y' ? 'b-w' : 'b-d'; const cov = r.CoV >= 9000 ? '–' : r.CoV != null ? r.CoV.toFixed(2) : '–';
+          return `<tr><td><span class="bd ${aC}">${r.ABCClass}</span></td><td><span class="bd ${xC}">${r.XYZClass}</span></td>
+     <td><span class="bd" style="background:${CC[r.ABCXYZClass] || '#f3f4f6'};color:${CT[r.ABCXYZClass] || '#374151'}">${r.ABCXYZClass}</span></td>
+     <td>${typBadge(r.ItemType, r.ItemName)}</td><td class="m">${r.Rank}</td>
+     <td class="m">${r.ItemCode}</td><td>${r.ItemName || ''}</td>
+     <td class="R m">${N(r.TotalOnHand)}</td><td class="R m">${FV(r.StockValue)}</td>
+     <td class="R m">${N(r.AvgMonthlyOut)}</td><td class="R m">${cov}</td><td class="R m">${r.CumulativePct}%</td>
+     <td><button class="trace-btn" onclick="goToTrace(this.dataset.code,this.dataset.name)" data-code="${r.ItemCode}" data-name="${(r.ItemName || '')}">🔍 Trace</button></td></tr>`
+        }).join('') + '</tbody></table>' : '<div class="em" style="padding:12px">No data for this filter</div>';
+      abItemCache[cacheKey] = html; inner.innerHTML = html;
+    }
+    function abSearchItems() { }
+
+    // ════ AGING ════
+    async function lAG() {
+      const d = await api('/api/aging' + (C ? '?category=' + encodeURIComponent(C) : '')); document.getElementById('agC').textContent = d.length;
+      document.getElementById('agT').innerHTML = d.length ?
+        `<table><thead><tr><th>Category</th><th>Bucket</th><th class="R">Items</th><th class="R">Qty</th><th class="R">Value</th><th></th></tr></thead><tbody>` +
+        d.map(r => {
+          const cl = r.Bucket === '0-30' ? 'b-ok' : r.Bucket === '90+' ? 'b-d' : 'b-w';
+          return `<tr><td>${r.Category}</td><td><span class="bd ${cl}">${r.Bucket}d sitting</span></td><td class="R m">${N(r.Items)}</td><td class="R m">${N(r.Qty)}</td><td class="R m">${FV(r.Value)}</td>
+    <td><button class="dr" onclick="drAg('${r.Bucket}','${r.Category}')">View →</button></td></tr>`
+        }).join('') + '</tbody></table>' :
+        '<div class="em">No data</div>'
+    }
+    async function drAg(b, c) {
+      oM(`Aging: ${b}d — ${c}`); document.getElementById('mB').innerHTML = '<div class="ld">Loading...</div>';
+      const d = await api(`/api/aging_drill?bucket=${b}&category=${encodeURIComponent(c)}`);
+      document.getElementById('mB').innerHTML = d.length ?
+        `<table><thead><tr><th>Item Code</th><th>Item Name</th><th>WH</th><th>First Receipt</th><th class="R">Days Sitting</th><th class="R">Qty</th><th class="R">Value</th><th></th></tr></thead><tbody>` +
+        d.map(r => `<tr><td class="m">${r.ItemCode}</td><td>${r.ItemName || ''}</td><td class="m">${r.WhsCode || ''}</td><td class="m">${r.FirstReceiptDate || ''}</td>
+   <td class="R m" style="color:${r.DaysSitting > 90 ? '#dc2626' : r.DaysSitting > 60 ? '#d97706' : '#059669'}">${N(r.DaysSitting)}d</td>
+   <td class="R m">${N(r.Qty)}</td><td class="R m">${FV(r.Value)}</td>
+   <td><button class="trace-btn" onclick="goToTrace(this.dataset.code,this.dataset.name)" data-code="${r.ItemCode}" data-name="${r.ItemName || ''}">🔍 Trace</button></td></tr>`).join('') + '</tbody></table>' :
+        '<div class="em">No items</div>'
+    }
+
+    // ════ ITEM TRACE ════
+    const TRACE_TYPES = {
+      13: { label: 'Sales', icon: '💰', color: '#065f46', bg: '#d1fae5' },
+      20: { label: 'Purchase Delivery', icon: '📦', color: '#1e40af', bg: '#dbeafe' },
+      60: { label: 'Issued to Production', icon: '🏭', color: '#92400e', bg: '#fef3c7' },
+      67: { label: 'Goods Receipt', icon: '📥', color: '#065f46', bg: '#d1fae5' },
+      59: { label: 'WH Transfer', icon: '🔀', color: '#4c1d95', bg: '#ede9fe' },
+      101: { label: 'Production Receipt', icon: '🏗️', color: '#1e40af', bg: '#dbeafe' },
+      202: { label: 'Production Issue', icon: '⚙️', color: '#92400e', bg: '#fef3c7' },
+      18: { label: 'AP Invoice', icon: '🧾', color: '#374151', bg: '#f3f4f6' },
+      162: { label: 'Inventory Adj.', icon: '⚙️', color: '#4c1d95', bg: '#ede9fe' },
+      15: { label: 'Vendor Return', icon: '↩️', color: '#991b1b', bg: '#fee2e2' },
+      14: { label: 'AR Return', icon: '↩️', color: '#991b1b', bg: '#fee2e2' },
+      16: { label: 'AR Credit Note', icon: '📋', color: '#374151', bg: '#f3f4f6' },
+    };
+    function tType(t) { return TRACE_TYPES[+t] || { label: 'Txn (' + t + ')', icon: '📋', color: '#374151', bg: '#f3f4f6' } }
+
+    async function lTrace() { await traceLoadSGDropdown(); await traceLoadList() }
+    async function traceLoadSGDropdown() {
+      const sel = document.getElementById('traceSGSelect');
+      sel.innerHTML = '<option value="">All Sub-Groups</option>';
+      const sgs = await api(`/api/trace_subgroups?category=${encodeURIComponent(traceCategory || 'FINISHED')}`);
+      sgs.forEach(v => { const o = document.createElement('option'); o.value = v.SubGroup; o.textContent = `${v.SubGroup} (${N(v.SKUs)})`; sel.appendChild(o) });
+      if (traceSG) sel.value = traceSG;
+    }
+    async function traceCatChanged(cat, btn) {
+      traceCategory = cat; traceSG = null;
+      document.querySelectorAll('#traceCatF .pl').forEach(p => p.classList.remove('on')); btn.classList.add('on');
+      await traceLoadSGDropdown(); await traceLoadList();
+    }
+    async function traceSGChanged() { traceSG = document.getElementById('traceSGSelect').value || null; await traceLoadList() }
+    async function traceLoadList() {
+      const sg = traceSG ? `&subgroup=${encodeURIComponent(traceSG)}` : '';
+      const items = await api(`/api/trace_items?category=${encodeURIComponent(traceCategory)}${sg}`);
+      traceAllItems = items; traceRenderList(items);
+    }
+    function traceRenderList(items) {
+      const el = document.getElementById('traceList');
+      document.getElementById('traceListCount').textContent = items.length + ' items';
+      if (!items.length) { el.innerHTML = '<div class="em">No items</div>'; return }
+      el.innerHTML = items.map(r => `
+   <div class="pt-list-item" onclick="tracePickItem('${r.ItemCode}','${r.ItemName.replace(/'/g, "\\'").replace(/"/g, '&quot;')}',this)">
+    <div class="item-code" style="font-size:12px;font-weight:800;color:var(--ac)">${r.ItemCode}</div>
+    <div style="font-size:12px;font-weight:600;color:var(--tx);margin-top:2px;line-height:1.3">${r.ItemName}</div>
+    <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
+     ${+r.OnHand > 0 ? `<span style="font-size:11px;color:#059669;font-weight:700">📦 ${N(r.OnHand)}</span>` : `<span style="font-size:11px;color:#dc2626;font-weight:700">⚠ Zero</span>`}
+     ${r.SubGroup && r.SubGroup !== '–' ? `<span style="font-size:11px;color:var(--mt)">${r.SubGroup}</span>` : ''}
+     ${r.ItemType && r.ItemType !== '–' ? typBadge(r.ItemType) : ''}
+    </div>
+   </div>`).join('');
+      // if traceCode is set (from redirect), auto-select
+      if (traceCode) {
+        const el2 = document.querySelector(`#traceList .pt-list-item`);
+        const match = Array.from(document.querySelectorAll('#traceList .pt-list-item')).find(e => e.querySelector('.item-code')?.textContent === traceCode);
+        if (match) { match.classList.add('active'); match.scrollIntoView({ behavior: 'smooth', block: 'center' }); traceLoadDetail(); }
+      }
+    }
+    function traceFilterList() { const q = document.getElementById('traceBrowse').value.toLowerCase(); traceRenderList(q ? traceAllItems.filter(r => r.ItemCode.toLowerCase().includes(q) || r.ItemName.toLowerCase().includes(q)) : traceAllItems) }
+    function tracePickItem(code, name, el) {
+      traceCode = code; traceName = name; traceTypeFilter = []; traceMonth = '';
+      document.querySelectorAll('#traceList .pt-list-item').forEach(x => x.classList.remove('active'));
+      if (el) el.classList.add('active');
+      traceLoadDetail();
+    }
+
+    async function traceLoadDetail() {
+      const code = traceCode; if (!code) return;
+      document.getElementById('traceRight').innerHTML = '<div class="ld">Loading trace...</div>';
+      const isFG = traceCategory === 'FINISHED';
+      let logUrl = `/api/trace_log?item=${encodeURIComponent(code)}`;
+      if (traceMonth) logUrl += `&month=${traceMonth}`;
+      else if (traceDays > 0) logUrl += `&days=${traceDays}`;
+      const [hdr, log, returns, disasm] = await Promise.all([
+        api(`/api/trace_header?item=${encodeURIComponent(code)}`),
+        api(logUrl),
+        isFG ? api(`/api/trace_returns?item=${encodeURIComponent(code)}` + (traceMonth ? `&month=${traceMonth}` : traceDays > 0 ? `&days=${traceDays}` : '')) : Promise.resolve([]),
+        isFG ? api(`/api/trace_disassembly?item=${encodeURIComponent(code)}&days=${traceDays}` + (traceMonth ? `&month=${traceMonth}` : '')) : Promise.resolve([])
+      ]);
+      const h = hdr[0] || {};
+      const totalIn = log.reduce((s, r) => s + (+r.InQty || 0), 0);
+      const totalOut = log.reduce((s, r) => s + (+r.OutQty || 0), 0);
+      const totalRet = returns.reduce((s, r) => s + (+r.ReturnQty || 0), 0);
+      const uniqueTypes = [...new Set(log.map(r => r.TransType))];
+
+      // Build month options (last 24 months)
+      const monthOpts = buildMonthOptions();
+
+      document.getElementById('traceRight').innerHTML = `
+  <div style="background:var(--card);border-radius:var(--r);border:1px solid var(--bd);padding:16px 20px;margin-bottom:12px">
+   <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:180px">
+     <div style="font-size:12px;font-weight:800;color:var(--ac);margin-bottom:2px">${h.ItemCode || code}</div>
+     <div style="font-size:16px;font-weight:800;letter-spacing:-.3px;margin-bottom:7px">${h.ItemName || traceName}</div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="bd b-i">${h.Category || traceCategory}</span>
+      ${h.SubGroup ? `<span class="bd b-w">${h.SubGroup}</span>` : ''}
+      ${h.ItemType && h.ItemType !== '–' ? typBadge(h.ItemType) : ''}
+      <span style="font-size:11px;font-weight:700;color:var(--mt)">📅 Created: <b style="color:var(--tx)">${h.CreateDate || '–'}</b></span>
+     </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+     <div style="background:#d1fae5;color:#065f46;border-radius:9px;padding:10px 16px;text-align:center;min-width:80px"><div style="font-size:18px;font-weight:800">${N(h.TotalOnHand)}</div><div style="font-size:9px;font-weight:800;text-transform:uppercase;margin-top:2px;opacity:.7">On Hand</div></div>
+     ${isFG ? `<div style="background:#fee2e2;color:#991b1b;border-radius:9px;padding:10px 16px;text-align:center;min-width:80px"><div style="font-size:18px;font-weight:800">${N(Math.round(totalRet))}</div><div style="font-size:9px;font-weight:800;text-transform:uppercase;margin-top:2px;opacity:.7">Returned</div></div>` : ''}
+     ${isFG ? `<div style="background:#ede9fe;color:#4c1d95;border-radius:9px;padding:10px 16px;text-align:center;min-width:80px"><div style="font-size:18px;font-weight:800">${disasm.length}</div><div style="font-size:9px;font-weight:800;text-transform:uppercase;margin-top:2px;opacity:.7">Disassembled</div></div>` : ''}
+     <div style="background:#dbeafe;color:#1e40af;border-radius:9px;padding:10px 16px;text-align:center;min-width:80px"><div style="font-size:18px;font-weight:800">${FV(h.StockValue)}</div><div style="font-size:9px;font-weight:800;text-transform:uppercase;margin-top:2px;opacity:.7">Value</div></div>
+    </div>
+   </div>
+  </div>
+  <div style="background:var(--card);border-radius:var(--r);border:1px solid var(--bd);padding:12px 20px;margin-bottom:12px">
+   <div style="font-size:10px;font-weight:800;color:var(--mt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Summary — ${log.length} transactions shown</div>
+   <div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div><span style="font-size:12px;color:var(--mt);font-weight:600">Total In: </span><span style="font-size:15px;font-weight:800;color:#059669">+${N(Math.round(totalIn))}</span></div>
+    <div><span style="font-size:12px;color:var(--mt);font-weight:600">Total Out: </span><span style="font-size:15px;font-weight:800;color:#dc2626">-${N(Math.round(totalOut))}</span></div>
+    <div><span style="font-size:12px;color:var(--mt);font-weight:600">Net Balance: </span><span style="font-size:15px;font-weight:800;color:#4f46e5">${N(Math.round(totalIn - totalOut))}</span></div>
+   </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+   <span style="font-size:12px;font-weight:700;color:var(--mt)">Period:</span>
+   <div class="pls" id="tracePeriodPls">
+    <button class="pl ${!traceMonth && traceDays === 0 ? 'on' : ''}" onclick="traceSetDays(0,null)">All Time</button>
+    <button class="pl ${!traceMonth && traceDays === 7 ? 'on' : ''}" onclick="traceSetDays(7,null)">7d</button>
+    <button class="pl ${!traceMonth && traceDays === 30 ? 'on' : ''}" onclick="traceSetDays(30,null)">30d</button>
+    <button class="pl ${!traceMonth && traceDays === 90 ? 'on' : ''}" onclick="traceSetDays(90,null)">90d</button>
+    <button class="pl ${!traceMonth && traceDays === 180 ? 'on' : ''}" onclick="traceSetDays(180,null)">180d</button>
+   </div>
+   <span style="font-size:12px;font-weight:700;color:var(--mt)">Month:</span>
+   <select id="traceMonthSel" class="filter-sel" onchange="traceSetMonth(this.value)" style="padding:4px 10px;border-radius:10px;font-size:12px">
+    <option value="">Select Month</option>
+    ${monthOpts}
+   </select>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+   <span style="font-size:12px;font-weight:700;color:var(--mt)">Type:</span>
+   <button class="pl on" id="ttAll" onclick="traceSetAllTypes()">All</button>
+   ${uniqueTypes.map(t => { const tp = tType(t); return `<button class="pl" onclick="traceToggleType(${t},this)">${tp.icon} ${tp.label}</button>` }).join('')}
+  </div>
+  <div class="tabs">
+   <div class="tab on" onclick="traceTab('log',this)">📋 Transaction Log (${log.length})</div>
+   ${isFG ? `<div class="tab" onclick="traceTab('returns',this)">↩️ Returns (${returns.length})</div>` : ''}
+   ${isFG ? `<div class="tab" onclick="traceTab('disasm',this)">🔧 Disassembly (${disasm.length})</div>` : ''}
+  </div>
+  <div class="tab-pane on" id="trace-tab-log">
+   <div class="tc">
+    <div class="tb"><h3>Transaction Log</h3><input class="sr" id="traceLogS" placeholder="Search..." oninput="_idbDeb(traceFilterLog)"><span class="cnt" id="traceLogC">${log.length} rows</span></div>
+    <div class="ts" id="traceLogT" style="max-height:500px">${traceBuildTable(log)}</div>
+   </div>
+  </div>
+  ${isFG ? `
+  <div class="tab-pane" id="trace-tab-returns">
+   <div class="tc"><div class="tb"><h3>↩️ Returns After Sale</h3><span class="cnt">${returns.length} returns · ${N(Math.round(totalRet))} units</span></div>
+   <div class="ts" style="max-height:500px">${returns.length ?
+            `<table><thead><tr><th>Date</th><th>Type</th><th>Customer</th><th>Warehouse</th><th class="R">Qty</th><th class="R">Value</th><th>Memo</th></tr></thead><tbody>` +
+            returns.map(r => `<tr><td class="m">${r.DocDate || '–'}</td><td><span style="padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;background:#fee2e2;color:#991b1b">${r.ReturnType}</span></td><td>${r.CardName || '–'}</td><td class="m">${r.Warehouse || '–'}</td><td class="R m" style="color:#dc2626;font-weight:800">+${N(r.ReturnQty)}</td><td class="R m">${FV(r.TransValue)}</td><td style="font-size:12px;color:var(--tx2)">${r.JrnlMemo || '–'}</td></tr>`).join('') + '</tbody></table>' :
+            '<div class="em">No returns found</div>'}
+   </div></div>
+  </div>
+  <div class="tab-pane" id="trace-tab-disasm">
+   <div class="tc"><div class="tb"><h3>🔧 Disassembly Orders</h3><span class="cnt">${disasm.length} orders</span></div>
+   <div class="ts" style="max-height:500px">${disasm.length ?
+            `<table><thead><tr><th>WO#</th><th>Status</th><th>Start</th><th>Due</th><th>Close</th><th class="R">Planned</th><th class="R">Actual</th><th>Comments</th></tr></thead><tbody>` +
+            disasm.map(r => {
+              const st = r.Status === 'R' ? 'Released' : r.Status === 'L' ? 'Closed' : 'Planned'; const sc = r.Status === 'L' ? 'b-ok' : r.Status === 'R' ? 'b-i' : 'b-w';
+              return `<tr><td class="m">${r.DocNum}</td><td><span class="bd ${sc}">${st}</span></td><td class="m">${r.StartDate || '–'}</td><td class="m">${r.DueDate || '–'}</td><td class="m">${r.CloseDate || '–'}</td><td class="R m">${N(r.PlannedQty)}</td><td class="R m" style="color:#059669;font-weight:800">${N(r.ActualQty)}</td><td style="font-size:11px;color:var(--mt)">${r.Comments || '–'}</td></tr>`
+            }).join('') + '</tbody></table>' :
+            '<div class="em">No disassembly orders</div>'}
+   </div></div>
+  </div>`: ''}`;
+      window._traceLog = log;
+      // restore month select value
+      if (traceMonth) { const sel = document.getElementById('traceMonthSel'); if (sel) sel.value = traceMonth; }
+    }
+
+    function buildMonthOptions() {
+      const opts = []; const now = new Date();
+      for (let i = 0; i < 24; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0');
+        const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const selected = traceMonth === `${y}-${m}` ? 'selected' : '';
+        opts.push(`<option value="${y}-${m}" ${selected}>${label}</option>`);
+      }
+      return opts.join('');
+    }
+    function traceSetMonth(val) {
+      traceMonth = val;
+      if (val) { traceDays = 0; document.querySelectorAll('#tracePeriodPls .pl').forEach(p => p.classList.remove('on')); }
+      traceLoadDetail();
+    }
+    function traceSetDays(d, _) { traceDays = d; traceMonth = ''; const sel = document.getElementById('traceMonthSel'); if (sel) sel.value = ''; traceLoadDetail() }
+
+    function traceBuildTable(rows) {
+      if (!rows.length) return '<div class="em">No transactions found</div>';
+      return `<table><thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Journal Memo</th><th>Party/Ref</th><th class="R" style="color:#059669">In Qty</th><th class="R" style="color:#dc2626">Out Qty</th><th class="R">Value</th><th>Comments</th></tr></thead>
+  <tbody>${rows.map(r => {
+        const tp = tType(r.TransType); const isIn = (+r.InQty || 0) > 0, isOut = (+r.OutQty || 0) > 0; const ref = [r.CardName, r.BaseRef].filter(Boolean).join(' · ') || '–';
+        return `<tr><td class="m" style="white-space:nowrap">${r.DocDate || '–'}</td>
+    <td><span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:800;background:${tp.bg};color:${tp.color};white-space:nowrap">${tp.icon} ${tp.label}</span></td>
+    <td><div class="m">${r.Warehouse || '–'}</div><div style="font-size:11px;color:var(--mt)">${r.WhsName || ''}</div></td>
+    <td style="font-size:12px;color:var(--tx2);max-width:160px">${r.JrnlMemo || '–'}</td>
+    <td style="font-size:11px;color:var(--mt);max-width:120px">${ref}</td>
+    <td class="R m" style="color:${isIn ? '#059669' : 'var(--mt)'}">${isIn ? '+' + N(r.InQty) : '–'}</td>
+    <td class="R m" style="color:${isOut ? '#dc2626' : 'var(--mt)'}">${isOut ? '-' + N(r.OutQty) : '–'}</td>
+    <td class="R m">${r.TransValue ? FV(r.TransValue) : '–'}</td>
+    <td style="font-size:11px;color:var(--mt);max-width:130px">${r.Comments || '–'}</td></tr>`
+      }).join('')}</tbody></table>`;
+    }
+    function traceTab(name, el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('on')); el.classList.add('on'); document.getElementById('trace-tab-' + name).classList.add('on') }
+    function traceSetAllTypes() { traceTypeFilter = []; document.querySelectorAll('#traceRight .pl').forEach(p => { if (p.id === 'ttAll') p.classList.add('on'); else p.classList.remove('on') }); applyTraceFilter() }
+    function traceToggleType(t, btn) {
+      document.getElementById('ttAll').classList.remove('on');
+      btn.classList.toggle('on');
+      const idx = traceTypeFilter.indexOf(+t);
+      if (idx >= 0) traceTypeFilter.splice(idx, 1); else traceTypeFilter.push(+t);
+      if (traceTypeFilter.length === 0) document.getElementById('ttAll').classList.add('on');
+      applyTraceFilter();
+    }
+    function applyTraceFilter() {
+      const log = window._traceLog || [];
+      const f = traceTypeFilter.length > 0 ? log.filter(r => traceTypeFilter.includes(+r.TransType)) : log;
+      document.getElementById('traceLogC').textContent = f.length + ' rows';
+      document.getElementById('traceLogT').innerHTML = traceBuildTable(f);
+    }
+    function traceFilterLog() {
+      const q = (document.getElementById('traceLogS').value || '').toLowerCase();
+      const log = window._traceLog || [];
+      const byType = traceTypeFilter.length > 0 ? log.filter(r => traceTypeFilter.includes(+r.TransType)) : log;
+      const rows = q ? byType.filter(r => Object.values(r).some(v => String(v || '').toLowerCase().includes(q))) : byType;
+      document.getElementById('traceLogC').textContent = rows.length + ' rows';
+      document.getElementById('traceLogT').innerHTML = traceBuildTable(rows);
+    }
+
+    // ════ PLANNING ════
+    async function lPlan() {
+
+      pg('plAlert', v => { plAlertF = v; rPlan() }); if(document.getElementById('plTF')) pg('plTF', v => { plType = v; lPlan(); });
+      if (document.getElementById('plSG').options.length <= 1) {
+        const sgs = await api('/api/trace_subgroups?category=FINISHED');
+        const sel = document.getElementById('plSG');
+        sgs.forEach(v => { const o = document.createElement('option'); o.value = v.SubGroup; o.textContent = v.SubGroup; sel.appendChild(o) });
+      }
+      const sg = document.getElementById('plSG').value;
+      const t = '';
+      const s = sg ? `subgroup=${encodeURIComponent(sg)}` : '';
+      plD = await api('/api/planning' + (s ? '?' + s.slice(1) : ''));
+      const critical = plD.filter(r => r.DaysOfStockLeft >= 0 && r.DaysOfStockLeft < 7);
+      const warning = plD.filter(r => r.DaysOfStockLeft >= 7 && r.DaysOfStockLeft < 30);
+      const ok = plD.filter(r => r.DaysOfStockLeft >= 30 || r.DaysOfStockLeft === -1);
+      const rising = plD.filter(r => r.Trend === 'RISING');
+      document.getElementById('planKPIs').innerHTML = `<div class="kg">
+   <div class="kc k3"><div class="kc-l">Critical (&lt;7d left)</div><div class="kc-v">${N(critical.length)}</div><div class="kc-s">Reorder immediately</div><div class="kc-bg">🚨</div></div>
+   <div class="kc k4"><div class="kc-l">Warning (&lt;30d left)</div><div class="kc-v">${N(warning.length)}</div><div class="kc-s">Plan reorder soon</div><div class="kc-bg">⚠️</div></div>
+   <div class="kc k2"><div class="kc-l">Stock OK</div><div class="kc-v">${N(ok.length)}</div><div class="kc-s">≥30 days coverage</div><div class="kc-bg">✅</div></div>
+   <div class="kc k1"><div class="kc-l">Rising Demand</div><div class="kc-v">${N(rising.length)}</div><div class="kc-s">Trending upward</div><div class="kc-bg">📈</div></div>
+   <div class="kc k5"><div class="kc-l">Total SKUs</div><div class="kc-v">${N(plD.length)}</div><div class="kc-s">In plan view</div><div class="kc-bg">📦</div></div>
+  </div>`;
+      rPlan();
+    }
+    function rPlan() {
+      const q = (document.getElementById('plS').value || '').toLowerCase();
+      let d = plD;
+      if (plAlertF === 'critical') d = d.filter(r => r.DaysOfStockLeft >= 0 && r.DaysOfStockLeft < 7);
+      else if (plAlertF === 'warning') d = d.filter(r => r.DaysOfStockLeft >= 7 && r.DaysOfStockLeft < 30);
+      else if (plAlertF === 'ok') d = d.filter(r => r.DaysOfStockLeft >= 30 || r.DaysOfStockLeft === -1);
+      if (q) d = d.filter(r => String(r.ItemCode || '').toLowerCase().includes(q) || String(r.ItemName || '').toLowerCase().includes(q) || String(r.SubGroup || '').toLowerCase().includes(q));
+      document.getElementById('plC').textContent = d.length + ' items';
+      if (!d.length) { document.getElementById('plT').innerHTML = '<div class="em">No items found</div>'; return }
+      document.getElementById('plT').innerHTML = `<table><thead><tr>
+   <th>Alert</th><th>Type</th><th>Item Code</th><th>Item Name</th><th>Sub-Group</th>
+   <th class="R">On Hand</th><th class="R">Avg Daily Out</th><th class="R">Days Left</th>
+   <th class="R">Suggested Order</th><th>Trend</th><th class="R">Stock Value</th>
+  </tr></thead><tbody>`+
+        d.map(r => {
+          const dsl = r.DaysOfStockLeft;
+          let alertBadge = '';
+          if (dsl >= 0 && dsl < 7) alertBadge = '<span class="alert-red">🔴 Critical</span>';
+          else if (dsl >= 7 && dsl < 30) alertBadge = '<span class="alert-amber">🟡 Warning</span>';
+          else alertBadge = '<span class="alert-green">✅ OK</span>';
+          const dslDisplay = dsl === -1 ? '<span style="color:var(--mt)">∞</span>' : `<span style="color:${dsl < 7 ? '#dc2626' : dsl < 30 ? '#d97706' : '#059669'};font-weight:800">${N(dsl)}d</span>`;
+          return `<tr>
+     <td>${alertBadge}</td><td>${typBadge(r.ItemType)}</td>
+     <td class="m">${r.ItemCode || ''}</td><td>${r.ItemName || ''}</td>
+     <td style="font-size:12px;color:var(--mt)">${r.SubGroup || '–'}</td>
+     <td class="R m">${N(r.TotalOnHand)}</td>
+     <td class="R m">${r.AvgDailyOut != null ? (+r.AvgDailyOut).toFixed(1) : '–'}</td>
+     <td class="R">${dslDisplay}</td>
+     <td class="R m" style="color:#0ea5e9;font-weight:800">${r.SuggestedOrder > 0 ? N(r.SuggestedOrder) : '–'}</td>
+     <td>${trendBadge(r.Trend)}</td><td class="R m">${FV(r.StockValue)}</td>
+    </tr>`;
+        }).join('') + '</tbody></table>';
+    }
+
+    async function planAI() { if (!window.inventoryUser.can_chat) return;
+      const box = document.getElementById('planAIBox'); const txt = document.getElementById('planAIText');
+      box.style.display = 'block'; txt.innerHTML = '<span style="color:var(--mt)">⏳ Generating AI analysis...</span>';
+      const critical = plD.filter(r => r.DaysOfStockLeft >= 0 && r.DaysOfStockLeft < 7).slice(0, 10);
+      const warning = plD.filter(r => r.DaysOfStockLeft >= 7 && r.DaysOfStockLeft < 30).slice(0, 10);
+      const nonMoving = plD.filter(r => r.DaysOfStockLeft === -1 && r.TotalOnHand > 0).slice(0, 5);
+      const rising = plD.filter(r => r.Trend === 'RISING').slice(0, 5);
+      const prompt = `You are an inventory planning analyst for Jivo Beverages India, a beverage manufacturer.
+Analyse this inventory data and provide 5-7 actionable bullet-point recommendations.
+Use ₹ for currency and Indian number formatting.
+CRITICAL (< 7 days): ${JSON.stringify(critical.map(r => ({ code: r.ItemCode, name: r.ItemName, daysLeft: r.DaysOfStockLeft, onHand: r.TotalOnHand })))}
+WARNING (7-30 days): ${JSON.stringify(warning.map(r => ({ code: r.ItemCode, name: r.ItemName, daysLeft: r.DaysOfStockLeft })))}
+RISING demand: ${JSON.stringify(rising.map(r => ({ code: r.ItemCode, name: r.ItemName, avgDailyOut: r.AvgDailyOut })))}
+ZERO movement: ${JSON.stringify(nonMoving.map(r => ({ code: r.ItemCode, name: r.ItemName, onHand: r.TotalOnHand, value: r.StockValue })))}
+Total SKUs: ${plD.length}. Format each point as: • [Priority] Action — Reasoning`;
+      try {
+        const res = await fetch('/inventory/' + DIVISION + '/api/chat/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() }, body: JSON.stringify({ message: prompt, context: '' }) });
+        const data = await res.json();
+        txt.innerHTML = (data.reply || 'No response').replace(/•/g, '<br>•').replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      } catch (e) { txt.innerHTML = '<span style="color:#dc2626">⚠ Could not connect to AI.</span>' }
+    }
+
+    // ════ CHAT ════
+    function tc() { if (!window.inventoryUser.can_chat) return; document.getElementById('cP').classList.toggle('op') }
+    async function sC() { if (!window.inventoryUser.can_chat) return;
+      const inp = document.getElementById('cI'); const q = inp.value.trim(); if (!q) return;
+      inp.value = '';
+      const cb = document.getElementById('cB');
+      cb.innerHTML += `<div class="cm u"><div class="bl">${q}</div></div>`;
+      cb.scrollTop = cb.scrollHeight;
+      const ctx = `Current view: ${S}. Category filter: ${C || 'All'}. Planning SKUs: ${plD.length}.`;
+      cb.innerHTML += `<div class="cm a" id="aiStreaming"><div class="bl">⏳ Thinking...</div></div>`;
+      cb.scrollTop = cb.scrollHeight;
+      try {
+        const res = await fetch('/inventory/' + DIVISION + '/api/chat/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() }, body: JSON.stringify({ message: q, context: ctx }) });
+        const data = await res.json();
+        const text = data.reply || 'Sorry, no response.';
+        document.getElementById('aiStreaming').outerHTML = `<div class="cm a"><div class="bl">${text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')}</div></div>`;
+      } catch (e) {
+        document.getElementById('aiStreaming').outerHTML = `<div class="cm a"><div class="bl" style="color:#dc2626">⚠ Connection error.</div></div>`;
+      }
+      cb.scrollTop = cb.scrollHeight;
+    }
+
+    // ── DATE HELPERS ──
+    function moApplyDate() {
+      moDateFrom = document.getElementById('moDateFrom').value;
+      moDateTo = document.getElementById('moDateTo').value;
+      if (moDateFrom && moDateTo) { moItemCache = {}; lMOSGs(); }
+    }
+    function moClearDate() {
+      moDateFrom = ''; moDateTo = '';
+      document.getElementById('moDateFrom').value = ''; document.getElementById('moDateTo').value = '';
+      moItemCache = {}; lMOSGs();
+    }
+    function mvApplyDaysInput() {
+      const n = parseInt(document.getElementById('mvDaysInput').value);
+      if (!n || n < 1) return;
+      const to = new Date(); const from = new Date(); from.setDate(from.getDate() - n);
+      const fmt = d => d.toISOString().slice(0, 10);
+      document.getElementById('mvDateFrom').value = fmt(from);
+      document.getElementById('mvDateTo').value = fmt(to);
+      mvApplyDate();
+    }
+    function moApplyDaysInput() {
+      const n = parseInt(document.getElementById('moDaysInput').value);
+      if (!n || n < 1) return;
+      const to = new Date(); const from = new Date(); from.setDate(from.getDate() - n);
+      const fmt = d => d.toISOString().slice(0, 10);
+      document.getElementById('moDateFrom').value = fmt(from);
+      document.getElementById('moDateTo').value = fmt(to);
+      moApplyDate();
+    }
+    function biApplyDaysInput() {
+      const n = parseInt(document.getElementById('biDaysInput').value);
+      if (!n || n < 1) return;
+      const to = new Date(); const from = new Date(); from.setDate(from.getDate() - n);
+      const fmt = d => d.toISOString().slice(0, 10);
+      document.getElementById('biDateFrom').value = fmt(from);
+      document.getElementById('biDateTo').value = fmt(to);
+      biApplyCustomDate();
+    }
+
+    // ── AUTH ──
+    const ADMIN_USER = 'admin', ADMIN_PASS = 'jivoadmin';
+    const body = document.getElementById('inventoryDashboard');
+    function initAuth() {
+      if (sessionStorage.getItem('adminAuth') === 'true') {
+        body.classList.remove('locked');
+        const btn = document.getElementById('lockBtn');
+        if (btn) { btn.textContent = '🔓'; btn.title = 'Logged in as admin · Click to lock'; }
+      } else {
+        body.classList.add('locked');
+      }
+    }
+    function showLoginModal() {
+      if (!body.classList.contains('locked')) return;
+      document.getElementById('loginModal').style.display = 'flex';
+      setTimeout(() => document.getElementById('loginUser').focus(), 50);
+    }
+    function closeLoginModal() {
+      document.getElementById('loginModal').style.display = 'none';
+      document.getElementById('loginErr').style.display = 'none';
+      document.getElementById('loginUser').value = '';
+      document.getElementById('loginPass').value = '';
+    }
+    function doLogin() {
+      const u = document.getElementById('loginUser').value.trim();
+      const p = document.getElementById('loginPass').value;
+      if (u === ADMIN_USER && p === ADMIN_PASS) {
+        sessionStorage.setItem('adminAuth', 'true');
+        body.classList.remove('locked');
+        const btn = document.getElementById('lockBtn');
+        if (btn) { btn.textContent = '🔓'; btn.title = 'Logged in as admin · Click to lock'; }
+        closeLoginModal();
+      } else {
+        document.getElementById('loginErr').style.display = 'block';
+      }
+    }
+    function toggleLock() {
+      if (body.classList.contains('locked')) { showLoginModal(); }
+      else {
+        sessionStorage.removeItem('adminAuth');
+        body.classList.add('locked');
+        const btn = document.getElementById('lockBtn');
+        if (btn) { btn.textContent = '🔒'; btn.title = 'Click to login'; }
+      }
+    }
+    body.classList.remove('locked');
+    showLockedMessage = function () {};
+    toggleLock = function () {
+      if (!window.inventoryUser.can_manage) return;
+      const locked = !body.classList.contains('locked');
+      body.classList.toggle('locked', locked);
+      const btn = document.getElementById('lockBtn');
+      if (btn) {
+        btn.textContent = locked ? '🔒' : '🔓';
+        btn.title = locked ? 'Values hidden - click to show' : 'Values visible - click to hide';
+      }
+    };
+    function applyPermissionLock() {
+      const btn = document.getElementById('lockBtn');
+      if (window.inventoryUser.can_manage) {
+        body.classList.remove('locked');
+        if (btn) {
+          btn.textContent = '🔓';
+          btn.title = 'Values visible - click to hide';
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      } else {
+        body.classList.add('locked');
+        if (btn) {
+          btn.textContent = '🔒';
+          btn.title = 'View access: values are locked';
+          btn.disabled = true;
+          btn.style.opacity = '0.65';
+          btn.style.cursor = 'not-allowed';
+        }
+      }
+    }
+    switchDivision(DIVISION);
+    applyPermissionLock();
+    if (!window.inventoryUser.can_chat) {
+      document.querySelectorAll('.chat-only').forEach(el => el.style.display = 'none');
+    }
+
+    // ── INIT ──
+    load();
+  </script>
+{% endblock %}

@@ -1,0 +1,217 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}Jivo Control Panel{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f3f4f6; color: #1f2937; }
+
+    /* ── Topbar ── */
+    .cp-topbar { display: flex; align-items: center; gap: 24px; padding: 0 20px; background: #ffffff; border-bottom: 1px solid #e5e7eb; height: 56px; position: sticky; top: 0; z-index: 100; }
+    .cp-topbar-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .cp-topbar-logo { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+    .cp-topbar-title { font-size: 14px; font-weight: 700; line-height: 1.1; }
+    .cp-topbar-subtitle { font-size: 11px; color: #6b7280; }
+    .cp-topbar-ticker { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
+    .cp-live-pill { background: #d1fae5; color: #047857; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .cp-live-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; animation: cp-pulse 2s infinite; }
+    @keyframes cp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .cp-ticker-item { padding: 4px 10px; background: #f3f4f6; border-radius: 20px; font-size: 11px; white-space: nowrap; flex-shrink: 0; color: #374151; }
+    .cp-ticker-item b { color: #4338ca; margin-right: 4px; }
+
+    /* ── Shell ── */
+    .cp-shell { display: flex; min-height: calc(100vh - 56px); position: relative; }
+
+    /* ── Sidebar ── */
+    .cp-sidebar { width: 240px; background: linear-gradient(180deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%); color: #fff; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width .22s ease, padding .22s ease; }
+    body.cp-sidebar-collapsed .cp-sidebar { width: 0; padding-left: 0; padding-right: 0; }
+    .cp-brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 18px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; }
+    .cp-brand-copy { min-width: 0; flex: 1; }
+    .cp-brand-logo { width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+    .cp-brand-title { font-size: 13px; font-weight: 700; }
+    .cp-brand-subtitle { font-size: 10px; color: rgba(255,255,255,0.7); }
+    .cp-sidebar-close, .cp-sidebar-open { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .15s, transform .15s; }
+    .cp-sidebar-close { width: 30px; height: 30px; border-radius: 7px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); flex-shrink: 0; }
+    .cp-sidebar-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .cp-sidebar-close .material-icons { font-size: 18px; }
+    .cp-sidebar-open { position: absolute; top: 12px; left: 12px; z-index: 20; width: 36px; height: 36px; border-radius: 9px; background: #4f46e5; color: #fff; box-shadow: 0 8px 18px rgba(79,70,229,.24); opacity: 0; pointer-events: none; transform: translateX(-8px); }
+    body.cp-sidebar-collapsed .cp-sidebar-open { opacity: 1; pointer-events: auto; transform: translateX(0); }
+    .cp-sidebar-open:hover { background: #4338ca; }
+    .cp-sidebar-open .material-icons { font-size: 21px; }
+    .cp-section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; color: rgba(255,255,255,0.5); margin: 16px 6px 6px 6px; text-transform: uppercase; }
+    .cp-nav { display: flex; flex-direction: column; gap: 2px; }
+    .cp-nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px; color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500; transition: background .15s; }
+    .cp-nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .cp-nav-item.active { background: #ffffff; color: #4338ca; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .cp-nav-item.active .material-icons { color: #4338ca; }
+    .cp-nav-item .material-icons { font-size: 18px; }
+
+    /* ── Period block ── */
+    .cp-period-block { margin-top: auto; padding-top: 18px; }
+    .cp-period-select { width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); font-family: inherit; font-size: 12px; cursor: pointer; outline: none; }
+    .cp-period-select option { color: #1f2937; background: #fff; }
+    .cp-clock { text-align: center; margin: 10px 0 8px; font-size: 12px; color: rgba(255,255,255,0.85); font-family: 'Courier New', monospace; letter-spacing: 1px; }
+    .cp-refresh-btn { display: block; text-align: center; padding: 8px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 600; transition: background .15s; }
+    .cp-refresh-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+    /* ── User badge ── */
+    .cp-user-badge { margin-top: 14px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; gap: 10px; }
+    .cp-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .cp-user-name { font-size: 12px; font-weight: 600; }
+    .cp-user-role { font-size: 10px; color: rgba(255,255,255,0.7); text-transform: capitalize; }
+    .cp-logout-form { margin-top: 8px; }
+    .cp-logout-btn { width: 100%; padding: 8px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; transition: background .15s; }
+    .cp-logout-btn:hover { background: rgba(255,255,255,0.15); }
+
+    /* ── Main content ── */
+    .cp-main { flex: 1; padding: 28px 32px; overflow: auto; min-width: 0; }
+    body.cp-sidebar-collapsed .cp-main { padding-left: 64px; }
+  </style>
+  {% block extra_styles %}{% endblock %}
+</head>
+<body>
+
+  {# ── TOPBAR ── #}
+  <div class="cp-topbar">
+    <div class="cp-topbar-brand">
+      <div class="cp-topbar-logo">JG</div>
+      <div>
+        <div class="cp-topbar-title">Jivo Group</div>
+        <div class="cp-topbar-subtitle">Control Panel</div>
+      </div>
+    </div>
+    <div class="cp-topbar-ticker">
+      <span class="cp-live-pill"><span class="cp-live-dot"></span>LIVE</span>
+      {% for item in ticker_items %}
+        <span class="cp-ticker-item"><b>{{ item.label }}</b>{{ item.value }}</span>
+      {% empty %}
+        <span class="cp-ticker-item" style="opacity:0.5;">No live metrics yet</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── SHELL (sidebar + main) ── #}
+  <div class="cp-shell">
+    <aside class="cp-sidebar">
+
+      <div class="cp-brand">
+        <div class="cp-brand-logo">JG</div>
+        <div class="cp-brand-copy">
+          <div class="cp-brand-title">Jivo Group</div>
+          <div class="cp-brand-subtitle">Control Panel</div>
+        </div>
+        <button class="cp-sidebar-close" type="button" onclick="setControlPanelSidebar(false)" title="Close sidebar" aria-label="Close control panel sidebar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      {% if is_authenticated %}
+        <div class="cp-section-label">Main Menu</div>
+        <nav class="cp-nav">
+          <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}">
+            <span class="material-icons">dashboard</span>Control Panel
+          </a>
+          {% if can_sales %}
+            <a class="cp-nav-item {% if sidebar_active == 'sales' %}active{% endif %}" href="{% url 'sales:dashboard' %}">
+              <span class="material-icons">trending_up</span>Sales
+            </a>
+          {% endif %}
+          {% if can_realise %}
+            <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}">
+              <span class="material-icons">flash_on</span>Realise
+            </a>
+          {% endif %}
+        </nav>
+
+        <div class="cp-section-label">Reports</div>
+        <nav class="cp-nav">
+          {% if can_inventory %}
+            <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}">
+              <span class="material-icons">inventory_2</span>Inventory
+            </a>
+          {% endif %}
+          {% if can_expenses %}
+            <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}">
+              <span class="material-icons">receipt_long</span>Expenses
+            </a>
+          {% endif %}
+          {% if can_salaries %}
+            <a class="cp-nav-item {% if sidebar_active == 'salaries' %}active{% endif %}" href="{% url 'dashboard:salaries' %}">
+              <span class="material-icons">people</span>Salaries
+            </a>
+          {% endif %}
+        </nav>
+
+        <div class="cp-period-block">
+          <div class="cp-section-label">Period</div>
+          <select class="cp-period-select" onchange="window.location.href='?period='+this.value">
+            {% for opt in period_options %}
+              <option value="{{ opt.value }}"{% if opt.value == selected_period %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+          <div class="cp-clock" id="cpClock">--:--:-- --</div>
+          <a class="cp-refresh-btn" href="?nocache=1">&#8635; Clear Cache &amp; Refresh</a>
+        </div>
+
+        <div class="cp-user-badge">
+          <div class="cp-avatar">{{ display_name|slice:":2"|upper }}</div>
+          <div>
+            <div class="cp-user-name">{{ display_name }}</div>
+            <div class="cp-user-role">{{ role }}</div>
+          </div>
+        </div>
+        <form class="cp-logout-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="cp-logout-btn">Sign out</button>
+        </form>
+      {% endif %}
+
+    </aside>
+
+    <button class="cp-sidebar-open" type="button" onclick="setControlPanelSidebar(true)" title="Open sidebar" aria-label="Open control panel sidebar">
+      <span class="material-icons">menu</span>
+    </button>
+
+    <main class="cp-main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script>
+    window.loginUser = {{ login_user_json|safe }};
+
+    function setControlPanelSidebar(open) {
+      document.body.classList.toggle('cp-sidebar-collapsed', !open);
+      try { localStorage.setItem('cpSidebarOpen', open ? '1' : '0'); } catch (err) {}
+    }
+
+    (function () {
+      try {
+        if (localStorage.getItem('cpSidebarOpen') === '0') {
+          document.body.classList.add('cp-sidebar-collapsed');
+        }
+      } catch (err) {}
+    })();
+
+    (function () {
+      function pad(n) { return n < 10 ? '0' + n : '' + n; }
+      function tick() {
+        var d = new Date();
+        var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+        var ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12; if (h === 0) h = 12;
+        var el = document.getElementById('cpClock');
+        if (el) el.textContent = pad(h) + ':' + pad(m) + ':' + pad(s) + ' ' + ampm;
+      }
+      tick(); setInterval(tick, 1000);
+    })();
+  </script>
+  {% block extra_scripts %}{% endblock %}
+
+</body>
+</html>
