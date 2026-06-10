@@ -47,11 +47,11 @@ def dashboard(request):
 
 def _aggregate_channel_rows(raw_rows):
     """Collapse raw SAP transaction rows to distinct
-    (type, sub_group, main_group, state, sales_person, card_name) buckets with
-    summed litres/revenue. Slide 2 only ever SUMS these dimensions, so this is
+    (type, sub_group, main_group, state, sales_person, card_name, item_name) buckets
+    with summed litres/revenue. Slide 2 only ever SUMS these dimensions, so this is
     lossless for every card / drill / commodity aggregation while still collapsing
     the many invoice LINES per customer-order into one bucket. card_name powers the
-    Customer drill in the channel detail modal."""
+    Customer drill and item_name the Item Name drill in the channel detail modal."""
     agg = {}
     for row in raw_rows:
         sales_person = ''
@@ -65,12 +65,14 @@ def _aggregate_channel_rows(raw_rows):
         u_main = str(row.get('U_Main_Group', '') or '').strip().upper()
         state = str(row.get('State', '') or '').strip().upper()
         card_name = str(row.get('CardName', '') or '').strip().upper()
-        key = (u_type, u_sub, u_main, state, sales_person, card_name)
+        item_name = str(row.get('ItemName', '') or '').strip().upper()
+        key = (u_type, u_sub, u_main, state, sales_person, card_name, item_name)
         bucket = agg.get(key)
         if bucket is None:
             bucket = agg[key] = {
                 'u_type': u_type, 'u_sub_group': u_sub, 'u_main_group': u_main,
                 'state': state, 'sales_person': sales_person, 'card_name': card_name,
+                'item_name': item_name,
                 'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
@@ -307,6 +309,29 @@ def api_order_in_hand(request):
 @require_http_methods(['GET'])
 def api_order_in_hand_rows(request):
     return JsonResponse({'status': 'ok', 'data': services.get_order_in_hand_rows()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_channel_detail_docs(request):
+    """Documents (invoices / open SOs) behind a Done-L or Order-in-Hand cell in the
+    channel-detail modal, filtered to the clicked drill node. Same SAP sources as the
+    dashboard's Done / Order-in-Hand numbers."""
+    channel = str(request.GET.get('channel', '') or '').strip().upper()
+    metric = str(request.GET.get('metric', 'done') or 'done').strip().lower()
+    seg = request.GET.get('seg', '')
+    filters = {}
+    for key in ('group', 'state', 'person', 'customer', 'product', 'item'):
+        val = request.GET.get(key)
+        if val not in (None, ''):
+            filters[key] = str(val).strip().upper()
+    if metric == 'oih':
+        data = services.get_channel_oih_documents(channel, filters)
+    else:
+        start = request.GET.get('start') or _raw_cache.get('start') or ''
+        end = request.GET.get('end') or _raw_cache.get('end') or ''
+        data = services.get_channel_done_documents(start, end, channel, seg, filters)
+    return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data), 'data': data})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

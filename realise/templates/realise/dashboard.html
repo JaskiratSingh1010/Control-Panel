@@ -149,6 +149,7 @@ td.ccell{font-weight:500}
 .cd-header p{margin:2px 0 0;font-size:12px;color:rgba(255,255,255,.85)}
 .cd-controls{display:flex;align-items:center;gap:12px}
 .cd-view-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:rgba(255,255,255,.9)}
+.cd-type-sel{background:#fff;border:none;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;color:#1d4ed8;font-family:inherit;cursor:pointer;outline:none}
 .cd-controls .btn-cancel{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .cd-controls .btn-cancel:hover{background:rgba(255,255,255,.3)}
 /* Dynamic drill-order builder (same UX as the editor) */
@@ -195,6 +196,26 @@ td.ccell{font-weight:500}
 .cd-table tr.cd-parent{cursor:pointer}
 .cd-table tr.cd-parent:hover td{background:rgba(59,130,246,.1)}
 .cd-empty{padding:48px;text-align:center;color:var(--text3)}
+/* Done-L / Order-in-Hand cells drill to the underlying documents */
+#cdBody td.cd-doc-cell:not(.cd-doc-empty){cursor:pointer;color:#1d4ed8}
+#cdBody td.cd-doc-cell:not(.cd-doc-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
+.cd-table tr.cd-total td.cd-doc-cell:not(.cd-doc-empty){color:#bcd8ff}
+/* Document detail modal */
+.doc-box{width:780px;max-width:94vw;height:78vh;max-height:88vh}
+.doc-header{background:linear-gradient(135deg,#1f3a5f,#14304f)}
+.cd-table.doc-table thead th,.cd-table.doc-table td{text-align:left}
+.cd-table.doc-table thead th.num,.cd-table.doc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.cd-table.doc-table td:nth-child(2){font-weight:700;color:var(--text)}
+.doc-table th:nth-child(1),.doc-table td:nth-child(1){width:130px}
+.doc-table th:nth-child(2),.doc-table td:nth-child(2){width:170px}
+.doc-table th:nth-child(4),.doc-table td:nth-child(4){width:120px}
+/* Litres expands to the document's line items */
+.doc-table td.doc-lit:not(.doc-lit-empty){cursor:pointer;color:#1d4ed8}
+.doc-table td.doc-lit:not(.doc-lit-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
+.doc-twirl{display:inline-block;width:11px;font-size:9px;color:#64748b;margin-right:6px;transition:transform .12s;vertical-align:middle}
+.doc-twirl.open{transform:rotate(90deg)}
+.cd-table.doc-table tr.doc-item-row td{background:#f6f9fc;color:var(--text2);border-bottom:1px solid #eef2f6}
+.cd-table.doc-table tr.doc-item-row td:nth-child(2){padding-left:28px;font-weight:600;color:var(--text)}
 td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-allowed;border-color:var(--border)}
 .prod-filter-wrap{position:relative;display:inline-block}
 .prod-filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:5px 8px;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;min-width:132px}
@@ -559,6 +580,12 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <p id="cdSub">Target, Done, Order in Hand (open SO) &amp; Balance — litres</p>
       </div>
       <div class="cd-controls">
+        <span class="cd-view-label">Type</span>
+        <select id="cdType" class="cd-type-sel" onchange="onCdTypeChange()">
+          <option value="">All</option>
+          <option value="PREMIUM">Premium</option>
+          <option value="COMMODITY">Commodity</option>
+        </select>
         <span class="cd-view-label">Drill by</span>
         <div class="cd-drill">
           <button type="button" class="cd-drill-btn" id="cdDrillBtn" onclick="toggleCdDrill(event)">
@@ -581,6 +608,31 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <th>Tgt Realise</th><th>Revenue</th><th>Act Realise</th>
         </tr></thead>
         <tbody id="cdBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Document detail modal (invoices / open SOs behind a Done-L or OIH cell) -->
+<div class="modal-overlay" id="docDetailModal" style="z-index:400" onclick="if(event.target===this)closeChannelDocs()">
+  <div class="modal-box cd-box doc-box">
+    <div class="cd-header doc-header">
+      <div>
+        <h3 id="docDetailTitle">Documents</h3>
+        <p id="docDetailSub"></p>
+      </div>
+      <div class="cd-controls">
+        <span class="cd-view-label" id="docDetailCount"></span>
+        <button class="btn-cancel" onclick="closeChannelDocs()">Close</button>
+      </div>
+    </div>
+    <div class="cd-table-wrap">
+      <table class="cd-table doc-table">
+        <thead><tr>
+          <th id="docColDate">Date</th><th id="docColNo">No</th><th>Party Name</th><th class="num">Litres</th>
+        </tr></thead>
+        <tbody id="docDetailBody"></tbody>
+        <tfoot><tr class="cd-total"><td colspan="3">TOTAL</td><td id="docDetailTot" class="num"></td></tr></tfoot>
       </table>
     </div>
   </div>
@@ -1720,15 +1772,15 @@ function themedChannelCardHtml(item){
     +'</div>';
 }
 // ===== Channel detail modal (Target / Done / Order in Hand / Bal) =====
-var detailChannel=null, detailTargetNodes=[], detailOihRows=[];
+var detailChannel=null, detailTargetNodes=[], detailOihRows=[], detailSeg='';
 var detailTargetCache={}, detailOihRowsCache=null;
 function channelMembers(name){
   for(var i=0;i<CHANNEL_BLOCKS.length;i++)if(CHANNEL_BLOCKS[i].name===name)return CHANNEL_BLOCKS[i].members;
   return [name];
 }
 function sc2Seg(){var e=document.getElementById('sc2Segment');return e?e.value:'';}
-async function fetchTargetNodes(month,year){
-  var seg=sc2Seg(), key=year+'-'+month+'-'+seg;
+async function fetchTargetNodes(month,year,segOverride){
+  var seg=(segOverride!==undefined&&segOverride!==null)?segOverride:sc2Seg(), key=year+'-'+month+'-'+seg;
   if(detailTargetCache[key])return detailTargetCache[key];
   try{var res=await fetch(API+'/api/target-nodes/?month='+month+'&year='+year+'&seg='+encodeURIComponent(seg),{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};detailTargetCache[key]=p.data||[];}
   catch(e){detailTargetCache[key]=[];}
@@ -1753,17 +1805,31 @@ async function openChannelDetail(name){
   detailOrder=(name==='REST')?['group']:['state'];
   detailChosen=detailOrder.slice();
   cdExpanded={};
+  // Seed the modal's own Premium/Commodity selector from the slide-2 toolbar segment.
+  detailSeg=sc2Seg();
+  var cdType=document.getElementById('cdType');if(cdType)cdType.value=detailSeg;
   updateCdDrillLabel();renderCdDpList();
   overlay.classList.add('show');
   renderChannelDetail();                          // instant: Done comes from client data
   var period=getResolvedChannelPeriod();
   try{
-    var res=await Promise.all([fetchTargetNodes(period.month,period.year),fetchOrderInHandRows()]);
+    var res=await Promise.all([fetchTargetNodes(period.month,period.year,detailSeg),fetchOrderInHandRows()]);
     detailTargetNodes=res[0]||[];detailOihRows=res[1]||[];
   }catch(e){detailTargetNodes=detailTargetNodes||[];detailOihRows=detailOihRows||[];}
   if(overlay.classList.contains('show'))renderChannelDetail();  // fill Target & Order in Hand
 }
 function closeChannelDetail(){document.getElementById('channelDetailModal').classList.remove('show');}
+// Modal-local Premium/Commodity selector: re-filter Done/Revenue instantly, then
+// re-fetch the segment's targets (Order-in-Hand has no segment, so it stays put).
+async function onCdTypeChange(){
+  var sel=document.getElementById('cdType');
+  detailSeg=sel?sel.value:'';
+  renderChannelDetail();                          // instant: Done from client rows
+  var period=getResolvedChannelPeriod();
+  try{ detailTargetNodes=await fetchTargetNodes(period.month,period.year,detailSeg)||[]; }
+  catch(e){ detailTargetNodes=detailTargetNodes||[]; }
+  if(document.getElementById('channelDetailModal').classList.contains('show'))renderChannelDetail();
+}
 function detailStateLabel(channel,stateName){
   if(CHANNEL_STATE_WHITELIST[channel])return channelStateLabel(channel,stateName);
   return String(stateName||'UNKNOWN').trim().toUpperCase()||'UNKNOWN';
@@ -1772,28 +1838,43 @@ function detailStateLabel(channel,stateName){
 // no customer, so they bucket under '—'. Because customer is the FINEST leaf key,
 // every coarser drill (state, person, state›person…) still aggregates correctly.
 var CD_NO_CUSTOMER='—';
+// Targets & order-in-hand carry no product/item/customer breakdown, so they bucket
+// under '—' for those finer dims (same convention as Customer). Coarser drills still
+// aggregate correctly because '—' is just one more leaf key.
+var CD_NONE='—';
+// Slide-2 channel rows filtered by the modal-local Premium/Commodity selector.
+function modalChannelRows(){
+  var rows=[];
+  for(var i=0;i<sc2Rows.length;i++){
+    if(detailSeg&&sc2Rows[i].u_type!==detailSeg)continue;
+    rows.push(sc2Rows[i]);
+  }
+  return rows;
+}
 function buildChannelDetailLeaves(){
   var channel=detailChannel, members=channelMembers(channel), map={};
-  function cell(group,state,person,customer){var k=group+'||'+state+'||'+person+'||'+customer;if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,target:0,done:0,oih:0,lineTotal:0,targetRealise:0};return map[k];}
-  var rows=getFilteredChannelRows();
+  function cell(group,state,person,customer,product,item){var k=group+'||'+state+'||'+person+'||'+customer+'||'+product+'||'+item;if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,product:product,item:item,target:0,done:0,oih:0,lineTotal:0,targetRealise:0};return map[k];}
+  var rows=modalChannelRows();
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();if(members.indexOf(g)===-1)continue;
     var st=detailStateLabel(channel,r.state);if(st===null)continue;
     var cust=String(r.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
-    var c=cell(g,st,assignedPerson(g,r.state)||'—',cust); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
+    var prod=String(r.u_sub_group||'').trim().toUpperCase()||CD_NONE;
+    var item=String(r.item_name||'').trim().toUpperCase()||CD_NONE;
+    var c=cell(g,st,assignedPerson(g,r.state)||'—',cust,prod,item); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
   }
   for(var t=0;t<detailTargetNodes.length;t++){
     var n=detailTargetNodes[t],g2=String(n.main_group||'').toUpperCase();if(members.indexOf(g2)===-1)continue;
     var st2=detailStateLabel(channel,n.state);if(st2===null)continue;
     var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(g2,n.state)||'—';
-    var c2=cell(g2,st2,p2,CD_NO_CUSTOMER); c2.target+=Number(n.target_ltrs)||0; c2.targetRealise=Number(n.target_realise)||c2.targetRealise;
+    var c2=cell(g2,st2,p2,CD_NO_CUSTOMER,CD_NONE,CD_NONE); c2.target+=Number(n.target_ltrs)||0; c2.targetRealise=Number(n.target_realise)||c2.targetRealise;
   }
   for(var o=0;o<detailOihRows.length;o++){
     var x=detailOihRows[o],g3=String(x.main_group||'').toUpperCase();if(members.indexOf(g3)===-1)continue;
     var st3=detailStateLabel(channel,x.state);if(st3===null)continue;
     var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(g3,x.state)||'—';
     var cust3=String(x.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
-    cell(g3,st3,p3,cust3).oih+=Number(x.open_qty)||0;
+    cell(g3,st3,p3,cust3,CD_NONE,CD_NONE).oih+=Number(x.open_qty)||0;
   }
   return Object.keys(map).map(function(k){return map[k];});
 }
@@ -1801,6 +1882,8 @@ function dimMeta(dim){
   return ({group:{label:'Main Group',tag:'GROUP',cls:'group'},
            state:{label:'State',tag:'STATE',cls:'state'},
            person:{label:'Person',tag:'PERSON',cls:'person'},
+           product:{label:'Product',tag:'PRODUCT',cls:'group'},
+           item:{label:'Item Name',tag:'ITEM',cls:'state'},
            customer:{label:'Customer',tag:'CUSTOMER',cls:'person'}})[dim]||{label:dim,tag:'',cls:''};
 }
 function orderStates(channel,names){
@@ -1828,13 +1911,19 @@ function aggList(list){
 }
 function groupLeavesBy(leaves,dim){var m={};leaves.forEach(function(l){var k=l[dim];(m[k]=m[k]||[]).push(l);});return m;}
 // Collapsible tree: parent rows carry a twirl and toggle their children.
-var cdExpanded={}, cdTree=[];
-function buildDetailTree(leaves,dims,depth,prefix){
+var cdExpanded={}, cdTree=[], cdNodeByPath={};
+function buildDetailTree(leaves,dims,depth,prefix,filt){
+  filt=filt||{};
   var d=dims[depth],m=groupLeavesBy(leaves,d),nodes=[];
   orderValues(d,m).forEach(function(v){
+    // Product/Item have no breakdown for OIH & Targets, which land in the '—'
+    // bucket — hide that row in those drills (TOTAL still counts the litres).
+    if((d==='product'||d==='item')&&v===CD_NONE)return;
     var path=prefix+''+v;
-    var node={path:path,dim:d,label:v,agg:aggList(m[v]),leaf:depth+1>=dims.length,children:[]};
-    if(!node.leaf)node.children=buildDetailTree(m[v],dims,depth+1,path);
+    var nodeFilt={};for(var fk in filt)nodeFilt[fk]=filt[fk];nodeFilt[d]=v;
+    var node={path:path,dim:d,label:v,filters:nodeFilt,agg:aggList(m[v]),leaf:depth+1>=dims.length,children:[]};
+    cdNodeByPath[path]=node;
+    if(!node.leaf)node.children=buildDetailTree(m[v],dims,depth+1,path,nodeFilt);
     nodes.push(node);
   });
   return nodes;
@@ -1842,7 +1931,12 @@ function buildDetailTree(leaves,dims,depth,prefix){
 function cdBal(a){return a.target-(a.done+a.oih);}  // Bal = Target − (Done + Order in Hand)
 function cdMetricCells(a){
   var bal=cdBal(a),balCls=bal>=0?'cd-good':'cd-bad';
-  return '<td>'+fN(a.target)+'</td><td>'+fN(a.done)+'</td><td>'+fN(a.oih)+'</td>'
+  // Done & Order-in-Hand cells drill to the underlying documents (see docDetailModal).
+  var doneCls='cd-doc-cell'+((a.done||0)>0?'':' cd-doc-empty');
+  var oihCls='cd-doc-cell'+((a.oih||0)>0?'':' cd-doc-empty');
+  return '<td>'+fN(a.target)+'</td>'
+    +'<td class="'+doneCls+'" data-metric="done">'+fN(a.done)+'</td>'
+    +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
     +'<td class="'+balCls+'">'+fN(bal)+'</td>'
     +'<td>'+fNp(a.targetRealise||0,2)+'</td><td>'+fN(a.lineTotal||0)+'</td><td>'+fNp(a.actualRealise||0,2)+'</td>';
 }
@@ -1854,7 +1948,8 @@ function cdNodeRow(node,depth){
     +cdMetricCells(node.agg)+'</tr>';
 }
 function cdTotalRow(leaves){
-  return '<tr class="cd-total"><td>TOTAL</td>'+cdMetricCells(aggList(leaves))+'</tr>';
+  cdNodeByPath['__cdtotal__']={filters:{},label:'TOTAL — '+(detailChannel||'')};
+  return '<tr class="cd-total" data-path="__cdtotal__"><td>TOTAL</td>'+cdMetricCells(aggList(leaves))+'</tr>';
 }
 function cdTreeRows(nodes,depth){
   var out='';
@@ -1867,6 +1962,7 @@ var DETAIL_DIMS=[
   {key:'group',name:'MAIN GROUP',sub:'GT / MT / ROI / HORECA'},
   {key:'state',name:'STATE',sub:'full state names'},
   {key:'person',name:'CONTACT PERSON',sub:'assigned territory owner'},
+  {key:'product',name:'PRODUCT',sub:'sub-group / category'},
   {key:'customer',name:'CUSTOMER',sub:'CardName / buyer'}
 ];
 var detailOrder=['state'], detailChosen=['state'];
@@ -1908,10 +2004,86 @@ document.addEventListener('click',function(){var p=document.getElementById('cdDr
 // Expand/collapse parent rows (delegated on document; survives re-renders).
 document.addEventListener('click',function(e){
   if(!e.target||!e.target.closest)return;
+  if(e.target.closest('#cdBody td.cd-doc-cell:not(.cd-doc-empty)'))return; // doc drill, not expand
   var tr=e.target.closest('#cdBody tr[data-toggle]');if(!tr)return;
   var p=tr.getAttribute('data-path');cdExpanded[p]=!cdExpanded[p];
-  document.getElementById('cdBody').innerHTML=cdTreeRows(cdTree,0);
+  document.getElementById('cdBody').innerHTML=cdTreeRows(cdTree,0)+cdTotalRow(buildChannelDetailLeaves());
 });
+// Click a Done-L / Order-in-Hand cell -> list the underlying invoices / open SOs.
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var cell=e.target.closest('#cdBody td.cd-doc-cell');
+  if(!cell||cell.classList.contains('cd-doc-empty'))return;
+  e.stopPropagation();
+  var tr=cell.closest('tr'),path=tr?tr.getAttribute('data-path'):'';
+  var node=path?cdNodeByPath[path]:null;
+  openChannelDocs(cell.getAttribute('data-metric'),node?node.filters:{},node?node.label:'TOTAL');
+});
+async function openChannelDocs(metric,filters,label){
+  filters=filters||{};
+  var modal=document.getElementById('docDetailModal'),body=document.getElementById('docDetailBody');
+  var isOih=metric==='oih';
+  var metricLabel=isOih?'Order in Hand — open sales orders':'Done — invoices';
+  document.getElementById('docDetailTitle').textContent=(label||'')+' · '+metricLabel;
+  document.getElementById('docColDate').textContent=isOih?'SO Date':'Invoice Date';
+  document.getElementById('docColNo').textContent=isOih?'SO No':'Invoice No';
+  var crumbs=[];['group','state','person','product','item','customer'].forEach(function(k){if(filters[k])crumbs.push(dimMeta(k).label+': '+filters[k]);});
+  document.getElementById('docDetailSub').textContent=crumbs.join('  ·  ')||(detailChannel+' — all');
+  document.getElementById('docDetailCount').textContent='';
+  document.getElementById('docDetailTot').textContent='';
+  body.innerHTML='<tr><td colspan="4" class="cd-empty">Loading…</td></tr>';
+  modal.classList.add('show');
+  var params=new URLSearchParams();
+  params.set('channel',detailChannel||'');params.set('metric',metric||'done');params.set('seg',detailSeg||'');
+  var f=document.getElementById('sc2From'),t=document.getElementById('sc2To');
+  if(f&&f.value)params.set('start',f.value);
+  if(t&&t.value)params.set('end',t.value);
+  Object.keys(filters).forEach(function(k){if(filters[k])params.set(k,filters[k]);});
+  try{
+    var res=await fetch(API+'/api/channel-detail-docs/?'+params.toString(),{headers:{'X-CSRFToken':getCSRF()}});
+    var payload=res.ok?await res.json():{data:[]};
+    renderChannelDocs(payload.data||[]);
+  }catch(err){
+    body.innerHTML='<tr><td colspan="4" class="cd-empty">Could not load documents.</td></tr>';
+  }
+}
+var docDetailRows=[], docExpanded={};
+function renderChannelDocs(rows){
+  docDetailRows=rows||[]; docExpanded={};
+  var body=document.getElementById('docDetailBody');
+  if(!docDetailRows.length){body.innerHTML='<tr><td colspan="4" class="cd-empty">No documents in the current selection.</td></tr>';document.getElementById('docDetailCount').textContent='0 documents';document.getElementById('docDetailTot').textContent='';return;}
+  var tot=0;for(var i=0;i<docDetailRows.length;i++)tot+=Number(docDetailRows[i].litres)||0;
+  body.innerHTML=docDocsHtml();
+  document.getElementById('docDetailCount').textContent=docDetailRows.length+(docDetailRows.length===1?' document':' documents');
+  document.getElementById('docDetailTot').textContent=fN(tot);
+}
+// Each document's Litres expands to its line items (item name + litres).
+function docDocsHtml(){
+  var html='';
+  for(var i=0;i<docDetailRows.length;i++){
+    var r=docDetailRows[i],items=r.items||[],hasItems=items.length>0,open=!!docExpanded[i];
+    var litCls='doc-lit'+(hasItems?'':' doc-lit-empty');
+    var twirl=hasItems?'<span class="doc-twirl'+(open?' open':'')+'">&#9654;</span>':'';
+    html+='<tr class="doc-row"><td>'+esc(r.doc_date||'—')+'</td><td>'+esc(r.doc_num||'—')+'</td><td>'+esc(r.party||'—')+'</td>'
+      +'<td class="num '+litCls+'" data-docidx="'+i+'">'+twirl+fN(r.litres||0)+'</td></tr>';
+    if(hasItems&&open){
+      for(var j=0;j<items.length;j++){
+        html+='<tr class="doc-item-row"><td></td><td colspan="2">'+esc(items[j].name||'—')+'</td><td class="num">'+fN(items[j].litres||0)+'</td></tr>';
+      }
+    }
+  }
+  return html;
+}
+// Toggle a document's item breakdown when its Litres cell is clicked.
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var cell=e.target.closest('#docDetailBody td.doc-lit');
+  if(!cell||cell.classList.contains('doc-lit-empty'))return;
+  var idx=cell.getAttribute('data-docidx');
+  docExpanded[idx]=!docExpanded[idx];
+  document.getElementById('docDetailBody').innerHTML=docDocsHtml();
+});
+function closeChannelDocs(){document.getElementById('docDetailModal').classList.remove('show');}
 
 function renderChannelDetail(){
   var dims=detailOrder.slice();
@@ -1921,6 +2093,7 @@ function renderChannelDetail(){
   try{
     var leaves=buildChannelDetailLeaves();
     if(!leaves.length){cdTree=[];body.innerHTML='<tr><td colspan="8" class="cd-empty">No data for this channel in the current selection.</td></tr>';return;}
+    cdNodeByPath={};
     cdTree=buildDetailTree(leaves,dims,0,'');
     body.innerHTML=cdTreeRows(cdTree,0)+cdTotalRow(leaves);
   }catch(err){body.innerHTML='<tr><td colspan="8" class="cd-empty">Could not render: '+esc(String((err&&err.message)||err))+'</td></tr>';}

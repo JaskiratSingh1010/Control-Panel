@@ -1048,6 +1048,197 @@ def get_order_in_hand_rows():
     return rows
 
 
+# ── Channel-detail drill-to-document (invoice / sales-order lists) ──────────
+# Members per slide-2 channel block (mirror of the JS CHANNEL_BLOCKS). REST rolls
+# up HORECA + the REST source groups; GT/ROI/MT are each a single main group.
+CHANNEL_MEMBERS = {
+    'GT': ['GT'],
+    'ROI': ['ROI'],
+    'MT': ['MT'],
+    'REST': ['HORECA'] + REST_SOURCE_GROUPS,
+}
+
+
+def _fmt_doc_date(value):
+    """DocDate -> 'YYYY-MM-DD' display string (best effort)."""
+    if isinstance(value, (datetime, date)):
+        return value.strftime('%Y-%m-%d')
+    return str(value or '').strip()[:10]
+
+
+def _channel_state_label(channel, state_name, whitelist):
+    """Python mirror of the dashboard's channelStateLabel: map a raw state spelling
+    to the channel's fixed label, or None when the state isn't in this channel."""
+    s = str(state_name or '').strip().upper()
+    entries = whitelist.get(channel)
+    if not entries:
+        return s or 'UNKNOWN'
+    for entry in entries:
+        for match in entry.get('match', []):
+            if str(match).strip().upper() == s:
+                return entry['label']
+    return None
+
+
+def _derived_node_match(derived, filters):
+    """True when every requested drill filter equals the row's derived dimension."""
+    for key, want in filters.items():
+        if want in (None, ''):
+            continue
+        if derived.get(key) != str(want).strip().upper():
+            return False
+    return True
+
+
+def _finalize_documents(docs):
+    """Round litres and expose each document's per-item breakdown (litres desc) for
+    the popup's expand-on-litres-click. Sorted by date then litres descending."""
+    out = list(docs.values())
+    for r in out:
+        r['litres'] = round(r['litres'], 2)
+        items = [{'name': k, 'litres': round(v, 2)} for k, v in r.pop('_items', {}).items()]
+        items.sort(key=lambda x: -x['litres'])
+        r['items'] = items
+    out.sort(key=lambda x: (x['doc_date'] or '', -x['litres']))
+    return out
+
+
+_DONE_LINE_SQL = '''
+    SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
+           COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
+           COALESCE(TRIM(C."State1"), '')       AS "ST",
+           COALESCE(TRIM(C."CardName"), '')     AS "CUST",
+           COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
+           COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
+           {sign} * L."Quantity" * COALESCE(I."SalPackUn", 0) AS "LIT"
+    FROM "{S}"."{hdr}" H
+    JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
+    JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+    LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
+'''
+
+
+def get_channel_done_documents(start_date, end_date, channel, seg, filters):
+    """Invoice documents (date / number / party / litres) behind a Done-L cell in the
+    channel-detail modal. Reads the invoice base tables directly — OINV/INV1 (sales,
+    positive litres) plus ORIN/RIN1 (returns / credit memos, negative litres) so net
+    Done matches the dashboard's sign — then re-derives the same drill dimensions the
+    modal buckets by and keeps the matching rows. Litres = Quantity * OITM.SalPackUn,
+    the same conversion REPORT_SALES_ANALYSIS uses."""
+    members = CHANNEL_MEMBERS.get(channel, [channel])
+    seg = str(seg or '').strip().upper()
+    inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
+    crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
+    sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CUST","SUBG","ITEM","UTYPE", '
+           f'SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
+           f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CUST","SUBG","ITEM","UTYPE"')
+    try:
+        rows = sap_connector.execute_query(sql, (start_date, end_date, start_date, end_date))
+    except Exception as exc:
+        logger.error('[CH-DETAIL] invoice fetch failed: %s', exc)
+        return []
+    payload = get_territory_dashboard_payload()
+    person_map, whitelist = payload['map'], payload['whitelist']
+    docs = {}
+    for row in rows or []:
+        g = _normalize_name(row.get('GRP'))
+        if g not in members:
+            continue
+        if seg and _normalize_name(row.get('UTYPE')) != seg:
+            continue
+        code = _normalize_name(row.get('ST'))
+        state_name = STATE_CODE_NAMES.get(code, code)
+        st = _channel_state_label(channel, state_name, whitelist)
+        if st is None:
+            continue
+        customer = _normalize_name(row.get('CUST')) or '—'
+        derived = {
+            'group': g, 'state': st,
+            'person': person_map.get(g + '|' + state_name) or '—',
+            'customer': customer,
+            'product': _normalize_name(row.get('SUBG')) or '—',
+            'item': _normalize_name(row.get('ITEM')) or '—',
+        }
+        if not _derived_node_match(derived, filters):
+            continue
+        num = str(row.get('DOCNUM') or '').strip()
+        dkey = num or (_fmt_doc_date(row.get('DOCDATE')) + '|' + customer)
+        rec = docs.get(dkey)
+        if rec is None:
+            rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
+                                'party': customer, 'litres': 0.0, '_items': {}}
+        lit = float(row.get('LIT') or 0)
+        rec['litres'] += lit
+        rec['_items'][derived['item']] = rec['_items'].get(derived['item'], 0.0) + lit
+    return _finalize_documents(docs)
+
+
+def get_channel_oih_documents(channel, filters):
+    """Open sales-order documents behind an Order-in-Hand cell. Same ORDR/RDR1 source
+    as the Order-in-Hand roll-up, kept at document grain. Open orders carry no
+    product/item, so a product/item drill filter yields an empty list (matching the
+    modal, where Order-in-Hand lives in the hidden '—' product bucket)."""
+    members = CHANNEL_MEMBERS.get(channel, [channel])
+    if str(filters.get('product') or '') not in ('', '—'):
+        return []
+    if str(filters.get('item') or '') not in ('', '—'):
+        return []
+    sql = f'''
+        SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
+               COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
+               COALESCE(TRIM(C."State1"), '')       AS "ST",
+               COALESCE(TRIM(C."CardName"), '')      AS "CUST",
+               COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
+        FROM "{SAP_SCHEMA}"."ORDR" H
+        JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
+        JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
+        LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
+        GROUP BY H."DocNum", H."DocDate",
+                 COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
+                 COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."ItemName"), '')
+    '''
+    try:
+        rows = sap_connector.execute_query(sql)
+    except Exception as exc:
+        logger.error('[CH-DETAIL] OIH document fetch failed: %s', exc)
+        return []
+    payload = get_territory_dashboard_payload()
+    person_map, whitelist = payload['map'], payload['whitelist']
+    docs = {}
+    for row in rows or []:
+        g = _normalize_name(row.get('GRP'))
+        if g not in members:
+            continue
+        code = _normalize_name(row.get('ST'))
+        state_name = STATE_CODE_NAMES.get(code, code)
+        st = _channel_state_label(channel, state_name, whitelist)
+        if st is None:
+            continue
+        customer = _normalize_name(row.get('CUST')) or '—'
+        derived = {
+            'group': g, 'state': st,
+            'person': person_map.get(g + '|' + state_name) or '—',
+            'customer': customer, 'product': '—', 'item': '—',
+        }
+        if not _derived_node_match(derived, filters):
+            continue
+        num = str(row.get('DOCNUM') or '').strip()
+        dkey = num or (_fmt_doc_date(row.get('DOCDATE')) + '|' + customer)
+        rec = docs.get(dkey)
+        if rec is None:
+            rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
+                                'party': customer, 'litres': 0.0, '_items': {}}
+        lit = float(row.get('OPEN_QTY') or 0)
+        rec['litres'] += lit
+        item_name = _normalize_name(row.get('ITEM')) or '—'
+        rec['_items'][item_name] = rec['_items'].get(item_name, 0.0) + lit
+    return _finalize_documents(docs)
+
+
 def get_target_nodes(month, year, segment=None):
     """Raw saved hierarchical targets for a period (group/state/person/ltrs/realise).
     segment PREMIUM/COMMODITY filters to that product segment; blank/None = all."""
