@@ -201,7 +201,7 @@ td.ccell{font-weight:500}
 #cdBody td.cd-doc-cell:not(.cd-doc-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
 .cd-table tr.cd-total td.cd-doc-cell:not(.cd-doc-empty){color:#bcd8ff}
 /* Document detail modal */
-.doc-box{width:780px;max-width:94vw;height:78vh;max-height:88vh}
+.doc-box{width:1060px;max-width:96vw;height:80vh;max-height:90vh}
 .doc-header{background:linear-gradient(135deg,#1f3a5f,#14304f)}
 .cd-table.doc-table thead th,.cd-table.doc-table td{text-align:left}
 .cd-table.doc-table thead th.num,.cd-table.doc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -209,6 +209,11 @@ td.ccell{font-weight:500}
 .doc-table th:nth-child(1),.doc-table td:nth-child(1){width:130px}
 .doc-table th:nth-child(2),.doc-table td:nth-child(2){width:170px}
 .doc-table th:nth-child(4),.doc-table td:nth-child(4){width:120px}
+/* Pin the TOTAL as a second sticky header row (always visible, white text) */
+.doc-table thead th{height:44px;box-sizing:border-box;z-index:3}
+.cd-table.doc-table tr.doc-total-top td{position:sticky;top:44px;z-index:2;background:#1f3a5f;color:#fff;font-weight:800;text-align:left;border-bottom:2px solid #14304f;font-variant-numeric:tabular-nums}
+.cd-table.doc-table tr.doc-total-top td.num{text-align:right}
+.cd-table.doc-table tr.doc-total-top td#docDetailTot{color:#fff}
 /* Litres expands to the document's line items */
 .doc-table td.doc-lit:not(.doc-lit-empty){cursor:pointer;color:#1d4ed8}
 .doc-table td.doc-lit:not(.doc-lit-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
@@ -307,6 +312,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-drillrow:last-child{border-bottom:none}
 .sc2-drillname{font-weight:800;color:#111827}
 .sc2-drillval{text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.sc2-drillval.com-click{cursor:pointer;color:#1d4ed8}
+.sc2-drillval.com-click:hover{background:rgba(37,99,235,.1);text-decoration:underline}
+.sc2-drillrow.sc2-state-total .sc2-drillval.com-click{color:#bcd8ff}
 .sc2-comhead{grid-column:1 / -1;font-size:15px;font-weight:900;letter-spacing:.3px;color:#111827;padding:2px 4px 8px;text-transform:uppercase}
 .sc2-comcard .sc2-drillbody{max-height:none;overflow:visible}
 .sc2-com-twirl{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-right:8px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;color:var(--blue,#2563eb);font-size:13px;font-weight:800;line-height:1;cursor:pointer;vertical-align:middle}
@@ -628,11 +636,13 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     </div>
     <div class="cd-table-wrap">
       <table class="cd-table doc-table">
-        <thead><tr>
-          <th id="docColDate">Date</th><th id="docColNo">No</th><th>Party Name</th><th class="num">Litres</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th id="docColDate">Date</th><th id="docColNo">No</th><th>Party Name</th><th class="num">Litres</th>
+          </tr>
+          <tr class="doc-total-top"><td colspan="3">TOTAL</td><td id="docDetailTot" class="num"></td></tr>
+        </thead>
         <tbody id="docDetailBody"></tbody>
-        <tfoot><tr class="cd-total"><td colspan="3">TOTAL</td><td id="docDetailTot" class="num"></td></tr></tfoot>
       </table>
     </div>
   </div>
@@ -1321,9 +1331,11 @@ function buildSlideTwoDrillRows(rows,dimension,groupFilter,targetNodes,oihRows){
     c2.target+=tl;
     if(tr>0){ var wt=tl>0?tl:1; c2.trWsum+=tr*wt; c2.trW+=wt; }
   }
+  var oihSeg=sc2Seg();
   for(var o=0;o<(oihRows||[]).length;o++){
     var x=oihRows[o], xg=String(x.main_group||'').toUpperCase();
     if(groupFilter && normaliseChannelGroup(xg)!==groupFilter)continue;
+    if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
     var k3=isPerson?String(x.sales_person||'').toUpperCase():String(x.state||'').toUpperCase();
     if(!k3)continue;
     cell(k3).oih+=Number(x.open_qty)||0;
@@ -1426,29 +1438,29 @@ function commodityProductTotals(rows){
   });
 }
 // Nested tree per the chosen drill order. Product nodes carry their target.
-function buildCommodityTree(rows,order){
+// Sales rows feed Done/Revenue; commodity OIH rows feed Order-in-Hand (both share the
+// same dim fields so comDimValue buckets either kind).
+function buildCommodityTree(rows,oihRows,order){
   order=(order&&order.length)?order:['product'];
-  var clean=commodityCleanRows(rows);
-  function group(subset,level){
+  var clean=commodityCleanRows(rows), oih=commodityCleanRows(oihRows||[]);
+  function group(salesSub,oihSub,level){
     if(level>=order.length)return null;
     var dim=order[level], map={};
-    for(var i=0;i<subset.length;i++){
-      var r=subset[i], v=comDimValue(r,dim);
-      if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,_rows:[]};
-      map[v].done+=Number(r.liter)||0; map[v].lineTotal+=Number(r.line_total)||0; map[v]._rows.push(r);
-    }
+    function cell(v){if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,oih:0,_s:[],_o:[]};return map[v];}
+    for(var i=0;i<salesSub.length;i++){var r=salesSub[i],c=cell(comDimValue(r,dim));c.done+=Number(r.liter)||0;c.lineTotal+=Number(r.line_total)||0;c._s.push(r);}
+    for(var j=0;j<oihSub.length;j++){var x=oihSub[j],c2=cell(comDimValue(x,dim));c2.oih+=Number(x.open_qty)||0;c2._o.push(x);}
     return Object.keys(map).map(function(k){
-      var n=map[k]; n.kids=group(n._rows,level+1); delete n._rows;
+      var n=map[k]; n.kids=group(n._s,n._o,level+1); delete n._s; delete n._o;
       if(dim==='product'){ n.target=Number(getDefTS('COMMODITY',n.name))||0; n.targetRealise=Number(getDefTR('COMMODITY',n.name))||0; }
       return n;
     }).sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
   }
-  var tree=group(clean,0)||[];
+  var tree=group(clean,oih,0)||[];
   // When Product is the top dimension, list every commodity product even at zero done.
   if(order[0]==='product'){
     var present={}; tree.forEach(function(n){present[n.name]=1;});
     commoditySubGroups().forEach(function(sub){
-      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,kids:group([],1),
+      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,oih:0,kids:group([],[],1),
         target:Number(getDefTS('COMMODITY',sub))||0,targetRealise:Number(getDefTR('COMMODITY',sub))||0});
     });
     tree.sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
@@ -1464,75 +1476,105 @@ function comTotal(products){
   return t;
 }
 function comCells(node,isProduct){
-  var bal=isProduct?((node.target||0)-(node.done||0)):null;
+  // Bal = Target − (Done + OIH) on product rows, matching the channel cards.
+  var bal=isProduct?((node.target||0)-((node.done||0)+(node.oih||0))):null;
   var balClass=bal===null?'':(bal>=0?'sc2-bal-good':'sc2-bal-bad');
   var act=node.done>0?node.lineTotal/node.done:0;
+  var doneCls='sc2-drillval com-done'+((node.done||0)!==0?' com-click':'');
+  var oihCls='sc2-drillval com-oih'+((node.oih||0)>0?' com-click':'');
   return '<div class="sc2-drillval">'+(isProduct?fN(node.target||0):'&mdash;')+'</div>'
     +'<div class="sc2-drillval">'+(isProduct&&(node.targetRealise||0)>0?fNp(node.targetRealise,2):'&mdash;')+'</div>'
-    +'<div class="sc2-drillval">'+fN(node.done||0)+'</div>'
+    +'<div class="'+doneCls+'">'+fN(node.done||0)+'</div>'
     +'<div class="sc2-drillval">'+(node.done>0?fNp(act,2):'&mdash;')+'</div>'
+    +'<div class="'+oihCls+'">'+fN(node.oih||0)+'</div>'
     +'<div class="sc2-drillval '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
     +'<div class="sc2-drillval">'+fC(node.lineTotal||0)+'</div>';
 }
-function comRow(node,level,path,gs){
+// Map a commodity drill dim to the document-API filter key (main_group -> group).
+var COM_TO_API={product:'product',main_group:'group',state:'state',customer:'customer'};
+var comNodeByPath={};
+function comRow(node,level,path,gs,filt){
+  filt=filt||{};
+  var nodeFilt={};for(var fk in filt)nodeFilt[fk]=filt[fk];
+  if(COM_TO_API[node.dim])nodeFilt[COM_TO_API[node.dim]]=node.name;
+  comNodeByPath[path]={filters:nodeFilt,label:node.name};
   var hasKids=node.kids&&node.kids.length>0, isOpen=!!comExpanded[path];
   var indent=12+level*18, isProduct=node.dim==='product';
   var twirl=hasKids
     ? '<button class="sc2-com-twirl'+(isOpen?' open':'')+'" data-compath="'+esc(path)+'">'+(isOpen?'−':'+')+'</button>'
     : '<span class="sc2-com-twirl-empty"></span>';
-  var html='<div class="sc2-drillrow sc2-wide com-l'+Math.min(level,2)+'"'+gs+'>'
+  var html='<div class="sc2-drillrow sc2-wide com-l'+Math.min(level,2)+'" data-compath="'+esc(path)+'"'+gs+'>'
     +'<div class="sc2-drillname" style="padding-left:'+indent+'px">'+twirl+esc(node.name)+'</div>'
     +comCells(node,isProduct)+'</div>';
   if(hasKids&&isOpen){
-    for(var i=0;i<node.kids.length;i++){var k=node.kids[i];html+=comRow(k,level+1,path+'>'+k.dim+':'+k.name,gs);}
+    for(var i=0;i<node.kids.length;i++){var k=node.kids[i];html+=comRow(k,level+1,path+'>'+k.dim+':'+k.name,gs,nodeFilt);}
   }
   return html;
 }
 function renderCommodityTable(tree,tot){
-  var gs=' style="grid-template-columns:1.9fr .9fr .9fr .9fr .9fr .9fr 1fr"';
+  var gs=' style="grid-template-columns:1.7fr .8fr .8fr .85fr .8fr .85fr .85fr .95fr"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
+  comNodeByPath={};
+  comNodeByPath['__comtotal__']={filters:{},label:'TOTAL — Commodity'};
   var html='<div class="sc2-comhead">Sales Person &mdash; '+esc(COMMODITY_PERSON)+'</div>'
     +'<div class="sc2-drillcard sc2-drillfull sc2-comcard">'
     +'<div class="sc2-thead sc2-wide"'+gs+'>'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Tgt Rlz</div>'
       +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Act Rlz</div>'
-      +'<div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Revenue</div>'
+      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Revenue</div>'
     +'</div><div class="sc2-drillbody">';
   if(!tree.length){
     html+='<div class="sc2-state-empty">No commodity data in the current selection.</div>';
   }else{
-    for(var i=0;i<tree.length;i++)html+=comRow(tree[i],0,tree[i].dim+':'+tree[i].name,gs);
-    html+='<div class="sc2-drillrow sc2-wide sc2-state-total"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCells(tot,true)+'</div>';
+    for(var i=0;i<tree.length;i++)html+=comRow(tree[i],0,tree[i].dim+':'+tree[i].name,gs,{});
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" data-compath="__comtotal__"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCells(tot,true)+'</div>';
   }
   return html+'</div></div>';
 }
 function buildCommodityCsvRows(tree,tot){
   var out=[['Sales Person',COMMODITY_PERSON],
-    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Actual Realise','Bal Ltr','Revenue']];
+    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Revenue']];
   function emit(node,level){
     var isProduct=node.dim==='product', act=node.done>0?node.lineTotal/node.done:0;
     var pad=level>0?new Array(level+1).join('  '):'';
     out.push([pad+node.name,
       isProduct?csvInt(node.target):'', isProduct?csvDec(node.targetRealise):'',
-      csvInt(node.done), node.done>0?csvDec(act):'',
-      isProduct?csvInt((node.target||0)-(node.done||0)):'', csvInt(node.lineTotal)]);
+      csvInt(node.done), node.done>0?csvDec(act):'', csvInt(node.oih),
+      isProduct?csvInt((node.target||0)-((node.done||0)+(node.oih||0))):'', csvInt(node.lineTotal)]);
     if(node.kids)node.kids.forEach(function(c){emit(c,level+1);});
   }
   for(var i=0;i<tree.length;i++)emit(tree[i],0);
   out.push(['TOTAL',csvInt(tot.target),csvDec(tot.targetRealise),csvInt(tot.done),
-    tot.done>0?csvDec(tot.lineTotal/tot.done):'',csvInt((tot.target||0)-(tot.done||0)),csvInt(tot.lineTotal)]);
+    tot.done>0?csvDec(tot.lineTotal/tot.done):'',csvInt(tot.oih),
+    csvInt((tot.target||0)-((tot.done||0)+(tot.oih||0))),csvInt(tot.lineTotal)]);
   return out;
+}
+// Commodity Order-in-Hand is a live snapshot (not date-bound), fetched once & cached.
+var commodityOihRows=null, commodityOihLoading=false;
+async function fetchCommodityOih(){
+  if(commodityOihRows!==null)return commodityOihRows;
+  try{var res=await fetch(API+'/api/commodity-oih-rows/',{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};commodityOihRows=p.data||[];}
+  catch(e){commodityOihRows=[];}
+  return commodityOihRows;
 }
 function renderSlideTwoCommodity(){
   var grid=document.getElementById('channelGrid');
   if(!grid)return;
   var rows=getFilteredChannelRows();
+  var oih=commodityOihRows||[];
   var tot=comTotal(commodityProductTotals(rows));
+  var co=commodityCleanRows(oih), totOih=0; for(var i=0;i<co.length;i++)totOih+=Number(co[i].open_qty)||0;
+  tot.oih=totOih;
   setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0);
-  var tree=buildCommodityTree(rows,comOrder);
+  var tree=buildCommodityTree(rows,oih,comOrder);
   sc2CsvRows=buildCommodityCsvRows(tree,tot);
   grid.innerHTML=renderCommodityTable(tree,tot);
+  // First paint has no OIH yet — fetch the live snapshot, then repaint.
+  if(commodityOihRows===null&&!commodityOihLoading){
+    commodityOihLoading=true;
+    fetchCommodityOih().then(function(){commodityOihLoading=false;if(sc2Seg()==='COMMODITY')renderSlideTwoCommodity();});
+  }
 }
 // Show/hide the channel Drill-By controls vs. the commodity drill panel by segment.
 function applySlideTwoSegmentUI(seg){
@@ -1597,6 +1639,17 @@ document.addEventListener('click',function(e){
   var p=b.getAttribute('data-compath');
   comExpanded[p]=!comExpanded[p];
   renderSlideTwoCommodity();
+});
+// Click a commodity Done / OIH value -> list the underlying invoices / open SOs.
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var cell=e.target.closest('#channelGrid .sc2-drillval.com-click');
+  if(!cell)return;
+  var row=cell.closest('.sc2-drillrow'), path=row?row.getAttribute('data-compath'):'';
+  var node=path?comNodeByPath[path]:null;
+  if(!node)return;
+  var metric=cell.classList.contains('com-oih')?'oih':'done';
+  openChannelDocs(metric,node.filters,node.label,{channel:'COMMODITY',seg:'COMMODITY'});
 });
 function buildStateRows(rows,members,groupByMainGroup,channelName){
   var whitelist=channelName?CHANNEL_STATE_WHITELIST[channelName]:null;
@@ -1871,10 +1924,12 @@ function buildChannelDetailLeaves(){
   }
   for(var o=0;o<detailOihRows.length;o++){
     var x=detailOihRows[o],g3=String(x.main_group||'').toUpperCase();if(members.indexOf(g3)===-1)continue;
+    if(detailSeg&&String(x.u_type||'').toUpperCase()!==detailSeg)continue;   // honour Premium/Commodity
     var st3=detailStateLabel(channel,x.state);if(st3===null)continue;
     var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(g3,x.state)||'—';
     var cust3=String(x.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
-    cell(g3,st3,p3,cust3,CD_NONE,CD_NONE).oih+=Number(x.open_qty)||0;
+    var prod3=String(x.u_sub_group||'').trim().toUpperCase()||CD_NONE;
+    cell(g3,st3,p3,cust3,prod3,CD_NONE).oih+=Number(x.open_qty)||0;
   }
   return Object.keys(map).map(function(k){return map[k];});
 }
@@ -2019,8 +2074,10 @@ document.addEventListener('click',function(e){
   var node=path?cdNodeByPath[path]:null;
   openChannelDocs(cell.getAttribute('data-metric'),node?node.filters:{},node?node.label:'TOTAL');
 });
-async function openChannelDocs(metric,filters,label){
-  filters=filters||{};
+async function openChannelDocs(metric,filters,label,opts){
+  filters=filters||{}; opts=opts||{};
+  var channel=opts.channel!==undefined?opts.channel:(detailChannel||'');
+  var seg=opts.seg!==undefined?opts.seg:(detailSeg||'');
   var modal=document.getElementById('docDetailModal'),body=document.getElementById('docDetailBody');
   var isOih=metric==='oih';
   var metricLabel=isOih?'Order in Hand — open sales orders':'Done — invoices';
@@ -2028,13 +2085,13 @@ async function openChannelDocs(metric,filters,label){
   document.getElementById('docColDate').textContent=isOih?'SO Date':'Invoice Date';
   document.getElementById('docColNo').textContent=isOih?'SO No':'Invoice No';
   var crumbs=[];['group','state','person','product','item','customer'].forEach(function(k){if(filters[k])crumbs.push(dimMeta(k).label+': '+filters[k]);});
-  document.getElementById('docDetailSub').textContent=crumbs.join('  ·  ')||(detailChannel+' — all');
+  document.getElementById('docDetailSub').textContent=crumbs.join('  ·  ')||((channel||'COMMODITY')+' — all');
   document.getElementById('docDetailCount').textContent='';
   document.getElementById('docDetailTot').textContent='';
   body.innerHTML='<tr><td colspan="4" class="cd-empty">Loading…</td></tr>';
   modal.classList.add('show');
   var params=new URLSearchParams();
-  params.set('channel',detailChannel||'');params.set('metric',metric||'done');params.set('seg',detailSeg||'');
+  params.set('channel',channel||'');params.set('metric',metric||'done');params.set('seg',seg||'');
   var f=document.getElementById('sc2From'),t=document.getElementById('sc2To');
   if(f&&f.value)params.set('start',f.value);
   if(t&&t.value)params.set('end',t.value);
@@ -2179,9 +2236,11 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
     c2.target+=tl;
     if(tr>0){ var wt=tl>0?tl:1; c2.trWsum+=tr*wt; c2.trW+=wt; }
   }
+  var oihSeg=sc2Seg();
   for(var o=0;o<(oihRows||[]).length;o++){
     var x=oihRows[o],xg=String(x.main_group||'').toUpperCase();
     if(members.indexOf(xg)===-1)continue;
+    if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
     var k3=isREST?xg:detailStateLabel(channel,x.state);
     if(k3===null)continue;
     cell(k3).oih+=Number(x.open_qty)||0;

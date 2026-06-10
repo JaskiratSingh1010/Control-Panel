@@ -326,12 +326,19 @@ def api_channel_detail_docs(request):
         if val not in (None, ''):
             filters[key] = str(val).strip().upper()
     if metric == 'oih':
-        data = services.get_channel_oih_documents(channel, filters)
+        data = services.get_channel_oih_documents(channel, filters, seg)
     else:
         start = request.GET.get('start') or _raw_cache.get('start') or ''
         end = request.GET.get('end') or _raw_cache.get('end') or ''
         data = services.get_channel_done_documents(start, end, channel, seg, filters)
     return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data), 'data': data})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_commodity_oih_rows(request):
+    """Open-order litres for COMMODITY items, shaped for the commodity table's OIH."""
+    return JsonResponse({'status': 'ok', 'data': services.get_commodity_oih_rows()})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

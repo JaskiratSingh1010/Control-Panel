@@ -1008,11 +1008,15 @@ def get_order_in_hand_by_person():
 
 
 def _open_order_litres_by_group_code_customer():
-    """[{GRP, ST, CUST, OPEN_QTY}] open-order litres split by customer (CardName)."""
+    """[{GRP, ST, CUST, SUBG, UTYPE, OPEN_QTY}] open-order litres split by customer and
+    by product/type (from the order line's item) so the dashboard can filter Order-in-
+    Hand by Premium/Commodity the same way Done is filtered."""
     sql = f'''
         SELECT COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
                COALESCE(TRIM(C."State1"), '')       AS "ST",
                COALESCE(TRIM(C."CardName"), '')      AS "CUST",
+               COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
+               COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
@@ -1020,7 +1024,8 @@ def _open_order_litres_by_group_code_customer():
         LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
         WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
         GROUP BY COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
-                 COALESCE(TRIM(C."CardName"), '')
+                 COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
+                 COALESCE(TRIM(I."U_TYPE"), '')
     '''
     try:
         return sap_connector.execute_query(sql)
@@ -1030,10 +1035,10 @@ def _open_order_litres_by_group_code_customer():
 
 
 def get_order_in_hand_rows():
-    """Granular open-order rows: {main_group, state(name), sales_person, card_name, open_qty}.
-    open_qty is in LITRES (converted via OITM.SalPackUn), matching Done litres.
-    card_name is the customer who placed the open order, so Order-in-Hand attributes
-    to a real buyer instead of an unassigned '—'. Person is the territory owner."""
+    """Granular open-order rows: {main_group, state(name), sales_person, card_name,
+    u_type, u_sub_group, open_qty}. open_qty is in LITRES (Quantity * OITM.SalPackUn),
+    matching Done. u_type/u_sub_group let the dashboard split Order-in-Hand by segment
+    and product; card_name attributes to a real buyer; person is the territory owner."""
     rows = []
     for d in _open_order_litres_by_group_code_customer():
         group = _normalize_name(d.get('GRP'))
@@ -1043,6 +1048,8 @@ def get_order_in_hand_rows():
             'state': STATE_CODE_NAMES.get(code, code) if code else '',
             'sales_person': _PERSON_ASSIGNMENTS.get((group, code), ''),
             'card_name': _normalize_name(d.get('CUST')),
+            'u_type': _normalize_name(d.get('UTYPE')),
+            'u_sub_group': _normalize_name(d.get('SUBG')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
         })
     return rows
@@ -1127,7 +1134,7 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     Done matches the dashboard's sign — then re-derives the same drill dimensions the
     modal buckets by and keeps the matching rows. Litres = Quantity * OITM.SalPackUn,
     the same conversion REPORT_SALES_ANALYSIS uses."""
-    members = CHANNEL_MEMBERS.get(channel, [channel])
+    members = CHANNEL_MEMBERS.get(channel)  # None -> all groups (commodity / all-channel)
     seg = str(seg or '').strip().upper()
     inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
     crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
@@ -1144,7 +1151,9 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     docs = {}
     for row in rows or []:
         g = _normalize_name(row.get('GRP'))
-        if g not in members:
+        if members is not None and g not in members:
+            continue
+        if channel == 'COMMODITY' and g == 'E-COMMERCE':  # commodity view excludes E-Com
             continue
         if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
@@ -1175,34 +1184,36 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     return _finalize_documents(docs)
 
 
-def get_channel_oih_documents(channel, filters):
+_OIH_LINE_SQL = f'''
+    SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
+           COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
+           COALESCE(TRIM(C."State1"), '')       AS "ST",
+           COALESCE(TRIM(C."CardName"), '')     AS "CUST",
+           COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
+           COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
+           SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
+    FROM "{SAP_SCHEMA}"."ORDR" H
+    JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
+    JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
+    LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
+    GROUP BY H."DocNum", H."DocDate",
+             COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
+             COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
+             COALESCE(TRIM(I."ItemName"), ''), COALESCE(TRIM(I."U_TYPE"), '')
+'''
+
+
+def get_channel_oih_documents(channel, filters, seg=''):
     """Open sales-order documents behind an Order-in-Hand cell. Same ORDR/RDR1 source
-    as the Order-in-Hand roll-up, kept at document grain. Open orders carry no
-    product/item, so a product/item drill filter yields an empty list (matching the
-    modal, where Order-in-Hand lives in the hidden '—' product bucket)."""
-    members = CHANNEL_MEMBERS.get(channel, [channel])
-    if str(filters.get('product') or '') not in ('', '—'):
-        return []
-    if str(filters.get('item') or '') not in ('', '—'):
-        return []
-    sql = f'''
-        SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
-               COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
-               COALESCE(TRIM(C."State1"), '')       AS "ST",
-               COALESCE(TRIM(C."CardName"), '')      AS "CUST",
-               COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
-               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
-        FROM "{SAP_SCHEMA}"."ORDR" H
-        JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
-        JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
-        LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
-        WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
-        GROUP BY H."DocNum", H."DocDate",
-                 COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
-                 COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."ItemName"), '')
-    '''
+    as the Order-in-Hand roll-up, kept at document grain and joined to OITM so product
+    / item / type drills work (needed for the commodity table). Re-derives the same
+    drill dimensions the modal buckets by and keeps the matching rows."""
+    members = CHANNEL_MEMBERS.get(channel)  # None -> all groups (commodity / all-channel)
+    seg = str(seg or '').strip().upper()
     try:
-        rows = sap_connector.execute_query(sql)
+        rows = sap_connector.execute_query(_OIH_LINE_SQL)
     except Exception as exc:
         logger.error('[CH-DETAIL] OIH document fetch failed: %s', exc)
         return []
@@ -1211,7 +1222,11 @@ def get_channel_oih_documents(channel, filters):
     docs = {}
     for row in rows or []:
         g = _normalize_name(row.get('GRP'))
-        if g not in members:
+        if members is not None and g not in members:
+            continue
+        if channel == 'COMMODITY' and g == 'E-COMMERCE':  # commodity view excludes E-Com
+            continue
+        if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
         code = _normalize_name(row.get('ST'))
         state_name = STATE_CODE_NAMES.get(code, code)
@@ -1222,7 +1237,9 @@ def get_channel_oih_documents(channel, filters):
         derived = {
             'group': g, 'state': st,
             'person': person_map.get(g + '|' + state_name) or '—',
-            'customer': customer, 'product': '—', 'item': '—',
+            'customer': customer,
+            'product': _normalize_name(row.get('SUBG')) or '—',
+            'item': _normalize_name(row.get('ITEM')) or '—',
         }
         if not _derived_node_match(derived, filters):
             continue
@@ -1234,9 +1251,36 @@ def get_channel_oih_documents(channel, filters):
                                 'party': customer, 'litres': 0.0, '_items': {}}
         lit = float(row.get('OPEN_QTY') or 0)
         rec['litres'] += lit
-        item_name = _normalize_name(row.get('ITEM')) or '—'
-        rec['_items'][item_name] = rec['_items'].get(item_name, 0.0) + lit
+        rec['_items'][derived['item']] = rec['_items'].get(derived['item'], 0.0) + lit
     return _finalize_documents(docs)
+
+
+def get_commodity_oih_rows():
+    """Open-order litres for COMMODITY items, shaped like the slide-2 sales rows so the
+    commodity tree can bucket Order-in-Hand by product / main group / state / customer.
+    Litres = OpenQty * OITM.SalPackUn (same conversion as Done)."""
+    try:
+        rows = sap_connector.execute_query(_OIH_LINE_SQL)
+    except Exception as exc:
+        logger.error('[CH-DETAIL] commodity OIH fetch failed: %s', exc)
+        return []
+    out = []
+    for row in rows or []:
+        if _normalize_name(row.get('UTYPE')) != 'COMMODITY':
+            continue
+        if _normalize_name(row.get('GRP')) == 'E-COMMERCE':  # commodity view excludes E-Com
+            continue
+        code = _normalize_name(row.get('ST'))
+        out.append({
+            'u_type': 'COMMODITY',
+            'u_main_group': _normalize_name(row.get('GRP')),
+            'u_sub_group': _normalize_name(row.get('SUBG')),
+            'state': STATE_CODE_NAMES.get(code, code),
+            'card_name': _normalize_name(row.get('CUST')),
+            'item_name': _normalize_name(row.get('ITEM')),
+            'open_qty': round(float(row.get('OPEN_QTY') or 0), 2),
+        })
+    return out
 
 
 def get_target_nodes(month, year, segment=None):
