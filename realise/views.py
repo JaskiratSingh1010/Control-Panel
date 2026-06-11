@@ -331,7 +331,8 @@ def api_channel_detail_docs(request):
         start = request.GET.get('start') or _raw_cache.get('start') or ''
         end = request.GET.get('end') or _raw_cache.get('end') or ''
         data = services.get_channel_done_documents(start, end, channel, seg, filters)
-    return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data), 'data': data})
+    return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data),
+                         'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -339,6 +340,14 @@ def api_channel_detail_docs(request):
 def api_commodity_oih_rows(request):
     """Open-order litres for COMMODITY items, shaped for the commodity table's OIH."""
     return JsonResponse({'status': 'ok', 'data': services.get_commodity_oih_rows()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_oih_breakdown(request):
+    """Granular open-order litres by item dimensions (split Premium/Commodity) for the
+    OIH KPI window's dynamic drill; the client nests them into any chosen order."""
+    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows()})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -437,7 +446,7 @@ def channel_targets_page(request):
         'hier_order_options': services.HIER_ORDERS,
         'hier_filters': hier_filters,
         'hier_filter_options': hier_filter_options,
-        'hier_rows': services.get_hier_rows(hier_order, month, year, master_rows, hier_filters),
+        'hier_rows': services.get_hier_rows(hier_order, month, year, master_rows, hier_filters, product_segment),
         'hier_master_rows': master_rows,
         'saved_target_map': saved_target_map,
         'month_options': list(enumerate(services.MONTHS_ORDER, start=1)),

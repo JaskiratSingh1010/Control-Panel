@@ -190,6 +190,7 @@ td.ccell{font-weight:500}
 .cd-tag.person{background:#fef3c7;color:#b45309}
 .cd-tag.group{background:#dcfce7;color:#15803d}
 .cd-tag.state{background:#dbeafe;color:#1d4ed8}
+.cd-tag.item{background:#ede9fe;color:#6d28d9}
 .cd-twirl{display:inline-flex;width:14px;justify-content:center;color:#64748b;font-size:10px;transition:transform .12s;margin-right:7px;vertical-align:middle}
 .cd-twirl.open{transform:rotate(90deg)}
 .cd-twirl.cd-leaf{visibility:hidden}
@@ -206,9 +207,11 @@ td.ccell{font-weight:500}
 .cd-table.doc-table thead th,.cd-table.doc-table td{text-align:left}
 .cd-table.doc-table thead th.num,.cd-table.doc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 .cd-table.doc-table td:nth-child(2){font-weight:700;color:var(--text)}
-.doc-table th:nth-child(1),.doc-table td:nth-child(1){width:130px}
-.doc-table th:nth-child(2),.doc-table td:nth-child(2){width:170px}
-.doc-table th:nth-child(4),.doc-table td:nth-child(4){width:120px}
+.doc-table th:nth-child(1),.doc-table td:nth-child(1){width:115px}   /* Date */
+.doc-table th:nth-child(2),.doc-table td:nth-child(2){width:150px}   /* No */
+.doc-table th:nth-child(4),.doc-table td:nth-child(4){width:120px}   /* State */
+.doc-table th:nth-child(5),.doc-table td:nth-child(5){width:140px}   /* City */
+.doc-table th:nth-child(6),.doc-table td:nth-child(6){width:110px}   /* Litres */
 /* Pin the TOTAL as a second sticky header row (always visible, white text) */
 .doc-table thead th{height:44px;box-sizing:border-box;z-index:3}
 .cd-table.doc-table tr.doc-total-top td{position:sticky;top:44px;z-index:2;background:#1f3a5f;color:#fff;font-weight:800;text-align:left;border-bottom:2px solid #14304f;font-variant-numeric:tabular-nums}
@@ -221,6 +224,15 @@ td.ccell{font-weight:500}
 .doc-twirl.open{transform:rotate(90deg)}
 .cd-table.doc-table tr.doc-item-row td{background:#f6f9fc;color:var(--text2);border-bottom:1px solid #eef2f6}
 .cd-table.doc-table tr.doc-item-row td:nth-child(2){padding-left:28px;font-weight:600;color:var(--text)}
+/* Nested per-warehouse item table inside an expanded OIH document */
+.cd-table.doc-table tr.doc-detail-row td{background:#eef3f8;padding:0 14px 8px 40px;border-bottom:1px solid #d7e0ea}
+table.doc-items{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #dbe3ec;border-radius:6px;overflow:hidden;margin-top:4px}
+table.doc-items thead th{background:#e8eef6;color:#475569;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:6px 12px;text-align:left;border-bottom:1px solid #d7e0ea}
+table.doc-items thead th.num{text-align:right}
+table.doc-items td{padding:6px 12px;border-bottom:1px solid #eef2f6;color:var(--text2)}
+table.doc-items td:first-child{color:var(--text);font-weight:600}
+table.doc-items td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.doc-items tr:last-child td{border-bottom:none}
 td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-allowed;border-color:var(--border)}
 .prod-filter-wrap{position:relative;display:inline-block}
 .prod-filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:5px 8px;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;min-width:132px}
@@ -255,8 +267,17 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-drillbar input[type=date]{background:#fff;border:1px solid #d9e5ee;color:#1f2937;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;font-family:inherit;outline:none}
 .sc2-drillbar input[type=date]:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
 .sc2-period-bar{margin-bottom:0;padding-bottom:8px;border-bottom:1px solid #e6eef5}
-.sc2-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.sc2-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 .sc2-kpi{background:#fff;border:1px solid #d9e5ee;border-radius:16px;padding:12px 14px;box-shadow:0 8px 22px rgba(15,23,42,.06);min-width:0}
+.sc2-kpi.sc2-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .15s}
+.sc2-kpi.sc2-kpi-click:hover{box-shadow:0 10px 26px rgba(37,99,235,.18);transform:translateY(-1px);border-color:#9bc0f5}
+.oih-kpi-summary{display:flex;gap:12px;margin:14px 0 8px}
+.oih-kpi-box{flex:1;background:#f1f5fb;border:1px solid #dbe3ec;border-radius:10px;padding:10px 14px}
+.oih-kpi-box span{display:block;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b;margin-bottom:4px}
+.oih-kpi-box b{font-size:20px;font-weight:900;color:#111827;font-variant-numeric:tabular-nums}
+.oih-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+.oih-tw.open{transform:rotate(90deg)}
+.oih-tw-empty{display:inline-block;width:13px;margin-right:7px}
 .sc2-kpi label{display:block;font-size:10px;font-weight:800;letter-spacing:.65px;text-transform:uppercase;color:#64748b;margin-bottom:6px}
 .sc2-kpi div{font-size:22px;font-weight:900;line-height:1.1;color:#111827;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sc2-kpi div.pos{color:#16a34a}
@@ -520,6 +541,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <div class="sc2-kpis" id="channelKpis">
         <div class="sc2-kpi"><label>Target Ltr</label><div id="sc2KpiTarget">&mdash;</div></div>
         <div class="sc2-kpi"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openOihWindow()" title="Open OIH breakdown"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
         <div class="sc2-kpi"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
         <div class="sc2-kpi"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
         <div class="sc2-kpi"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
@@ -638,11 +660,44 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="cd-table doc-table">
         <thead>
           <tr>
-            <th id="docColDate">Date</th><th id="docColNo">No</th><th>Party Name</th><th class="num">Litres</th>
+            <th id="docColDate">Date</th><th id="docColNo">No</th><th>Party Name</th><th>State</th><th>City</th><th class="num">Litres</th>
           </tr>
-          <tr class="doc-total-top"><td colspan="3">TOTAL</td><td id="docDetailTot" class="num"></td></tr>
+          <tr class="doc-total-top"><td colspan="5">TOTAL</td><td id="docDetailTot" class="num"></td></tr>
         </thead>
         <tbody id="docDetailBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- OIH KPI breakdown window (click the OIH Ltr KPI) -->
+<div class="modal-overlay" id="oihKpiModal" style="z-index:400" onclick="if(event.target===this)closeOihWindow()">
+  <div class="modal-box cd-box doc-box">
+    <div class="cd-header doc-header">
+      <div>
+        <h3 id="oihKpiTitle">Order in Hand</h3>
+        <p>Open sales-order litres — Premium &amp; Commodity</p>
+      </div>
+      <div class="cd-controls">
+        <span class="cd-view-label">Group by</span>
+        <div class="com-drill-box">
+          <button type="button" class="com-drill-btn" id="oihDrillBtn">
+            <span id="oihDrillLabel">U_Sub_Group</span><span class="com-caret">&#9662;</span>
+          </button>
+          <div class="com-drill-panel" id="oihDrillPanel">
+            <div class="com-dp-head"><a id="oihSelAll">Select All</a><a id="oihClrAll">Clear All</a></div>
+            <div class="com-dp-list" id="oihDpList"></div>
+            <div class="com-dp-foot"><button type="button" id="oihApply">Apply</button></div>
+          </div>
+        </div>
+        <button class="btn-cancel" onclick="closeOihWindow()">Close</button>
+      </div>
+    </div>
+    <div class="cd-table-wrap">
+      <div id="oihKpiSummary" class="oih-kpi-summary"></div>
+      <table class="cd-table doc-table" id="oihKpiTable">
+        <thead><tr id="oihKpiHead"></tr></thead>
+        <tbody id="oihKpiBody"></tbody>
       </table>
     </div>
   </div>
@@ -1295,15 +1350,17 @@ function getFilteredChannelRows(){
   }
   return rows;
 }
-function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise){
+function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr){
   var bal=(targetLtr||0)-(doneLtr||0);
   var elTarget=document.getElementById('sc2KpiTarget');
   var elDone=document.getElementById('sc2KpiDone');
+  var elOih=document.getElementById('sc2KpiOih');
   var elBal=document.getElementById('sc2KpiBal');
   var elTargetRealise=document.getElementById('sc2KpiTargetRealise');
   var elCurrentRealise=document.getElementById('sc2KpiCurrentRealise');
   if(elTarget)elTarget.innerHTML=fN(targetLtr||0);
   if(elDone)elDone.innerHTML=fN(doneLtr||0);
+  if(elOih)elOih.innerHTML=fN(oihLtr||0);
   if(elBal){
     elBal.innerHTML=fN(bal);
     elBal.className=bal>=0?'pos':'neg';
@@ -1390,9 +1447,9 @@ function renderSlideTwoDrillTable(rows,dimension,groupFilter){
    channel cards we show a product table (Target/Tgt-Realise from the per-product
    MonthlyTarget store that Slide 1 uses; Done/Actual from the SAP rows). The drill
    order (Product / Main Group / State) is user-configurable via a panel like the
-   Update Targets page. E-COMMERCE is excluded. Targets are a per-product property
-   so they render on product rows; the KPI cards & TOTAL row use distinct-product
-   totals so they stay correct in any drill order. */
+   Update Targets page. Targets are a per-product property so they render on product
+   rows; the KPI cards & TOTAL row use distinct-product totals so they stay correct
+   in any drill order. */
 var COMMODITY_PERSON='Surjeet Singh';
 var comExpanded={};
 var COM_DIMS=[{key:'product',name:'Product'},{key:'main_group',name:'Main Group'},{key:'state',name:'State'},{key:'customer',name:'Customer'}];
@@ -1403,6 +1460,12 @@ function commoditySubGroups(){
   var out=[];
   for(var i=0;i<PRODUCTS.length;i++){if(PRODUCTS[i].u_type==='COMMODITY')out.push(PRODUCTS[i].u_sub_group);}
   return out;
+}
+// Total commodity product target (MonthlyTarget store, same as the commodity view).
+function commodityTargetTotal(){
+  var subs=commoditySubGroups(), t=0;
+  for(var i=0;i<subs.length;i++)t+=Number(getDefTS('COMMODITY',subs[i]))||0;
+  return t;
 }
 function comDimValue(r,dim){
   if(dim==='product')return String(r.u_sub_group||'').trim().toUpperCase();
@@ -1415,7 +1478,6 @@ function commodityCleanRows(rows){
   for(var i=0;i<rows.length;i++){
     var r=rows[i];
     if(String(r.u_type||'').toUpperCase()!=='COMMODITY')continue;
-    if(String(r.u_main_group||'').trim().toUpperCase()==='E-COMMERCE')continue;  // commodity excludes E-Com
     if(!String(r.u_sub_group||'').trim())continue;
     out.push(r);
   }
@@ -1554,7 +1616,7 @@ function buildCommodityCsvRows(tree,tot){
 var commodityOihRows=null, commodityOihLoading=false;
 async function fetchCommodityOih(){
   if(commodityOihRows!==null)return commodityOihRows;
-  try{var res=await fetch(API+'/api/commodity-oih-rows/',{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};commodityOihRows=p.data||[];}
+  try{var res=await fetch(API+'/api/commodity-oih-rows/?'+sc2DateQS(),{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};commodityOihRows=p.data||[];}
   catch(e){commodityOihRows=[];}
   return commodityOihRows;
 }
@@ -1566,7 +1628,7 @@ function renderSlideTwoCommodity(){
   var tot=comTotal(commodityProductTotals(rows));
   var co=commodityCleanRows(oih), totOih=0; for(var i=0;i<co.length;i++)totOih+=Number(co[i].open_qty)||0;
   tot.oih=totOih;
-  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0);
+  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih);
   var tree=buildCommodityTree(rows,oih,comOrder);
   sc2CsvRows=buildCommodityCsvRows(tree,tot);
   grid.innerHTML=renderCommodityTable(tree,tot);
@@ -1793,9 +1855,11 @@ function cardCells(c,isTotal){
 }
 function themedChannelCardHtml(item){
   var accent=CHANNEL_COLORS[item.name]||{band:'#dbeafe',ring:'#60a5fa'};
-  // Only show areas/states that have actual activity (Done or Order in Hand);
-  // hide rows that are zero on both so the card isn't padded with empty states.
-  var data=(item.rowsData||[]).filter(function(c){return (c.done||0)>0||(c.oih||0)>0;});
+  // In "All", hide zero-activity rows so cards aren't padded with empty states; when a
+  // specific segment (Premium/Commodity) is selected, show every row even at zero so
+  // gaps in that segment are visible.
+  var showAll=!!sc2Seg();
+  var data=(item.rowsData||[]).filter(function(c){return showAll||(c.done||0)>0||(c.oih||0)>0;});
   var cardTitle=item.title||themedChannelTitle(item.name)||item.name;
   var firstColLabel=item.firstColLabel||'State/Area';
   var rows='';
@@ -1839,9 +1903,17 @@ async function fetchTargetNodes(month,year,segOverride){
   catch(e){detailTargetCache[key]=[];}
   return detailTargetCache[key];
 }
+// Slide-2 date range as a query string — used to build the customer->state map so
+// Order-in-Hand state matches the Done/sales side.
+function sc2DateQS(){
+  var f=document.getElementById('sc2From'),t=document.getElementById('sc2To'),qs=[];
+  if(f&&f.value)qs.push('start='+encodeURIComponent(f.value));
+  if(t&&t.value)qs.push('end='+encodeURIComponent(t.value));
+  return qs.join('&');
+}
 async function fetchOrderInHandRows(){
   if(detailOihRowsCache)return detailOihRowsCache;
-  try{var res=await fetch(API+'/api/order-in-hand-rows/',{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};detailOihRowsCache=p.data||[];}
+  try{var res=await fetch(API+'/api/order-in-hand-rows/?'+sc2DateQS(),{headers:{'X-CSRFToken':getCSRF()}});var p=res.ok?await res.json():{};detailOihRowsCache=p.data||[];}
   catch(e){detailOihRowsCache=[];}
   return detailOihRowsCache;
 }
@@ -1887,13 +1959,12 @@ function detailStateLabel(channel,stateName){
   if(CHANNEL_STATE_WHITELIST[channel])return channelStateLabel(channel,stateName);
   return String(stateName||'UNKNOWN').trim().toUpperCase()||'UNKNOWN';
 }
-// Customer (CardName) only exists on the sales rows; targets & order-in-hand have
-// no customer, so they bucket under '—'. Because customer is the FINEST leaf key,
-// every coarser drill (state, person, state›person…) still aggregates correctly.
+// Customer (CardName) only exists on the sales rows; targets have no customer, so
+// they bucket under '—'. OIH rows do carry customer/product/item breakdowns, so the
+// finer drills can now split them the same way the slide-1 dashboard does.
 var CD_NO_CUSTOMER='—';
-// Targets & order-in-hand carry no product/item/customer breakdown, so they bucket
-// under '—' for those finer dims (same convention as Customer). Coarser drills still
-// aggregate correctly because '—' is just one more leaf key.
+// Targets carry no product/item/customer breakdown, so they bucket under '—' for
+// those finer dims (same convention as Customer). OIH rows do have product/item.
 var CD_NONE='—';
 // Slide-2 channel rows filtered by the modal-local Premium/Commodity selector.
 function modalChannelRows(){
@@ -1929,7 +2000,8 @@ function buildChannelDetailLeaves(){
     var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(g3,x.state)||'—';
     var cust3=String(x.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
     var prod3=String(x.u_sub_group||'').trim().toUpperCase()||CD_NONE;
-    cell(g3,st3,p3,cust3,prod3,CD_NONE).oih+=Number(x.open_qty)||0;
+    var item3=String(x.item_name||'').trim().toUpperCase()||CD_NONE;
+    cell(g3,st3,p3,cust3,prod3,item3).oih+=Number(x.open_qty)||0;
   }
   return Object.keys(map).map(function(k){return map[k];});
 }
@@ -1938,7 +2010,7 @@ function dimMeta(dim){
            state:{label:'State',tag:'STATE',cls:'state'},
            person:{label:'Person',tag:'PERSON',cls:'person'},
            product:{label:'Product',tag:'PRODUCT',cls:'group'},
-           item:{label:'Item Name',tag:'ITEM',cls:'state'},
+           item:{label:'Item Name',tag:'ITEM',cls:'item'},
            customer:{label:'Customer',tag:'CUSTOMER',cls:'person'}})[dim]||{label:dim,tag:'',cls:''};
 }
 function orderStates(channel,names){
@@ -1971,8 +2043,8 @@ function buildDetailTree(leaves,dims,depth,prefix,filt){
   filt=filt||{};
   var d=dims[depth],m=groupLeavesBy(leaves,d),nodes=[];
   orderValues(d,m).forEach(function(v){
-    // Product/Item have no breakdown for OIH & Targets, which land in the '—'
-    // bucket — hide that row in those drills (TOTAL still counts the litres).
+    // Targets have no product/item breakdown, so they land in the '—' bucket.
+    // Hide that empty bucket in product/item drills; TOTAL still counts them.
     if((d==='product'||d==='item')&&v===CD_NONE)return;
     var path=prefix+''+v;
     var nodeFilt={};for(var fk in filt)nodeFilt[fk]=filt[fk];nodeFilt[d]=v;
@@ -2018,6 +2090,7 @@ var DETAIL_DIMS=[
   {key:'state',name:'STATE',sub:'full state names'},
   {key:'person',name:'CONTACT PERSON',sub:'assigned territory owner'},
   {key:'product',name:'PRODUCT',sub:'sub-group / category'},
+  {key:'item',name:'ITEM NAME',sub:'SAP item name'},
   {key:'customer',name:'CUSTOMER',sub:'CardName / buyer'}
 ];
 var detailOrder=['state'], detailChosen=['state'];
@@ -2080,6 +2153,7 @@ async function openChannelDocs(metric,filters,label,opts){
   var seg=opts.seg!==undefined?opts.seg:(detailSeg||'');
   var modal=document.getElementById('docDetailModal'),body=document.getElementById('docDetailBody');
   var isOih=metric==='oih';
+  docMetric=metric;
   var metricLabel=isOih?'Order in Hand — open sales orders':'Done — invoices';
   document.getElementById('docDetailTitle').textContent=(label||'')+' · '+metricLabel;
   document.getElementById('docColDate').textContent=isOih?'SO Date':'Invoice Date';
@@ -2088,7 +2162,7 @@ async function openChannelDocs(metric,filters,label,opts){
   document.getElementById('docDetailSub').textContent=crumbs.join('  ·  ')||((channel||'COMMODITY')+' — all');
   document.getElementById('docDetailCount').textContent='';
   document.getElementById('docDetailTot').textContent='';
-  body.innerHTML='<tr><td colspan="4" class="cd-empty">Loading…</td></tr>';
+  body.innerHTML='<tr><td colspan="6" class="cd-empty">Loading…</td></tr>';
   modal.classList.add('show');
   var params=new URLSearchParams();
   params.set('channel',channel||'');params.set('metric',metric||'done');params.set('seg',seg||'');
@@ -2099,16 +2173,17 @@ async function openChannelDocs(metric,filters,label,opts){
   try{
     var res=await fetch(API+'/api/channel-detail-docs/?'+params.toString(),{headers:{'X-CSRFToken':getCSRF()}});
     var payload=res.ok?await res.json():{data:[]};
+    docStockWarehouses=payload.warehouses||[];
     renderChannelDocs(payload.data||[]);
   }catch(err){
-    body.innerHTML='<tr><td colspan="4" class="cd-empty">Could not load documents.</td></tr>';
+    body.innerHTML='<tr><td colspan="6" class="cd-empty">Could not load documents.</td></tr>';
   }
 }
-var docDetailRows=[], docExpanded={};
+var docDetailRows=[], docExpanded={}, docStockWarehouses=[], docMetric='oih';
 function renderChannelDocs(rows){
   docDetailRows=rows||[]; docExpanded={};
   var body=document.getElementById('docDetailBody');
-  if(!docDetailRows.length){body.innerHTML='<tr><td colspan="4" class="cd-empty">No documents in the current selection.</td></tr>';document.getElementById('docDetailCount').textContent='0 documents';document.getElementById('docDetailTot').textContent='';return;}
+  if(!docDetailRows.length){body.innerHTML='<tr><td colspan="6" class="cd-empty">No documents in the current selection.</td></tr>';document.getElementById('docDetailCount').textContent='0 documents';document.getElementById('docDetailTot').textContent='';return;}
   var tot=0;for(var i=0;i<docDetailRows.length;i++)tot+=Number(docDetailRows[i].litres)||0;
   body.innerHTML=docDocsHtml();
   document.getElementById('docDetailCount').textContent=docDetailRows.length+(docDetailRows.length===1?' document':' documents');
@@ -2122,14 +2197,37 @@ function docDocsHtml(){
     var litCls='doc-lit'+(hasItems?'':' doc-lit-empty');
     var twirl=hasItems?'<span class="doc-twirl'+(open?' open':'')+'">&#9654;</span>':'';
     html+='<tr class="doc-row"><td>'+esc(r.doc_date||'—')+'</td><td>'+esc(r.doc_num||'—')+'</td><td>'+esc(r.party||'—')+'</td>'
+      +'<td>'+esc(r.state||'—')+'</td><td>'+esc(r.city||'—')+'</td>'
       +'<td class="num '+litCls+'" data-docidx="'+i+'">'+twirl+fN(r.litres||0)+'</td></tr>';
     if(hasItems&&open){
-      for(var j=0;j<items.length;j++){
-        html+='<tr class="doc-item-row"><td></td><td colspan="2">'+esc(items[j].name||'—')+'</td><td class="num">'+fN(items[j].litres||0)+'</td></tr>';
+      // OIH items carry per-warehouse on-hand stock; Done items are just name + litres.
+      var detailed=items[0]&&items[0].stock!==undefined;
+      if(detailed){
+        html+='<tr class="doc-detail-row"><td colspan="6">'+docItemsTable(items)+'</td></tr>';
+      }else{
+        for(var k=0;k<items.length;k++){
+          html+='<tr class="doc-item-row"><td></td><td colspan="4">'+esc(items[k].name||'—')+'</td><td class="num">'+fN(items[k].litres||0)+'</td></tr>';
+        }
       }
     }
   }
   return html;
+}
+// Nested item table for an OIH document: ITEM, one stock column per warehouse, OIH (L).
+function docItemsTable(items){
+  var whs=docStockWarehouses||[];
+  var lastCol=docMetric==='oih'?'OIH (L)':'DONE (L)';
+  var head='<tr><th>ITEM</th>';
+  for(var w=0;w<whs.length;w++)head+='<th class="num">'+esc(whs[w])+'</th>';
+  head+='<th class="num">'+lastCol+'</th></tr>';
+  var body='';
+  for(var i=0;i<items.length;i++){
+    var it=items[i],st=it.stock||[];
+    body+='<tr><td>'+esc(it.name||'—')+'</td>';
+    for(var j=0;j<whs.length;j++)body+='<td class="num">'+fN(st[j]||0)+'</td>';
+    body+='<td class="num">'+fN(it.litres||0)+'</td></tr>';
+  }
+  return '<table class="doc-items"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
 }
 // Toggle a document's item breakdown when its Litres cell is clicked.
 document.addEventListener('click',function(e){
@@ -2141,6 +2239,128 @@ document.addEventListener('click',function(e){
   document.getElementById('docDetailBody').innerHTML=docDocsHtml();
 });
 function closeChannelDocs(){document.getElementById('docDetailModal').classList.remove('show');}
+
+/* ===== OIH KPI window: dynamic multi-level drill (U_Sub_Group / PackType / Item) ===== */
+var OIH_DIM_NAME={sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer Name'};
+var oihDims=[{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer Name'}];
+var oihOrder=['sub_group'], oihChosen=['sub_group'];
+var oihKpiSeg='', oihGranular=[], oihError=null, oihExpanded={};
+function oihSegLabel(s){return s==='PREMIUM'?'Premium':(s==='COMMODITY'?'Commodity':'All segments');}
+async function openOihWindow(){
+  oihKpiSeg=sc2Seg();
+  oihExpanded={};
+  document.getElementById('oihKpiTitle').textContent='Order in Hand — '+oihSegLabel(oihKpiSeg);
+  document.getElementById('oihKpiModal').classList.add('show');
+  document.getElementById('oihKpiBody').innerHTML='<tr><td colspan="4" class="cd-empty">Loading…</td></tr>';
+  try{
+    var res=await fetch(API+'/api/oih-breakdown/',{headers:{'X-CSRFToken':getCSRF()}});
+    var p=res.ok?await res.json():{};
+    oihGranular=p.rows||[]; oihError=p.error||null;
+    if(Array.isArray(p.dims)&&p.dims.length){oihDims=p.dims;}
+  }catch(e){ oihGranular=[]; oihError='load failed'; }
+  oihUpdateDrillLabel();
+  renderOihBreakdown();
+}
+function closeOihWindow(){document.getElementById('oihKpiModal').classList.remove('show');}
+function oihKpiBox(label,val){return '<div class="oih-kpi-box"><span>'+label+'</span><b>'+fN(val||0)+'</b></div>';}
+function oihDimLabel(k){return OIH_DIM_NAME[k]||k;}
+function oihUpdateDrillLabel(){
+  var el=document.getElementById('oihDrillLabel');
+  if(el)el.textContent=oihOrder.length?oihOrder.map(oihDimLabel).join(' › '):'— none —';
+}
+// Nest granular rows into a tree per the chosen drill order; each node sums prem/comm.
+function buildOihTree(rows,order){
+  function group(subset,level){
+    if(level>=order.length)return null;
+    var dim=order[level],map={};
+    for(var i=0;i<subset.length;i++){var r=subset[i],v=r[dim]||'—';
+      if(!map[v])map[v]={name:v,dim:dim,premium:0,commodity:0,_rows:[]};
+      map[v].premium+=r.premium||0; map[v].commodity+=r.commodity||0; map[v]._rows.push(r);
+    }
+    return Object.keys(map).map(function(k){var n=map[k];n.total=n.premium+n.commodity;n.kids=group(n._rows,level+1);delete n._rows;return n;})
+      .sort(function(a,b){return b.total-a.total||String(a.name).localeCompare(String(b.name));});
+  }
+  return group(rows,0)||[];
+}
+function oihColCells(n,seg){
+  if(seg==='PREMIUM')return '<td class="num">'+fN(n.premium)+'</td>';
+  if(seg==='COMMODITY')return '<td class="num">'+fN(n.commodity)+'</td>';
+  return '<td class="num">'+fN(n.premium)+'</td><td class="num">'+fN(n.commodity)+'</td><td class="num">'+fN(n.total)+'</td>';
+}
+function oihTreeRows(nodes,level,seg,prefix){
+  var html='';
+  for(var i=0;i<nodes.length;i++){var n=nodes[i];
+    if(seg==='PREMIUM'&&n.premium<=0)continue;
+    if(seg==='COMMODITY'&&n.commodity<=0)continue;
+    var path=prefix+'>'+n.dim+':'+n.name, hasKids=n.kids&&n.kids.length>0, open=!!oihExpanded[path];
+    var tw=hasKids?'<span class="oih-tw'+(open?' open':'')+'" data-oihpath="'+esc(path)+'">&#9654;</span>':'<span class="oih-tw-empty"></span>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+esc(n.name)+'</td>'+oihColCells(n,seg)+'</tr>';
+    if(hasKids&&open)html+=oihTreeRows(n.kids,level+1,seg,path);
+  }
+  return html;
+}
+function renderOihBreakdown(){
+  var seg=oihKpiSeg;
+  var head=document.getElementById('oihKpiHead'), body=document.getElementById('oihKpiBody'), sum=document.getElementById('oihKpiSummary');
+  var label=oihOrder.map(oihDimLabel).join(' › ')||'Dimension';
+  // Totals (order-independent)
+  var tp=0,tc=0; for(var i=0;i<oihGranular.length;i++){tp+=oihGranular[i].premium||0;tc+=oihGranular[i].commodity||0;}
+  tp=Math.round(tp*100)/100; tc=Math.round(tc*100)/100;
+  if(seg==='PREMIUM')      sum.innerHTML=oihKpiBox('Premium OIH (L)',tp);
+  else if(seg==='COMMODITY')sum.innerHTML=oihKpiBox('Commodity OIH (L)',tc);
+  else                     sum.innerHTML=oihKpiBox('Premium OIH (L)',tp)+oihKpiBox('Commodity OIH (L)',tc)+oihKpiBox('Total OIH (L)',tp+tc);
+  if(seg==='PREMIUM')      head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th>';
+  else if(seg==='COMMODITY')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Commodity (L)</th>';
+  else                     head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th><th class="num">Total (L)</th>';
+  var span=(seg?2:4);
+  if(oihError){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">Could not load ('+esc(oihError)+').</td></tr>'; return; }
+  var tree=buildOihTree(oihGranular,oihOrder);
+  var rowsHtml=oihTreeRows(tree,0,seg,'');
+  if(!rowsHtml){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">No open orders in this segment.</td></tr>'; return; }
+  // TOTAL row
+  var tot={premium:tp,commodity:tc,total:tp+tc};
+  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+oihColCells(tot,seg)+'</tr>';
+  body.innerHTML=rowsHtml;
+}
+// Expand/collapse tree nodes
+document.addEventListener('click',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('#oihKpiBody .oih-tw'):null;
+  if(!b)return;
+  var p=b.getAttribute('data-oihpath'); oihExpanded[p]=!oihExpanded[p];
+  renderOihBreakdown();
+});
+// Drill-order builder panel (checkbox order, like the cards)
+function oihRenderDpList(){
+  var list=document.getElementById('oihDpList'); if(!list)return; list.innerHTML='';
+  oihDims.forEach(function(d){
+    var pos=oihChosen.indexOf(d.key);
+    var item=document.createElement('label');
+    item.className='com-dp-item'+(pos!==-1?' checked':'');
+    item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'</span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+    item.querySelector('input').addEventListener('change',function(){
+      var i=oihChosen.indexOf(d.key);
+      if(this.checked){ if(i===-1)oihChosen.push(d.key); } else if(i!==-1)oihChosen.splice(i,1);
+      oihRenderDpList();
+    });
+    list.appendChild(item);
+  });
+}
+function oihInitDrillPanel(){
+  var btn=document.getElementById('oihDrillBtn'), panel=document.getElementById('oihDrillPanel');
+  if(!btn||!panel)return;
+  btn.addEventListener('click',function(e){ e.stopPropagation(); oihChosen=oihOrder.slice(); oihRenderDpList(); panel.classList.toggle('open'); });
+  panel.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.addEventListener('click',function(){ panel.classList.remove('open'); });
+  document.getElementById('oihSelAll').addEventListener('click',function(){ oihChosen=oihDims.map(function(d){return d.key;}); oihRenderDpList(); });
+  document.getElementById('oihClrAll').addEventListener('click',function(){ oihChosen=[]; oihRenderDpList(); });
+  document.getElementById('oihApply').addEventListener('click',function(){
+    if(!oihChosen.length){ showToast('Pick at least one dimension','info'); return; }
+    oihOrder=oihChosen.slice(); oihExpanded={};
+    oihUpdateDrillLabel(); panel.classList.remove('open'); renderOihBreakdown();
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',oihInitDrillPanel);
+else oihInitDrillPanel();
 
 function renderChannelDetail(){
   var dims=detailOrder.slice();
@@ -2179,7 +2399,8 @@ async function renderSlideTwo(){
     try{ dOihRows=await fetchOrderInHandRows(); }catch(e){ dOihRows=[]; }
     var drillRows=buildSlideTwoDrillRows(rows,mode,groupFilter,dTargetNodes,dOihRows);
     var dt=cardRowsTotal(drillRows);
-    setSlideTwoKpis(dt.target,dt.done,dt.targetRealise,sc2Realise(rows));
+    var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
+    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih);
     sc2CsvRows=buildDrillCsvRows(drillRows,dt,mode,groupFilter);
     grid.innerHTML=renderSlideTwoDrillTable(drillRows,mode,groupFilter);
     return;
@@ -2207,7 +2428,8 @@ async function renderSlideTwo(){
     });
   }
   var kpiTargetRealise=agg.trW>0?agg.trWsum/agg.trW:0;
-  setSlideTwoKpis(agg.target,agg.done,kpiTargetRealise,sc2Realise(rows));
+  var kpiTarget=agg.target+(sc2Seg()===''?commodityTargetTotal():0);
+  setSlideTwoKpis(kpiTarget,agg.done,kpiTargetRealise,sc2Realise(rows),agg.oih);
   sc2CsvRows=buildChannelCsvRows(layoutNames,crByName,agg,sc2Realise(rows));
   var html='';
   for(var li=0;li<layoutNames.length;li++){ if(cardByName[layoutNames[li]])html+=cardByName[layoutNames[li]]; }
@@ -2277,10 +2499,11 @@ function csvMetricRow(label,c){
 var SC2_CSV_HEADER_TAIL=['Target Ltr','Done Ltr','OIH','Bal Ltr','Target Realise','Revenue','Actual Realise'];
 function buildChannelCsvRows(layoutNames,crByName,agg,actualRealise){
   var out=[['Channel','Area'].concat(SC2_CSV_HEADER_TAIL)];
+  var showAll=!!sc2Seg();
   for(var i=0;i<layoutNames.length;i++){
     var name=layoutNames[i], info=crByName[name];
     if(!info)continue;
-    var visible=info.rows.filter(function(c){return (c.done||0)>0||(c.oih||0)>0;});
+    var visible=info.rows.filter(function(c){return showAll||(c.done||0)>0||(c.oih||0)>0;});
     for(var j=0;j<visible.length;j++)out.push([name].concat(csvMetricRow(visible[j].name,visible[j])));
     out.push([name].concat(csvMetricRow('TOTAL',info.total)));
   }

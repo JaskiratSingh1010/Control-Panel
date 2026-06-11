@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/target-nodes/',        views.api_target_nodes,       name='api_target_nodes'),
     path('api/channel-detail-docs/', views.api_channel_detail_docs, name='api_channel_detail_docs'),
     path('api/commodity-oih-rows/',  views.api_commodity_oih_rows,  name='api_commodity_oih_rows'),
+    path('api/oih-breakdown/',       views.api_oih_breakdown,       name='api_oih_breakdown'),
     path('api/drill-down/',          views.api_drill_down,         name='api_drill_down'),
     path('api/historical-realise/',  views.api_historical_realise, name='api_historical_realise'),
     path('api/targets/',             views.api_targets,            name='api_targets'),

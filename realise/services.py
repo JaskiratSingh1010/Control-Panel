@@ -1010,22 +1010,26 @@ def get_order_in_hand_by_person():
 def _open_order_litres_by_group_code_customer():
     """[{GRP, ST, CUST, SUBG, UTYPE, OPEN_QTY}] open-order litres split by customer and
     by product/type (from the order line's item) so the dashboard can filter Order-in-
-    Hand by Premium/Commodity the same way Done is filtered."""
+    Hand by Premium/Commodity the same way Done is filtered. State/city come from the
+    order's ship-to address (CRD1), not the BP-master HQ."""
     sql = f'''
         SELECT COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
-               COALESCE(TRIM(C."State1"), '')       AS "ST",
+               {_SHIPTO_STATE} AS "ST",
+               {_SHIPTO_CITY} AS "CITY",
                COALESCE(TRIM(C."CardName"), '')      AS "CUST",
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
+               COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
         LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
         WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
-        GROUP BY COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
+        GROUP BY COALESCE(TRIM(C."U_Main_Group"), ''), {_SHIPTO_STATE}, {_SHIPTO_CITY},
                  COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
-                 COALESCE(TRIM(I."U_TYPE"), '')
+                 COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."ItemName"), '')
     '''
     try:
         return sap_connector.execute_query(sql)
@@ -1036,20 +1040,23 @@ def _open_order_litres_by_group_code_customer():
 
 def get_order_in_hand_rows():
     """Granular open-order rows: {main_group, state(name), sales_person, card_name,
-    u_type, u_sub_group, open_qty}. open_qty is in LITRES (Quantity * OITM.SalPackUn),
-    matching Done. u_type/u_sub_group let the dashboard split Order-in-Hand by segment
-    and product; card_name attributes to a real buyer; person is the territory owner."""
+    u_type, u_sub_group, item_name, open_qty}. open_qty is in LITRES (Quantity *
+    OITM.SalPackUn), matching Done. u_type/u_sub_group/item_name let the dashboard
+    split Order-in-Hand by segment, product, and item; card_name attributes to a real
+    buyer. State comes from the order's ship-to address (CRD1) so it matches Done
+    (OCRD.State1 is unreliable for national accounts); person follows that state."""
     rows = []
     for d in _open_order_litres_by_group_code_customer():
         group = _normalize_name(d.get('GRP'))
-        code = _normalize_name(d.get('ST'))
+        state_name = _state_name(d)
         rows.append({
             'main_group': group,
-            'state': STATE_CODE_NAMES.get(code, code) if code else '',
-            'sales_person': _PERSON_ASSIGNMENTS.get((group, code), ''),
+            'state': state_name,
+            'sales_person': _PERSON_BY_GROUP_STATE.get((group, state_name), ''),
             'card_name': _normalize_name(d.get('CUST')),
             'u_type': _normalize_name(d.get('UTYPE')),
             'u_sub_group': _normalize_name(d.get('SUBG')),
+            'item_name': _normalize_name(d.get('ITEM')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
         })
     return rows
@@ -1062,7 +1069,9 @@ CHANNEL_MEMBERS = {
     'GT': ['GT'],
     'ROI': ['ROI'],
     'MT': ['MT'],
-    'REST': ['HORECA'] + REST_SOURCE_GROUPS,
+    # Mirror the JS CHANNEL_BLOCKS REST list exactly (HORECA + CSD + the REST groups);
+    # CSD was missing here, so REST document drills on CSD returned nothing.
+    'REST': ['HORECA', 'CSD'] + REST_SOURCE_GROUPS,
 }
 
 
@@ -1097,32 +1106,61 @@ def _derived_node_match(derived, filters):
     return True
 
 
-def _finalize_documents(docs):
-    """Round litres and expose each document's per-item breakdown (litres desc) for
-    the popup's expand-on-litres-click. Sorted by date then litres descending."""
-    out = list(docs.values())
-    for r in out:
+def _finalize_with_stock(docs):
+    """Round litres and expose each document's per-item breakdown, with each item's
+    on-hand stock (litres) across OIH_STOCK_WAREHOUSES. _items must be keyed by code
+    with {name, code, litres}. Sorted by date then litres descending."""
+    codes = {it['code'] for r in docs.values() for it in r['_items'].values() if it['code']}
+    stock = _warehouse_stock_litres(codes)
+    out = []
+    for r in docs.values():
         r['litres'] = round(r['litres'], 2)
-        items = [{'name': k, 'litres': round(v, 2)} for k, v in r.pop('_items', {}).items()]
+        items = []
+        for it in r.pop('_items').values():
+            items.append({
+                'name': it['name'],
+                'stock': [round(stock.get((it['code'], w), 0) or 0, 2) for w in OIH_STOCK_WAREHOUSES],
+                'litres': round(it['litres'], 2),
+            })
         items.sort(key=lambda x: -x['litres'])
         r['items'] = items
+        out.append(r)
     out.sort(key=lambda x: (x['doc_date'] or '', -x['litres']))
     return out
+
+
+def _state_name(row):
+    """State name from the row's ship-to state CODE (falls back to OCRD.State1 via the
+    same COALESCE in SQL). A national account's true state is its ship-to address, not
+    the BP-master HQ — e.g. WAL MART is registered AP but ships to PUNJAB branches."""
+    code = _normalize_name(row.get('ST'))
+    return STATE_CODE_NAMES.get(code, code)
+
+
+# State & City come from the order's ship-to address (CRD1 via ShipToCode); when an
+# order has no ship-to address we fall back to the BP-master OCRD.State1/City.
+_SHIPTO_STATE = "COALESCE(NULLIF(TRIM(A.\"State\"), ''), TRIM(C.\"State1\"))"
+_SHIPTO_CITY = "COALESCE(NULLIF(TRIM(A.\"City\"), ''), TRIM(C.\"City\"))"
+_SHIPTO_JOIN = ('LEFT JOIN "{S}"."CRD1" A ON A."CardCode" = H."CardCode" '
+                'AND A."Address" = H."ShipToCode" AND A."AdresType" = \'S\'')
 
 
 _DONE_LINE_SQL = '''
     SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
-           COALESCE(TRIM(C."State1"), '')       AS "ST",
+           ''' + _SHIPTO_STATE + ''' AS "ST",
+           ''' + _SHIPTO_CITY + ''' AS "CITY",
            COALESCE(TRIM(C."CardName"), '')     AS "CUST",
            COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
            COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
            COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
            {sign} * L."Quantity" * COALESCE(I."SalPackUn", 0) AS "LIT"
     FROM "{S}"."{hdr}" H
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
     LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
 '''
 
@@ -1138,9 +1176,9 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     seg = str(seg or '').strip().upper()
     inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
     crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
-    sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CUST","SUBG","ITEM","UTYPE", '
+    sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
            f'SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
-           f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CUST","SUBG","ITEM","UTYPE"')
+           f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
     try:
         rows = sap_connector.execute_query(sql, (start_date, end_date, start_date, end_date))
     except Exception as exc:
@@ -1153,12 +1191,9 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
         g = _normalize_name(row.get('GRP'))
         if members is not None and g not in members:
             continue
-        if channel == 'COMMODITY' and g == 'E-COMMERCE':  # commodity view excludes E-Com
-            continue
         if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
-        code = _normalize_name(row.get('ST'))
-        state_name = STATE_CODE_NAMES.get(code, code)
+        state_name = _state_name(row)
         st = _channel_state_label(channel, state_name, whitelist)
         if st is None:
             continue
@@ -1177,39 +1212,79 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
         rec = docs.get(dkey)
         if rec is None:
             rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
-                                'party': customer, 'litres': 0.0, '_items': {}}
+                                'party': customer, 'state': state_name,
+                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0, '_items': {}}
         lit = float(row.get('LIT') or 0)
         rec['litres'] += lit
-        rec['_items'][derived['item']] = rec['_items'].get(derived['item'], 0.0) + lit
-    return _finalize_documents(docs)
+        icode = _normalize_name(row.get('ICODE'))
+        ikey = icode or derived['item']
+        it = rec['_items'].get(ikey)
+        if it is None:
+            it = rec['_items'][ikey] = {'name': derived['item'], 'code': icode, 'litres': 0.0}
+        it['litres'] += lit
+    return _finalize_with_stock(docs)
 
 
 _OIH_LINE_SQL = f'''
     SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
-           COALESCE(TRIM(C."State1"), '')       AS "ST",
+           {_SHIPTO_STATE} AS "ST",
+           {_SHIPTO_CITY} AS "CITY",
            COALESCE(TRIM(C."CardName"), '')     AS "CUST",
            COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
            COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
            COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
            SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
     FROM "{SAP_SCHEMA}"."ORDR" H
     JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
     JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
     LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
     WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
     GROUP BY H."DocNum", H."DocDate",
-             COALESCE(TRIM(C."U_Main_Group"), ''), COALESCE(TRIM(C."State1"), ''),
+             COALESCE(TRIM(C."U_Main_Group"), ''), {_SHIPTO_STATE}, {_SHIPTO_CITY},
              COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
-             COALESCE(TRIM(I."ItemName"), ''), COALESCE(TRIM(I."U_TYPE"), '')
+             COALESCE(TRIM(I."ItemName"), ''), COALESCE(TRIM(I."ItemCode"), ''),
+             COALESCE(TRIM(I."U_TYPE"), '')
 '''
+
+
+# Warehouses whose on-hand stock (in litres) is shown per item in the OIH popup.
+OIH_STOCK_WAREHOUSES = ['GP-FG', 'BH-EC', 'BH-PF']
+
+
+def _warehouse_stock_litres(item_codes):
+    """{(ItemCode, WhsCode): on-hand litres} for OIH_STOCK_WAREHOUSES — used to show
+    each open-order item's stock across the key warehouses. Litres = OnHand * SalPackUn."""
+    codes = sorted({str(c).strip() for c in item_codes if str(c or '').strip()})
+    if not codes:
+        return {}
+    whs_ph = ','.join(['?'] * len(OIH_STOCK_WAREHOUSES))
+    code_ph = ','.join(['?'] * len(codes))
+    sql = f'''
+        SELECT W."ItemCode" AS "ICODE", W."WhsCode" AS "WHS",
+               W."OnHand" * COALESCE(M."SalPackUn", 0) AS "LIT"
+        FROM "{SAP_SCHEMA}"."OITW" W
+        JOIN "{SAP_SCHEMA}"."OITM" M ON M."ItemCode" = W."ItemCode"
+        WHERE W."WhsCode" IN ({whs_ph}) AND W."ItemCode" IN ({code_ph})
+    '''
+    try:
+        rows = sap_connector.execute_query(sql, tuple(OIH_STOCK_WAREHOUSES) + tuple(codes))
+    except Exception as exc:
+        logger.error('[CH-DETAIL] warehouse stock fetch failed: %s', exc)
+        return {}
+    out = {}
+    for r in rows or []:
+        out[(_normalize_name(r.get('ICODE')), _normalize_name(r.get('WHS')))] = float(r.get('LIT') or 0)
+    return out
 
 
 def get_channel_oih_documents(channel, filters, seg=''):
     """Open sales-order documents behind an Order-in-Hand cell. Same ORDR/RDR1 source
     as the Order-in-Hand roll-up, kept at document grain and joined to OITM so product
-    / item / type drills work (needed for the commodity table). Re-derives the same
-    drill dimensions the modal buckets by and keeps the matching rows."""
+    / item / type drills work (needed for the commodity table). State & city come from
+    the order's ship-to address (CRD1) so they match the Done/sales side."""
     members = CHANNEL_MEMBERS.get(channel)  # None -> all groups (commodity / all-channel)
     seg = str(seg or '').strip().upper()
     try:
@@ -1224,12 +1299,9 @@ def get_channel_oih_documents(channel, filters, seg=''):
         g = _normalize_name(row.get('GRP'))
         if members is not None and g not in members:
             continue
-        if channel == 'COMMODITY' and g == 'E-COMMERCE':  # commodity view excludes E-Com
-            continue
         if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
-        code = _normalize_name(row.get('ST'))
-        state_name = STATE_CODE_NAMES.get(code, code)
+        state_name = _state_name(row)
         st = _channel_state_label(channel, state_name, whitelist)
         if st is None:
             continue
@@ -1248,17 +1320,25 @@ def get_channel_oih_documents(channel, filters, seg=''):
         rec = docs.get(dkey)
         if rec is None:
             rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
-                                'party': customer, 'litres': 0.0, '_items': {}}
+                                'party': customer, 'state': state_name,
+                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0, '_items': {}}
         lit = float(row.get('OPEN_QTY') or 0)
         rec['litres'] += lit
-        rec['_items'][derived['item']] = rec['_items'].get(derived['item'], 0.0) + lit
-    return _finalize_documents(docs)
+        # Per item (by ItemCode): accumulate open litres; stock is attached below.
+        icode = _normalize_name(row.get('ICODE'))
+        ikey = icode or derived['item']
+        it = rec['_items'].get(ikey)
+        if it is None:
+            it = rec['_items'][ikey] = {'name': derived['item'], 'code': icode, 'litres': 0.0}
+        it['litres'] += lit
+    return _finalize_with_stock(docs)
 
 
 def get_commodity_oih_rows():
     """Open-order litres for COMMODITY items, shaped like the slide-2 sales rows so the
     commodity tree can bucket Order-in-Hand by product / main group / state / customer.
-    Litres = OpenQty * OITM.SalPackUn (same conversion as Done)."""
+    Litres = OpenQty * OITM.SalPackUn (same conversion as Done). State comes from the
+    order's ship-to address (CRD1) so it matches the Done/sales side."""
     try:
         rows = sap_connector.execute_query(_OIH_LINE_SQL)
     except Exception as exc:
@@ -1268,14 +1348,11 @@ def get_commodity_oih_rows():
     for row in rows or []:
         if _normalize_name(row.get('UTYPE')) != 'COMMODITY':
             continue
-        if _normalize_name(row.get('GRP')) == 'E-COMMERCE':  # commodity view excludes E-Com
-            continue
-        code = _normalize_name(row.get('ST'))
         out.append({
             'u_type': 'COMMODITY',
             'u_main_group': _normalize_name(row.get('GRP')),
             'u_sub_group': _normalize_name(row.get('SUBG')),
-            'state': STATE_CODE_NAMES.get(code, code),
+            'state': _state_name(row),
             'card_name': _normalize_name(row.get('CUST')),
             'item_name': _normalize_name(row.get('ITEM')),
             'open_qty': round(float(row.get('OPEN_QTY') or 0), 2),
@@ -1283,13 +1360,68 @@ def get_commodity_oih_rows():
     return out
 
 
+# OIH KPI window: item dimensions to group open-order litres by. col = OITM field as
+# exposed by REPORT_SALES_ANALYSIS. Adjust OITM_PACKTYPE_COL if the field name differs.
+OITM_PACKTYPE_COL = 'U_PACK_TYPE'
+# Dimensions the OIH KPI window can drill by (dynamic, multi-level — like the cards).
+OIH_BREAKDOWN_DIMS = [
+    {'key': 'sub_group', 'label': 'U_Sub_Group'},
+    {'key': 'packtype', 'label': 'PackType'},
+    {'key': 'item', 'label': 'Item Name'},
+    {'key': 'customer', 'label': 'Customer Name'},
+]
+
+
+def get_oih_dimension_rows():
+    """Granular open-order litres by (U_Sub_Group, PackType, Item, Customer), split
+    Premium vs Commodity, for the OIH KPI window. The client nests these into any drill
+    order. Litres = OpenQty * OITM.SalPackUn."""
+    col = OITM_PACKTYPE_COL
+    sql = f'''
+        SELECT COALESCE(TRIM(I."U_Sub_Group"), '—') AS "SUBG",
+               COALESCE(TRIM(I."{col}"), '—')        AS "PACK",
+               COALESCE(TRIM(I."ItemName"), '—')     AS "ITEM",
+               COALESCE(TRIM(C."CardName"), '—')     AS "CUST",
+               COALESCE(TRIM(I."U_TYPE"), '')         AS "UTYPE",
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY"
+        FROM "{SAP_SCHEMA}"."ORDR" H
+        JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
+        JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
+        LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
+        GROUP BY COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
+                 COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(C."CardName"), '—'),
+                 COALESCE(TRIM(I."U_TYPE"), '')
+    '''
+    try:
+        rows = sap_connector.execute_query(sql)
+    except Exception as exc:
+        logger.error('[OIH-KPI] dimension rows failed: %s', exc)
+        return {'rows': [], 'dims': OIH_BREAKDOWN_DIMS, 'error': str(exc)}
+    agg = {}
+    for r in rows or []:
+        ut = _normalize_name(r.get('UTYPE'))
+        if ut not in ('PREMIUM', 'COMMODITY'):
+            continue
+        key = (_normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
+               _normalize_name(r.get('ITEM')) or '—', _normalize_name(r.get('CUST')) or '—')
+        cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0})
+        cell['premium' if ut == 'PREMIUM' else 'commodity'] += float(r.get('QTY') or 0)
+    out = [{'sub_group': k[0], 'packtype': k[1], 'item': k[2], 'customer': k[3],
+            'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2)}
+           for k, v in agg.items()]
+    return {'rows': out, 'dims': OIH_BREAKDOWN_DIMS, 'error': None}
+
+
 def get_target_nodes(month, year, segment=None):
     """Raw saved hierarchical targets for a period (group/state/person/ltrs/realise).
-    segment PREMIUM/COMMODITY filters to that product segment; blank/None = all."""
+    segment PREMIUM/COMMODITY filters to that product segment; blank/None = all.
+    Unsegmented targets (segment='') are treated as applying to any segment, so a
+    channel target entered without a segment still shows under Premium/Commodity."""
     qs = TargetNode.objects.filter(month=month, year=year)
     seg = _norm_segment(segment)
     if seg:
-        qs = qs.filter(segment=seg)
+        qs = qs.filter(segment__in=[seg, ''])
     return [
         {'main_group': n.main_group, 'state': n.state, 'sales_person': n.sales_person,
          'target_ltrs': float(n.target_ltrs or 0), 'target_realise': float(n.target_realise or 0)}
@@ -1305,12 +1437,18 @@ def get_hier_filter_options(master_rows):
     }
 
 
-def get_hier_rows(order_key, month, year, master_rows, filters=None):
+def get_hier_rows(order_key, month, year, master_rows, filters=None, segment=''):
     dims = _HIER_ORDER_DIMS.get(order_key) or _HIER_ORDER_DIMS['mg_state_sp']
     filters = filters or {}
 
+    # Scope the displayed target value to the selected segment so a Premium target
+    # doesn't show up under Commodity (and vice-versa). 'All' shows any saved value.
+    node_qs = TargetNode.objects.filter(month=month, year=year)
+    seg = _norm_segment(segment)
+    if seg:
+        node_qs = node_qs.filter(segment=seg)
     saved = {}
-    for node in TargetNode.objects.filter(month=month, year=year):
+    for node in node_qs:
         saved[(node.main_group, node.state, node.sales_person)] = node.target_ltrs
 
     filtered_rows = []
