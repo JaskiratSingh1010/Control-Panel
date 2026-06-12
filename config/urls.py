@@ -1,8 +1,16 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.conf import settings
+from django.views.static import serve as serve_static
 
 from core.views import PermissionLoginView
+
+# Configure Django admin to use its own login
+admin.site.login_url = '/admin/login/'
+admin.site.index_title = 'Site Admin'
+admin.site.site_title = 'Admin'
+admin.site.site_header = 'Django Administration'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -16,3 +24,11 @@ urlpatterns = [
 
     path('inventory/', include('inventory.urls')),
 ]
+
+# Serve static files in development
+if settings.DEBUG:
+    urlpatterns += [
+        re_path(r'^static/(?P<path>.*)$', serve_static, {
+            'document_root': settings.STATIC_ROOT,
+        }),
+    ]
