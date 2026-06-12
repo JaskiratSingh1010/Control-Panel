@@ -15,6 +15,7 @@ venv/
 .venv/
 env/
 .env.bak
+*.bat
 
 # Django
 *.log
