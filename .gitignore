@@ -15,7 +15,6 @@ venv/
 .venv/
 env/
 .env.bak
-*.bat
 
 # Django
 *.log
@@ -26,7 +25,7 @@ media/
 
 # Secrets — never commit
 .env
-
+*.bat
 # IDEs
 .idea/
 .vscode/
