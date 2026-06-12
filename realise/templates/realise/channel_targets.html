@@ -89,6 +89,7 @@
   .dim-tag.main_group{background:#dbeafe;color:#1d4ed8}
   .dim-tag.state{background:#dcfce7;color:#15803d}
   .dim-tag.sales_person{background:#fef3c7;color:#b45309}
+  .dim-tag.product{background:#ede9fe;color:#6d28d9}
   .node-label{overflow:hidden;text-overflow:ellipsis}
   .cnt{background:#2563eb;color:#fff;border-radius:10px;padding:1px 9px;font-size:11px;font-weight:700}
   .children{display:none}
@@ -296,69 +297,265 @@
       year:  parseInt((document.getElementById("hyear")  || {}).value || 0, 10) || new Date().getFullYear()
     };
   }
+  // ── Commodity drill (Product > Main Group > State) ──────────────────────
+  // Same dynamic drill-order behaviour as the channel/vendor view, but for the
+  // commodity person (Surjeet Singh). Persistence stays per-product in
+  // MonthlyTarget (the store Slide 1 uses): the tree only VIEWS / allocates,
+  // and Save rolls every leaf back up to a per-product total (litres summed,
+  // realise litres-weighted). Master rows = commodity products x the territory
+  // sheet's (main group, state) cells — no SAP query and no schema change.
   function setupCommodityEditor(){
-    // Hide channel-only toolbar controls; keep Month / Year / Segment.
-    [drillBtn && drillBtn.closest(".field"), searchEl && searchEl.closest(".field"),
+    const C_DIMS = [
+      { key:"product",    name:"PRODUCT",    tag:"Product",    sub:"commodity oils" },
+      { key:"main_group", name:"MAIN GROUP", tag:"Main Group", sub:"GT / MT / ROI / HORECA …" },
+      { key:"state",      name:"STATE",      tag:"State",      sub:"territory states" }
+    ];
+    const C_DMETA = {}; C_DIMS.forEach(d => C_DMETA[d.key] = d);
+    C_DMETA.sales_person = { key:"sales_person", tag:"Person" };  // top wrapper node
+    const cStoreKey = "realise-commodity-drill-order";
+    let cOrder = ["product","main_group","state"];
+    try { const s = JSON.parse(localStorage.getItem(cStoreKey) || "null");
+          if (Array.isArray(s) && s.indexOf("product") !== -1) cOrder = s.filter(k => C_DMETA[k] && k !== "sales_person"); } catch(_){}
+    let cChosen = cOrder.slice();
+    let cMaster = [], cRoots = [];
+    const cL = new Map(), cR = new Map(), C_MAPS = { L:cL, R:cR };
+
+    // Hide channel-only search/filter; KEEP the Drill By button + Month/Year/Segment.
+    [searchEl && searchEl.closest(".field"),
      filterDimEl && filterDimEl.closest(".field"), filterValueEl && filterValueEl.closest(".field"),
      document.getElementById("btnReset"), document.querySelector(".summary")]
-      .forEach(function(el){ if (el) el.style.display = "none"; });
-    var head = document.querySelector(".grid-wrap .row.head .c-count");
-    if (head) head.textContent = "";
-    var p = commodityPeriod();
+      .forEach(el => { if (el) el.style.display = "none"; });
+
+    // Distinct (main_group, state) cells from the territory sheet (MASTER).
+    function cCells(){
+      const seen = new Set(), out = [];
+      MASTER.forEach(r => {
+        const g = String(r.main_group||"").trim(), s = String(r.state||"").trim();
+        if (!g || !s) return;
+        const k = g + "" + s;
+        if (seen.has(k)) { return; }
+        seen.add(k); out.push({ main_group:g, state:s });
+      });
+      return out;
+    }
+    function cBuildMaster(products){
+      const cells = cCells();
+      cMaster = [];
+      products.forEach(p => cells.forEach(c =>
+        cMaster.push({ product:p, main_group:c.main_group, state:c.state })));
+    }
+
+    function cProductOf(node){
+      for (let i = 0; i < node.path.length; i++) if (node.path[i].key === "product") return node.path[i].value;
+      return "";
+    }
+    function cCanon(path){
+      const part = { product:"", main_group:"", state:"" };
+      path.forEach(seg => { if (seg.key in part) part[seg.key] = seg.value; });
+      return part.product + "" + part.main_group + "" + part.state;
+    }
+
+    function cBuild(rows, depth, parentPath){
+      if (depth >= cOrder.length) return [];
+      const key = cOrder[depth];
+      return groupValues(rows, key).map(val => {
+        const subset = rows.filter(r => displayName(key, r[key]) === val);
+        const path = parentPath.concat([{ key:key, value:val }]);
+        const children = cBuild(subset, depth + 1, path);
+        return { key:key, value:val, path:path, count:subset.length,
+                 isLeaf:children.length === 0, children:children, tL:null, tR:null, inL:null, inR:null };
+      });
+    }
+
+    function cCompute(node){
+      if (!node.isLeaf) node.children.forEach(cCompute);
+      if (node.isLeaf) { const v = C_MAPS.L.get(cCanon(node.path)); node.tL = (v === undefined ? null : v); }
+      else { let sum=0, any=false; node.children.forEach(c => { if (c.tL!==null){ sum+=c.tL; any=true; } }); node.tL = any?round2(sum):null; }
+      if (node.isLeaf) { const v = C_MAPS.R.get(cCanon(node.path)); node.tR = (v === undefined ? null : v); }
+      else {
+        let wsum=0, w=0, simple=0, n=0, any=false;
+        node.children.forEach(c => { if (c.tR===null) return; any=true; simple+=c.tR; n++; const wt=(c.tL!==null&&c.tL>0)?c.tL:0; wsum+=c.tR*wt; w+=wt; });
+        node.tR = !any?null:(w>0?round2(wsum/w):round2(simple/n));
+      }
+    }
+    function cComputeAll(){ cRoots.forEach(cCompute); }
+
+    function cDistribute(node, value, m){
+      if (node.isLeaf) { if (value===null) C_MAPS[m].delete(cCanon(node.path)); else C_MAPS[m].set(cCanon(node.path), round2(value)); return; }
+      if (value===null) { node.children.forEach(c => cDistribute(c, null, m)); return; }
+      if (m === "R") { node.children.forEach(c => cDistribute(c, value, m)); return; }  // realise = rate
+      const total = node.children.reduce((s,c)=>s+c.count,0) || node.children.length;
+      let allocated = 0;
+      node.children.forEach((c,i) => {
+        let share;
+        if (i === node.children.length-1) share = round2(value-allocated);
+        else { share = round2(value*(c.count||1)/total); allocated += share; }
+        cDistribute(c, share, m);
+      });
+    }
+    function cApplyEdit(node, raw, m, skip){ cDistribute(node, parseNum(raw), m); cComputeAll(); cRefresh(skip); }
+    function cRefresh(skip){
+      walk(cRoots, n => { ["L","R"].forEach(m => {
+        const inp = n["in"+m]; if (!inp || inp===skip) return;
+        inp.value = fmt(n["t"+m]); inp.classList.toggle("filled", n["t"+m]!==null && n["t"+m]!==0);
+      }); });
+    }
+
+    function cRenderNode(node, depth){
+      const wrap = document.createElement("div"); wrap.className = "node";
+      const row = document.createElement("div"); row.className = "row";
+      const cTree = document.createElement("div"); cTree.className = "c-tree";
+      cTree.style.paddingLeft = (12 + depth*18) + "px";
+      cTree.innerHTML =
+        '<span class="twirl' + (node.isLeaf?' leaf':'') + '">&#9654;</span>' +
+        '<span class="dim-tag ' + node.key + '">' + escapeHtml(C_DMETA[node.key].tag) + '</span>' +
+        '<span class="node-label" title="' + escapeAttr(node.value) + '">' + escapeHtml(node.value) + '</span>';
+      const cCount = document.createElement("div"); cCount.className = "c-count";
+      cCount.innerHTML = '<span class="cnt">' + node.count + '</span>';
+      function makeInput(m){
+        const inp = document.createElement("input");
+        inp.className = "target-input"; inp.type = "text"; inp.placeholder = "-";
+        inp.setAttribute("inputmode","decimal"); inp.value = fmt(node["t"+m]);
+        if (node["t"+m]!==null && node["t"+m]!==0) inp.classList.add("filled");
+        inp.addEventListener("click", e => e.stopPropagation());
+        inp.addEventListener("input", () => cApplyEdit(node, inp.value, m, inp));
+        inp.addEventListener("blur", () => { inp.value = fmt(node["t"+m]); });
+        node["in"+m] = inp;
+        const cell = document.createElement("div"); cell.className = "c-target"; cell.appendChild(inp);
+        return cell;
+      }
+      row.appendChild(cTree); row.appendChild(cCount);
+      row.appendChild(makeInput("L")); row.appendChild(makeInput("R"));
+      wrap.appendChild(row);
+      if (!node.isLeaf) {
+        const childWrap = document.createElement("div"); childWrap.className = "children";
+        node.children.forEach(c => childWrap.appendChild(cRenderNode(c, depth+1)));
+        wrap.appendChild(childWrap);
+        const toggle = () => wrap.classList.toggle("open");
+        cTree.querySelector(".twirl").addEventListener("click", e => { e.stopPropagation(); toggle(); });
+        row.addEventListener("click", toggle);
+      }
+      return wrap;
+    }
+
+    function cBuildTree(){
+      cRoots = [];
+      treeEl.innerHTML = "";
+      if (!cMaster.length) { treeEl.innerHTML = '<div class="empty">No commodity products.</div>'; return; }
+      // Single Surjeet Singh root wraps the drill — the person owns all commodity.
+      const personNode = { key:"sales_person", value:COMMODITY_PERSON, path:[], count:cMaster.length,
+                           isLeaf:false, children:cBuild(cMaster, 0, []), tL:null, tR:null, inL:null, inR:null };
+      cRoots = [personNode];
+      cComputeAll();
+      const personEl = cRenderNode(personNode, 0);
+      personEl.classList.add("open");  // show first drill level; deeper stays collapsed
+      treeEl.appendChild(personEl);
+    }
+
+    function initCommodity(data){
+      const base = ["BLENDED","COTTON SEED","MUSTARD","RICE BRAN","SOYABEAN","SUNFLOWER"];
+      const fromApi = Object.keys(data)
+        .filter(k => k.indexOf("COMMODITY|") === 0)
+        .map(k => k.split("|")[1] || k);
+      const products = Array.from(new Set(base.concat(fromApi))).sort();
+      cBuildMaster(products);
+      cBuildTree();
+      // Seed each saved per-product total: spread litres across that product's
+      // leaves (so the breakdown is visible), apply the rate to every leaf, then
+      // roll back up. The product total round-trips exactly.
+      products.forEach(prod => {
+        const d = data["COMMODITY|" + prod] || {};
+        const l = Number(d.tgt_ltrs), rt = Number(d.tgt_rate);
+        const leaves = [];
+        walk(cRoots, n => { if (n.isLeaf && cProductOf(n) === prod) leaves.push(n); });
+        if (!leaves.length) return;
+        if (isFinite(l) && l > 0) {
+          let alloc = 0;
+          leaves.forEach((lf, i) => {
+            const share = (i === leaves.length - 1) ? round2(l - alloc) : round2(l / leaves.length);
+            if (i !== leaves.length - 1) alloc += share;
+            cL.set(cCanon(lf.path), share);
+          });
+        }
+        if (isFinite(rt) && rt > 0) leaves.forEach(lf => cR.set(cCanon(lf.path), round2(rt)));
+      });
+      cComputeAll(); cRefresh();
+    }
+
+    function saveCommodity(){
+      // Roll every leaf up to a per-product total: litres summed, realise as the
+      // litres-weighted average (simple average when no litres are set).
+      const agg = {};
+      walk(cRoots, n => {
+        if (!n.isLeaf) return;
+        const prod = cProductOf(n); if (!prod) return;
+        const a = agg[prod] || (agg[prod] = { l:0, wr:0, w:0, simple:0, n:0, anyL:false, anyR:false });
+        if (n.tL !== null) { a.l += n.tL; a.anyL = true; }
+        if (n.tR !== null) { a.anyR = true; a.simple += n.tR; a.n++; const wt=(n.tL!==null&&n.tL>0)?n.tL:0; a.wr += n.tR*wt; a.w += wt; }
+      });
+      const targets = Object.keys(agg).map(prod => {
+        const a = agg[prod];
+        const rate = !a.anyR ? 0 : (a.w>0 ? round2(a.wr/a.w) : round2(a.simple/a.n));
+        return { key:"COMMODITY|"+prod, tgt_ltrs: a.anyL ? round2(a.l) : 0, tgt_rate: rate };
+      });
+      const p = commodityPeriod();
+      saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+      fetch("/realise/api/save-targets/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+        body: JSON.stringify({ month: p.month, year: p.year, targets: targets })
+      })
+        .then(r => { if (!r.ok) throw new Error("save failed"); return r.json(); })
+        .then(() => window.location.reload())
+        .catch(() => { saveBtn.disabled = false; saveBtn.textContent = "Save Targets"; alert("Could not save commodity targets."); });
+    }
+
+    // ── Drill panel (reorder dimensions; Product is mandatory) ──────────────
+    function cRenderDp(){
+      dpList.innerHTML = "";
+      C_DIMS.forEach(d => {
+        const pos = cChosen.indexOf(d.key);
+        const locked = d.key === "product";
+        const item = document.createElement("label");
+        item.className = "dp-item" + (pos !== -1 ? " checked" : "");
+        item.innerHTML =
+          '<input type="checkbox" ' + (pos !== -1 ? 'checked' : '') + (locked ? ' disabled' : '') + '>' +
+          '<span class="dp-name">' + d.name + '<div class="dp-sub">' + d.sub + '</div></span>' +
+          '<span class="pos">' + (pos !== -1 ? pos + 1 : '') + '</span>';
+        const cb = item.querySelector("input");
+        cb.addEventListener("change", () => {
+          if (cb.checked) { if (cChosen.indexOf(d.key) === -1) cChosen.push(d.key); }
+          else { cChosen = cChosen.filter(k => k !== d.key); }
+          cRenderDp();
+        });
+        dpList.appendChild(item);
+      });
+    }
+    function cUpdateLabel(){
+      document.getElementById("drillLabel").textContent = cOrder.map(k => C_DMETA[k].tag).join(" > ");
+    }
+
+    drillBtn.addEventListener("click", e => { e.stopPropagation(); cChosen = cOrder.slice(); cRenderDp(); drillPanel.classList.toggle("open"); });
+    drillPanel.addEventListener("click", e => e.stopPropagation());
+    document.addEventListener("click", () => drillPanel.classList.remove("open"));
+    document.getElementById("selAll").addEventListener("click", () => { cChosen = C_DIMS.map(d => d.key); cRenderDp(); });
+    document.getElementById("clrAll").addEventListener("click", () => { cChosen = ["product"]; cRenderDp(); });
+    document.getElementById("applyBtn").addEventListener("click", () => {
+      if (cChosen.indexOf("product") === -1) cChosen.unshift("product");  // product is mandatory for per-product save
+      cOrder = cChosen.slice();
+      try { localStorage.setItem(cStoreKey, JSON.stringify(cOrder)); } catch(_){}
+      drillPanel.classList.remove("open");
+      cUpdateLabel(); cBuildTree(); cComputeAll(); cRefresh();
+    });
+    saveBtn.addEventListener("click", saveCommodity);
+
+    cUpdateLabel();
+    const p = commodityPeriod();
     treeEl.innerHTML = '<div class="empty">Loading commodity products…</div>';
     fetch("/realise/api/targets/?month=" + p.month + "&year=" + p.year, { headers: { "X-CSRFToken": csrfToken() } })
-      .then(function(r){ return r.ok ? r.json() : { data: {} }; })
-      .then(function(payload){ renderCommodityEditor(payload.data || {}); })
-      .catch(function(){ renderCommodityEditor({}); });
-    saveBtn.addEventListener("click", saveCommodityTargets);
-  }
-  function renderCommodityEditor(data){
-    var keys = Object.keys(data).filter(function(k){ return k.indexOf("COMMODITY|") === 0; });
-    if (!keys.length) {
-      ["BLENDED", "COTTON SEED", "MUSTARD", "RICE BRAN", "SOYABEAN", "SUNFLOWER"]
-        .forEach(function(s){ keys.push("COMMODITY|" + s); });
-    }
-    keys.sort(function(a, b){
-      var la = (data[a] && data[a].tgt_ltrs) || 0, lb = (data[b] && data[b].tgt_ltrs) || 0;
-      return lb - la || a.localeCompare(b);
-    });
-    var html = '<div class="node"><div class="row">'
-      + '<div class="c-tree"><span class="dim-tag sales_person">Person</span>'
-      + '<span class="node-label">' + escapeHtml(COMMODITY_PERSON) + '</span></div>'
-      + '<div class="c-count"></div><div class="c-target"></div><div class="c-target"></div></div></div>';
-    keys.forEach(function(k){
-      var sub = k.split("|")[1] || k, d = data[k] || {};
-      var l = (d.tgt_ltrs != null) ? d.tgt_ltrs : "", rt = (d.tgt_rate != null) ? d.tgt_rate : "";
-      html += '<div class="node ct-prod-row" data-key="' + escapeAttr(k) + '">'
-        + '<div class="row">'
-        + '<div class="c-tree" style="padding-left:34px"><span class="dim-tag main_group">Commodity</span>'
-        + '<span class="node-label">' + escapeHtml(sub) + '</span></div>'
-        + '<div class="c-count"></div>'
-        + '<div class="c-target"><input class="target-input' + (l ? " filled" : "") + '" data-f="ltrs" inputmode="decimal" value="' + l + '"></div>'
-        + '<div class="c-target"><input class="target-input' + (rt ? " filled" : "") + '" data-f="rate" inputmode="decimal" value="' + rt + '"></div>'
-        + '</div></div>';
-    });
-    treeEl.innerHTML = html;
-  }
-  function saveCommodityTargets(){
-    var rows = document.querySelectorAll("#tree .ct-prod-row"), targets = [];
-    rows.forEach(function(row){
-      targets.push({
-        key: row.getAttribute("data-key"),
-        tgt_ltrs: parseFloat(row.querySelector('[data-f="ltrs"]').value) || 0,
-        tgt_rate: parseFloat(row.querySelector('[data-f="rate"]').value) || 0
-      });
-    });
-    var p = commodityPeriod();
-    saveBtn.disabled = true; saveBtn.textContent = "Saving…";
-    fetch("/realise/api/save-targets/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-      body: JSON.stringify({ month: p.month, year: p.year, targets: targets })
-    })
-      .then(function(r){ if (!r.ok) throw new Error("save failed"); return r.json(); })
-      .then(function(){ window.location.reload(); })
-      .catch(function(){ saveBtn.disabled = false; saveBtn.textContent = "Save Targets"; alert("Could not save commodity targets."); });
+      .then(r => r.ok ? r.json() : { data: {} })
+      .then(payload => initCommodity(payload.data || {}))
+      .catch(() => initCommodity({}));
   }
 
   function persistState(){
