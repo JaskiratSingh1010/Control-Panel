@@ -24,14 +24,7 @@ class CoreConfig(AppConfig):
             for username, password, is_staff, is_super in defaults:
                 try:
                     if not User.objects.filter(username=username).exists():
-                        if is_super:
-                            # Use create_superuser when a superuser is required.
-                            try:
-                                User.objects.create_superuser(username=username, password=password)
-                            except TypeError:
-                                User.objects.create_user(username=username, password=password, is_staff=is_staff, is_superuser=is_super)
-                        else:
-                            User.objects.create_user(username=username, password=password, is_staff=is_staff, is_superuser=is_super)
+                        User.objects.create_user(username=username, password=password, is_staff=is_staff, is_superuser=is_super)
                 except Exception:
                     # Skip any per-user creation errors to avoid blocking startup
                     continue

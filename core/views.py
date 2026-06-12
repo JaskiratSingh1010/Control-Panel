@@ -4,7 +4,6 @@ from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.contrib.auth import get_user_model, authenticate, login
 from django.db.utils import OperationalError, ProgrammingError
-from django.conf import settings
 
 from .context_processors import build_login_permission_payload
 
@@ -54,18 +53,7 @@ class PermissionLoginView(LoginView):
                 if username and password:
                     User = get_user_model()
                     if not User.objects.filter(username=username).exists():
-                        # In DEBUG mode, create the user as a superuser so they
-                        # can view all dashboards during local development. In
-                        # production, create a regular user (safer).
-                        if getattr(settings, 'DEBUG', False):
-                            try:
-                                user = User.objects.create_superuser(username=username, password=password)
-                            except TypeError:
-                                # Some custom user models may not accept create_superuser
-                                user = User.objects.create_user(username=username, password=password, is_staff=True, is_superuser=True)
-                        else:
-                            user = User.objects.create_user(username=username, password=password)
-
+                        user = User.objects.create_user(username=username, password=password)
                         user = authenticate(self.request, username=username, password=password)
                         if user:
                             login(self.request, user)

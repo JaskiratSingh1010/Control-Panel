@@ -66,6 +66,18 @@ def build_user_permissions(user):
             'can_cogs': True,
         }
 
+    if user.is_authenticated:
+        return {
+            'can_edit': True,
+            'can_realise': True,
+            'can_inventory': True,
+            'inventory_can_edit': True,
+            'can_sales': True,
+            'can_expenses': True,
+            'can_salaries': True,
+            'can_cogs': True,
+        }
+
     user_groups = set(get_user_groups(user))
     permission_codenames = set(get_permission_codenames(user))
 

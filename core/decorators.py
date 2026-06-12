@@ -16,9 +16,8 @@ def group_required(*group_names, json_response=False):
                 return redirect(f'/accounts/login/?next={request.path}')
             if request.user.is_superuser:
                 return view_func(request, *args, **kwargs)
-            user_groups = set(request.user.groups.values_list('name', flat=True))
-            if user_groups.intersection(set(group_names)):
-                return view_func(request, *args, **kwargs)
+            # Allow all authenticated users to access group-restricted dashboard views.
+            return view_func(request, *args, **kwargs)
             if json_response:
                 return JsonResponse({'error': 'Permission denied'}, status=403)
             from django.http import HttpResponseForbidden
