@@ -6,6 +6,12 @@ from django.views.static import serve as serve_static
 
 from core.views import PermissionLoginView
 
+# Configure Django admin to use its own login
+admin.site.login_url = '/admin/login/'
+admin.site.index_title = 'Site Admin'
+admin.site.site_title = 'Admin'
+admin.site.site_header = 'Django Administration'
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/login/',  PermissionLoginView.as_view(), name='login'),
