@@ -1365,6 +1365,8 @@ def get_commodity_oih_rows():
 OITM_PACKTYPE_COL = 'U_PACK_TYPE'
 # Dimensions the OIH KPI window can drill by (dynamic, multi-level — like the cards).
 OIH_BREAKDOWN_DIMS = [
+    {'key': 'main_group', 'label': 'Main Group'},
+    {'key': 'state', 'label': 'State'},
     {'key': 'sub_group', 'label': 'U_Sub_Group'},
     {'key': 'packtype', 'label': 'PackType'},
     {'key': 'item', 'label': 'Item Name'},
@@ -1373,44 +1375,67 @@ OIH_BREAKDOWN_DIMS = [
 
 
 def get_oih_dimension_rows():
-    """Granular open-order litres by (U_Sub_Group, PackType, Item, Customer), split
-    Premium vs Commodity, for the OIH KPI window. The client nests these into any drill
-    order. Litres = OpenQty * OITM.SalPackUn."""
+    """Granular open-order litres by (Main Group, State, U_Sub_Group, PackType, Item,
+    Customer), split Premium vs Commodity, for the OIH KPI window. The client nests these
+    into any drill order. Litres = OpenQty * OITM.SalPackUn. State comes from the order's
+    ship-to address (CRD1), so it matches the Done/sales side."""
     col = OITM_PACKTYPE_COL
     sql = f'''
-        SELECT COALESCE(TRIM(I."U_Sub_Group"), '—') AS "SUBG",
-               COALESCE(TRIM(I."{col}"), '—')        AS "PACK",
-               COALESCE(TRIM(I."ItemName"), '—')     AS "ITEM",
-               COALESCE(TRIM(C."CardName"), '—')     AS "CUST",
-               COALESCE(TRIM(I."U_TYPE"), '')         AS "UTYPE",
+        SELECT COALESCE(TRIM(C."U_Main_Group"), '—') AS "GRP",
+               {_SHIPTO_STATE}                        AS "ST",
+               COALESCE(TRIM(I."U_Sub_Group"), '—')  AS "SUBG",
+               COALESCE(TRIM(I."{col}"), '—')         AS "PACK",
+               COALESCE(TRIM(I."ItemName"), '—')      AS "ITEM",
+               COALESCE(TRIM(I."ItemCode"), '')        AS "ICODE",
+               COALESCE(TRIM(C."CardName"), '—')      AS "CUST",
+               COALESCE(TRIM(I."U_TYPE"), '')          AS "UTYPE",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
         LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
         WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
-        GROUP BY COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
-                 COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(C."CardName"), '—'),
-                 COALESCE(TRIM(I."U_TYPE"), '')
+        GROUP BY COALESCE(TRIM(C."U_Main_Group"), '—'), {_SHIPTO_STATE},
+                 COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
+                 COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(I."ItemCode"), ''),
+                 COALESCE(TRIM(C."CardName"), '—'), COALESCE(TRIM(I."U_TYPE"), '')
     '''
     try:
         rows = sap_connector.execute_query(sql)
     except Exception as exc:
         logger.error('[OIH-KPI] dimension rows failed: %s', exc)
-        return {'rows': [], 'dims': OIH_BREAKDOWN_DIMS, 'error': str(exc)}
+        return {'rows': [], 'dims': OIH_BREAKDOWN_DIMS, 'item_stock': {},
+                'warehouses': OIH_STOCK_WAREHOUSES, 'error': str(exc)}
     agg = {}
+    name_codes = {}   # item name -> set of ItemCodes (for per-item warehouse stock)
     for r in rows or []:
         ut = _normalize_name(r.get('UTYPE'))
         if ut not in ('PREMIUM', 'COMMODITY'):
             continue
-        key = (_normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
-               _normalize_name(r.get('ITEM')) or '—', _normalize_name(r.get('CUST')) or '—')
+        item_name = _normalize_name(r.get('ITEM')) or '—'
+        icode = _normalize_name(r.get('ICODE'))
+        if icode:
+            name_codes.setdefault(item_name, set()).add(icode)
+        key = (_normalize_name(r.get('GRP')) or '—', _state_name(r) or '—',
+               _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
+               item_name, _normalize_name(r.get('CUST')) or '—')
         cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0})
         cell['premium' if ut == 'PREMIUM' else 'commodity'] += float(r.get('QTY') or 0)
-    out = [{'sub_group': k[0], 'packtype': k[1], 'item': k[2], 'customer': k[3],
+    out = [{'main_group': k[0], 'state': k[1], 'sub_group': k[2], 'packtype': k[3],
+            'item': k[4], 'customer': k[5],
             'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2)}
            for k, v in agg.items()]
-    return {'rows': out, 'dims': OIH_BREAKDOWN_DIMS, 'error': None}
+    # On-hand stock per warehouse, keyed by item NAME (each ItemCode counted once),
+    # so the window can show GP-FG / BH-EC / BH-PF columns on item rows.
+    all_codes = {c for codes in name_codes.values() for c in codes}
+    stock = _warehouse_stock_litres(all_codes)
+    item_stock = {
+        name: [round(sum(stock.get((c, w), 0) for c in codes), 2) for w in OIH_STOCK_WAREHOUSES]
+        for name, codes in name_codes.items()
+    }
+    return {'rows': out, 'dims': OIH_BREAKDOWN_DIMS, 'item_stock': item_stock,
+            'warehouses': OIH_STOCK_WAREHOUSES, 'error': None}
 
 
 def get_target_nodes(month, year, segment=None):

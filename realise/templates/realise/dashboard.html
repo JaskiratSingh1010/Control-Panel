@@ -2251,10 +2251,11 @@ document.addEventListener('click',function(e){
 function closeChannelDocs(){document.getElementById('docDetailModal').classList.remove('show');}
 
 /* ===== OIH KPI window: dynamic multi-level drill (U_Sub_Group / PackType / Item) ===== */
-var OIH_DIM_NAME={sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer Name'};
-var oihDims=[{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer Name'}];
+var OIH_DIM_NAME={main_group:'Main Group',state:'State',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer Name'};
+var oihDims=[{key:'main_group',label:'Main Group'},{key:'state',label:'State'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer Name'}];
 var oihOrder=['sub_group'], oihChosen=['sub_group'];
 var oihKpiSeg='', oihGranular=[], oihError=null, oihExpanded={};
+var oihItemStock={}, oihWhs=[];   // per-item on-hand stock (litres) by warehouse
 function oihSegLabel(s){return s==='PREMIUM'?'Premium':(s==='COMMODITY'?'Commodity':'All segments');}
 async function openOihWindow(){
   oihKpiSeg=sc2Seg();
@@ -2266,6 +2267,7 @@ async function openOihWindow(){
     var res=await fetch(API+'/api/oih-breakdown/',{headers:{'X-CSRFToken':getCSRF()}});
     var p=res.ok?await res.json():{};
     oihGranular=p.rows||[]; oihError=p.error||null;
+    oihItemStock=p.item_stock||{}; oihWhs=p.warehouses||[];
     if(Array.isArray(p.dims)&&p.dims.length){oihDims=p.dims;}
   }catch(e){ oihGranular=[]; oihError='load failed'; }
   oihUpdateDrillLabel();
@@ -2297,15 +2299,23 @@ function oihColCells(n,seg){
   if(seg==='COMMODITY')return '<td class="num">'+fN(n.commodity)+'</td>';
   return '<td class="num">'+fN(n.premium)+'</td><td class="num">'+fN(n.commodity)+'</td><td class="num">'+fN(n.total)+'</td>';
 }
-function oihTreeRows(nodes,level,seg,prefix){
+// On-hand stock cells (one per warehouse) — only for item rows; blank otherwise.
+function oihWhsCells(n,showWhs){
+  if(!showWhs)return '';
+  var st=(n&&n.dim==='item')?(oihItemStock[n.name]||null):null;
+  var html='';
+  for(var w=0;w<oihWhs.length;w++)html+='<td class="num">'+(st?fN(st[w]||0):'—')+'</td>';
+  return html;
+}
+function oihTreeRows(nodes,level,seg,prefix,showWhs){
   var html='';
   for(var i=0;i<nodes.length;i++){var n=nodes[i];
     if(seg==='PREMIUM'&&n.premium<=0)continue;
     if(seg==='COMMODITY'&&n.commodity<=0)continue;
     var path=prefix+'>'+n.dim+':'+n.name, hasKids=n.kids&&n.kids.length>0, open=!!oihExpanded[path];
     var tw=hasKids?'<span class="oih-tw'+(open?' open':'')+'" data-oihpath="'+esc(path)+'">&#9654;</span>':'<span class="oih-tw-empty"></span>';
-    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+esc(n.name)+'</td>'+oihColCells(n,seg)+'</tr>';
-    if(hasKids&&open)html+=oihTreeRows(n.kids,level+1,seg,path);
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+esc(n.name)+'</td>'+oihColCells(n,seg)+oihWhsCells(n,showWhs)+'</tr>';
+    if(hasKids&&open)html+=oihTreeRows(n.kids,level+1,seg,path,showWhs);
   }
   return html;
 }
@@ -2313,23 +2323,26 @@ function renderOihBreakdown(){
   var seg=oihKpiSeg;
   var head=document.getElementById('oihKpiHead'), body=document.getElementById('oihKpiBody'), sum=document.getElementById('oihKpiSummary');
   var label=oihOrder.map(oihDimLabel).join(' › ')||'Dimension';
+  // Show on-hand stock columns once the drill reaches the item level.
+  var showWhs=oihOrder.indexOf('item')!==-1 && oihWhs.length>0;
+  var whsHead=''; if(showWhs){for(var wi=0;wi<oihWhs.length;wi++)whsHead+='<th class="num">'+esc(oihWhs[wi])+'</th>';}
   // Totals (order-independent)
   var tp=0,tc=0; for(var i=0;i<oihGranular.length;i++){tp+=oihGranular[i].premium||0;tc+=oihGranular[i].commodity||0;}
   tp=Math.round(tp*100)/100; tc=Math.round(tc*100)/100;
   if(seg==='PREMIUM')      sum.innerHTML=oihKpiBox('Premium OIH (L)',tp);
   else if(seg==='COMMODITY')sum.innerHTML=oihKpiBox('Commodity OIH (L)',tc);
   else                     sum.innerHTML=oihKpiBox('Premium OIH (L)',tp)+oihKpiBox('Commodity OIH (L)',tc)+oihKpiBox('Total OIH (L)',tp+tc);
-  if(seg==='PREMIUM')      head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th>';
-  else if(seg==='COMMODITY')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Commodity (L)</th>';
-  else                     head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th><th class="num">Total (L)</th>';
-  var span=(seg?2:4);
+  if(seg==='PREMIUM')      head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th>'+whsHead;
+  else if(seg==='COMMODITY')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Commodity (L)</th>'+whsHead;
+  else                     head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th><th class="num">Total (L)</th>'+whsHead;
+  var span=(seg?2:4)+(showWhs?oihWhs.length:0);
   if(oihError){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">Could not load ('+esc(oihError)+').</td></tr>'; return; }
   var tree=buildOihTree(oihGranular,oihOrder);
-  var rowsHtml=oihTreeRows(tree,0,seg,'');
+  var rowsHtml=oihTreeRows(tree,0,seg,'',showWhs);
   if(!rowsHtml){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">No open orders in this segment.</td></tr>'; return; }
   // TOTAL row
   var tot={premium:tp,commodity:tc,total:tp+tc};
-  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+oihColCells(tot,seg)+'</tr>';
+  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+oihColCells(tot,seg)+oihWhsCells(null,showWhs)+'</tr>';
   body.innerHTML=rowsHtml;
 }
 // Expand/collapse tree nodes
