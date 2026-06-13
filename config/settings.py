@@ -105,7 +105,7 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 SAP_HANA = {
-    'HOST': env('SAP_HANA_HOST', '20.20.45.192'),
+    'HOST': env('SAP_HANA_HOST', '103.89.45.192'),
     'PORT': int(env('SAP_HANA_PORT', '30015')),
     'USER': env('SAP_HANA_USER', 'DATA1'),
     'PASSWORD': env('SAP_HANA_PASSWORD', 'Jivo@1989'),

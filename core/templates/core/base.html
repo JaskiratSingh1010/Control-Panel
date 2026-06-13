@@ -29,7 +29,18 @@
 
     /* ── Sidebar ── */
     .cp-sidebar { width: 240px; background: linear-gradient(180deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%); color: #fff; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width .22s ease, padding .22s ease; }
-    body.cp-sidebar-collapsed .cp-sidebar { width: 0; padding-left: 0; padding-right: 0; }
+    /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
+       hide all text/labels, and let the floating menu button expand it. */
+    body.cp-sidebar-collapsed .cp-sidebar { width: 64px; padding: 16px 8px; }
+    body.cp-sidebar-collapsed .cp-brand,
+    body.cp-sidebar-collapsed .cp-section-label,
+    body.cp-sidebar-collapsed .cp-period-block,
+    body.cp-sidebar-collapsed .cp-user-badge,
+    body.cp-sidebar-collapsed .cp-logout-form { display: none; }
+    body.cp-sidebar-collapsed .cp-nav:first-of-type { margin-top: 56px; }  /* clear the floating menu button */
+    body.cp-sidebar-collapsed .cp-nav-item { justify-content: center; gap: 0; padding: 11px 0; font-size: 0; }
+    body.cp-sidebar-collapsed .cp-nav-item .material-icons { font-size: 22px; }
+    body.cp-sidebar-collapsed .cp-sidebar-open { top: 14px; left: 14px; }
     .cp-brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 18px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; }
     .cp-brand-copy { min-width: 0; flex: 1; }
     .cp-brand-logo { width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
@@ -113,26 +124,26 @@
       {% if is_authenticated %}
         <div class="cp-section-label">Main Menu</div>
         <nav class="cp-nav">
-          <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}" title="Control Panel">
             <span class="material-icons">dashboard</span>Control Panel
           </a>
-          <a class="cp-nav-item {% if sidebar_active == 'sales' %}active{% endif %}" href="{% url 'sales:dashboard' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'sales' %}active{% endif %}" href="{% url 'sales:dashboard' %}" title="Sales">
             <span class="material-icons">trending_up</span>Sales
           </a>
-          <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}" title="Realise">
             <span class="material-icons">flash_on</span>Realise
           </a>
         </nav>
 
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
-          <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}" title="Inventory">
             <span class="material-icons">inventory_2</span>Inventory
           </a>
-          <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}" title="Expenses">
             <span class="material-icons">receipt_long</span>Expenses
           </a>
-          <a class="cp-nav-item {% if sidebar_active == 'salaries' %}active{% endif %}" href="{% url 'dashboard:salaries' %}">
+          <a class="cp-nav-item {% if sidebar_active == 'salaries' %}active{% endif %}" href="{% url 'dashboard:salaries' %}" title="Salaries">
             <span class="material-icons">people</span>Salaries
           </a>
         </nav>

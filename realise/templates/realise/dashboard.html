@@ -320,8 +320,13 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-state-empty{padding:18px 12px;font-size:12px;color:#64748b;text-align:center}
 .sc2-empty{display:flex;align-items:center;justify-content:center;min-height:240px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b;font-size:13px}
 .sc2-drillcard{background:#fff;border:1px solid #d9e5ee;border-radius:20px;box-shadow:0 10px 28px rgba(15,23,42,.08);overflow:hidden;min-height:0;display:flex;flex-direction:column}
-.sc2-drillcard.sc2-drillfull{grid-column:1 / -1}
-.sc2-drillrow.sc2-state-total{background:#1f3a5f}
+.sc2-drillcard.sc2-drillfull{grid-column:1 / -1;align-self:start}
+/* TOTAL stays pinned to the bottom of the table body while it scrolls (long
+   tables); for short tables it just sits right under the last data row.
+   The extra `.sc2-drillbody` qualifier raises specificity above the
+   `:nth-child(even)` zebra stripe so the dark fill never gets overridden
+   (which made white-on-white "disappear" on even row counts). */
+.sc2-drillbody .sc2-drillrow.sc2-state-total{background:#1f3a5f;position:sticky;bottom:0;z-index:1;box-shadow:0 -2px 8px rgba(15,23,42,.18)}
 .sc2-drillrow.sc2-state-total .sc2-drillname{color:#fff}
 .sc2-drillrow.sc2-state-total .sc2-drillval{color:#fff}
 .sc2-drillrow.sc2-state-total .sc2-bal-good{color:#7ef0b0}
@@ -516,14 +521,19 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <option value="person">Sales Person</option>
           <option value="state">State</option>
         </select>
-        <label for="sc2DrillGroup" id="sc2DrillGroupLabel" style="display:none">Main Group</label>
-        <select id="sc2DrillGroup" onchange="renderSlideTwo()" style="display:none">
-          <option value="">All Main Groups</option>
-          <option value="GT">GT</option>
-          <option value="ROI">ROI</option>
-          <option value="MT">MT</option>
-          <option value="REST">REST</option>
-        </select>
+        <div id="sc2DynWrap" class="com-drill" style="display:none">
+          <label>Drill Order</label>
+          <div class="com-drill-box">
+            <button type="button" class="com-drill-btn" id="sc2DynBtn">
+              <span id="sc2DynLabel">State</span><span class="com-caret">&#9662;</span>
+            </button>
+            <div class="com-drill-panel" id="sc2DynPanel">
+              <div class="com-dp-head"><a id="sc2DynSelAll">Select All</a><a id="sc2DynClrAll">Clear All</a></div>
+              <div class="com-dp-list" id="sc2DynList"></div>
+              <div class="com-dp-foot"><button type="button" id="sc2DynApply">Apply</button></div>
+            </div>
+          </div>
+        </div>
         <div id="comDrillWrap" class="com-drill" style="display:none">
           <label>Drill By</label>
           <div class="com-drill-box">
@@ -1325,11 +1335,12 @@ function getSlideTwoGroupFilter(){
 }
 function onSlideTwoDrillChange(){
   var mode=getSlideTwoDrillBy();
-  var groupLabel=document.getElementById('sc2DrillGroupLabel');
-  var groupSelect=document.getElementById('sc2DrillGroup');
-  var showGroup=mode!=='main_group';
-  if(groupLabel)groupLabel.style.display=showGroup?'':'none';
-  if(groupSelect)groupSelect.style.display=showGroup?'':'none';
+  var showDyn=mode!=='main_group';
+  var wrap=document.getElementById('sc2DynWrap');
+  if(wrap)wrap.style.display=showDyn?'':'none';
+  // Seed the dynamic driller from the chosen mode (Person / State); the panel
+  // then lets the user reorder / add dimensions on top of that.
+  if(showDyn){ sc2DynUserSet=false; sc2DynOrder=[mode]; sc2DynChosen=sc2DynOrder.slice(); sc2DynExpanded={}; sc2DynUpdateLabel(); }
   renderSlideTwo();
 }
 function normaliseChannelGroup(name){
@@ -1644,10 +1655,9 @@ function applySlideTwoSegmentUI(seg){
   var db=document.getElementById('sc2DrillBy'), dbl=document.querySelector('label[for="sc2DrillBy"]');
   if(db)db.style.display=isCom?'none':'';
   if(dbl)dbl.style.display=isCom?'none':'';
-  var g=document.getElementById('sc2DrillGroup'), gl=document.getElementById('sc2DrillGroupLabel');
-  var showGroup=!isCom&&getSlideTwoDrillBy()!=='main_group';
-  if(g)g.style.display=showGroup?'':'none';
-  if(gl)gl.style.display=showGroup?'':'none';
+  var dyn=document.getElementById('sc2DynWrap');
+  var showDyn=!isCom&&getSlideTwoDrillBy()!=='main_group';
+  if(dyn)dyn.style.display=showDyn?'':'none';
   var cw=document.getElementById('comDrillWrap');
   if(cw)cw.style.display=isCom?'':'none';
 }
@@ -2397,12 +2407,15 @@ async function renderSlideTwo(){
     var dTargetNodes=[], dOihRows=[];
     try{ dTargetNodes=await fetchTargetNodes(period.month,period.year); }catch(e){ dTargetNodes=[]; }
     try{ dOihRows=await fetchOrderInHandRows(); }catch(e){ dOihRows=[]; }
-    var drillRows=buildSlideTwoDrillRows(rows,mode,groupFilter,dTargetNodes,dOihRows);
-    var dt=cardRowsTotal(drillRows);
+    if(!sc2DynUserSet||!sc2DynOrder.length){ sc2DynOrder=[mode]; sc2DynUpdateLabel(); }
+    var leaves=buildSc2DynLeaves(rows,dTargetNodes,dOihRows);
+    sc2DynLastLeaves=leaves;
+    var dt=aggList(leaves);
     var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
     setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih);
-    sc2CsvRows=buildDrillCsvRows(drillRows,dt,mode,groupFilter);
-    grid.innerHTML=renderSlideTwoDrillTable(drillRows,mode,groupFilter);
+    grid.innerHTML=renderSc2DynTree(leaves);   // sets sc2DynTree
+    sc2CsvRows=sc2DynCsvRows(sc2DynTree,dt);
+    sc2DynFitHeight();                         // grow the body to fill the slide
     return;
   }
 
@@ -2487,6 +2500,210 @@ function cardRowsTotal(list){
   t.actualRealise=t.done>0?t.lineTotal/t.done:0;
   return t;
 }
+
+/* ===== Slide-2 main-table DYNAMIC DRILLER (same UX as the channel-detail cards) =====
+   When Drill By = Sales Person / State, the main table becomes a reorderable,
+   collapsible drill tree across ALL channels. Dimensions: Main Group, State,
+   Person, Product, Item, Customer (reuses DETAIL_DIMS / aggList / dimMeta).
+   Targets carry no product/item/customer breakdown -> they bucket under '—'
+   (hidden in those drills but always counted in TOTAL, like the card driller). */
+var SC2_DYN_DIMS=DETAIL_DIMS;
+var sc2DynOrder=['state'], sc2DynChosen=['state'];
+var sc2DynUserSet=false;   // true once the user applies a custom order (don't reseed from Drill By)
+var sc2DynExpanded={}, sc2DynNodeByPath={}, sc2DynTree=[], sc2DynLastLeaves=null;
+var SC2_DYN_GCOLS='grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr 1fr .9fr';
+// Rows that can't be attributed to a real person / customer / product / item land
+// in the '—' bucket; show that as "Other" (UNKNOWN states keep their own label).
+function sc2DynLabel(v){ return v==='—'?'Other':v; }
+
+function buildSc2DynLeaves(rows,targetNodes,oihRows){
+  var map={};
+  function cell(group,state,person,customer,product,item){
+    var k=group+'|'+state+'|'+person+'|'+customer+'|'+product+'|'+item;
+    if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,product:product,item:item,
+      target:0,done:0,oih:0,lineTotal:0,targetRealise:0};
+    return map[k];
+  }
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i], rawG=String(r.u_main_group||'').toUpperCase();
+    var g=normaliseChannelGroup(rawG)||'—';
+    var st=String(r.state||'').trim().toUpperCase()||'—';
+    var p=assignedPerson(rawG,r.state)||'—';
+    var cust=String(r.card_name||'').trim().toUpperCase()||'—';
+    var prod=String(r.u_sub_group||'').trim().toUpperCase()||'—';
+    var it=String(r.item_name||'').trim().toUpperCase()||'—';
+    var c=cell(g,st,p,cust,prod,it); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
+  }
+  for(var t=0;t<(targetNodes||[]).length;t++){
+    var n=targetNodes[t], rawNg=String(n.main_group||'').toUpperCase();
+    var g2=normaliseChannelGroup(rawNg)||'—';
+    var st2=String(n.state||'').trim().toUpperCase()||'—';
+    var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(rawNg,n.state)||'—';
+    var c2=cell(g2,st2,p2,'—','—','—'); c2.target+=Number(n.target_ltrs)||0;
+    var tr=Number(n.target_realise)||0; if(tr>0)c2.targetRealise=tr;
+  }
+  var oihSeg=sc2Seg();
+  for(var o=0;o<(oihRows||[]).length;o++){
+    var x=oihRows[o], rawXg=String(x.main_group||'').toUpperCase();
+    if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
+    var g3=normaliseChannelGroup(rawXg)||'—';
+    var st3=String(x.state||'').trim().toUpperCase()||'—';
+    var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(rawXg,x.state)||'—';
+    var cust3=String(x.card_name||'').trim().toUpperCase()||'—';
+    var prod3=String(x.u_sub_group||'').trim().toUpperCase()||'—';
+    var it3=String(x.item_name||'').trim().toUpperCase()||'—';
+    cell(g3,st3,p3,cust3,prod3,it3).oih+=Number(x.open_qty)||0;
+  }
+  return Object.keys(map).map(function(k){return map[k];});
+}
+function sc2DynOrderValues(dim,m){
+  var names=Object.keys(m);
+  if(dim==='person')return orderPersons(names);
+  if(dim==='group'){var ord={GT:0,ROI:1,MT:2,REST:3};return names.sort(function(a,b){return (ord[a]==null?9:ord[a])-(ord[b]==null?9:ord[b])||a.localeCompare(b);});}
+  if(dim==='state')return names.sort(function(a,b){return a.localeCompare(b);});
+  return names.sort(function(a,b){return aggList(m[b]).done-aggList(m[a]).done||a.localeCompare(b);}); // product/item/customer by done desc
+}
+function sc2DynBuildTree(leaves,dims,depth,prefix,filt){
+  filt=filt||{};
+  var d=dims[depth], m=groupLeavesBy(leaves,d), nodes=[];
+  sc2DynOrderValues(d,m).forEach(function(v){
+    if((d==='product'||d==='item')&&v==='—')return;   // hide empty target bucket; TOTAL still counts it
+    var path=prefix+'¦'+d+'='+v;
+    var nodeFilt={};for(var fk in filt)nodeFilt[fk]=filt[fk];nodeFilt[d]=v;
+    var node={path:path,dim:d,label:v,filters:nodeFilt,agg:aggList(m[v]),leaf:depth+1>=dims.length,children:[]};
+    sc2DynNodeByPath[path]=node;
+    if(!node.leaf)node.children=sc2DynBuildTree(m[v],dims,depth+1,path,nodeFilt);
+    nodes.push(node);
+  });
+  return nodes;
+}
+function sc2DynNodeRow(node,depth){
+  var meta=dimMeta(node.dim);
+  var twirl=node.leaf?'<span class="cd-twirl cd-leaf"></span>':'<span class="cd-twirl'+(sc2DynExpanded[node.path]?' open':'')+'">&#9654;</span>';
+  var tag=meta.tag?'<span class="cd-tag '+meta.cls+'">'+esc(meta.tag)+'</span>':'';
+  var name='<div class="sc2-drillname" style="padding-left:'+(depth*18)+'px">'+twirl+tag+esc(sc2DynLabel(node.label))+'</div>';
+  var rowStyle=SC2_DYN_GCOLS+(node.leaf?'':';cursor:pointer');
+  return '<div class="sc2-drillrow sc2-wide" style="'+rowStyle+'" data-dynpath="'+esc(node.path)+'"'
+    +(node.leaf?'':' data-dyntoggle="1"')+'>'+name+drillCells(node.agg)+'</div>';
+}
+function sc2DynTreeRows(nodes,depth){
+  var out='';
+  nodes.forEach(function(n){
+    out+=sc2DynNodeRow(n,depth);
+    if(!n.leaf&&sc2DynExpanded[n.path])out+=sc2DynTreeRows(n.children,depth+1);
+  });
+  return out;
+}
+function renderSc2DynTree(leaves){
+  var dims=sc2DynOrder.slice();
+  sc2DynNodeByPath={};
+  sc2DynTree=dims.length?sc2DynBuildTree(leaves,dims,0,'',{}):[];
+  var title=dims.length?dims.map(function(d){return dimMeta(d).label;}).join(' › '):'—';
+  var html='<div class="sc2-drillcard sc2-drillfull">'
+    +'<div class="sc2-thead sc2-wide" style="'+SC2_DYN_GCOLS+'">'
+      +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
+      +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Done L</div>'
+      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
+      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Revenue</div><div class="sc2-tt-col">Act Rlz</div>'
+    +'</div><div class="sc2-drillbody">';
+  if(!dims.length){
+    html+='<div class="sc2-state-empty">Select at least one drill dimension.</div>';
+  }else if(!sc2DynTree.length){
+    html+='<div class="sc2-state-empty">No rows available in the current selection.</div>';
+  }else{
+    html+=sc2DynTreeRows(sc2DynTree,0);
+    var tot=aggList(leaves);
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" style="'+SC2_DYN_GCOLS+'"><div class="sc2-drillname">TOTAL</div>'+drillCells(tot)+'</div>';
+  }
+  html+='</div></div>';
+  return html;
+}
+function sc2DynRerender(){
+  var grid=document.getElementById('channelGrid');
+  if(grid&&sc2DynLastLeaves){ grid.innerHTML=renderSc2DynTree(sc2DynLastLeaves); sc2DynFitHeight(); }
+}
+// Size the table body to the real space left below it so it uses the whole slide
+// (more rows visible, no dead strip) while still shrinking to content when short
+// (no white gap). max-height only caps — it never force-fills — so both hold.
+function sc2DynFitHeight(){
+  var grid=document.getElementById('channelGrid');
+  if(!grid)return;
+  var body=grid.querySelector('.sc2-drillfull .sc2-drillbody');
+  if(!body)return;
+  var top=body.getBoundingClientRect().top;
+  var avail=window.innerHeight-top-16;   // 16px breathing room at the bottom
+  body.style.maxHeight=(avail>140?avail:140)+'px';
+}
+var sc2DynResizeT;
+window.addEventListener('resize',function(){
+  clearTimeout(sc2DynResizeT);
+  sc2DynResizeT=setTimeout(function(){
+    var grid=document.getElementById('channelGrid');
+    if(grid&&grid.querySelector('.sc2-drillfull'))sc2DynFitHeight();
+  },150);
+});
+function sc2DynCsvRows(tree,total){
+  var out=[['Drill: '+sc2DynOrder.map(function(k){return dimMeta(k).label;}).join(' > ')].concat(SC2_CSV_HEADER_TAIL)];
+  (function walk(nodes,prefix){
+    nodes.forEach(function(n){
+      out.push(csvMetricRow(prefix+sc2DynLabel(n.label),n.agg));
+      if(!n.leaf)walk(n.children,prefix+'    ');
+    });
+  })(tree,'');
+  out.push(csvMetricRow('TOTAL',total));
+  return out;
+}
+// ── Dynamic drill-order panel (replaces the old Main Group dropdown) ──
+function sc2DynUpdateLabel(){
+  var el=document.getElementById('sc2DynLabel');
+  if(el)el.textContent=sc2DynOrder.length?sc2DynOrder.map(function(k){return dimMeta(k).label;}).join(' › '):'— none —';
+}
+function sc2DynRenderList(){
+  var list=document.getElementById('sc2DynList'); if(!list)return;
+  list.innerHTML='';
+  SC2_DYN_DIMS.forEach(function(d){
+    var pos=sc2DynChosen.indexOf(d.key);
+    var item=document.createElement('label');
+    item.className='com-dp-item'+(pos!==-1?' checked':'');
+    item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'>'
+      +'<span class="com-dp-name">'+d.name+'</span>'
+      +'<span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+    item.querySelector('input').addEventListener('change',function(){
+      var i=sc2DynChosen.indexOf(d.key);
+      if(this.checked){ if(i===-1)sc2DynChosen.push(d.key); }
+      else if(i!==-1)sc2DynChosen.splice(i,1);
+      sc2DynRenderList();
+    });
+    list.appendChild(item);
+  });
+}
+function sc2DynInitPanel(){
+  var btn=document.getElementById('sc2DynBtn'), panel=document.getElementById('sc2DynPanel');
+  if(!btn||!panel)return;
+  sc2DynUpdateLabel();
+  btn.addEventListener('click',function(e){ e.stopPropagation(); sc2DynChosen=sc2DynOrder.slice(); sc2DynRenderList(); panel.classList.toggle('open'); });
+  panel.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.addEventListener('click',function(){ panel.classList.remove('open'); });
+  document.getElementById('sc2DynSelAll').addEventListener('click',function(){ sc2DynChosen=SC2_DYN_DIMS.map(function(d){return d.key;}); sc2DynRenderList(); });
+  document.getElementById('sc2DynClrAll').addEventListener('click',function(){ sc2DynChosen=[]; sc2DynRenderList(); });
+  document.getElementById('sc2DynApply').addEventListener('click',function(){
+    if(!sc2DynChosen.length){ showToast('Pick at least one drill dimension','info'); return; }
+    sc2DynOrder=sc2DynChosen.slice(); sc2DynExpanded={}; sc2DynUserSet=true;
+    sc2DynUpdateLabel(); panel.classList.remove('open');
+    renderSlideTwo();
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sc2DynInitPanel);
+else sc2DynInitPanel();
+// Expand / collapse dynamic-tree parent rows (delegated; survives re-renders).
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var row=e.target.closest('#channelGrid .sc2-drillrow[data-dyntoggle]');
+  if(!row)return;
+  var p=row.getAttribute('data-dynpath');
+  sc2DynExpanded[p]=!sc2DynExpanded[p];
+  sc2DynRerender();
+});
 
 /* ===== CHANNEL DASHBOARD (slide 2) PLAIN-CSV EXPORT ===== */
 function csvInt(n){n=Number(n);return isFinite(n)?String(Math.round(n)):'0';}
