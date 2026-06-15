@@ -1,7 +1,7 @@
 import logging
 import time
 from decimal import Decimal
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from core import sap_connector
 from .models import MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster, TargetMaster, TargetNode
@@ -92,6 +92,110 @@ def _fetch_raw(start_date, end_date):
     except Exception as e:
         logger.error('[SAP] Procedure call failed: %s', e)
         return []
+
+
+# ── Beverages dataset (separate HANA schema + proc) ───────────────────────
+# Same fetch mechanism as oils, but a different schema/proc and a product-only
+# shape: Variety / Sub-Group / SKU dimensions with Quantity & Boxes metrics.
+BEVERAGES_SCHEMA = 'JIVO_BEVERAGES_HANADB'
+BEVERAGES_PROC   = 'REPORT_SALES_COGS'
+_BEV_CACHE = {}
+_BEV_CACHE_TTL = 90   # seconds, same as oils
+
+
+def _fetch_raw_beverages(start_date, end_date):
+    sql = f'CALL "{BEVERAGES_SCHEMA}"."{BEVERAGES_PROC}"(?, ?)'
+    try:
+        with sap_connector.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, (start_date, end_date))
+            columns = [desc[0] for desc in cursor.description]
+            rows = cursor.fetchall()
+            cursor.close()
+        return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        logger.error('[SAP-BEV] Procedure call failed: %s', e)
+        return []
+
+
+def _bev_pick(row, *keys):
+    """First non-empty value among candidate column names (proc casing varies)."""
+    for k in keys:
+        if k in row and row[k] not in (None, ''):
+            return row[k]
+    return None
+
+
+def _bev_num(value):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _bev_date(value):
+    """Parse a DocDate cell to a date (hdbcli usually returns date/datetime objects)."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        s = value.strip()[:10]
+        for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y'):
+            try:
+                return datetime.strptime(s, fmt).date()
+            except ValueError:
+                pass
+    return None
+
+
+def get_beverages_rows(start_date, end_date):
+    """Granular beverage rows aggregated by (Variety, Sub_Group, SKU, Main Group, State,
+    Item) with Quantity and Boxes, plus today's & yesterday's box totals (by DocDate).
+    The client nests the rows into any drill order."""
+    raw = _fetch_raw_beverages(start_date, end_date)
+    agg = {}
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    today_boxes = 0.0
+    yest_boxes = 0.0
+    for r in raw or []:
+        variety = _normalize_name(_bev_pick(r, 'Variety', 'VARIETY', 'variety')) or '—'
+        sub = _normalize_name(_bev_pick(r, 'Sub_Group', 'SUB_GROUP', 'U_Sub_Group', 'sub_group')) or '—'
+        sku = _normalize_name(_bev_pick(r, 'SKU', 'Sku', 'sku')) or '—'
+        main_group = _normalize_name(_bev_pick(r, 'U_Main_Group', 'U_MAIN_GROUP', 'Main_Group', 'main_group')) or '—'
+        state = _normalize_name(_bev_pick(r, 'State', 'STATE', 'state')) or '—'
+        item = _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—'
+        qty = _bev_num(_bev_pick(r, 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
+        box = _bev_num(_bev_pick(r, 'Box', 'BOX', 'Boxes', 'Box(es)', 'box'))
+        key = (variety, sub, sku, main_group, state, item)
+        cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0})
+        cell['quantity'] += qty
+        cell['boxes'] += box
+        dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
+        if dd == today:
+            today_boxes += box
+        elif dd == yesterday:
+            yest_boxes += box
+    rows = [{'variety': k[0], 'sub_group': k[1], 'sku': k[2],
+             'main_group': k[3], 'state': k[4], 'item': k[5],
+             'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
+            for k, v in agg.items()]
+    return {'rows': rows, 'today_boxes': round(today_boxes, 2), 'yesterday_boxes': round(yest_boxes, 2)}
+
+
+def get_beverages_rows_cached(start_date, end_date):
+    key = f'{start_date}|{end_date}'
+    now = time.time()
+    hit = _BEV_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    data = get_beverages_rows(start_date, end_date)
+    if data and data.get('rows'):
+        _BEV_CACHE[key] = (now + _BEV_CACHE_TTL, data)
+        for k in [k for k, v in _BEV_CACHE.items() if v[0] <= now]:
+            _BEV_CACHE.pop(k, None)
+    return data
 
 
 def _empty_result():
@@ -862,7 +966,7 @@ TERRITORY_SHEET = [
     ('GT',     'RJ', 'RAJASTHAN',     'RAMINDER JI'),
     ('GT',     'HR', 'HARYANA',       'TANJEET JI'),
     ('GT',     'UP', 'UTTAR PRADESH', 'RAVINDER CHADHA JI'),
-    ('GT',     'UK', 'UTTARAKHAND',   'RAVINDER CHADHA JI'),
+    ('GT',     'UK', 'UTTARAKHAND',   'TANJEET JI'),
     ('MT',     'DL', 'DELHI',         'PRINCE'),
     ('MT',     'PB', 'PUNJAB',        'PRINCE'),
     ('MT',     'HR', 'HARYANA',       'PRINCE'),
@@ -882,6 +986,22 @@ _PERSON_ASSIGNMENTS = {(g, code): person for (g, code, name, person) in TERRITOR
 # By state NAME, for completing partially-keyed targets (each pair is unique).
 _GROUP_BY_STATE_PERSON = {(name, person): g for (g, code, name, person) in TERRITORY_SHEET}
 _PERSON_BY_GROUP_STATE = {(g, name): person for (g, code, name, person) in TERRITORY_SHEET}
+
+# National channels owned by a single person regardless of state. These groups have
+# no per-state territory row, so they resolve to their owner by main group alone —
+# this is what makes their sales attribute to the owner in the Sales-Person drill.
+CHANNEL_OWNERS = {
+    'E-COMMERCE': 'PRABHU SIR',
+    'CSD': 'SACHIN STEPHEN',
+}
+
+
+def person_for_group_state(group, state_name):
+    """Territory owner for a (group, state); falls back to the channel-level owner
+    for national channels (E-Commerce, CSD) that have no per-state assignment."""
+    group = _normalize_name(group)
+    person = _PERSON_BY_GROUP_STATE.get((group, _normalize_name(state_name)))
+    return person or CHANNEL_OWNERS.get(group, '')
 
 
 def complete_target_triple(group, state, person):
@@ -925,6 +1045,10 @@ def _assigned_persons_in_order():
         if person not in seen:
             seen.add(person)
             ordered.append(person)
+    for person in CHANNEL_OWNERS.values():
+        if person not in seen:
+            seen.add(person)
+            ordered.append(person)
     return ordered
 
 
@@ -946,7 +1070,10 @@ def get_territory_master_rows():
         seen.add(key)
         rows.append({'main_group': group, 'state': name, 'sales_person': person})
     for group in REST_GROUPS:
-        rows.append({'main_group': group, 'state': '', 'sales_person': ''})
+        # Channels with a named owner (E-Commerce → Prabhu Sir, CSD → Sachin Stephen)
+        # carry that person so they show up in the Update Targets person list and a
+        # target entered for them resolves back to the channel's main group.
+        rows.append({'main_group': group, 'state': '', 'sales_person': CHANNEL_OWNERS.get(group, '')})
     return rows
 
 
@@ -965,6 +1092,7 @@ def get_territory_dashboard_payload():
         'persons': _assigned_persons_in_order(),
         'map': person_map,
         'whitelist': whitelist,
+        'group_owners': dict(CHANNEL_OWNERS),
     }
 
 
@@ -1001,7 +1129,7 @@ def get_order_in_hand_by_person():
     """Open-order LITRES per territory owner (assigned only). Live snapshot."""
     data = {p: 0.0 for p in _assigned_persons_in_order()}
     for (group, code), qty in _open_order_qty_by_group_code().items():
-        person = _PERSON_ASSIGNMENTS.get((group, code))
+        person = _PERSON_ASSIGNMENTS.get((group, code)) or CHANNEL_OWNERS.get(group)
         if person:
             data[person] = data.get(person, 0.0) + qty
     return data
@@ -1052,7 +1180,7 @@ def get_order_in_hand_rows():
         rows.append({
             'main_group': group,
             'state': state_name,
-            'sales_person': _PERSON_BY_GROUP_STATE.get((group, state_name), ''),
+            'sales_person': person_for_group_state(group, state_name),
             'card_name': _normalize_name(d.get('CUST')),
             'u_type': _normalize_name(d.get('UTYPE')),
             'u_sub_group': _normalize_name(d.get('SUBG')),
@@ -1069,9 +1197,13 @@ CHANNEL_MEMBERS = {
     'GT': ['GT'],
     'ROI': ['ROI'],
     'MT': ['MT'],
-    # Mirror the JS CHANNEL_BLOCKS REST list exactly (HORECA + CSD + the REST groups);
-    # CSD was missing here, so REST document drills on CSD returned nothing.
-    'REST': ['HORECA', 'CSD'] + REST_SOURCE_GROUPS,
+    # E-Commerce, Horeca and CSD each get their own card now, so they're their own
+    # single-group channels. REST holds only the leftover source groups. Keep this in
+    # sync with the JS CHANNEL_BLOCKS in realise/templates/realise/dashboard.html.
+    'ECOM': ['E-COMMERCE'],
+    'HORECA': ['HORECA'],
+    'CSD': ['CSD'],
+    'REST': [g for g in REST_SOURCE_GROUPS if g != 'E-COMMERCE'],
 }
 
 
@@ -1449,6 +1581,7 @@ def get_target_nodes(month, year, segment=None):
         qs = qs.filter(segment__in=[seg, ''])
     return [
         {'main_group': n.main_group, 'state': n.state, 'sales_person': n.sales_person,
+         'segment': n.segment or '',
          'target_ltrs': float(n.target_ltrs or 0), 'target_realise': float(n.target_realise or 0)}
         for n in qs
     ]

@@ -9,6 +9,7 @@ urlpatterns = [
     path('channel/<str:group>/',     views.channel_detail_placeholder, name='channel_detail'),
     path('api/health/',              views.api_health,             name='api_health'),
     path('api/sales-data/',          views.api_sales_data,         name='api_sales_data'),
+    path('api/beverages-data/',      views.api_beverages_data,     name='api_beverages_data'),
     path('api/channel-targets/',     views.api_channel_targets,    name='api_channel_targets'),
     path('api/segment-targets/',     views.api_segment_targets,    name='api_segment_targets'),
     path('api/order-in-hand/',       views.api_order_in_hand,      name='api_order_in_hand'),

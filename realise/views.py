@@ -182,6 +182,27 @@ def api_sales_data(request):
 
 @group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['POST'])
+def api_beverages_data(request):
+    """Beverages dataset (JIVO_BEVERAGES_HANADB / REPORT_SALES_COGS) — granular rows
+    by Variety / Sub-Group / SKU with Quantity & Boxes for the dynamic driller."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date   = body.get('end_date', '')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    try:
+        data = services.get_beverages_rows_cached(start_date, end_date)
+    except Exception as e:
+        logger.error('[BEVERAGES] fetch error: %s', e)
+        return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0})
+    rows = data.get('rows', []) if isinstance(data, dict) else (data or [])
+    return JsonResponse({'status': 'ok', 'data': rows, 'count': len(rows),
+                         'today_boxes': data.get('today_boxes', 0) if isinstance(data, dict) else 0,
+                         'yesterday_boxes': data.get('yesterday_boxes', 0) if isinstance(data, dict) else 0})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['POST'])
 def api_drill_down(request):
     body = _parse_body(request)
     start_date   = body.get('start_date', '')

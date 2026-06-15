@@ -18,6 +18,11 @@
 body.slide-two-mode .rd-wrap .controls{display:none}
 .cp-main{padding:0!important}
 body.cp-sidebar-collapsed .cp-main{padding-left:64px!important}
+/* Slide 2: pin the page to the viewport (topbar is 56px) so the toolbar + KPI row
+   stay fixed and only the channel-card grid (.sc2-grid) scrolls. Without a definite
+   height here, .rd-wrap's height:100% collapses to auto and the whole page — KPIs
+   included — scrolls inside .cp-main instead. */
+body.slide-two-mode .cp-main{height:calc(100vh - 56px);overflow:hidden}
 .rd-wrap{display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;color:var(--text);max-width:none;min-width:0}
 body.slide-two-mode .rd-wrap .header{display:none}
 .header{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between}
@@ -171,11 +176,11 @@ td.ccell{font-weight:500}
 .cd-dp-foot{padding:10px 14px;border-top:1px solid #eceff1}
 .cd-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;padding:9px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
 .cd-dp-foot button:hover{background:#1d4ed8}
-.cd-table-wrap{flex:1;min-height:0;overflow:auto;padding:0 24px 20px}
-.cd-table{width:100%;border-collapse:collapse;font-size:14px}
+.cd-table-wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 24px 20px}
+.cd-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
 .cd-table thead th{position:sticky;top:0;z-index:1;background:var(--surface2);padding:12px 14px;text-align:right;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:2px solid var(--border)}
 .cd-table thead th:first-child{text-align:left}
-.cd-table td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text2)}
+.cd-table td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text2);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 .cd-table td:first-child{text-align:left;font-weight:700;color:var(--text)}
 .cd-table tr.cd-parent td{background:var(--surface);font-weight:800;color:var(--text)}
 .cd-table tr.cd-child td:first-child{font-weight:600;color:var(--text2)}
@@ -202,15 +207,16 @@ td.ccell{font-weight:500}
 #cdBody td.cd-doc-cell:not(.cd-doc-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
 .cd-table tr.cd-total td.cd-doc-cell:not(.cd-doc-empty){color:#bcd8ff}
 /* Document detail modal */
-.doc-box{width:1060px;max-width:96vw;height:80vh;max-height:90vh}
+.doc-box{width:min(1280px,calc(100vw - 24px));max-width:none;height:min(90vh,900px);max-height:90vh}
 .doc-header{background:linear-gradient(135deg,#1f3a5f,#14304f)}
 .cd-table.doc-table thead th,.cd-table.doc-table td{text-align:left}
 .cd-table.doc-table thead th.num,.cd-table.doc-table td.num{text-align:right;font-variant-numeric:tabular-nums}
 .cd-table.doc-table td:nth-child(2){font-weight:700;color:var(--text)}
-.doc-table th:nth-child(1),.doc-table td:nth-child(1){width:115px}   /* Date */
-.doc-table th:nth-child(2),.doc-table td:nth-child(2){width:150px}   /* No */
+.doc-table th:nth-child(1),.doc-table td:nth-child(1){width:110px}   /* Date */
+.doc-table th:nth-child(2),.doc-table td:nth-child(2){width:140px}   /* No */
+.doc-table th:nth-child(3),.doc-table td:nth-child(3){width:36%}      /* Party Name */
 .doc-table th:nth-child(4),.doc-table td:nth-child(4){width:120px}   /* State */
-.doc-table th:nth-child(5),.doc-table td:nth-child(5){width:140px}   /* City */
+.doc-table th:nth-child(5),.doc-table td:nth-child(5){width:180px}   /* City */
 .doc-table th:nth-child(6),.doc-table td:nth-child(6){width:110px}   /* Litres */
 /* Pin the TOTAL as a second sticky header row (always visible, white text) */
 .doc-table thead th{height:44px;box-sizing:border-box;z-index:3}
@@ -226,10 +232,10 @@ td.ccell{font-weight:500}
 .cd-table.doc-table tr.doc-item-row td:nth-child(2){padding-left:28px;font-weight:600;color:var(--text)}
 /* Nested per-warehouse item table inside an expanded OIH document */
 .cd-table.doc-table tr.doc-detail-row td{background:#eef3f8;padding:0 14px 8px 40px;border-bottom:1px solid #d7e0ea}
-table.doc-items{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #dbe3ec;border-radius:6px;overflow:hidden;margin-top:4px}
+table.doc-items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;background:#fff;border:1px solid #dbe3ec;border-radius:6px;overflow:hidden;margin-top:4px}
 table.doc-items thead th{background:#e8eef6;color:#475569;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:6px 12px;text-align:left;border-bottom:1px solid #d7e0ea}
 table.doc-items thead th.num{text-align:right}
-table.doc-items td{padding:6px 12px;border-bottom:1px solid #eef2f6;color:var(--text2)}
+table.doc-items td{padding:6px 12px;border-bottom:1px solid #eef2f6;color:var(--text2);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 table.doc-items td:first-child{color:var(--text);font-weight:600}
 table.doc-items td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.doc-items tr:last-child td{border-bottom:none}
@@ -390,9 +396,13 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 <div class="header">
   <div class="header-left">
     <div class="logo-icon">JS</div>
-    <h1>Realise Dashboard <span>REPORT_SALES_ANALYSIS</span> <span class="vbadge">v11</span></h1>
+    <h1>Realise Dashboard <span id="procName">REPORT_SALES_ANALYSIS</span> <span class="vbadge">v11</span></h1>
   </div>
   <div class="header-actions">
+    <div class="ds-toggle" role="group" aria-label="Dataset">
+      <button type="button" class="ds-btn ds-oils active" onclick="switchDataset('oils')">OILS</button>
+      <button type="button" class="ds-btn ds-bev" onclick="switchDataset('beverages')">BEVERAGES</button>
+    </div>
     <div class="slide-nav" aria-label="Dashboard slide navigation">
       <button class="slide-btn" id="slidePrevBtn" onclick="prevSlide()" aria-label="Previous slide">&#8249;</button>
       <div class="slide-indicator" id="slideIndicator">Slide 1 / 2</div>
@@ -401,7 +411,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     <div class="status-pill"><span class="dot dot-red" id="sDot"></span><span id="sTxt">Checking...</span></div>
   </div>
 </div>
-<div class="controls">
+<div class="controls" id="oilsControls">
   <div class="cg"><label>From</label><input type="date" id="dFrom"></div>
   <div class="cg"><label>To</label><input type="date" id="dTo"></div>
   <button class="btn btn-primary" id="fetchBtn" onclick="loadData()">&#9654; Fetch Data</button>
@@ -495,6 +505,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <h2>Sales Channel Dashboard</h2>
         </div>
         <div class="sc2-actions">
+          <div class="ds-toggle" role="group" aria-label="Dataset">
+            <button type="button" class="ds-btn ds-oils active" onclick="switchDataset('oils')">OILS</button>
+            <button type="button" class="ds-btn ds-bev" onclick="switchDataset('beverages')">BEVERAGES</button>
+          </div>
           <div class="sc2-nav" aria-label="Slide 2 navigation">
             <button class="slide-btn" onclick="prevSlide()" aria-label="Previous slide">&#8249;</button>
             <div class="slide-indicator">Slide 2 / 2</div>
@@ -550,15 +564,85 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       </div>
       <div class="sc2-kpis" id="channelKpis">
         <div class="sc2-kpi"><label>Target Ltr</label><div id="sc2KpiTarget">&mdash;</div></div>
-        <div class="sc2-kpi"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('done')" title="Open Done breakdown"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
         <div class="sc2-kpi sc2-kpi-click" onclick="openOihWindow()" title="Open OIH breakdown"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
-        <div class="sc2-kpi"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('balance')" title="Open Balance breakdown"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
         <div class="sc2-kpi"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
         <div class="sc2-kpi"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
       </div>
       <div class="sc2-grid" id="channelGrid"></div>
     </div>
   </section>
+</div>
+
+<style>
+  .ds-toggle{display:inline-flex;border:1px solid #cbd5e1;border-radius:9px;overflow:hidden;background:#fff}
+  .ds-btn{border:0;background:#fff;color:#475569;font-family:inherit;font-weight:800;font-size:12px;letter-spacing:.04em;padding:8px 14px;cursor:pointer;transition:background .15s,color .15s}
+  .ds-btn+.ds-btn{border-left:1px solid #e2e8f0}
+  .ds-btn.active{background:#4f46e5;color:#fff}
+  .bev-view{flex:1;min-height:0;overflow:auto;padding:16px 20px 24px}
+  .bev-head{margin-bottom:12px}
+  /* Own class (not .controls) so slide-two-mode doesn't hide the beverages toolbar. */
+  .bev-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .bev-sum{display:flex;gap:14px;margin:0 0 14px}
+  .bev-sum .scard{flex:0 0 220px}
+  .bev-tablewrap{background:#fff;border:1px solid #d9e5ee;border-radius:14px;box-shadow:0 8px 22px rgba(15,23,42,.06);overflow:auto}
+  table.bev-table{width:100%;border-collapse:collapse;font-size:13px}
+  table.bev-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:12px 16px}
+  table.bev-table th.num,table.bev-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.bev-table tbody td{padding:10px 16px;border-bottom:1px solid #eef2f6;color:#334155}
+  table.bev-table tbody tr:nth-child(even){background:#fafcff}
+  table.bev-table tbody tr.cd-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  .bev-tw{display:inline-flex;width:14px;justify-content:center;color:#64748b;font-size:10px;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .bev-tw.open{transform:rotate(90deg)}
+  .bev-tw-empty{display:inline-block;width:14px;margin-right:7px}
+</style>
+
+<div class="bev-view" id="beveragesView" style="display:none">
+  <div class="sc2-head bev-head">
+    <div class="sc2-title"><h2>Beverages</h2></div>
+    <div class="sc2-actions">
+      <div class="ds-toggle" role="group" aria-label="Dataset">
+        <button type="button" class="ds-btn ds-oils" onclick="switchDataset('oils')">OILS</button>
+        <button type="button" class="ds-btn ds-bev active" onclick="switchDataset('beverages')">BEVERAGES</button>
+      </div>
+      <div class="sc2-nav" aria-label="Slide 2 navigation">
+        <button class="slide-btn" onclick="prevSlide()" aria-label="Previous slide">&#8249;</button>
+        <div class="slide-indicator">Slide 2 / 2</div>
+      </div>
+      <button type="button" class="btn btn-ghost" onclick="exportBeveragesCSV()">&#11015; Export CSV</button>
+    </div>
+  </div>
+  <div class="bev-controls">
+    <div class="cg"><label>From</label><input type="date" id="bevFrom"></div>
+    <div class="cg"><label>To</label><input type="date" id="bevTo"></div>
+    <button class="btn btn-primary" id="bevFetchBtn" onclick="loadBeverages()">&#9654; Fetch Data</button>
+    <div class="sep"></div>
+    <div class="cg"><label>Drill Order</label>
+      <div class="com-drill">
+        <div class="com-drill-box">
+          <button type="button" class="com-drill-btn" id="bevDrillBtn"><span id="bevDrillLabel">Variety › Sub-Group › SKU</span><span class="com-caret">&#9662;</span></button>
+          <div class="com-drill-panel" id="bevDrillPanel">
+            <div class="com-dp-head"><a id="bevSelAll">Select All</a><a id="bevClrAll">Clear All</a></div>
+            <div class="com-dp-list" id="bevDpList"></div>
+            <div class="com-dp-foot"><button type="button" id="bevApply">Apply</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bev-sum">
+    <div class="scard"><div class="sl">Total Quantity</div><div class="sv" id="bevKpiQty">&mdash;</div></div>
+    <div class="scard"><div class="sl">Total Boxes</div><div class="sv" id="bevKpiBox">&mdash;</div></div>
+    <div class="scard"><div class="sl">Today's Sales (Boxes)</div><div class="sv" id="bevKpiToday">&mdash;</div></div>
+    <div class="scard"><div class="sl">Yesterday's Sales (Boxes)</div><div class="sv" id="bevKpiYest">&mdash;</div></div>
+  </div>
+  <div class="bev-tablewrap">
+    <table class="bev-table">
+      <thead><tr><th id="bevFirstCol">Variety › Sub-Group › SKU</th><th class="num">Quantity</th><th class="num">Boxes</th></tr></thead>
+      <tbody id="bevBody"><tr><td colspan="3" class="cd-empty" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr></tbody>
+    </table>
+  </div>
 </div>
 <div class="overlay" id="ov"><div class="spin"></div><div style="color:var(--text2);font-weight:500;font-size:13px">Fetching from SAP HANA...</div></div>
 <div class="toast" id="toast"></div>
@@ -712,6 +796,39 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     </div>
   </div>
 </div>
+
+<!-- Done / Balance breakdown modal (Premium / Commodity / Total by any dimension) -->
+<div class="modal-overlay" id="mbModal" style="z-index:400" onclick="if(event.target===this)closeMetricWindow()">
+  <div class="modal-box cd-box doc-box">
+    <div class="cd-header doc-header">
+      <div>
+        <h3 id="mbTitle">Breakdown</h3>
+        <p id="mbSubtitle">Premium &amp; Commodity litres</p>
+      </div>
+      <div class="cd-controls">
+        <span class="cd-view-label">Group by</span>
+        <div class="com-drill-box">
+          <button type="button" class="com-drill-btn" id="mbDrillBtn">
+            <span id="mbDrillLabel">Main Group</span><span class="com-caret">&#9662;</span>
+          </button>
+          <div class="com-drill-panel" id="mbDrillPanel">
+            <div class="com-dp-head"><a id="mbSelAll">Select All</a><a id="mbClrAll">Clear All</a></div>
+            <div class="com-dp-list" id="mbDpList"></div>
+            <div class="com-dp-foot"><button type="button" id="mbApply">Apply</button></div>
+          </div>
+        </div>
+        <button class="btn-cancel" onclick="closeMetricWindow()">Close</button>
+      </div>
+    </div>
+    <div class="cd-table-wrap">
+      <div id="mbSummary" class="oih-kpi-summary"></div>
+      <table class="cd-table doc-table" id="mbTable">
+        <thead><tr id="mbHead"></tr></thead>
+        <tbody id="mbBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -791,11 +908,16 @@ var avgRealiseData={},avgRealiseDrill={},avgPeriod='';
 var channelRows=[],channelTargetCache={},segmentTargetCache={};
 var selectedProducts={};
 var currentSlide=0;
+// Keep in sync with CHANNEL_MEMBERS in realise/services.py. E-Com / Horeca / CSD are
+// their own single-group cards; REST holds the leftover source groups.
 var CHANNEL_BLOCKS=[
   {name:'GT', members:['GT']},
   {name:'ROI', members:['ROI']},
   {name:'MT', members:['MT']},
-  {name:'REST', members:['HORECA','CSD','E-COMMERCE','CASH SALE','CORPORATE','SANGAT','BRANCH','STAFF','REFERENCE','PURCHASE OIL']}
+  {name:'ECOM', members:['E-COMMERCE']},
+  {name:'HORECA', members:['HORECA']},
+  {name:'CSD', members:['CSD']},
+  {name:'REST', members:['CASH SALE','CORPORATE','SANGAT','BRANCH','STAFF','REFERENCE','PURCHASE OIL']}
 ];
 // Territory ground truth, supplied by the server (single source = TERRITORY_SHEET).
 var TERRITORY_DATA={{ territory_payload|safe }};
@@ -803,6 +925,8 @@ var TERRITORY=TERRITORY_DATA.map||{};                 // "GROUP|STATENAME" -> pe
 var ASSIGNED_PERSONS=TERRITORY_DATA.persons||[];       // ordered owners
 // Fixed state breakdown per channel (label + the sales-side spellings it matches).
 var CHANNEL_STATE_WHITELIST=TERRITORY_DATA.whitelist||{};
+// National channels owned by one person regardless of state (E-Commerce, CSD).
+var GROUP_OWNERS=TERRITORY_DATA.group_owners||{};
 function channelStateLabel(channel,stateName){
   var list=CHANNEL_STATE_WHITELIST[channel];
   if(!list)return String(stateName||'UNKNOWN').trim().toUpperCase()||'UNKNOWN';
@@ -813,7 +937,7 @@ function channelStateLabel(channel,stateName){
 function assignedPerson(group,state){
   group=String(group||'').trim().toUpperCase();
   state=String(state||'').trim().toUpperCase();
-  return TERRITORY[group+'|'+state]||null;
+  return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
 }
 var orderInHandCache=null;
 async function fetchOrderInHand(){
@@ -837,13 +961,14 @@ function setSlide(idx){
   document.getElementById('slideIndicator').textContent='Slide '+(currentSlide+1)+' / 2';
   document.getElementById('slidePrevBtn').disabled=currentSlide===0;
   document.getElementById('slideNextBtn').disabled=currentSlide===slides.length-1;
-  // First time slide 2 is shown, seed its dates and fetch its own data.
-  // If we restored cached data, paint it instead of re-fetching from SAP.
-  if(currentSlide===1){
+  // Slide 2 in OILS mode = channel dashboard (needs oils data). In BEVERAGES mode
+  // it shows the beverages table instead (handled by applyView).
+  if(currentSlide===1 && currentDataset==='oils'){
     ensureSlideTwoDates();
     if(!sc2Fetched && !sc2Loading)loadSlideTwoData();
     else if(sc2Fetched && !sc2Rendered)renderSlideTwo();
   }
+  applyView();
 }
 function ensureSlideTwoDates(){
   var f=document.getElementById('sc2From'), t=document.getElementById('sc2To');
@@ -852,6 +977,162 @@ function ensureSlideTwoDates(){
 }
 function nextSlide(){setSlide(currentSlide+1);}
 function prevSlide(){setSlide(currentSlide-1);}
+
+/* ===== OILS / BEVERAGES dataset toggle + Beverages view =====
+   Beverages is a separate dataset (JIVO_BEVERAGES_HANADB / REPORT_SALES_COGS).
+   When selected it replaces the oils slides with a single dynamic-drill table
+   (Variety / Sub-Group / SKU, reorderable) showing Quantity & Boxes. */
+var currentDataset='oils';
+var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'sku',label:'SKU'},{key:'main_group',label:'Main Group'},{key:'state',label:'State'},{key:'item',label:'Item Name'}];
+var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',sku:'SKU',main_group:'Main Group',state:'State',item:'Item Name'};
+var BEV_TAG_CLS={variety:'group',sub_group:'state',sku:'item',main_group:'person',state:'group',item:'state'};
+var bevOrder=['variety','sub_group','sku'], bevChosen=bevOrder.slice();
+var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
+var bevTodayBoxes=0, bevYestBoxes=0;
+
+function setDatasetButtons(oils){
+  var os=document.querySelectorAll('.ds-oils'), bs=document.querySelectorAll('.ds-bev'), i;
+  for(i=0;i<os.length;i++)os[i].classList.toggle('active',oils);
+  for(i=0;i<bs.length;i++)bs[i].classList.toggle('active',!oils);
+}
+// The OILS/BEVERAGES toggle picks what SLIDE 2 shows; Slide 1 always stays the oils
+// product table. Switching jumps to Slide 2 so the change is visible.
+function switchDataset(ds){
+  if(ds===currentDataset)return;
+  currentDataset=ds;
+  setDatasetButtons(ds==='oils');
+  var pn=document.getElementById('procName'); if(pn)pn.textContent=ds==='oils'?'REPORT_SALES_ANALYSIS':'REPORT_SALES_COGS';
+  if(currentSlide!==1){ setSlide(1); return; }   // setSlide() calls applyView()
+  applyView();
+  if(ds==='oils'){ ensureSlideTwoDates(); if(!sc2Fetched && !sc2Loading)loadSlideTwoData(); else if(sc2Fetched && !sc2Rendered)renderSlideTwo(); }
+}
+// Reconcile Slide 2's content with the selected dataset.
+function applyView(){
+  var showBev=(currentSlide===1 && currentDataset==='beverages');
+  var bv=document.getElementById('beveragesView'); if(bv)bv.style.display=showBev?'':'none';
+  // The .slides container keeps flex:1 even with hidden children, so it would
+  // reserve a blank band above the beverages view — hide it while beverages shows.
+  var sl=document.querySelector('.slides'); if(sl)sl.style.display=showBev?'none':'';
+  if(showBev){ ensureBevDates(); if(!bevFetched && !bevLoading)loadBeverages(); }
+}
+function ensureBevDates(){
+  var f=document.getElementById('bevFrom'), t=document.getElementById('bevTo');
+  var sd=(document.getElementById('dFrom')||{}).value, ed=(document.getElementById('dTo')||{}).value;
+  if(f&&!f.value)f.value=sd||(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-01');
+  if(t&&!t.value)t.value=ed||new Date().toISOString().split('T')[0];
+}
+async function loadBeverages(){
+  var sd=document.getElementById('bevFrom').value, ed=document.getElementById('bevTo').value;
+  if(!sd||!ed){showToast('Select dates','err');return;}
+  if(bevLoading)return; bevLoading=true;
+  var fb=document.getElementById('bevFetchBtn'); if(fb){fb.disabled=true;fb.textContent='Loading...';}
+  document.getElementById('ov').classList.add('show');
+  try{
+    var res=await fetch(API+'/api/beverages-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed})});
+    if(!res.ok){var e=await res.json();throw new Error(e.detail||e.error||'Server error');}
+    var result=await res.json();
+    bevRows=result.data||[]; bevFetched=true; bevExpanded={};
+    bevTodayBoxes=result.today_boxes||0; bevYestBoxes=result.yesterday_boxes||0;
+    renderBeverages();
+    showToast(bevRows.length+' beverage rows loaded','ok');
+  }catch(e){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="3" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; }
+  finally{ bevLoading=false; if(fb){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';} document.getElementById('ov').classList.remove('show'); }
+}
+function buildBevTree(rows,order,depth,prefix){
+  if(depth>=order.length)return [];
+  var dim=order[depth], map={};
+  for(var i=0;i<rows.length;i++){var r=rows[i],v=r[dim]||'—';
+    if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,_rows:[]};
+    map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v]._rows.push(r);
+  }
+  return Object.keys(map).map(function(k){var n=map[k];var path=prefix+'>'+dim+':'+n.name;n.path=path;n.kids=buildBevTree(n._rows,order,depth+1,path);delete n._rows;n.leaf=!n.kids.length;return n;})
+    .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
+}
+function bevTreeRows(nodes,level){
+  var html='';
+  for(var i=0;i<nodes.length;i++){var n=nodes[i];
+    var hasKids=n.kids&&n.kids.length>0, open=!!bevExpanded[n.path];
+    var tw=hasKids?'<span class="bev-tw'+(open?' open':'')+'" data-bevpath="'+esc(n.path)+'">&#9654;</span>':'<span class="bev-tw-empty"></span>';
+    var tag='<span class="cd-tag '+(BEV_TAG_CLS[n.dim]||'')+'">'+esc(BEV_DIM_NAME[n.dim]||n.dim)+'</span>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+fN(n.quantity)+'</td><td class="num">'+fN(n.boxes)+'</td></tr>';
+    if(hasKids&&open)html+=bevTreeRows(n.kids,level+1);
+  }
+  return html;
+}
+function renderBeverages(){
+  var body=document.getElementById('bevBody');
+  var label=bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
+  document.getElementById('bevFirstCol').textContent=label;
+  var lbl=document.getElementById('bevDrillLabel'); if(lbl)lbl.textContent=label||'— none —';
+  var tq=0,tb=0; for(var i=0;i<bevRows.length;i++){tq+=bevRows[i].quantity||0;tb+=bevRows[i].boxes||0;}
+  tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100;
+  document.getElementById('bevKpiQty').textContent=fN(tq);
+  document.getElementById('bevKpiBox').textContent=fN(tb);
+  document.getElementById('bevKpiToday').textContent=fN(Math.round(bevTodayBoxes*100)/100);
+  document.getElementById('bevKpiYest').textContent=fN(Math.round(bevYestBoxes*100)/100);
+  if(!bevFetched){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr>';return;}
+  if(!bevRows.length){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">No beverage rows in this range.</td></tr>';return;}
+  if(!bevOrder.length){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
+  bevTree=buildBevTree(bevRows,bevOrder,0,'');
+  var html=bevTreeRows(bevTree,0);
+  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td></tr>';
+  body.innerHTML=html;
+}
+function bevRenderDpList(){
+  var list=document.getElementById('bevDpList'); if(!list)return; list.innerHTML='';
+  BEV_DIMS.forEach(function(d){
+    var pos=bevChosen.indexOf(d.key);
+    var item=document.createElement('label');
+    item.className='com-dp-item'+(pos!==-1?' checked':'');
+    item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+d.label+'</span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+    item.querySelector('input').addEventListener('change',function(){
+      var i=bevChosen.indexOf(d.key);
+      if(this.checked){ if(i===-1)bevChosen.push(d.key); } else if(i!==-1)bevChosen.splice(i,1);
+      bevRenderDpList();
+    });
+    list.appendChild(item);
+  });
+}
+function bevInitDrillPanel(){
+  var btn=document.getElementById('bevDrillBtn'), panel=document.getElementById('bevDrillPanel');
+  if(!btn||!panel)return;
+  btn.addEventListener('click',function(e){ e.stopPropagation(); bevChosen=bevOrder.slice(); bevRenderDpList(); panel.classList.toggle('open'); });
+  panel.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.addEventListener('click',function(){ panel.classList.remove('open'); });
+  document.getElementById('bevSelAll').addEventListener('click',function(){ bevChosen=BEV_DIMS.map(function(d){return d.key;}); bevRenderDpList(); });
+  document.getElementById('bevClrAll').addEventListener('click',function(){ bevChosen=[]; bevRenderDpList(); });
+  document.getElementById('bevApply').addEventListener('click',function(){
+    if(!bevChosen.length){ showToast('Pick at least one dimension','info'); return; }
+    bevOrder=bevChosen.slice(); bevExpanded={};
+    panel.classList.remove('open'); renderBeverages();
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bevInitDrillPanel);
+else bevInitDrillPanel();
+document.addEventListener('click',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('#bevBody .bev-tw'):null;
+  if(!b)return;
+  var p=b.getAttribute('data-bevpath'); bevExpanded[p]=!bevExpanded[p];
+  renderBeverages();
+});
+function exportBeveragesCSV(){
+  if(!bevFetched||!bevRows.length){showToast('Fetch beverages first','info');return;}
+  var out=[[bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' > '),'Quantity','Boxes']];
+  (function walk(nodes,prefix){
+    nodes.forEach(function(n){
+      out.push([prefix+n.name, Math.round(n.quantity*100)/100, Math.round(n.boxes*100)/100]);
+      if(n.kids&&n.kids.length)walk(n.kids,prefix+'    ');
+    });
+  })(bevTree.length?bevTree:buildBevTree(bevRows,bevOrder,0,''),'');
+  var tq=0,tb=0; for(var i=0;i<bevRows.length;i++){tq+=bevRows[i].quantity||0;tb+=bevRows[i].boxes||0;}
+  out.push(['TOTAL',Math.round(tq*100)/100,Math.round(tb*100)/100]);
+  var text=out.map(function(r){return r.map(function(c){c=String(c==null?'':c);return /[",\r\n]/.test(c)?('"'+c.replace(/"/g,'""')+'"'):c;}).join(',');}).join('\r\n');
+  var blob=new Blob([text],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='Beverages_'+document.getElementById('bevFrom').value+'_'+document.getElementById('bevTo').value+'.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  showToast('CSV exported','ok');
+}
 
 function getDrillBy(){return document.getElementById('fDrill').value;}
 function productKey(r){return r.u_type+'|'+r.u_sub_group;}
@@ -1051,6 +1332,7 @@ async function hydrateFetchedData(rows,rawChannelRows,opts){
   channelRows=Array.isArray(rawChannelRows)?rawChannelRows:[];
   // Slide 2 shares the same channel rows, so a restored slide-1 cache lights it up too.
   sc2Rows=channelRows; sc2Fetched=true; sc2Rendered=false;
+  commodityLastRows=null;  // last-month done depends on the date range; refetch lazily
   dataFetched=true;modifiedRealKeys.clear();setDirty(false);
   for(var i=0;i<allData.length;i++){
     var dr=allData[i];
@@ -1101,6 +1383,7 @@ async function loadData(opts){
     channelRows=Array.isArray(result.channel_rows)?result.channel_rows:[];
     // Slide 2 reads the very same payload.
     sc2Rows=channelRows; sc2Fetched=true; sc2Rendered=false;
+    commodityLastRows=null;  // last-month done depends on the date range; refetch lazily
     dataFetched=true;modifiedRealKeys.clear();setDirty(false);
     for(var i=0;i<allData.length;i++){
       var dr=allData[i];
@@ -1463,8 +1746,8 @@ function renderSlideTwoDrillTable(rows,dimension,groupFilter){
    in any drill order. */
 var COMMODITY_PERSON='Surjeet Singh';
 var comExpanded={};
-var COM_DIMS=[{key:'product',name:'Product'},{key:'main_group',name:'Main Group'},{key:'state',name:'State'},{key:'customer',name:'Customer'}];
-var COM_DIM_NAME={product:'Product',main_group:'Main Group',state:'State',customer:'Customer'};
+var COM_DIMS=[{key:'product',name:'Product'},{key:'main_group',name:'Main Group'},{key:'state',name:'State'},{key:'item',name:'Item'},{key:'customer',name:'Customer'}];
+var COM_DIM_NAME={product:'Product',main_group:'Main Group',state:'State',item:'Item',customer:'Customer'};
 var comOrder=['product','main_group','state'];   // applied drill order
 var comChosen=comOrder.slice();                  // working selection in the panel
 function commoditySubGroups(){
@@ -1481,6 +1764,7 @@ function commodityTargetTotal(){
 function comDimValue(r,dim){
   if(dim==='product')return String(r.u_sub_group||'').trim().toUpperCase();
   if(dim==='main_group')return String(r.u_main_group||'').trim().toUpperCase()||'UNKNOWN';
+  if(dim==='item')return String(r.item_name||'').trim().toUpperCase()||'—';
   if(dim==='customer')return String(r.card_name||'').trim().toUpperCase()||'—';
   return String(r.state||'UNKNOWN').trim().toUpperCase()||'UNKNOWN';
 }
@@ -1513,27 +1797,28 @@ function commodityProductTotals(rows){
 // Nested tree per the chosen drill order. Product nodes carry their target.
 // Sales rows feed Done/Revenue; commodity OIH rows feed Order-in-Hand (both share the
 // same dim fields so comDimValue buckets either kind).
-function buildCommodityTree(rows,oihRows,order){
+function buildCommodityTree(rows,oihRows,lastRows,order){
   order=(order&&order.length)?order:['product'];
-  var clean=commodityCleanRows(rows), oih=commodityCleanRows(oihRows||[]);
-  function group(salesSub,oihSub,level){
+  var clean=commodityCleanRows(rows), oih=commodityCleanRows(oihRows||[]), last=commodityCleanRows(lastRows||[]);
+  function group(salesSub,oihSub,lastSub,level){
     if(level>=order.length)return null;
     var dim=order[level], map={};
-    function cell(v){if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,oih:0,_s:[],_o:[]};return map[v];}
+    function cell(v){if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,oih:0,lastDone:0,_s:[],_o:[],_l:[]};return map[v];}
     for(var i=0;i<salesSub.length;i++){var r=salesSub[i],c=cell(comDimValue(r,dim));c.done+=Number(r.liter)||0;c.lineTotal+=Number(r.line_total)||0;c._s.push(r);}
     for(var j=0;j<oihSub.length;j++){var x=oihSub[j],c2=cell(comDimValue(x,dim));c2.oih+=Number(x.open_qty)||0;c2._o.push(x);}
+    for(var m=0;m<lastSub.length;m++){var y=lastSub[m],c3=cell(comDimValue(y,dim));c3.lastDone+=Number(y.liter)||0;c3._l.push(y);}
     return Object.keys(map).map(function(k){
-      var n=map[k]; n.kids=group(n._s,n._o,level+1); delete n._s; delete n._o;
+      var n=map[k]; n.kids=group(n._s,n._o,n._l,level+1); delete n._s; delete n._o; delete n._l;
       if(dim==='product'){ n.target=Number(getDefTS('COMMODITY',n.name))||0; n.targetRealise=Number(getDefTR('COMMODITY',n.name))||0; }
       return n;
     }).sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
   }
-  var tree=group(clean,oih,0)||[];
+  var tree=group(clean,oih,last,0)||[];
   // When Product is the top dimension, list every commodity product even at zero done.
   if(order[0]==='product'){
     var present={}; tree.forEach(function(n){present[n.name]=1;});
     commoditySubGroups().forEach(function(sub){
-      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,oih:0,kids:group([],[],1),
+      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,oih:0,lastDone:0,kids:group([],[],[],1),
         target:Number(getDefTS('COMMODITY',sub))||0,targetRealise:Number(getDefTR('COMMODITY',sub))||0});
     });
     tree.sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
@@ -1558,13 +1843,14 @@ function comCells(node,isProduct){
   return '<div class="sc2-drillval">'+(isProduct?fN(node.target||0):'&mdash;')+'</div>'
     +'<div class="sc2-drillval">'+(isProduct&&(node.targetRealise||0)>0?fNp(node.targetRealise,2):'&mdash;')+'</div>'
     +'<div class="'+doneCls+'">'+fN(node.done||0)+'</div>'
+    +'<div class="sc2-drillval">'+fN(node.lastDone||0)+'</div>'
     +'<div class="sc2-drillval">'+(node.done>0?fNp(act,2):'&mdash;')+'</div>'
     +'<div class="'+oihCls+'">'+fN(node.oih||0)+'</div>'
     +'<div class="sc2-drillval '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
     +'<div class="sc2-drillval">'+fC(node.lineTotal||0)+'</div>';
 }
 // Map a commodity drill dim to the document-API filter key (main_group -> group).
-var COM_TO_API={product:'product',main_group:'group',state:'state',customer:'customer'};
+var COM_TO_API={product:'product',main_group:'group',state:'state',item:'item',customer:'customer'};
 var comNodeByPath={};
 function comRow(node,level,path,gs,filt){
   filt=filt||{};
@@ -1585,7 +1871,7 @@ function comRow(node,level,path,gs,filt){
   return html;
 }
 function renderCommodityTable(tree,tot){
-  var gs=' style="grid-template-columns:1.7fr .8fr .8fr .85fr .8fr .85fr .85fr .95fr"';
+  var gs=' style="grid-template-columns:1.6fr .8fr .8fr .85fr .85fr .8fr .8fr .85fr .95fr"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
   comNodeByPath={};
   comNodeByPath['__comtotal__']={filters:{},label:'TOTAL — Commodity'};
@@ -1594,7 +1880,7 @@ function renderCommodityTable(tree,tot){
     +'<div class="sc2-thead sc2-wide"'+gs+'>'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Tgt Rlz</div>'
-      +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Act Rlz</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Revenue</div>'
     +'</div><div class="sc2-drillbody">';
   if(!tree.length){
@@ -1607,18 +1893,18 @@ function renderCommodityTable(tree,tot){
 }
 function buildCommodityCsvRows(tree,tot){
   var out=[['Sales Person',COMMODITY_PERSON],
-    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Revenue']];
+    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Revenue']];
   function emit(node,level){
     var isProduct=node.dim==='product', act=node.done>0?node.lineTotal/node.done:0;
     var pad=level>0?new Array(level+1).join('  '):'';
     out.push([pad+node.name,
       isProduct?csvInt(node.target):'', isProduct?csvDec(node.targetRealise):'',
-      csvInt(node.done), node.done>0?csvDec(act):'', csvInt(node.oih),
+      csvInt(node.done), csvInt(node.lastDone), node.done>0?csvDec(act):'', csvInt(node.oih),
       isProduct?csvInt((node.target||0)-((node.done||0)+(node.oih||0))):'', csvInt(node.lineTotal)]);
     if(node.kids)node.kids.forEach(function(c){emit(c,level+1);});
   }
   for(var i=0;i<tree.length;i++)emit(tree[i],0);
-  out.push(['TOTAL',csvInt(tot.target),csvDec(tot.targetRealise),csvInt(tot.done),
+  out.push(['TOTAL',csvInt(tot.target),csvDec(tot.targetRealise),csvInt(tot.done),csvInt(tot.lastDone),
     tot.done>0?csvDec(tot.lineTotal/tot.done):'',csvInt(tot.oih),
     csvInt((tot.target||0)-((tot.done||0)+(tot.oih||0))),csvInt(tot.lineTotal)]);
   return out;
@@ -1631,22 +1917,53 @@ async function fetchCommodityOih(){
   catch(e){commodityOihRows=[];}
   return commodityOihRows;
 }
+// "Last month" = the full previous calendar month relative to the slide-2 To-date.
+// Fetched (and cached per range) via the same sales-data endpoint as the live rows.
+var commodityLastRows=null, commodityLastLoading=false;
+function prevMonthRange(toStr){
+  var d=toStr?new Date(toStr+'T00:00:00'):new Date();
+  if(isNaN(d.getTime()))d=new Date();
+  var y=d.getFullYear(), m=d.getMonth()-1;   // 0-based month, step back one
+  if(m<0){m=11;y--;}
+  var start=new Date(y,m,1), end=new Date(y,m+1,0);
+  function f(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+  return {start:f(start),end:f(end)};
+}
+async function fetchCommodityLastMonth(){
+  if(commodityLastRows!==null)return commodityLastRows;
+  var to=document.getElementById('sc2To')?document.getElementById('sc2To').value:'';
+  var range=prevMonthRange(to);
+  try{
+    var res=await fetch(API+'/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:range.start,end_date:range.end})});
+    var p=res.ok?await res.json():{};
+    commodityLastRows=Array.isArray(p.channel_rows)?p.channel_rows:[];
+  }catch(e){commodityLastRows=[];}
+  return commodityLastRows;
+}
 function renderSlideTwoCommodity(){
   var grid=document.getElementById('channelGrid');
   if(!grid)return;
   var rows=getFilteredChannelRows();
   var oih=commodityOihRows||[];
+  var last=commodityLastRows||[];
   var tot=comTotal(commodityProductTotals(rows));
   var co=commodityCleanRows(oih), totOih=0; for(var i=0;i<co.length;i++)totOih+=Number(co[i].open_qty)||0;
   tot.oih=totOih;
+  var cl=commodityCleanRows(last), totLast=0; for(var li=0;li<cl.length;li++)totLast+=Number(cl[li].liter)||0;
+  tot.lastDone=totLast;
   setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih);
-  var tree=buildCommodityTree(rows,oih,comOrder);
+  var tree=buildCommodityTree(rows,oih,last,comOrder);
   sc2CsvRows=buildCommodityCsvRows(tree,tot);
   grid.innerHTML=renderCommodityTable(tree,tot);
   // First paint has no OIH yet — fetch the live snapshot, then repaint.
   if(commodityOihRows===null&&!commodityOihLoading){
     commodityOihLoading=true;
     fetchCommodityOih().then(function(){commodityOihLoading=false;if(sc2Seg()==='COMMODITY')renderSlideTwoCommodity();});
+  }
+  // Likewise fetch last month's done once, then repaint.
+  if(commodityLastRows===null&&!commodityLastLoading){
+    commodityLastLoading=true;
+    fetchCommodityLastMonth().then(function(){commodityLastLoading=false;if(sc2Seg()==='COMMODITY')renderSlideTwoCommodity();});
   }
 }
 // Show/hide the channel Drill-By controls vs. the commodity drill panel by segment.
@@ -1766,6 +2083,7 @@ function getChannelTitle(name){
     GT:'General Trade (GT) Performance',
     ROI:'Rest Of India (ROI) Tracking',
     MT:'Modern Trade (MT) Market Trends',
+    ECOM:'E-Commerce Performance',
     HORECA:'Horeca Channel Performance',
     CSD:'CSD Channel Performance',
     REST:'Rest Segment Tracking'
@@ -1796,6 +2114,7 @@ var CHANNEL_COLORS={
   GT:{band:'#b8e8fb',ring:'#51b7d8'},
   ROI:{band:'#ffb7a7',ring:'#f26a4b'},
   MT:{band:'#ffd59b',ring:'#f59e0b'},
+  ECOM:{band:'#e9d5ff',ring:'#9333ea'},
   HORECA:{band:'#c8f1db',ring:'#16a34a'},
   CSD:{band:'#cdeefe',ring:'#0ea5e9'},
   REST:{band:'#fbe4a2',ring:'#d97706'}
@@ -1829,6 +2148,7 @@ function themedChannelTitle(name){
     GT:'General Trade (GT) Performance',
     ROI:'Rest Of India (ROI) Tracking',
     MT:'Modern Trade (MT) Market Trends',
+    ECOM:'E-Commerce Performance',
     HORECA:'Horeca Channel Performance',
     CSD:'CSD Channel Performance',
     REST:'Rest Segment Tracking'
@@ -2385,6 +2705,162 @@ function oihInitDrillPanel(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',oihInitDrillPanel);
 else oihInitDrillPanel();
 
+/* ===== Done / Balance breakdown windows (Premium / Commodity / Total) =====
+   The Done Ltr and Bal Ltr KPIs open a drill tree, mirroring the OIH window. Built
+   entirely from slide-2 data already in memory:
+     done    = +done litres (split Premium/Commodity by U_TYPE).
+     balance = target − done − OIH. Done/OIH split by U_TYPE. Targets mirror the
+               dashboard's own views: the Premium column uses channel target nodes
+               (segment PREMIUM or untagged), the Commodity column uses the per-product
+               commodity targets, and Total counts every channel node once plus the
+               commodity products. So Prem + Comm need not equal Total. */
+var MB_DIMS=[{key:'main_group',label:'Main Group'},{key:'state',label:'State'},{key:'person',label:'Person'},{key:'sub_group',label:'U_Sub_Group'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer Name'}];
+var MB_DIM_NAME={main_group:'Main Group',state:'State',person:'Person',sub_group:'U_Sub_Group',item:'Item Name',customer:'Customer Name'};
+var mbMetric='done', mbSeg='', mbOrder=['main_group'], mbChosen=['main_group'], mbExpanded={}, mbGranular=[];
+function mbMetricLabel(){return mbMetric==='balance'?'Balance':'Done';}
+function mbSegLabel(s){return s==='PREMIUM'?'Premium':(s==='COMMODITY'?'Commodity':'Premium & Commodity');}
+function mbDimLabel(k){return MB_DIM_NAME[k]||k;}
+function mbUpdateDrillLabel(){var el=document.getElementById('mbDrillLabel');if(el)el.textContent=mbOrder.length?mbOrder.map(mbDimLabel).join(' › '):'— none —';}
+async function openMetricWindow(metric){
+  if(!sc2Fetched){ showToast('Fetch the channel dashboard first','info'); return; }
+  mbMetric=(metric==='balance')?'balance':'done';
+  mbSeg=sc2Seg(); mbExpanded={};
+  document.getElementById('mbTitle').textContent=mbMetricLabel()+' — '+mbSegLabel(mbSeg);
+  document.getElementById('mbSubtitle').textContent=mbMetric==='balance'?'Target − Done − Order in Hand — litres':'Done litres — Premium & Commodity';
+  document.getElementById('mbModal').classList.add('show');
+  document.getElementById('mbBody').innerHTML='<tr><td colspan="4" class="cd-empty">Loading…</td></tr>';
+  var targetNodes=[], oihRows=[];
+  if(mbMetric==='balance'){
+    var period=getResolvedChannelPeriod();
+    try{ targetNodes=await fetchTargetNodes(period.month,period.year,''); }catch(e){ targetNodes=[]; }
+    try{ oihRows=await fetchOrderInHandRows(); }catch(e){ oihRows=[]; }
+  }
+  mbGranular=buildMetricGranular(mbMetric,targetNodes,oihRows);
+  mbUpdateDrillLabel();
+  renderMetricBreakdown();
+}
+function closeMetricWindow(){document.getElementById('mbModal').classList.remove('show');}
+function buildMetricGranular(metric,targetNodes,oihRows){
+  var g=[], rows=sc2Rows||[];
+  function add(rawG,st,person,sub,item,cust,prem,comm,total){
+    g.push({main_group:rawG||'—',state:st||'—',person:person||'—',sub_group:sub||'—',item:item||'—',customer:cust||'—',prem:prem,comm:comm,total:total});
+  }
+  var dSign=(metric==='balance')?-1:1;   // done is subtracted when computing balance
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i], grp=String(r.u_main_group||'').trim().toUpperCase()||'—', st=String(r.state||'').trim().toUpperCase()||'—';
+    var ut=String(r.u_type||'').toUpperCase(), v=(Number(r.liter)||0)*dSign;
+    add(grp,st,assignedPerson(grp,st)||'—',String(r.u_sub_group||'').trim().toUpperCase(),String(r.item_name||'').trim().toUpperCase(),String(r.card_name||'').trim().toUpperCase(),ut==='PREMIUM'?v:0,ut==='COMMODITY'?v:0,v);
+  }
+  if(metric==='balance'){
+    for(var o=0;o<(oihRows||[]).length;o++){
+      var x=oihRows[o], xg=String(x.main_group||'').trim().toUpperCase()||'—', xst=String(x.state||'').trim().toUpperCase()||'—';
+      var xut=String(x.u_type||'').toUpperCase(), q=-(Number(x.open_qty)||0);
+      add(xg,xst,String(x.sales_person||'').trim().toUpperCase()||assignedPerson(xg,xst)||'—',String(x.u_sub_group||'').trim().toUpperCase(),String(x.item_name||'').trim().toUpperCase(),String(x.card_name||'').trim().toUpperCase(),xut==='PREMIUM'?q:0,xut==='COMMODITY'?q:0,q);
+    }
+    // Channel target nodes feed the Premium column (segment-tagged PREMIUM or untagged,
+    // mirroring the dashboard's Premium view) and count once toward Total. Commodity is
+    // owned per product (added next), so channel nodes don't feed the Commodity column.
+    for(var t=0;t<(targetNodes||[]).length;t++){
+      var n=targetNodes[t], ng=String(n.main_group||'').trim().toUpperCase()||'—', nst=String(n.state||'').trim().toUpperCase()||'—';
+      var tl=Number(n.target_ltrs)||0; if(!tl)continue;
+      var nseg=String(n.segment||'').toUpperCase();
+      var pr=(nseg===''||nseg==='PREMIUM')?tl:0;
+      add(ng,nst,String(n.sales_person||'').trim().toUpperCase()||assignedPerson(ng,nst)||'—','—','—','—',pr,0,tl);
+    }
+    // Commodity per-product targets (Surjeet Singh's store) feed the Commodity column
+    // and Total; they carry no state/person, so they bucket by product (U_Sub_Group).
+    var comSubs=commoditySubGroups();
+    for(var cs=0;cs<comSubs.length;cs++){
+      var csub=comSubs[cs], ctl=Number(getDefTS('COMMODITY',csub))||0; if(!ctl)continue;
+      add('—','—','—',csub,'—','—',0,ctl,ctl);
+    }
+  }
+  return g;
+}
+function buildMbTree(rows,order){
+  function group(subset,level){
+    if(level>=order.length)return null;
+    var dim=order[level],map={};
+    for(var i=0;i<subset.length;i++){var r=subset[i],v=r[dim]||'—';
+      if(!map[v])map[v]={name:v,dim:dim,prem:0,comm:0,total:0,_rows:[]};
+      map[v].prem+=r.prem||0;map[v].comm+=r.comm||0;map[v].total+=r.total||0;map[v]._rows.push(r);}
+    return Object.keys(map).map(function(k){var n=map[k];n.kids=group(n._rows,level+1);delete n._rows;return n;})
+      .sort(function(a,b){return b.total-a.total||String(a.name).localeCompare(String(b.name));});
+  }
+  return group(rows,0)||[];
+}
+function mbNum(v){var s=fN(v||0);return ((v||0)<0)?'<span class="sc2-bal-bad">'+s+'</span>':s;}
+function mbColCells(n,seg){
+  if(seg==='PREMIUM')return '<td class="num">'+mbNum(n.prem)+'</td>';
+  if(seg==='COMMODITY')return '<td class="num">'+mbNum(n.comm)+'</td>';
+  return '<td class="num">'+mbNum(n.prem)+'</td><td class="num">'+mbNum(n.comm)+'</td><td class="num">'+mbNum(n.total)+'</td>';
+}
+function mbTreeRows(nodes,level,seg,prefix){
+  var html='';
+  for(var i=0;i<nodes.length;i++){var n=nodes[i];
+    var path=prefix+'>'+n.dim+':'+n.name, hasKids=n.kids&&n.kids.length>0, open=!!mbExpanded[path];
+    var tw=hasKids?'<span class="oih-tw'+(open?' open':'')+'" data-mbpath="'+esc(path)+'">&#9654;</span>':'<span class="oih-tw-empty"></span>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+esc(n.name)+'</td>'+mbColCells(n,seg)+'</tr>';
+    if(hasKids&&open)html+=mbTreeRows(n.kids,level+1,seg,path);
+  }
+  return html;
+}
+function renderMetricBreakdown(){
+  var seg=mbSeg, metricL=mbMetricLabel();
+  var head=document.getElementById('mbHead'), body=document.getElementById('mbBody'), sum=document.getElementById('mbSummary');
+  var label=mbOrder.map(mbDimLabel).join(' › ')||'Dimension';
+  var tp=0,tc=0,tt=0; for(var i=0;i<mbGranular.length;i++){tp+=mbGranular[i].prem||0;tc+=mbGranular[i].comm||0;tt+=mbGranular[i].total||0;}
+  tp=Math.round(tp*100)/100;tc=Math.round(tc*100)/100;tt=Math.round(tt*100)/100;
+  if(seg==='PREMIUM')sum.innerHTML=oihKpiBox('Premium '+metricL+' (L)',tp);
+  else if(seg==='COMMODITY')sum.innerHTML=oihKpiBox('Commodity '+metricL+' (L)',tc);
+  else sum.innerHTML=oihKpiBox('Premium '+metricL+' (L)',tp)+oihKpiBox('Commodity '+metricL+' (L)',tc)+oihKpiBox('Total '+metricL+' (L)',tt);
+  if(seg==='PREMIUM')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th>';
+  else if(seg==='COMMODITY')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Commodity (L)</th>';
+  else head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th><th class="num">Total (L)</th>';
+  var span=seg?2:4;
+  var tree=buildMbTree(mbGranular,mbOrder);
+  var rowsHtml=mbTreeRows(tree,0,seg,'');
+  if(!rowsHtml){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">No data in this selection.</td></tr>'; return; }
+  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+mbColCells({prem:tp,comm:tc,total:tt},seg)+'</tr>';
+  body.innerHTML=rowsHtml;
+}
+document.addEventListener('click',function(e){
+  var b=e.target&&e.target.closest?e.target.closest('#mbBody .oih-tw'):null;
+  if(!b)return;
+  var p=b.getAttribute('data-mbpath'); mbExpanded[p]=!mbExpanded[p]; renderMetricBreakdown();
+});
+function mbRenderDpList(){
+  var list=document.getElementById('mbDpList'); if(!list)return; list.innerHTML='';
+  MB_DIMS.forEach(function(d){
+    var pos=mbChosen.indexOf(d.key);
+    var item=document.createElement('label');
+    item.className='com-dp-item'+(pos!==-1?' checked':'');
+    item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'</span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+    item.querySelector('input').addEventListener('change',function(){
+      var i=mbChosen.indexOf(d.key);
+      if(this.checked){ if(i===-1)mbChosen.push(d.key); } else if(i!==-1)mbChosen.splice(i,1);
+      mbRenderDpList();
+    });
+    list.appendChild(item);
+  });
+}
+function mbInitDrillPanel(){
+  var btn=document.getElementById('mbDrillBtn'), panel=document.getElementById('mbDrillPanel');
+  if(!btn||!panel)return;
+  btn.addEventListener('click',function(e){ e.stopPropagation(); mbChosen=mbOrder.slice(); mbRenderDpList(); panel.classList.toggle('open'); });
+  panel.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.addEventListener('click',function(){ panel.classList.remove('open'); });
+  document.getElementById('mbSelAll').addEventListener('click',function(){ mbChosen=MB_DIMS.map(function(d){return d.key;}); mbRenderDpList(); });
+  document.getElementById('mbClrAll').addEventListener('click',function(){ mbChosen=[]; mbRenderDpList(); });
+  document.getElementById('mbApply').addEventListener('click',function(){
+    if(!mbChosen.length){ showToast('Pick at least one dimension','info'); return; }
+    mbOrder=mbChosen.slice(); mbExpanded={};
+    mbUpdateDrillLabel(); panel.classList.remove('open'); renderMetricBreakdown();
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mbInitDrillPanel);
+else mbInitDrillPanel();
+
 function renderChannelDetail(){
   var dims=detailOrder.slice();
   var body=document.getElementById('cdBody');
@@ -2436,7 +2912,9 @@ async function renderSlideTwo(){
   try{ targetNodes=await fetchTargetNodes(period.month,period.year); }catch(e){ targetNodes=[]; }
   try{ oihRows=await fetchOrderInHandRows(); }catch(e){ oihRows=[]; }
   var cardByName={}, crByName={}, agg={target:0,done:0,oih:0,lineTotal:0,trW:0,trWsum:0};
-  var layoutNames=['GT','ROI','MT','REST'];
+  // E-Com takes REST's old grid slot (4th cell); Horeca, CSD then REST flow below in
+  // the same 2-col grid, which scrolls. Keep in sync with CHANNEL_BLOCKS.
+  var layoutNames=['GT','ROI','MT','ECOM','HORECA','CSD','REST'];
   for(var bi=0;bi<CHANNEL_BLOCKS.length;bi++){
     var block=CHANNEL_BLOCKS[bi], name=block.name;
     var cr=buildCardRows(name,block.members,rows,targetNodes,oihRows);
@@ -2572,7 +3050,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
 function sc2DynOrderValues(dim,m){
   var names=Object.keys(m);
   if(dim==='person')return orderPersons(names);
-  if(dim==='group'){var ord={GT:0,ROI:1,MT:2,REST:3};return names.sort(function(a,b){return (ord[a]==null?9:ord[a])-(ord[b]==null?9:ord[b])||a.localeCompare(b);});}
+  if(dim==='group'){var ord={GT:0,ROI:1,MT:2,ECOM:3,HORECA:4,CSD:5,REST:6};return names.sort(function(a,b){return (ord[a]==null?9:ord[a])-(ord[b]==null?9:ord[b])||a.localeCompare(b);});}
   if(dim==='state')return names.sort(function(a,b){return a.localeCompare(b);});
   return names.sort(function(a,b){return aggList(m[b]).done-aggList(m[a]).done||a.localeCompare(b);}); // product/item/customer by done desc
 }
