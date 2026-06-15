@@ -127,26 +127,38 @@
           <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}" title="Control Panel">
             <span class="material-icons">dashboard</span>Control Panel
           </a>
+          {% if can_sales %}
           <a class="cp-nav-item {% if sidebar_active == 'sales' %}active{% endif %}" href="{% url 'sales:dashboard' %}" title="Sales">
             <span class="material-icons">trending_up</span>Sales
           </a>
+          {% endif %}
+          {% if can_realise %}
           <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}" title="Realise">
             <span class="material-icons">flash_on</span>Realise
           </a>
+          {% endif %}
         </nav>
 
+        {% if can_inventory or can_expenses or can_salaries %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
+          {% if can_inventory %}
           <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}" title="Inventory">
             <span class="material-icons">inventory_2</span>Inventory
           </a>
+          {% endif %}
+          {% if can_expenses %}
           <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}" title="Expenses">
             <span class="material-icons">receipt_long</span>Expenses
           </a>
+          {% endif %}
+          {% if can_salaries %}
           <a class="cp-nav-item {% if sidebar_active == 'salaries' %}active{% endif %}" href="{% url 'dashboard:salaries' %}" title="Salaries">
             <span class="material-icons">people</span>Salaries
           </a>
+          {% endif %}
         </nav>
+        {% endif %}
 
         <div class="cp-period-block">
           <div class="cp-section-label">Period</div>
