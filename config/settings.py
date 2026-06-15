@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 from dotenv import load_dotenv
 import os
 
@@ -47,6 +47,7 @@ MIDDLEWARE = [
     # Compress JSON/HTML responses (~70-80% smaller) — must run first.
     'django.middleware.gzip.GZipMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
