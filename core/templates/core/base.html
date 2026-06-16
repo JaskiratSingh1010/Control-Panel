@@ -139,12 +139,17 @@
           {% endif %}
         </nav>
 
-        {% if can_inventory or can_expenses or can_salaries %}
+        {% if can_inventory or can_stock_available or can_expenses or can_salaries %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
           {% if can_inventory %}
           <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}" title="Inventory">
             <span class="material-icons">inventory_2</span>Inventory
+          </a>
+          {% endif %}
+          {% if can_stock_available %}
+          <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
+            <span class="material-icons">inventory</span>Stock Available
           </a>
           {% endif %}
           {% if can_expenses %}

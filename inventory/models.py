@@ -8,6 +8,7 @@ class InventoryPermission(models.Model):
         permissions = (
             ('view_inventory', 'Can view inventory dashboard'),
             ('manage_inventory', 'Can manage inventory dashboard'),
+            ('view_stock_available', 'Can view stock available'),
         )
         verbose_name = 'inventory permission'
         verbose_name_plural = 'inventory permissions'

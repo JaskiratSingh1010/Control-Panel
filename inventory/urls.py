@@ -34,7 +34,11 @@ _ENDPOINTS = [
     ('planning', 'planning'),
 ]
 
-urlpatterns = [path('', views.dashboard, name='dashboard')]
+urlpatterns = [
+    path('', views.dashboard, name='dashboard'),
+    path('stock-available/', views.stock_available, name='stock_available'),
+    path('stock-available/api/data/', views.stock_available_data, name='stock_available_data'),
+]
 
 for path_name, view_name in _ENDPOINTS:
     urlpatterns.append(path(f'oils/api/{path_name}/', getattr(views, f'oils_api_{view_name}'), name=f'oils_api_{view_name}'))

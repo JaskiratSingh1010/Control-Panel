@@ -12,6 +12,90 @@ def JSONResponse(content):
 # Owner join helper — handles int/varchar type mismatch
 OWN_JOIN = 'LEFT JOIN {db}.OUSR U ON CAST({tbl}."U_Owner" AS VARCHAR(20))=CAST(U."USERID" AS VARCHAR(20))'
 
+# Stock Available — finished-goods (ItmsGrpCod 102) stock by item, pivoted across these
+# warehouses (display order), classified into the canonical 16 Realise products.
+STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU']
+
+
+def get_stock_available(schema="jivo_oil"):
+    # Lazy import keeps the product taxonomy (the 16 cards + reclassification) in one
+    # place — Realise — without a load-time dependency between the apps.
+    from realise.services import _reclassify, ALLOWED_SUB_GROUPS, DEFAULT_TARGETS
+
+    db = get_schema(schema)
+    whs_in = ",".join("'%s'" % w for w in STOCK_WAREHOUSES)
+    rows = q(f"""SELECT
+        I."ItemCode" AS "ItemCode", I."ItemName" AS "ItemName", O."Warehouse" AS "Warehouse",
+        I."U_SKU" AS "U_SKU", I."U_Sub_Group" AS "U_Sub_Group", I."U_Variety" AS "U_Variety",
+        I."U_TYPE" AS "U_TYPE",
+        SUM(O."InQty" - O."OutQty") AS "Qty",
+        CASE WHEN I."U_IsLitre" = 'Y' THEN SUM(O."InQty" - O."OutQty") * I."SalPackUn" ELSE 0 END AS "Litres"
+    FROM {db}.OINM O
+    INNER JOIN {db}.OITM I ON I."ItemCode" = O."ItemCode"
+    WHERE I."ItmsGrpCod" = 102 AND O."Warehouse" IN ({whs_in})
+    GROUP BY I."ItemCode", I."ItemName", I."SalPackUn", O."Warehouse",
+             I."U_SKU", I."U_Sub_Group", I."U_Variety", I."U_IsLitre", I."U_TYPE"
+    HAVING SUM(O."InQty" - O."OutQty") <> 0
+    ORDER BY I."U_Sub_Group", I."U_Variety", I."ItemName" """)
+
+    items = {}
+    for r in rows:
+        code = r.get("ItemCode")
+        name = str(r.get("ItemName") or "").strip()
+        ctype, csub = _reclassify(
+            str(r.get("U_TYPE") or "").strip().upper(),
+            str(r.get("U_Sub_Group") or "").strip().upper(),
+            name.upper(),
+        )
+        if ctype not in ("PREMIUM", "COMMODITY") or csub not in ALLOWED_SUB_GROUPS:
+            continue
+        it = items.get(code)
+        if it is None:
+            it = items[code] = {
+                "type": ctype, "sub_group": csub,
+                "variety": str(r.get("U_Variety") or "").strip(),
+                "item_code": code, "item_name": name,
+                "sku": str(r.get("U_SKU") or "").strip(),
+                "wh": {w: 0.0 for w in STOCK_WAREHOUSES},
+                "grand_total": 0.0, "litres": 0.0,
+            }
+        wcode = str(r.get("Warehouse") or "").strip().upper()
+        qty = float(r.get("Qty") or 0)
+        if wcode in it["wh"]:
+            it["wh"][wcode] += qty
+        it["grand_total"] += qty
+        it["litres"] += float(r.get("Litres") or 0)
+
+    item_list = list(items.values())
+    for it in item_list:
+        it["wh"] = {w: round(v, 2) for w, v in it["wh"].items()}
+        it["grand_total"] = round(it["grand_total"], 2)
+        it["litres"] = round(it["litres"], 2)
+
+    # All 16 canonical products always get a card (even at zero stock).
+    products = {}
+    for key in DEFAULT_TARGETS:
+        ptype, psub = key.split("|", 1)
+        products[(ptype, psub)] = {"type": ptype, "sub_group": psub, "qty": 0.0, "litres": 0.0, "sku_count": 0}
+    for it in item_list:
+        p = products.get((it["type"], it["sub_group"]))
+        if p is None:
+            p = products[(it["type"], it["sub_group"])] = {
+                "type": it["type"], "sub_group": it["sub_group"], "qty": 0.0, "litres": 0.0, "sku_count": 0}
+        p["qty"] += it["grand_total"]
+        p["litres"] += it["litres"]
+        p["sku_count"] += 1
+    product_list = []
+    for p in products.values():
+        p["qty"] = round(p["qty"], 2)
+        p["litres"] = round(p["litres"], 2)
+        product_list.append(p)
+    # Premium block first, then Commodity; within each, most stock first.
+    product_list.sort(key=lambda p: (0 if p["type"] == "PREMIUM" else 1, -p["qty"], p["sub_group"]))
+
+    return {"warehouses": STOCK_WAREHOUSES, "products": product_list, "items": item_list}
+
+
 def get_kpi(category=None,schema="jivo_oil",whs=None):
     db=get_schema(schema);f=cf(category);wf_=wf(whs)
     return JSONResponse(content={"data":q(f"""SELECT

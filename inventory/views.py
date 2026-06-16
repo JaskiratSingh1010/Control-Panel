@@ -36,6 +36,24 @@ def dashboard(request):
     return render(request, 'inventory/dashboard.html', {'sidebar_active': 'inventory'})
 
 
+@permission_flag_required('can_stock_available')
+def stock_available(request):
+    """Standalone, independently-shareable page (own permission, not can_inventory)."""
+    return render(request, 'inventory/stock_available.html', {'sidebar_active': 'stock_available'})
+
+
+@permission_flag_required('can_stock_available', json_response=True)
+@require_http_methods(['GET'])
+def stock_available_data(request):
+    schema = request.GET.get('schema', 'jivo_oil')
+    try:
+        data = oils.get_stock_available(schema=schema)
+    except Exception:
+        logger.exception('[inventory] stock-available fetch failed')
+        data = {'warehouses': [], 'products': [], 'items': []}
+    return JsonResponse({'data': data})
+
+
 @permission_flag_required('inventory_can_edit', json_response=True)
 @require_http_methods(['POST'])
 def oils_api_chat(request):

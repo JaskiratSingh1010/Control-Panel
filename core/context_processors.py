@@ -48,6 +48,7 @@ def build_user_permissions(user):
             'can_realise': False,
             'can_inventory': False,
             'inventory_can_edit': False,
+            'can_stock_available': False,
             'can_sales': False,
             'can_expenses': False,
             'can_salaries': False,
@@ -60,6 +61,7 @@ def build_user_permissions(user):
             'can_realise': True,
             'can_inventory': True,
             'inventory_can_edit': True,
+            'can_stock_available': True,
             'can_sales': True,
             'can_expenses': True,
             'can_salaries': True,
@@ -85,6 +87,16 @@ def build_user_permissions(user):
         ),
         'inventory_can_edit': bool(
             'inventory_admin' in user_groups
+            or user.has_perm('inventory.manage_inventory')
+        ),
+        # Standalone, independently-shareable page: granted by the dedicated
+        # stock_viewer group / view_stock_available permission, and to anyone with
+        # full inventory access.
+        'can_stock_available': bool(
+            'stock_viewer' in user_groups
+            or user_groups & INVENTORY_GROUPS
+            or user.has_perm('inventory.view_stock_available')
+            or user.has_perm('inventory.view_inventory')
             or user.has_perm('inventory.manage_inventory')
         ),
         'can_sales': bool(user_groups & MODULE_GROUPS['sales'] or has_app_permission('sales')),
