@@ -203,8 +203,6 @@
   var resizeTimer=null;
 
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
-  // Tonnage = litres / 1000 (qty → litres conversion already done in the backend).
-  function ton(litres){return num((Number(litres)||0)/1000);}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
 
@@ -226,10 +224,10 @@
       if(p.type==='PREMIUM'){pq+=Number(p.qty)||0;pl+=Number(p.litres)||0;ps+=Number(p.sku_count)||0;}
       else if(p.type==='COMMODITY'){cq+=Number(p.qty)||0;cl+=Number(p.litres)||0;cs+=Number(p.sku_count)||0;}
     });
-    document.getElementById('saKpiPremQty').textContent=ton(pl)+' T';
-    document.getElementById('saKpiPremSub').textContent=num(pl)+' L · '+ps+' SKUs';
-    document.getElementById('saKpiCommQty').textContent=ton(cl)+' T';
-    document.getElementById('saKpiCommSub').textContent=num(cl)+' L · '+cs+' SKUs';
+    document.getElementById('saKpiPremQty').textContent=num(pl)+' L';
+    document.getElementById('saKpiPremSub').textContent=ps+' SKUs';
+    document.getElementById('saKpiCommQty').textContent=num(cl)+' L';
+    document.getElementById('saKpiCommSub').textContent=cs+' SKUs';
   }
 
   function renderCards(){
@@ -243,8 +241,8 @@
         +'<div class="sa-motif">'+motifFor(p)+'</div>'
         +'<span class="sa-badge">'+esc(p.type)+'</span>'
         +'<h3>'+esc(p.sub_group)+'</h3>'
-        +'<div class="sa-qty">'+ton(p.litres)+' <span style="font-size:.5em;font-weight:600;opacity:.85">T</span></div>'
-        +'<div class="sa-sub">'+num(p.litres)+' L · '+(p.sku_count||0)+' SKUs</div>'
+        +'<div class="sa-qty">'+num(p.litres)+' <span style="font-size:.5em;font-weight:600;opacity:.85">L</span></div>'
+        +'<div class="sa-sub">'+(p.sku_count||0)+' SKUs</div>'
         +'</div>';
     }).join('');
     if(selected)openTable();
@@ -282,9 +280,9 @@
     var rows=(DATA.items||[]).filter(function(it){return selected&&it.type===selected.type&&it.sub_group===selected.sub_group&&(!skuF||it.sku===skuF);})
       .sort(function(a,b){return (Number(b.litres)||0)-(Number(a.litres)||0);});
     document.getElementById('saTableTitle').textContent=selected.type+' — '+selected.sub_group;
-    document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items')+' · tonnes';
+    document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items')+' · litres';
     document.getElementById('saTableHead').innerHTML='<tr><th>U_Variety</th><th>ItemCode</th><th>ItemName</th><th>U_SKU</th>'
-      +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total (T)</th></tr>';
+      +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total (L)</th></tr>';
     if(!rows.length){
       document.getElementById('saTableBody').innerHTML='<tr><td colspan="'+(5+whs.length)+'" class="sa-empty">No stock for this product.</td></tr>';
       return;
@@ -295,12 +293,12 @@
       whs.forEach(function(w){tot[w]+=wl(it,w);}); gt+=Number(it.litres)||0;
       return '<tr><td><span class="sa-var">'+esc(it.variety||'—')+'</span></td>'
         +'<td>'+esc(it.item_code)+'</td><td>'+esc(it.item_name)+'</td><td>'+esc(it.sku||'—')+'</td>'
-        +whs.map(function(w){var v=wl(it,w);return '<td class="num">'+(v?ton(v):'')+'</td>';}).join('')
-        +'<td class="num">'+ton(it.litres)+'</td></tr>';
+        +whs.map(function(w){var v=wl(it,w);return '<td class="num">'+(v?num(v):'')+'</td>';}).join('')
+        +'<td class="num">'+num(it.litres)+'</td></tr>';
     }).join('');
     body+='<tr class="sa-total"><td colspan="4">TOTAL</td>'
-      +whs.map(function(w){return '<td class="num">'+ton(tot[w])+'</td>';}).join('')
-      +'<td class="num">'+ton(gt)+'</td></tr>';
+      +whs.map(function(w){return '<td class="num">'+num(tot[w])+'</td>';}).join('')
+      +'<td class="num">'+num(gt)+'</td></tr>';
     document.getElementById('saTableBody').innerHTML=body;
   }
 
