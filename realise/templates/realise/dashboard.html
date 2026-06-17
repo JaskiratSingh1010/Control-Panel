@@ -622,8 +622,53 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-head{margin-bottom:12px}
   /* Own class (not .controls) so slide-two-mode doesn't hide the beverages toolbar. */
   .bev-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  /* Fetch-mode toggle (Date Range | Month-Wise) — two standalone buttons above the inputs. */
+  .bev-modebar{flex:0 0 100%;display:flex;gap:8px}
+  .bev-mode-btn{border:1px solid var(--border);background:#fff;color:var(--text2);font-size:12px;font-weight:700;padding:8px 20px;border-radius:8px;cursor:pointer;font-family:inherit;transition:all .15s}
+  .bev-mode-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .bev-mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 2px 8px rgba(37,99,235,.25)}
+  .bev-input-grp{display:flex;gap:14px;align-items:flex-end}
   .bev-sum{display:flex;gap:14px;margin:0 0 14px}
-  .bev-sum .scard{flex:0 0 220px}
+  .bev-sum .scard{flex:0 0 230px;background:#fff;border:1px solid #d9e5ee;box-shadow:0 1px 3px rgba(15,23,42,.06);padding:14px 18px}
+  /* Bigger, bolder KPI readouts. */
+  .bev-sum .scard .sl{font-size:11px;letter-spacing:.7px;color:var(--text2)}
+  .bev-sum .scard .sv{font-size:30px;font-weight:800;line-height:1.1}
+  /* Day-sales KPIs drill into "what was sold" — flag them as interactive. */
+  .bev-sum .scard.bev-kpi-click{cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+  .bev-sum .scard.bev-kpi-click:hover{border-color:var(--blue);box-shadow:0 6px 16px rgba(37,99,235,.16);transform:translateY(-1px)}
+  .bev-sum .scard.bev-kpi-click .sv{color:var(--blue)}
+  .bev-sum .scard.bev-kpi-click::after{content:'\25B8 view';display:block;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--blue);margin-top:4px;text-transform:uppercase}
+  /* Top Customers / Top Months cards (month-wise view) — header only; click to open the full ranking. */
+  .bev-sum .scard.bev-top-card{flex:0 0 230px;display:flex;flex-direction:column;justify-content:center}
+  .bev-top-title{font-size:22px;font-weight:800;color:var(--text);line-height:1.2}
+  /* Full-screen detail/compare modal — fills the viewport, no horizontal scroller. */
+  .bev-sold-box{width:100%;height:100%;max-width:100%;max-height:100%;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;border-radius:0}
+  .bev-sold-close{background:rgba(255,255,255,.18);border:none;color:#fff;width:30px;height:30px;border-radius:8px;font-size:18px;line-height:1;cursor:pointer;flex:0 0 auto}
+  .bev-sold-close:hover{background:rgba(255,255,255,.34)}
+  .bev-sold-wrap{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+  /* OIH drill bar (dim chips) */
+  .oih-drillbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .oih-drill-label{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text3)}
+  #oihChips{display:flex;gap:8px;flex-wrap:wrap}
+  .oih-chip{border:1px solid var(--border);background:#fff;color:var(--text2);border-radius:8px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s;display:inline-flex;align-items:center;gap:6px}
+  .oih-chip:hover{border-color:var(--blue);color:var(--blue)}
+  .oih-chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .oih-chip .oih-pos{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:8px;background:rgba(255,255,255,.3);font-size:10px;font-weight:800}
+  /* Fixed layout so the table always fits the width; long item names wrap instead of scrolling. */
+  .bev-sold-box table.bev-table{table-layout:fixed;width:100%}
+  .bev-sold-box table.bev-table th,.bev-sold-box table.bev-table td{white-space:normal;overflow-wrap:anywhere}
+  .bev-sold-box table.bev-table th:first-child,.bev-sold-box table.bev-table td:first-child{width:34%}
+  /* Compare (Today vs Yesterday) */
+  .bev-cmp-btn{font-size:12px}
+  .bev-cmp-stats{display:flex;gap:14px;padding:18px 24px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--surface)}
+  .bev-cmp-card{flex:1;min-width:160px;background:#fff;border:1px solid #d9e5ee;border-radius:12px;padding:16px 18px;text-align:center}
+  .bev-cmp-card .cmp-day{font-size:12px;font-weight:800;letter-spacing:.9px;color:var(--text3);text-transform:uppercase}
+  .bev-cmp-card .cmp-date{font-size:14px;font-weight:700;color:var(--text2);margin:3px 0 10px}
+  .bev-cmp-card .cmp-big{font-size:38px;font-weight:800;line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+  .bev-cmp-card .cmp-big.pos{color:var(--green)}.bev-cmp-card .cmp-big.neg{color:var(--red)}
+  .bev-cmp-card .cmp-unit{font-size:12px;color:var(--text3);margin-top:6px;font-weight:600}
+  .cmp-chg{font-weight:800;font-variant-numeric:tabular-nums;color:var(--text3)}
+  .cmp-chg.pos{color:var(--green)}.cmp-chg.neg{color:var(--red)}
   .bev-tablewrap{background:#fff;border:1px solid #d9e5ee;border-radius:14px;box-shadow:0 8px 22px rgba(15,23,42,.06);overflow:auto}
   table.bev-table{width:100%;border-collapse:collapse;font-size:13px}
   table.bev-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:12px 16px}
@@ -652,14 +697,25 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     </div>
   </div>
   <div class="bev-controls">
-    <div class="cg"><label>From</label><input type="date" id="bevFrom"></div>
-    <div class="cg"><label>To</label><input type="date" id="bevTo"></div>
+    <div class="bev-modebar" role="group" aria-label="Fetch mode">
+      <button type="button" class="bev-mode-btn active" id="bevModeRange" onclick="setBevMode('range')">Date Range</button>
+      <button type="button" class="bev-mode-btn" id="bevModeMonths" onclick="setBevMode('months')">Month-Wise</button>
+    </div>
+    <div class="bev-input-grp" id="bevRangeControls">
+      <div class="cg"><label>From</label><input type="date" id="bevFrom"></div>
+      <div class="cg"><label>To</label><input type="date" id="bevTo"></div>
+    </div>
+    <div class="bev-input-grp" id="bevMonthControls" style="display:none">
+      <div class="cg"><label>Last (months)</label>
+        <input type="number" id="bevMonths" min="1" max="120" step="1" value="3" placeholder="e.g. 6" style="width:110px" onkeydown="if(event.key==='Enter')loadBeverages()">
+      </div>
+    </div>
     <button class="btn btn-primary" id="bevFetchBtn" onclick="loadBeverages()">&#9654; Fetch Data</button>
     <div class="sep"></div>
     <div class="cg"><label>Drill Order</label>
       <div class="com-drill">
         <div class="com-drill-box">
-          <button type="button" class="com-drill-btn" id="bevDrillBtn"><span id="bevDrillLabel">Variety › Sub-Group › SKU</span><span class="com-caret">&#9662;</span></button>
+          <button type="button" class="com-drill-btn" id="bevDrillBtn"><span id="bevDrillLabel">Variety › Sub-Group › Brand</span><span class="com-caret">&#9662;</span></button>
           <div class="com-drill-panel" id="bevDrillPanel">
             <div class="com-dp-head"><a id="bevSelAll">Select All</a><a id="bevClrAll">Clear All</a></div>
             <div class="com-dp-list" id="bevDpList"></div>
@@ -668,23 +724,119 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         </div>
       </div>
     </div>
+    <div class="sep"></div>
+    <div class="cg"><label>Brand</label>
+      <select id="bevBrandFilter" onchange="onBevBrandChange()" style="min-width:160px"><option value="">All Brands</option></select>
+    </div>
+    <div class="sep" id="bevMonthSep" style="display:none"></div>
+    <div class="cg" id="bevMonthFilterCg" style="display:none"><label>Month</label>
+      <select id="bevMonthFilter" onchange="onBevMonthChange()" style="min-width:150px"><option value="">All Months</option></select>
+    </div>
+    <div class="sep"></div>
+    <div class="cg"><label>Compare</label>
+      <button type="button" class="btn btn-ghost bev-cmp-btn" onclick="openBevCompare()" title="Compare today's vs yesterday's sales">&#8644; Today vs Yesterday</button>
+    </div>
   </div>
   <div class="bev-sum">
     <div class="scard"><div class="sl">Total Quantity</div><div class="sv" id="bevKpiQty">&mdash;</div></div>
     <div class="scard"><div class="sl">Total Boxes</div><div class="sv" id="bevKpiBox">&mdash;</div></div>
-    <div class="scard"><div class="sl">Today's Sales (Boxes)</div><div class="sv" id="bevKpiToday">&mdash;</div></div>
-    <div class="scard"><div class="sl">Yesterday's Sales (Boxes)</div><div class="sv" id="bevKpiYest">&mdash;</div></div>
+    <div class="scard bev-kpi-click" onclick="openBevOih()" title="Order in Hand — open orders (drill by variety)"><div class="sl">OIH (Boxes)</div><div class="sv" id="bevKpiOih">&mdash;</div></div>
+    <div class="scard bev-kpi-click bev-day-card" onclick="openBevSold('today')" title="See what was sold today"><div class="sl" id="bevLblToday">Today's Sales (Boxes)</div><div class="sv" id="bevKpiToday">&mdash;</div></div>
+    <div class="scard bev-kpi-click bev-day-card" onclick="openBevSold('yesterday')" title="See what was sold yesterday"><div class="sl" id="bevLblYest">Yesterday's Sales (Boxes)</div><div class="sv" id="bevKpiYest">&mdash;</div></div>
+    <div class="scard bev-kpi-click bev-top-card" onclick="openBevTop('customers')" title="See all customers (descending)" style="display:none"><div class="bev-top-title">Top Customers</div></div>
+    <div class="scard bev-kpi-click bev-top-card" onclick="openBevTop('months')" title="See all months (descending)" style="display:none"><div class="bev-top-title">Top Months</div></div>
   </div>
   <div class="bev-tablewrap">
     <table class="bev-table">
-      <thead><tr><th id="bevFirstCol">Variety › Sub-Group › SKU</th><th class="num">Quantity</th><th class="num">Boxes</th></tr></thead>
-      <tbody id="bevBody"><tr><td colspan="3" class="cd-empty" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr></tbody>
+      <thead><tr><th id="bevFirstCol">Variety › Sub-Group › Brand</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num">OIH</th></tr></thead>
+      <tbody id="bevBody"><tr><td colspan="4" class="cd-empty" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr></tbody>
     </table>
   </div>
 </div>
 <div class="overlay" id="ov"><div class="spin"></div><div style="color:var(--text2);font-weight:500;font-size:13px">Fetching from SAP HANA...</div></div>
 <div class="toast" id="toast"></div>
 </div><!-- /rd-wrap -->
+
+<!-- Beverages "what was sold" detail (opened from the Today's / Yesterday's KPI cards) -->
+<div class="modal-overlay" id="bevSoldModal" onclick="if(event.target===this)closeBevSold()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3 id="bevSoldTitle">Sales</h3>
+        <p id="bevSoldSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeBevSold()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th>Item</th><th>Brand</th><th>SKU</th><th class="num">Quantity</th><th class="num">Boxes</th></tr></thead>
+        <tbody id="bevSoldBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Beverages Today-vs-Yesterday comparison -->
+<div class="modal-overlay" id="bevCompareModal" onclick="if(event.target===this)closeBevCompare()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3>Today vs Yesterday</h3>
+        <p id="bevCmpSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeBevCompare()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-cmp-stats" id="bevCmpStats"></div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th>Item</th><th>Brand</th><th class="num" id="bevCmpYHead">Yesterday</th><th class="num" id="bevCmpTHead">Today</th><th class="num">Change</th></tr></thead>
+        <tbody id="bevCmpBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Beverages Top Customers / Top Months (descending) -->
+<div class="modal-overlay" id="bevTopModal" onclick="if(event.target===this)closeBevTop()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3 id="bevTopTitle">Top</h3>
+        <p id="bevTopSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeBevTop()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th style="width:64px">#</th><th id="bevTopNameHead" style="width:52%">Name</th><th class="num">Boxes</th><th class="num">Quantity</th></tr></thead>
+        <tbody id="bevTopBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Beverages Order-in-Hand (open orders) drill -->
+<div class="modal-overlay" id="bevOihModal" onclick="if(event.target===this)closeBevOih()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3>Order in Hand</h3>
+        <p id="bevOihSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeBevOih()" aria-label="Close">&times;</button>
+    </div>
+    <div class="oih-drillbar">
+      <span class="oih-drill-label">Drill:</span>
+      <div id="oihChips"></div>
+    </div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th id="oihFirstCol">Variety</th><th class="num">PCS</th><th class="num">Boxes</th></tr></thead>
+        <tbody id="oihBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- Target Editor re-auth modal -->
 <div class="modal-overlay" id="adminReauthModal">
@@ -1020,12 +1172,22 @@ function prevSlide(){setSlide(currentSlide-1);}
    When selected it replaces the oils slides with a single dynamic-drill table
    (Variety / Sub-Group / SKU, reorderable) showing Quantity & Boxes. */
 var currentDataset='oils';
-var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'sku',label:'SKU'},{key:'main_group',label:'Main Group'},{key:'state',label:'State'},{key:'item',label:'Item Name'}];
-var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',sku:'SKU',main_group:'Main Group',state:'State',item:'Item Name'};
-var BEV_TAG_CLS={variety:'group',sub_group:'state',sku:'item',main_group:'person',state:'group',item:'state'};
-var bevOrder=['variety','sub_group','sku'], bevChosen=bevOrder.slice();
+var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
+var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',brand:'Brand',sku:'SKU',item:'Item Name',main_group:'Main Group',chain:'Chain',state:'State',customer:'Customer'};
+var BEV_TAG_CLS={variety:'group',sub_group:'state',brand:'item',sku:'item',item:'state',main_group:'person',chain:'person',state:'group',customer:'person'};
+var bevOrder=['variety','sub_group','brand'], bevChosen=bevOrder.slice();
 var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
 var bevTodayBoxes=0, bevYestBoxes=0;
+var bevBrand='', bevTodayItems=[], bevYestItems=[], bevTodayDate='', bevYestDate='';
+var bevMode='range';   // 'range' = From/To dates, 'months' = last-N-months
+var bevMonth='';       // selected YYYY-MM in month-wise view ('' = all months)
+var bevCustomerRows=[], bevMonthRows=[], bevTopCustList=[], bevTopMonthList=[];
+var bevOihRows=[];   // Order-in-Hand rows for the OIH drill popup
+var OIH_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'}];
+var oihPopOrder=['variety'], oihPopExpanded={};
+// Each mode keeps its own fetched dataset + filter state so the two are fully
+// independent — switching tabs never bleeds one mode's data/inputs into the other.
+var bevCache={range:null, months:null};
 
 function setDatasetButtons(oils){
   var os=document.querySelectorAll('.ds-oils'), bs=document.querySelectorAll('.ds-bev'), i;
@@ -1058,29 +1220,101 @@ function ensureBevDates(){
   if(f&&!f.value)f.value=sd||(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-01');
   if(t&&!t.value)t.value=ed||new Date().toISOString().split('T')[0];
 }
-async function loadBeverages(){
-  var sd=document.getElementById('bevFrom').value, ed=document.getElementById('bevTo').value;
-  if(!sd||!ed){showToast('Select dates','err');return;}
+// Snapshot / restore / reset the per-mode dataset + filter state.
+function bevSnapshot(){
+  return {rows:bevRows, todayBoxes:bevTodayBoxes, yestBoxes:bevYestBoxes,
+    todayItems:bevTodayItems, yestItems:bevYestItems, todayDate:bevTodayDate, yestDate:bevYestDate,
+    customerRows:bevCustomerRows, monthRows:bevMonthRows, oihRows:bevOihRows,
+    fetched:bevFetched, brand:bevBrand, month:bevMonth, expanded:bevExpanded};
+}
+function bevRestore(e){
+  bevRows=e.rows; bevTodayBoxes=e.todayBoxes; bevYestBoxes=e.yestBoxes;
+  bevTodayItems=e.todayItems; bevYestItems=e.yestItems; bevTodayDate=e.todayDate; bevYestDate=e.yestDate;
+  bevCustomerRows=e.customerRows; bevMonthRows=e.monthRows; bevOihRows=e.oihRows||[];
+  bevFetched=e.fetched; bevBrand=e.brand; bevMonth=e.month; bevExpanded=e.expanded;
+}
+function bevResetData(){
+  bevRows=[]; bevTodayBoxes=0; bevYestBoxes=0; bevTodayItems=[]; bevYestItems=[];
+  bevTodayDate=''; bevYestDate=''; bevCustomerRows=[]; bevMonthRows=[]; bevOihRows=[];
+  bevFetched=false; bevBrand=''; bevMonth=''; bevExpanded={};
+}
+// Toggle between Date Range and Month-Wise fetch modes. Each mode keeps its own
+// dataset, so switching tabs restores that mode's last results (or an empty state).
+// Month-wise also swaps the day-sales KPIs (Today/Yesterday) for Top Customers / Top Months.
+function setBevMode(m){
+  if(m===bevMode)return;
+  bevCache[bevMode]=bevSnapshot();   // preserve the mode we're leaving
+  bevMode=m;
+  var month=(m==='months'), i;
+  document.getElementById('bevModeRange').classList.toggle('active',!month);
+  document.getElementById('bevModeMonths').classList.toggle('active',month);
+  document.getElementById('bevRangeControls').style.display=month?'none':'flex';
+  document.getElementById('bevMonthControls').style.display=month?'flex':'none';
+  document.getElementById('bevMonthFilterCg').style.display=month?'':'none';
+  document.getElementById('bevMonthSep').style.display=month?'':'none';
+  var dc=document.querySelectorAll('.bev-day-card'), tc=document.querySelectorAll('.bev-top-card');
+  for(i=0;i<dc.length;i++)dc[i].style.display=month?'none':'';
+  for(i=0;i<tc.length;i++)tc[i].style.display=month?'':'none';
+  if(bevCache[m])bevRestore(bevCache[m]); else bevResetData();   // swap to this mode's data
+  bevPopulateBrands();
+  bevPopulateMonths();
+  renderBeverages();
+}
+function bevYmd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// opts.silent → background auto-refresh: no overlay/button spinner, keeps the user's
+// drill-expand state, and stays quiet on transient errors (leaves the current view).
+async function loadBeverages(opts){
+  var silent=!!(opts&&opts.silent);
+  var sd, ed;
+  if(bevMode==='months'){
+    var n=parseInt(document.getElementById('bevMonths').value,10);
+    if(!n||n<1){ if(!silent)showToast('Enter number of months','err'); return; }
+    if(n>120)n=120;
+    var now=new Date();
+    ed=bevYmd(now);
+    sd=bevYmd(new Date(now.getFullYear(), now.getMonth()-(n-1), 1));   // 1st of the (n-1)th month back
+  }else{
+    sd=document.getElementById('bevFrom').value; ed=document.getElementById('bevTo').value;
+    if(!sd||!ed){ if(!silent)showToast('Select dates','err'); return; }
+  }
   if(bevLoading)return; bevLoading=true;
-  var fb=document.getElementById('bevFetchBtn'); if(fb){fb.disabled=true;fb.textContent='Loading...';}
-  document.getElementById('ov').classList.add('show');
+  var fb=document.getElementById('bevFetchBtn'); if(fb&&!silent){fb.disabled=true;fb.textContent='Loading...';}
+  if(!silent)document.getElementById('ov').classList.add('show');
   try{
     var res=await fetch(API+'/api/beverages-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed})});
     if(!res.ok){var e=await res.json();throw new Error(e.detail||e.error||'Server error');}
     var result=await res.json();
-    bevRows=result.data||[]; bevFetched=true; bevExpanded={};
+    bevRows=result.data||[]; bevFetched=true; if(!silent)bevExpanded={};   // keep expanded rows on auto-refresh
     bevTodayBoxes=result.today_boxes||0; bevYestBoxes=result.yesterday_boxes||0;
+    bevTodayItems=result.today_items||[]; bevYestItems=result.yesterday_items||[];
+    bevTodayDate=result.today_date||''; bevYestDate=result.yesterday_date||'';
+    bevCustomerRows=result.customer_rows||[]; bevMonthRows=result.month_rows||[];
+    bevOihRows=result.oih_rows||[];
+    bevPopulateBrands();
+    bevPopulateMonths();
+    bevCache[bevMode]=bevSnapshot();   // remember this mode's freshly-fetched data
     renderBeverages();
-    showToast(bevRows.length+' beverage rows loaded','ok');
-  }catch(e){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="3" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; }
-  finally{ bevLoading=false; if(fb){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';} document.getElementById('ov').classList.remove('show'); }
+    showToast((silent?'Auto-refreshed · ':'')+bevRows.length+(silent?' rows':' beverage rows loaded'), silent?'info':'ok');
+  }catch(e){ if(!silent){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="4" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; } }
+  finally{ bevLoading=false; if(fb&&!silent){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';} if(!silent)document.getElementById('ov').classList.remove('show'); }
 }
+// Auto-refresh the active beverages view every 30 minutes (only while it's visible and
+// already fetched). Re-runs the current mode's query — fresh data, since the server cache
+// is 90s. Silent so it doesn't disrupt browsing.
+var BEV_REFRESH_MS=30*60*1000, bevRefreshTimer=null;
+function bevStartAutoRefresh(){
+  if(bevRefreshTimer)return;
+  bevRefreshTimer=setInterval(function(){
+    if(currentSlide===1 && currentDataset==='beverages' && bevFetched && !bevLoading)loadBeverages({silent:true});
+  }, BEV_REFRESH_MS);
+}
+bevStartAutoRefresh();
 function buildBevTree(rows,order,depth,prefix){
   if(depth>=order.length)return [];
   var dim=order[depth], map={};
   for(var i=0;i<rows.length;i++){var r=rows[i],v=r[dim]||'—';
-    if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,_rows:[]};
-    map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v]._rows.push(r);
+    if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,oih:0,_rows:[]};
+    map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v].oih+=r.oih||0; map[v]._rows.push(r);
   }
   return Object.keys(map).map(function(k){var n=map[k];var path=prefix+'>'+dim+':'+n.name;n.path=path;n.kids=buildBevTree(n._rows,order,depth+1,path);delete n._rows;n.leaf=!n.kids.length;return n;})
     .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
@@ -1091,30 +1325,235 @@ function bevTreeRows(nodes,level){
     var hasKids=n.kids&&n.kids.length>0, open=!!bevExpanded[n.path];
     var tw=hasKids?'<span class="bev-tw'+(open?' open':'')+'" data-bevpath="'+esc(n.path)+'">&#9654;</span>':'<span class="bev-tw-empty"></span>';
     var tag='<span class="cd-tag '+(BEV_TAG_CLS[n.dim]||'')+'">'+esc(BEV_DIM_NAME[n.dim]||n.dim)+'</span>';
-    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+fN(n.quantity)+'</td><td class="num">'+fN(n.boxes)+'</td></tr>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+fN(n.quantity)+'</td><td class="num">'+fN(n.boxes)+'</td><td class="num">'+fN(n.oih||0)+'</td></tr>';
     if(hasKids&&open)html+=bevTreeRows(n.kids,level+1);
   }
   return html;
 }
+// Rows narrowed to the selected brand and/or month ('' = no filter).
+function bevActiveRows(){
+  if(!bevBrand&&!bevMonth)return bevRows;
+  return bevRows.filter(function(r){return (!bevBrand||r.brand===bevBrand)&&(!bevMonth||r.ym===bevMonth);});
+}
+// Box total of a day's item list, honouring the brand filter.
+function bevDayBoxes(items,brand){var t=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand)t+=a[i].boxes||0;}return Math.round(t*100)/100;}
 function renderBeverages(){
   var body=document.getElementById('bevBody');
   var label=bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
   document.getElementById('bevFirstCol').textContent=label;
   var lbl=document.getElementById('bevDrillLabel'); if(lbl)lbl.textContent=label||'— none —';
-  var tq=0,tb=0; for(var i=0;i<bevRows.length;i++){tq+=bevRows[i].quantity||0;tb+=bevRows[i].boxes||0;}
-  tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100;
+  var rows=bevActiveRows();
+  var tq=0,tb=0,toih=0; for(var i=0;i<rows.length;i++){tq+=rows[i].quantity||0;tb+=rows[i].boxes||0;toih+=rows[i].oih||0;}
+  tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100; toih=Math.round(toih*100)/100;
   document.getElementById('bevKpiQty').textContent=fN(tq);
   document.getElementById('bevKpiBox').textContent=fN(tb);
-  document.getElementById('bevKpiToday').textContent=fN(Math.round(bevTodayBoxes*100)/100);
-  document.getElementById('bevKpiYest').textContent=fN(Math.round(bevYestBoxes*100)/100);
-  if(!bevFetched){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr>';return;}
-  if(!bevRows.length){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">No beverage rows in this range.</td></tr>';return;}
-  if(!bevOrder.length){body.innerHTML='<tr><td colspan="3" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
-  bevTree=buildBevTree(bevRows,bevOrder,0,'');
+  document.getElementById('bevKpiOih').textContent=fN(toih);
+  document.getElementById('bevKpiToday').textContent=fN(bevDayBoxes(bevTodayItems,bevBrand));
+  document.getElementById('bevKpiYest').textContent=fN(bevDayBoxes(bevYestItems,bevBrand));
+  var lt=document.getElementById('bevLblToday'); if(lt)lt.textContent="Today's Sales"+(bevTodayDate?(' · '+bevFmtDate(bevTodayDate)):'');
+  var ly=document.getElementById('bevLblYest'); if(ly)ly.textContent="Yesterday's Sales"+(bevYestDate?(' · '+bevFmtDate(bevYestDate)):'');
+  bevTopCustList=bevAggTop(bevCustomerRows,'customer',bevBrand,bevMonth);
+  bevTopMonthList=bevAggTop(bevMonthRows,'ym',bevBrand,bevMonth);
+  if(!bevFetched){
+    document.getElementById('bevKpiQty').textContent='—'; document.getElementById('bevKpiBox').textContent='—'; document.getElementById('bevKpiOih').textContent='—';
+    document.getElementById('bevKpiToday').textContent='—'; document.getElementById('bevKpiYest').textContent='—';
+    body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevMode==='months'?'Enter a number of months and click Fetch to load beverages.':'Pick a date range and click Fetch to load beverages.')+'</td></tr>';return;}
+  if(!bevOrder.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
+  if(!rows.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevBrand?('No rows for brand "'+esc(bevBrand)+'".'):'No beverage rows in this range.')+'</td></tr>';return;}
+  bevTree=buildBevTree(rows,bevOrder,0,'');
   var html=bevTreeRows(bevTree,0);
-  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td></tr>';
+  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td><td class="num">'+fN(toih)+'</td></tr>';
   body.innerHTML=html;
 }
+function bevPopulateBrands(){
+  var sel=document.getElementById('bevBrandFilter'); if(!sel)return;
+  var seen={}, list=[];
+  for(var i=0;i<bevRows.length;i++){var b=bevRows[i].brand||'—'; if(!seen[b]){seen[b]=1;list.push(b);}}
+  list.sort(function(a,b){return String(a).localeCompare(String(b));});
+  var html='<option value="">All Brands</option>';
+  for(var j=0;j<list.length;j++)html+='<option value="'+esc(list[j])+'">'+esc(list[j])+'</option>';
+  sel.innerHTML=html;
+  if(bevBrand && list.indexOf(bevBrand)!==-1)sel.value=bevBrand; else { bevBrand=''; sel.value=''; }
+}
+function onBevBrandChange(){ bevBrand=document.getElementById('bevBrandFilter').value; bevExpanded={}; renderBeverages(); }
+function bevPopulateMonths(){
+  var sel=document.getElementById('bevMonthFilter'); if(!sel)return;
+  var labels={}, list=[];
+  for(var i=0;i<bevMonthRows.length;i++){var r=bevMonthRows[i]; if(r.ym&&!labels[r.ym]){labels[r.ym]=r.label||r.ym;list.push(r.ym);}}
+  list.sort(function(a,b){return a<b?1:(a>b?-1:0);});   // most recent month first
+  var html='<option value="">All Months</option>';
+  for(var j=0;j<list.length;j++)html+='<option value="'+esc(list[j])+'">'+esc(labels[list[j]])+'</option>';
+  sel.innerHTML=html;
+  if(bevMonth && labels[bevMonth])sel.value=bevMonth; else { bevMonth=''; sel.value=''; }
+}
+function onBevMonthChange(){ bevMonth=document.getElementById('bevMonthFilter').value; bevExpanded={}; renderBeverages(); }
+function openBevSold(which){
+  if(!bevFetched){showToast('Fetch beverages first','info');return;}
+  var items=(which==='today'?bevTodayItems:bevYestItems)||[];
+  var dstr=which==='today'?bevTodayDate:bevYestDate;
+  if(bevBrand)items=items.filter(function(it){return it.brand===bevBrand;});
+  items=items.slice().sort(function(a,b){return (b.boxes||0)-(a.boxes||0);});
+  document.getElementById('bevSoldTitle').textContent=(which==='today'?"Today's Sales":"Yesterday's Sales")+(bevBrand?(' — '+bevBrand):'');
+  var tq=0,tb=0; for(var i=0;i<items.length;i++){tq+=items[i].quantity||0;tb+=items[i].boxes||0;}
+  document.getElementById('bevSoldSub').textContent=(dstr?dstr+' · ':'')+items.length+' item(s) · '+fN(Math.round(tb*100)/100)+' boxes';
+  var body=document.getElementById('bevSoldBody');
+  if(!items.length){
+    body.innerHTML='<tr><td colspan="5" style="padding:34px;text-align:center;color:#7b8794">Nothing sold '+(which==='today'?'today':'yesterday')+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+' yet.</td></tr>';
+  }else{
+    var html='';
+    for(var k=0;k<items.length;k++){var it=items[k];
+      html+='<tr><td>'+esc(it.item||'—')+'</td><td>'+esc(it.brand||'—')+'</td><td>'+esc(it.sku||'—')+'</td><td class="num">'+fN(Math.round((it.quantity||0)*100)/100)+'</td><td class="num">'+fN(Math.round((it.boxes||0)*100)/100)+'</td></tr>';
+    }
+    html+='<tr class="cd-total"><td colspan="3">TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td><td class="num">'+fN(Math.round(tb*100)/100)+'</td></tr>';
+    body.innerHTML=html;
+  }
+  document.getElementById('bevSoldModal').classList.add('show');
+}
+function closeBevSold(){document.getElementById('bevSoldModal').classList.remove('show');}
+var BEV_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function bevFmtDate(iso){
+  if(!iso)return '';
+  var p=String(iso).split('-'); if(p.length!==3)return iso;
+  return parseInt(p[2],10)+' '+(BEV_MON[parseInt(p[1],10)-1]||p[1])+' '+p[0];
+}
+// Sum quantity & boxes of a (brand-filtered) day item list.
+function bevDayTotals(items,brand){var q=0,b=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand){q+=a[i].quantity||0;b+=a[i].boxes||0;}}return {qty:Math.round(q*100)/100,boxes:Math.round(b*100)/100};}
+function bevCmpChange(y,t){
+  var d=Math.round((t-y)*100)/100;
+  var cls=d>0?'pos':(d<0?'neg':''), arrow=d>0?'▲':(d<0?'▼':'–');
+  var pct=y>0?((d/y)*100):(t>0?null:0);
+  var pctStr=pct===null?'new':(d>=0?'+':'')+(Math.round(pct*10)/10)+'%';
+  return '<span class="cmp-chg '+cls+'">'+arrow+' '+fN(Math.abs(d))+(y>0||pct===null?(' ('+pctStr+')'):'')+'</span>';
+}
+function openBevCompare(){
+  if(!bevFetched){showToast('Fetch beverages first','info');return;}
+  var tItems=(bevTodayItems||[]), yItems=(bevYestItems||[]);
+  if(bevBrand){var bf=function(it){return it.brand===bevBrand;};tItems=tItems.filter(bf);yItems=yItems.filter(bf);}
+  var tt=bevDayTotals(tItems,''), yt=bevDayTotals(yItems,'');
+  document.getElementById('bevCmpSub').textContent=bevFmtDate(bevTodayDate)+' vs '+bevFmtDate(bevYestDate)+(bevBrand?(' · '+bevBrand):'');
+  document.getElementById('bevCmpTHead').textContent='Today ('+bevFmtDate(bevTodayDate)+')';
+  document.getElementById('bevCmpYHead').textContent='Yesterday ('+bevFmtDate(bevYestDate)+')';
+  // Headline stat cards.
+  var dBox=Math.round((tt.boxes-yt.boxes)*100)/100;
+  var dCls=dBox>0?'pos':(dBox<0?'neg':''), dArrow=dBox>0?'▲':(dBox<0?'▼':'–');
+  var dPct=yt.boxes>0?((dBox/yt.boxes)*100):(tt.boxes>0?null:0);
+  var dUnit=dPct===null?'new sales':(yt.boxes>0?((dBox>=0?'+':'')+(Math.round(dPct*10)/10)+'% boxes'):'no change');
+  document.getElementById('bevCmpStats').innerHTML=
+    '<div class="bev-cmp-card"><div class="cmp-day">Today</div><div class="cmp-date">'+bevFmtDate(bevTodayDate)+'</div><div class="cmp-big">'+fN(tt.boxes)+'</div><div class="cmp-unit">boxes · '+fN(tt.qty)+' qty</div></div>'+
+    '<div class="bev-cmp-card"><div class="cmp-day">Yesterday</div><div class="cmp-date">'+bevFmtDate(bevYestDate)+'</div><div class="cmp-big">'+fN(yt.boxes)+'</div><div class="cmp-unit">boxes · '+fN(yt.qty)+' qty</div></div>'+
+    '<div class="bev-cmp-card"><div class="cmp-day">Change</div><div class="cmp-date">Boxes</div><div class="cmp-big '+dCls+'">'+dArrow+' '+fN(Math.abs(dBox))+'</div><div class="cmp-unit">'+dUnit+'</div></div>';
+  // Per-item comparison, merged across both days.
+  var map={}, order=[];
+  function ensure(it){var k=(it.item||'—')+'|'+(it.brand||'—'); if(!map[k]){map[k]={item:it.item||'—',brand:it.brand||'—',y:0,t:0};order.push(k);} return map[k];}
+  yItems.forEach(function(it){ensure(it).y+=it.boxes||0;});
+  tItems.forEach(function(it){ensure(it).t+=it.boxes||0;});
+  var list=order.map(function(k){return map[k];});
+  list.sort(function(a,b){return Math.max(b.t,b.y)-Math.max(a.t,a.y);});
+  var body=document.getElementById('bevCmpBody');
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="5" style="padding:34px;text-align:center;color:#7b8794">No sales on either day'+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+'.</td></tr>';
+  }else{
+    var html='';
+    for(var i=0;i<list.length;i++){var r=list[i];
+      html+='<tr><td>'+esc(r.item)+'</td><td>'+esc(r.brand)+'</td><td class="num">'+fN(Math.round(r.y*100)/100)+'</td><td class="num">'+fN(Math.round(r.t*100)/100)+'</td><td class="num">'+bevCmpChange(r.y,r.t)+'</td></tr>';
+    }
+    html+='<tr class="cd-total"><td colspan="2">TOTAL</td><td class="num">'+fN(yt.boxes)+'</td><td class="num">'+fN(tt.boxes)+'</td><td class="num">'+bevCmpChange(yt.boxes,tt.boxes)+'</td></tr>';
+    body.innerHTML=html;
+  }
+  document.getElementById('bevCompareModal').classList.add('show');
+}
+function closeBevCompare(){document.getElementById('bevCompareModal').classList.remove('show');}
+// Aggregate customer_rows / month_rows by a key (honouring brand + month filters), boxes desc.
+function bevAggTop(rows,keyField,brand,month){
+  var map={}, order=[], a=rows||[];
+  for(var i=0;i<a.length;i++){var r=a[i];
+    if(brand&&r.brand!==brand)continue;
+    if(month&&r.ym!==month)continue;
+    var k=r[keyField]; if(k==null||k==='')continue;
+    if(!map[k]){map[k]={key:k,label:r.label||k,boxes:0,quantity:0};order.push(k);}
+    map[k].boxes+=r.boxes||0; map[k].quantity+=r.quantity||0;
+  }
+  var list=order.map(function(k){return map[k];});
+  list.sort(function(a,b){return (b.boxes-a.boxes)||String(a.label).localeCompare(String(b.label));});
+  return list;
+}
+function openBevTop(which){
+  if(!bevFetched){showToast('Fetch beverages first','info');return;}
+  var isCust=(which==='customers'), list=isCust?bevTopCustList:bevTopMonthList;
+  document.getElementById('bevTopTitle').textContent=(isCust?'Top Customers':'Top Months')+(bevBrand?(' — '+bevBrand):'');
+  document.getElementById('bevTopNameHead').textContent=isCust?'Customer':'Month';
+  var tb=0,tq=0; for(var i=0;i<list.length;i++){tb+=list[i].boxes;tq+=list[i].quantity;}
+  document.getElementById('bevTopSub').textContent=list.length+(isCust?' customer(s) · ':' month(s) · ')+fN(Math.round(tb*100)/100)+' boxes — highest first';
+  var body=document.getElementById('bevTopBody');
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="4" style="padding:34px;text-align:center;color:#7b8794">No data'+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+'.</td></tr>';
+  }else{
+    var html='';
+    for(var k=0;k<list.length;k++){var r=list[k];
+      html+='<tr><td>'+(k+1)+'</td><td>'+esc(r.label)+'</td><td class="num">'+fN(Math.round(r.boxes*100)/100)+'</td><td class="num">'+fN(Math.round(r.quantity*100)/100)+'</td></tr>';
+    }
+    html+='<tr class="cd-total"><td colspan="2">TOTAL</td><td class="num">'+fN(Math.round(tb*100)/100)+'</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td></tr>';
+    body.innerHTML=html;
+  }
+  document.getElementById('bevTopModal').classList.add('show');
+}
+function closeBevTop(){document.getElementById('bevTopModal').classList.remove('show');}
+// ── Order in Hand popup — dynamic drill over open-order rows ────────────────
+function bevOihActive(){
+  return (bevOihRows||[]).filter(function(r){return (!bevBrand||r.brand===bevBrand)&&(!bevMonth||r.ym===bevMonth);});
+}
+function renderOihChips(){
+  var box=document.getElementById('oihChips'); if(!box)return;
+  var html='';
+  OIH_DIMS.forEach(function(d){
+    var pos=oihPopOrder.indexOf(d.key), on=pos!==-1;
+    html+='<button type="button" class="oih-chip'+(on?' active':'')+'" data-oihdim="'+d.key+'">'+esc(d.label)+(on?'<span class="oih-pos">'+(pos+1)+'</span>':'')+'</button>';
+  });
+  box.innerHTML=html;
+}
+function bevOihTreeRows(nodes,level){
+  var html='';
+  for(var i=0;i<nodes.length;i++){var n=nodes[i];
+    var hasKids=n.kids&&n.kids.length>0, open=!!oihPopExpanded[n.path];
+    var tw=hasKids?'<span class="bev-tw'+(open?' open':'')+'" data-oihpath="'+esc(n.path)+'">&#9654;</span>':'<span class="bev-tw-empty"></span>';
+    var tag='<span class="cd-tag '+(BEV_TAG_CLS[n.dim]||'')+'">'+esc(BEV_DIM_NAME[n.dim]||n.dim)+'</span>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+fN(n.quantity)+'</td><td class="num">'+fN(n.boxes)+'</td></tr>';
+    if(hasKids&&open)html+=bevOihTreeRows(n.kids,level+1);
+  }
+  return html;
+}
+function oihPopRender(){
+  renderOihChips();
+  var label=oihPopOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
+  document.getElementById('oihFirstCol').textContent=label;
+  var rows=bevOihActive();
+  var tp=0,tb=0; for(var i=0;i<rows.length;i++){tp+=rows[i].quantity||0;tb+=rows[i].boxes||0;}
+  tp=Math.round(tp*100)/100; tb=Math.round(tb*100)/100;
+  document.getElementById('bevOihSub').textContent=fN(tb)+' boxes · '+fN(tp)+' pcs open'+(bevBrand?(' · '+bevBrand):'')+(bevMonth?(' · '+bevMonth):'');
+  var body=document.getElementById('oihBody');
+  if(!oihPopOrder.length){body.innerHTML='<tr><td colspan="3" style="padding:34px;text-align:center;color:#7b8794">Pick at least one drill dimension.</td></tr>';return;}
+  if(!rows.length){body.innerHTML='<tr><td colspan="3" style="padding:34px;text-align:center;color:#7b8794">No open orders'+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+'.</td></tr>';return;}
+  var tree=buildBevTree(rows,oihPopOrder,0,'');
+  var html=bevOihTreeRows(tree,0);
+  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tp)+'</td><td class="num">'+fN(tb)+'</td></tr>';
+  body.innerHTML=html;
+}
+function openBevOih(){
+  if(!bevFetched){showToast('Fetch beverages first','info');return;}
+  oihPopExpanded={};
+  oihPopRender();
+  document.getElementById('bevOihModal').classList.add('show');
+}
+function closeBevOih(){document.getElementById('bevOihModal').classList.remove('show');}
+// Drill-chip toggle (click order sets the drill order) + row expand, scoped to the OIH popup.
+document.addEventListener('click',function(e){
+  var chip=e.target&&e.target.closest?e.target.closest('#oihChips .oih-chip'):null;
+  if(chip){var k=chip.getAttribute('data-oihdim'),i=oihPopOrder.indexOf(k);
+    if(i===-1)oihPopOrder.push(k); else oihPopOrder.splice(i,1);
+    oihPopExpanded={}; oihPopRender(); return;}
+  var tw=e.target&&e.target.closest?e.target.closest('#oihBody .bev-tw'):null;
+  if(tw){var p=tw.getAttribute('data-oihpath'); oihPopExpanded[p]=!oihPopExpanded[p]; oihPopRender();}
+});
 function bevRenderDpList(){
   var list=document.getElementById('bevDpList'); if(!list)return; list.innerHTML='';
   BEV_DIMS.forEach(function(d){
@@ -1153,16 +1592,17 @@ document.addEventListener('click',function(e){
   renderBeverages();
 });
 function exportBeveragesCSV(){
-  if(!bevFetched||!bevRows.length){showToast('Fetch beverages first','info');return;}
-  var out=[[bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' > '),'Quantity','Boxes']];
+  if(!bevFetched||!bevActiveRows().length){showToast('Fetch beverages first','info');return;}
+  var arows=bevActiveRows();
+  var out=[[bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' > '),'Quantity','Boxes','OIH']];
   (function walk(nodes,prefix){
     nodes.forEach(function(n){
-      out.push([prefix+n.name, Math.round(n.quantity*100)/100, Math.round(n.boxes*100)/100]);
+      out.push([prefix+n.name, Math.round(n.quantity*100)/100, Math.round(n.boxes*100)/100, Math.round((n.oih||0)*100)/100]);
       if(n.kids&&n.kids.length)walk(n.kids,prefix+'    ');
     });
-  })(bevTree.length?bevTree:buildBevTree(bevRows,bevOrder,0,''),'');
-  var tq=0,tb=0; for(var i=0;i<bevRows.length;i++){tq+=bevRows[i].quantity||0;tb+=bevRows[i].boxes||0;}
-  out.push(['TOTAL',Math.round(tq*100)/100,Math.round(tb*100)/100]);
+  })(bevTree.length?bevTree:buildBevTree(arows,bevOrder,0,''),'');
+  var tq=0,tb=0,toih=0; for(var i=0;i<arows.length;i++){tq+=arows[i].quantity||0;tb+=arows[i].boxes||0;toih+=arows[i].oih||0;}
+  out.push(['TOTAL',Math.round(tq*100)/100,Math.round(tb*100)/100,Math.round(toih*100)/100]);
   var text=out.map(function(r){return r.map(function(c){c=String(c==null?'':c);return /[",\r\n]/.test(c)?('"'+c.replace(/"/g,'""')+'"'):c;}).join(',');}).join('\r\n');
   var blob=new Blob([text],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob);

@@ -194,11 +194,21 @@ def api_beverages_data(request):
         data = services.get_beverages_rows_cached(start_date, end_date)
     except Exception as e:
         logger.error('[BEVERAGES] fetch error: %s', e)
-        return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0})
-    rows = data.get('rows', []) if isinstance(data, dict) else (data or [])
+        return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0,
+                             'today_items': [], 'yesterday_items': [], 'today_date': '', 'yesterday_date': '',
+                             'customer_rows': [], 'month_rows': [], 'oih_rows': []})
+    is_dict = isinstance(data, dict)
+    rows = data.get('rows', []) if is_dict else (data or [])
     return JsonResponse({'status': 'ok', 'data': rows, 'count': len(rows),
-                         'today_boxes': data.get('today_boxes', 0) if isinstance(data, dict) else 0,
-                         'yesterday_boxes': data.get('yesterday_boxes', 0) if isinstance(data, dict) else 0})
+                         'today_boxes': data.get('today_boxes', 0) if is_dict else 0,
+                         'yesterday_boxes': data.get('yesterday_boxes', 0) if is_dict else 0,
+                         'today_items': data.get('today_items', []) if is_dict else [],
+                         'yesterday_items': data.get('yesterday_items', []) if is_dict else [],
+                         'today_date': data.get('today_date', '') if is_dict else '',
+                         'yesterday_date': data.get('yesterday_date', '') if is_dict else '',
+                         'customer_rows': data.get('customer_rows', []) if is_dict else [],
+                         'month_rows': data.get('month_rows', []) if is_dict else [],
+                         'oih_rows': data.get('oih_rows', []) if is_dict else []})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

@@ -3,6 +3,8 @@ import time
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 
+from django.utils import timezone
+
 from core import sap_connector
 from .models import MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster, TargetMaster, TargetNode
 
@@ -94,17 +96,49 @@ def _fetch_raw(start_date, end_date):
         return []
 
 
-# ── Beverages dataset (separate HANA schema + proc) ───────────────────────
-# Same fetch mechanism as oils, but a different schema/proc and a product-only
-# shape: Variety / Sub-Group / SKU dimensions with Quantity & Boxes metrics.
+# ── Beverages dataset (separate HANA schema) ──────────────────────────────
+# Sales pulled with a direct invoice query (OINV/INV1) rather than a proc. Shape:
+# Variety / Sub-Group / Brand / Main Group / Chain / State dimensions, PCS_Sold (qty)
+# and Boxes_Sold (boxes) metrics, by customer & month.
 BEVERAGES_SCHEMA = 'JIVO_BEVERAGES_HANADB'
-BEVERAGES_PROC   = 'REPORT_SALES_COGS'
 _BEV_CACHE = {}
 _BEV_CACHE_TTL = 90   # seconds, same as oils
 
 
 def _fetch_raw_beverages(start_date, end_date):
-    sql = f'CALL "{BEVERAGES_SCHEMA}"."{BEVERAGES_PROC}"(?, ?)'
+    # Boxes_Sold = SUM(Quantity / SalFactor2). Note the Variety/Sub_Group aliases are
+    # intentionally cross-mapped to OITM's U_Sub_Group/U_Variety, per the source query.
+    # OITB join restricts to FINISHED goods so packaging materials (Pouch, Caps, …) and
+    # assets (Office Equipment, Plant & Machinery) sold on invoices are excluded.
+    sql = f'''SELECT
+        T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        (SELECT K."Name" FROM {BEVERAGES_SCHEMA}.OCST K
+          WHERE K."Code" = T7."State" AND K."Country" = T7."Country") AS "State",
+        T0."CardCode", T4."CardName",
+        T2."U_SKU" AS "SKU", T2."ItemName",
+        T2."U_Sub_Group" AS "Variety",
+        T2."U_Variety" AS "Sub_Group",
+        T2."U_Brand" AS "Brand",
+        YEAR(T0."DocDate") AS "Year",
+        TO_CHAR(T0."DocDate",'Mon-YYYY') AS "MonthName",
+        SUM(T1."Quantity") AS "PCS_Sold",
+        MAX(T2."SalFactor2") AS "PCS_Per_Box",
+        ROUND(SUM(T1."Quantity" / NULLIF(T2."SalFactor2",0)), 2) AS "Boxes_Sold",
+        SUM(T1."LineTotal") AS "Sales_Value"
+    FROM {BEVERAGES_SCHEMA}.OINV T0
+    INNER JOIN {BEVERAGES_SCHEMA}.INV1 T1 ON T0."DocEntry" = T1."DocEntry"
+    INNER JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
+    INNER JOIN {BEVERAGES_SCHEMA}.OITB G ON T2."ItmsGrpCod" = G."ItmsGrpCod"
+    INNER JOIN {BEVERAGES_SCHEMA}.OCRD T4 ON T0."CardCode" = T4."CardCode"
+    LEFT JOIN {BEVERAGES_SCHEMA}.CRD1 T7
+        ON T7."CardCode" = T0."CardCode" AND T7."AdresType" = 'S' AND T7."Address" = T0."ShipToCode"
+    WHERE T0."CANCELED" = 'N' AND T4."GroupCode" <> 100 AND T1."TreeType" <> 'I'
+        AND G."ItmsGrpNam" = 'FINISHED'
+        AND T0."DocDate" BETWEEN ? AND ?
+    GROUP BY T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        T7."State", T7."Country", T0."CardCode", T4."CardName",
+        T2."U_SKU", T2."ItemName", T2."U_Sub_Group", T2."U_Variety", T2."U_Brand"
+    ORDER BY T0."DocDate", T0."DocNum", T2."ItemName"'''
     try:
         with sap_connector.connection() as conn:
             cursor = conn.cursor()
@@ -114,7 +148,53 @@ def _fetch_raw_beverages(start_date, end_date):
             cursor.close()
         return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
-        logger.error('[SAP-BEV] Procedure call failed: %s', e)
+        logger.error('[SAP-BEV] Sales query failed: %s', e)
+        return []
+
+
+def _fetch_raw_beverages_oih(start_date, end_date):
+    # Order in Hand = open sales-order lines (ORDR/RDR1, LineStatus='O'). Same shape and
+    # FINISHED-goods filter as the sales query, date-filtered to the selected range so it
+    # stays coherent with the period shown.
+    sql = f'''SELECT
+        T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        (SELECT K."Name" FROM {BEVERAGES_SCHEMA}.OCST K
+          WHERE K."Code" = T7."State" AND K."Country" = T7."Country") AS "State",
+        T0."CardCode", T4."CardName",
+        T2."U_SKU" AS "SKU", T2."ItemName",
+        T2."U_Sub_Group" AS "Variety",
+        T2."U_Variety" AS "Sub_Group",
+        T2."U_Brand" AS "Brand",
+        YEAR(T0."DocDate") AS "Year",
+        TO_CHAR(T0."DocDate",'Mon-YYYY') AS "MonthName",
+        SUM(T1."Quantity") AS "PCS_Ordered",
+        MAX(T2."SalFactor2") AS "PCS_Per_Box",
+        ROUND(SUM(T1."Quantity" / NULLIF(T2."SalFactor2",0)), 2) AS "Boxes_Ordered",
+        SUM(T1."LineTotal") AS "Order_Value"
+    FROM {BEVERAGES_SCHEMA}.ORDR T0
+    INNER JOIN {BEVERAGES_SCHEMA}.RDR1 T1 ON T0."DocEntry" = T1."DocEntry"
+    INNER JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
+    INNER JOIN {BEVERAGES_SCHEMA}.OITB G ON T2."ItmsGrpCod" = G."ItmsGrpCod"
+    INNER JOIN {BEVERAGES_SCHEMA}.OCRD T4 ON T0."CardCode" = T4."CardCode"
+    LEFT JOIN {BEVERAGES_SCHEMA}.CRD1 T7
+        ON T7."CardCode" = T0."CardCode" AND T7."AdresType" = 'S' AND T7."Address" = T0."ShipToCode"
+    WHERE T0."CANCELED" = 'N' AND T4."GroupCode" <> 100 AND T1."TreeType" <> 'I'
+        AND T1."LineStatus" = 'O' AND G."ItmsGrpNam" = 'FINISHED'
+        AND T0."DocDate" BETWEEN ? AND ?
+    GROUP BY T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        T7."State", T7."Country", T0."CardCode", T4."CardName",
+        T2."U_SKU", T2."ItemName", T2."U_Sub_Group", T2."U_Variety", T2."U_Brand"
+    ORDER BY T0."DocDate", T0."DocNum"'''
+    try:
+        with sap_connector.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, (start_date, end_date))
+            columns = [desc[0] for desc in cursor.description]
+            rows = cursor.fetchall()
+            cursor.close()
+        return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        logger.error('[SAP-BEV] OIH query failed: %s', e)
         return []
 
 
@@ -149,39 +229,144 @@ def _bev_date(value):
     return None
 
 
+_BEV_MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def _bev_month_key(r, dd):
+    """(sort key 'YYYY-MM', display label 'Mon YYYY') for a row — preferring the proc's
+    Year/Month columns, falling back to the parsed DocDate. The label is built from the
+    abbreviation + year (the proc's MonthName already embeds the year, so reusing it
+    would double it, e.g. 'May-2026 2026')."""
+    year = _bev_pick(r, 'Year', 'YEAR', 'year')
+    month = _bev_pick(r, 'Month', 'MONTH', 'month')
+    try:
+        yv = int(float(year)); mv = int(float(month))
+        if 1 <= mv <= 12:
+            return '%04d-%02d' % (yv, mv), '%s %d' % (_BEV_MONTH_ABBR[mv - 1], yv)
+    except (TypeError, ValueError):
+        pass
+    if dd:
+        return '%04d-%02d' % (dd.year, dd.month), '%s %d' % (_BEV_MONTH_ABBR[dd.month - 1], dd.year)
+    return None, None
+
+
+def _bev_accum_item(store, item, sku, brand, qty, box):
+    """Accumulate a single day's sale into a per-item bucket (keyed by item/SKU/brand)
+    for the day-specific 'what was sold' drill-downs."""
+    cell = store.setdefault((item, sku, brand), {'quantity': 0.0, 'boxes': 0.0})
+    cell['quantity'] += qty
+    cell['boxes'] += box
+
+
+def _bev_items_list(store):
+    out = [{'item': k[0], 'sku': k[1], 'brand': k[2],
+            'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
+           for k, v in store.items()]
+    out.sort(key=lambda x: x['boxes'], reverse=True)
+    return out
+
+
 def get_beverages_rows(start_date, end_date):
-    """Granular beverage rows aggregated by (Variety, Sub_Group, SKU, Main Group, State,
-    Item) with Quantity and Boxes, plus today's & yesterday's box totals (by DocDate).
-    The client nests the rows into any drill order."""
+    """Beverage sales rows aggregated by (Variety, Sub_Group, SKU, Item, Main Group, State,
+    Brand, Chain, Month) with Quantity (PCS) and Boxes, plus today's & yesterday's box
+    totals, a per-item breakdown for each of those days, and customer/month aggregates.
+    The client nests the rows into any drill order, filters by Brand/Month, and opens the
+    day & top breakdowns from the KPIs."""
     raw = _fetch_raw_beverages(start_date, end_date)
     agg = {}
-    today = date.today()
+    # Use the project timezone (Asia/Kolkata, USE_TZ=True) for the "today"/"yesterday"
+    # cut-off — date.today() reads the server's OS date, which on a UTC host points at
+    # the wrong day until ~05:30 IST and would make today's sales read 0.
+    today = timezone.localdate()
     yesterday = today - timedelta(days=1)
     today_boxes = 0.0
     yest_boxes = 0.0
+    today_items = {}
+    yest_items = {}
+    cust_agg = {}    # (customer, brand) -> {quantity, boxes}  → Top Customers (month-wise view)
+    month_agg = {}   # (ym, brand)       -> {quantity, boxes, label}  → Top Months
     for r in raw or []:
         variety = _normalize_name(_bev_pick(r, 'Variety', 'VARIETY', 'variety')) or '—'
         sub = _normalize_name(_bev_pick(r, 'Sub_Group', 'SUB_GROUP', 'U_Sub_Group', 'sub_group')) or '—'
-        sku = _normalize_name(_bev_pick(r, 'SKU', 'Sku', 'sku')) or '—'
+        sku = _normalize_name(_bev_pick(r, 'SKU', 'U_SKU', 'Sku', 'sku')) or '—'
+        item = _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—'
         main_group = _normalize_name(_bev_pick(r, 'U_Main_Group', 'U_MAIN_GROUP', 'Main_Group', 'main_group')) or '—'
         state = _normalize_name(_bev_pick(r, 'State', 'STATE', 'state')) or '—'
-        item = _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—'
-        qty = _bev_num(_bev_pick(r, 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
-        box = _bev_num(_bev_pick(r, 'Box', 'BOX', 'Boxes', 'Box(es)', 'box'))
-        key = (variety, sub, sku, main_group, state, item)
+        brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
+        chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
+        customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
+        qty = _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
+        box = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Box', 'BOX', 'Boxes', 'box'))
+        dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
+        ym, mlabel = _bev_month_key(r, dd)
+        ymk = ym or ''   # carried on each row so the client can filter to a single month
+        key = (variety, sub, sku, item, main_group, state, brand, chain, ymk)
         cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0})
         cell['quantity'] += qty
         cell['boxes'] += box
-        dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
+        cc = cust_agg.setdefault((customer, brand, ymk), {'quantity': 0.0, 'boxes': 0.0})
+        cc['quantity'] += qty; cc['boxes'] += box
+        if ym:
+            mc = month_agg.setdefault((ym, brand), {'quantity': 0.0, 'boxes': 0.0, 'label': mlabel})
+            mc['quantity'] += qty; mc['boxes'] += box
         if dd == today:
             today_boxes += box
+            _bev_accum_item(today_items, item, sku, brand, qty, box)
         elif dd == yesterday:
             yest_boxes += box
-    rows = [{'variety': k[0], 'sub_group': k[1], 'sku': k[2],
-             'main_group': k[3], 'state': k[4], 'item': k[5],
-             'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
-            for k, v in agg.items()]
-    return {'rows': rows, 'today_boxes': round(today_boxes, 2), 'yesterday_boxes': round(yest_boxes, 2)}
+            _bev_accum_item(yest_items, item, sku, brand, qty, box)
+
+    # ── Order in Hand (open sales orders) ────────────────────────────────────
+    # oih_main: boxes keyed by the same dims as sales rows (merged in as the 'oih' column).
+    # oih_pop:  by (variety, sub, item, customer, brand, month) for the OIH drill popup.
+    oih_main = {}
+    oih_pop = {}
+    for r in _fetch_raw_beverages_oih(start_date, end_date) or []:
+        variety = _normalize_name(_bev_pick(r, 'Variety', 'VARIETY', 'variety')) or '—'
+        sub = _normalize_name(_bev_pick(r, 'Sub_Group', 'SUB_GROUP', 'U_Sub_Group', 'sub_group')) or '—'
+        sku = _normalize_name(_bev_pick(r, 'SKU', 'U_SKU', 'Sku', 'sku')) or '—'
+        item = _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—'
+        main_group = _normalize_name(_bev_pick(r, 'U_Main_Group', 'U_MAIN_GROUP', 'Main_Group', 'main_group')) or '—'
+        state = _normalize_name(_bev_pick(r, 'State', 'STATE', 'state')) or '—'
+        brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
+        chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
+        customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
+        opcs = _bev_num(_bev_pick(r, 'PCS_Ordered', 'PCS_ORDERED', 'PCS_Sold', 'Quantity', 'Qty'))
+        obox = _bev_num(_bev_pick(r, 'Boxes_Ordered', 'BOXES_ORDERED', 'Boxes_Sold', 'Boxes', 'Box'))
+        ym, _ml = _bev_month_key(r, _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date')))
+        ymk = ym or ''
+        mk = (variety, sub, sku, item, main_group, state, brand, chain, ymk)
+        oih_main[mk] = oih_main.get(mk, 0.0) + obox
+        pk = (variety, sub, item, customer, brand, ymk)
+        pc = oih_pop.setdefault(pk, {'pcs': 0.0, 'boxes': 0.0})
+        pc['pcs'] += opcs; pc['boxes'] += obox
+
+    # Union of sales + OIH keys so products with open orders but no in-range sales still show.
+    rows = []
+    for k in set(agg) | set(oih_main):
+        v = agg.get(k)
+        rows.append({'variety': k[0], 'sub_group': k[1], 'sku': k[2], 'item': k[3],
+                     'main_group': k[4], 'state': k[5], 'brand': k[6], 'chain': k[7], 'ym': k[8],
+                     'quantity': round(v['quantity'], 2) if v else 0.0,
+                     'boxes': round(v['boxes'], 2) if v else 0.0,
+                     'oih': round(oih_main.get(k, 0.0), 2)})
+    oih_rows = [{'variety': k[0], 'sub_group': k[1], 'item': k[2], 'customer': k[3],
+                 'brand': k[4], 'ym': k[5],
+                 'quantity': round(v['pcs'], 2), 'boxes': round(v['boxes'], 2)}
+                for k, v in oih_pop.items()]
+    customer_rows = [{'customer': k[0], 'brand': k[1], 'ym': k[2],
+                      'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
+                     for k, v in cust_agg.items()]
+    month_rows = [{'ym': k[0], 'brand': k[1], 'label': v['label'],
+                   'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
+                  for k, v in month_agg.items()]
+    return {'rows': rows,
+            'today_boxes': round(today_boxes, 2), 'yesterday_boxes': round(yest_boxes, 2),
+            'today_items': _bev_items_list(today_items),
+            'yesterday_items': _bev_items_list(yest_items),
+            'today_date': today.isoformat(), 'yesterday_date': yesterday.isoformat(),
+            'customer_rows': customer_rows, 'month_rows': month_rows, 'oih_rows': oih_rows}
 
 
 def get_beverages_rows_cached(start_date, end_date):
