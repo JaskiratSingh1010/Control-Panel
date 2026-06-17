@@ -623,7 +623,11 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   /* Own class (not .controls) so slide-two-mode doesn't hide the beverages toolbar. */
   .bev-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   /* Fetch-mode toggle (Date Range | Month-Wise) — two standalone buttons above the inputs. */
-  .bev-modebar{flex:0 0 100%;display:flex;gap:8px}
+  .bev-modebar{flex:0 0 100%;display:flex;gap:8px;align-items:center}
+  .bev-view-sel{display:flex;align-items:center;gap:6px;margin-left:18px;padding-left:18px;border-left:1px solid var(--border)}
+  .bev-view-sel label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px}
+  .bev-view-sel select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;outline:none;cursor:pointer}
+  .bev-view-sel select:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
   .bev-mode-btn{border:1px solid var(--border);background:#fff;color:var(--text2);font-size:12px;font-weight:700;padding:8px 20px;border-radius:8px;cursor:pointer;font-family:inherit;transition:all .15s}
   .bev-mode-btn:hover{border-color:var(--blue);color:var(--blue)}
   .bev-mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 2px 8px rgba(37,99,235,.25)}
@@ -700,6 +704,12 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     <div class="bev-modebar" role="group" aria-label="Fetch mode">
       <button type="button" class="bev-mode-btn active" id="bevModeRange" onclick="setBevMode('range')">Date Range</button>
       <button type="button" class="bev-mode-btn" id="bevModeMonths" onclick="setBevMode('months')">Month-Wise</button>
+      <div class="bev-view-sel"><label>View</label>
+        <select id="bevView" onchange="bevSetView(this.value)">
+          <option value="main">Main View</option>
+          <option value="person">Sales Person View</option>
+        </select>
+      </div>
     </div>
     <div class="bev-input-grp" id="bevRangeControls">
       <div class="cg"><label>From</label><input type="date" id="bevFrom"></div>
@@ -1175,7 +1185,9 @@ var currentDataset='oils';
 var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'sales_person',label:'Sales Person'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
 var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',brand:'Brand',sku:'SKU',item:'Item Name',sales_person:'Sales Person',main_group:'Main Group',chain:'Chain',state:'State',customer:'Customer'};
 var BEV_TAG_CLS={variety:'group',sub_group:'state',brand:'item',sku:'item',item:'state',sales_person:'person',main_group:'person',chain:'person',state:'group',customer:'person'};
-var bevOrder=['variety','sub_group','brand'], bevChosen=bevOrder.slice();
+// Drill-order presets for the View selector. Main = product breakdown; Person = by salesperson.
+var BEV_VIEWS={main:['variety','sub_group','brand'],person:['sales_person']};
+var bevOrder=BEV_VIEWS.main.slice(), bevChosen=bevOrder.slice();
 var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
 var bevTodayBoxes=0, bevYestBoxes=0;
 var bevBrand='', bevTodayItems=[], bevYestItems=[], bevTodayDate='', bevYestDate='';
@@ -1337,11 +1349,30 @@ function bevActiveRows(){
 }
 // Box total of a day's item list, honouring the brand filter.
 function bevDayBoxes(items,brand){var t=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand)t+=a[i].boxes||0;}return Math.round(t*100)/100;}
+// View selector → swap the drill order to a preset (Main / Sales Person).
+function bevSetView(view){
+  bevOrder=(BEV_VIEWS[view]||BEV_VIEWS.main).slice();
+  bevChosen=bevOrder.slice();
+  bevExpanded={};
+  renderBeverages();
+}
+// Keep the dropdown truthful: match the current drill order to a preset, else show "Custom".
+function bevSyncViewSelect(){
+  var sel=document.getElementById('bevView'); if(!sel)return;
+  var cur=bevOrder.join('|'), match='';
+  for(var k in BEV_VIEWS){ if(BEV_VIEWS[k].join('|')===cur){match=k;break;} }
+  if(match){ if(sel.value!==match)sel.value=match; var c=sel.querySelector('option[value="custom"]'); if(c)c.remove(); return; }
+  if(!sel.querySelector('option[value="custom"]')){
+    var o=document.createElement('option'); o.value='custom'; o.textContent='Custom'; sel.appendChild(o);
+  }
+  sel.value='custom';
+}
 function renderBeverages(){
   var body=document.getElementById('bevBody');
   var label=bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
   document.getElementById('bevFirstCol').textContent=label;
   var lbl=document.getElementById('bevDrillLabel'); if(lbl)lbl.textContent=label||'— none —';
+  bevSyncViewSelect();
   var rows=bevActiveRows();
   var tq=0,tb=0,toih=0; for(var i=0;i<rows.length;i++){tq+=rows[i].quantity||0;tb+=rows[i].boxes||0;toih+=rows[i].oih||0;}
   tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100; toih=Math.round(toih*100)/100;
