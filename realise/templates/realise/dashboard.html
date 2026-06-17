@@ -927,7 +927,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="cd-table">
         <thead><tr>
           <th id="cdFirstCol">State</th>
-          <th>Target L</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>Bal</th><th>Bal Realise</th><th>Revenue</th><th>Act Realise</th>
+          <th>Target L</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
         </tr></thead>
         <tbody id="cdBody"></tbody>
       </table>
@@ -2211,20 +2211,19 @@ function drillCells(c){
     +'<div class="sc2-drillval">'+fN(c.oih||0)+'</div>'
     +'<div class="sc2-drillval '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.targetRealise||0,2)+'</div>'
-    +'<div class="sc2-drillval">'+fN(c.lineTotal||0)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.actualRealise||0,2)+'</div>';
 }
 function renderSlideTwoDrillTable(rows,dimension,groupFilter){
   var isPerson=dimension==='person';
   var title=(isPerson?'Sales Person':'State')+' wise';
   if(groupFilter)title+=' — '+groupFilter;
-  var gs=' style="grid-template-columns:1.4fr .8fr .8fr .8fr .8fr .9fr 1fr .9fr"';
+  var gs=' style="grid-template-columns:1.4fr .8fr .8fr .8fr .8fr .9fr .9fr"';
   var html='<div class="sc2-drillcard sc2-drillfull">'
     +'<div class="sc2-thead sc2-wide"'+gs+'>'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Done L</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
-      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Revenue</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
     +'</div>'
     +'<div class="sc2-drillbody">';
   if(!rows.length){
@@ -2354,8 +2353,7 @@ function comCells(node,isProduct){
     +'<div class="sc2-drillval">'+(node.done>0?fNp(act,2):'&mdash;')+'</div>'
     +'<div class="'+oihCls+'">'+fN(node.oih||0)+'</div>'
     +'<div class="sc2-drillval '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
-    +'<div class="sc2-drillval">'+balRlzStr+'</div>'
-    +'<div class="sc2-drillval">'+fC(node.lineTotal||0)+'</div>';
+    +'<div class="sc2-drillval">'+balRlzStr+'</div>';
 }
 // Map a commodity drill dim to the document-API filter key (main_group -> group).
 var COM_TO_API={product:'product',main_group:'group',state:'state',item:'item',customer:'customer'};
@@ -2379,7 +2377,7 @@ function comRow(node,level,path,gs,filt){
   return html;
 }
 function renderCommodityTable(tree,tot){
-  var gs=' style="grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .8fr .85fr .9fr"';
+  var gs=' style="grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .8fr .85fr"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
   comNodeByPath={};
   comNodeByPath['__comtotal__']={filters:{},label:'TOTAL — Commodity'};
@@ -2389,7 +2387,7 @@ function renderCommodityTable(tree,tot){
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Tgt Rlz</div>'
       +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Act Rlz</div>'
-      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div><div class="sc2-tt-col">Revenue</div>'
+      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div>'
     +'</div><div class="sc2-drillbody">';
   if(!tree.length){
     html+='<div class="sc2-state-empty">No commodity data in the current selection.</div>';
@@ -2402,7 +2400,7 @@ function renderCommodityTable(tree,tot){
 function buildCommodityCsvRows(tree,tot){
   function balRlz(n){var b=(n.target||0)-((n.done||0)+(n.oih||0));return ((n.target||0)>0&&b!==0)?(((n.target||0)*(n.targetRealise||0))-(n.lineTotal||0))/b:null;}
   var out=[['Sales Person',COMMODITY_PERSON],
-    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Bal Realise','Revenue']];
+    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Bal Realise']];
   function emit(node,level){
     var isProduct=node.dim==='product', act=node.done>0?node.lineTotal/node.done:0;
     var pad=level>0?new Array(level+1).join('  '):'';
@@ -2411,7 +2409,7 @@ function buildCommodityCsvRows(tree,tot){
       isProduct?csvInt(node.target):'', isProduct?csvDec(node.targetRealise):'',
       csvInt(node.done), csvInt(node.lastDone), node.done>0?csvDec(act):'', csvInt(node.oih),
       isProduct?csvInt((node.target||0)-((node.done||0)+(node.oih||0))):'',
-      (br!=null&&isFinite(br))?csvDec(br):'', csvInt(node.lineTotal)]);
+      (br!=null&&isFinite(br))?csvDec(br):'']);
     if(node.kids)node.kids.forEach(function(c){emit(c,level+1);});
   }
   for(var i=0;i<tree.length;i++)emit(tree[i],0);
@@ -2419,7 +2417,7 @@ function buildCommodityCsvRows(tree,tot){
   out.push(['TOTAL',csvInt(tot.target),csvDec(tot.targetRealise),csvInt(tot.done),csvInt(tot.lastDone),
     tot.done>0?csvDec(tot.lineTotal/tot.done):'',csvInt(tot.oih),
     csvInt((tot.target||0)-((tot.done||0)+(tot.oih||0))),
-    (tbr!=null&&isFinite(tbr))?csvDec(tbr):'',csvInt(tot.lineTotal)]);
+    (tbr!=null&&isFinite(tbr))?csvDec(tbr):'']);
   return out;
 }
 // Commodity Order-in-Hand is a live snapshot (not date-bound), fetched once & cached.
@@ -2922,7 +2920,6 @@ function cdMetricCells(a){
     +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
     +'<td class="'+balCls+'">'+fN(bal)+'</td>'
     +'<td>'+balRlzStr+'</td>'
-    +'<td>'+fN(a.lineTotal||0)+'</td>'
     +'<td>'+fNp(a.actualRealise||0,2)+'</td>';
 }
 function cdNodeRow(node,depth){
@@ -3530,7 +3527,7 @@ var SC2_DYN_DIMS=DETAIL_DIMS;
 var sc2DynOrder=['state'], sc2DynChosen=['state'];
 var sc2DynUserSet=false;   // true once the user applies a custom order (don't reseed from Drill By)
 var sc2DynExpanded={}, sc2DynNodeByPath={}, sc2DynTree=[], sc2DynLastLeaves=null;
-var SC2_DYN_GCOLS='grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr 1fr .9fr';
+var SC2_DYN_GCOLS='grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr .9fr';
 // Rows that can't be attributed to a real person / customer / product / item land
 // in the '—' bucket; show that as "Other" (UNKNOWN states keep their own label).
 function sc2DynLabel(v){ return v==='—'?'Other':v; }
@@ -3623,7 +3620,7 @@ function renderSc2DynTree(leaves){
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Done L</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
-      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Revenue</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
     +'</div><div class="sc2-drillbody">';
   if(!dims.length){
     html+='<div class="sc2-state-empty">Select at least one drill dimension.</div>';
@@ -3730,9 +3727,9 @@ function csvDec(n){n=Number(n);return isFinite(n)?String(Math.round(n*100)/100):
 function csvBal(c){return (Number(c.target)||0)-((Number(c.done)||0)+(Number(c.oih)||0));}
 function csvMetricRow(label,c){
   return [label,csvInt(c.target),csvInt(c.done),csvInt(c.oih),csvInt(csvBal(c)),
-    csvDec(c.targetRealise),csvInt(c.lineTotal),csvDec(c.actualRealise)];
+    csvDec(c.targetRealise),csvDec(c.actualRealise)];
 }
-var SC2_CSV_HEADER_TAIL=['Target Ltr','Done Ltr','OIH','Bal Ltr','Target Realise','Revenue','Actual Realise'];
+var SC2_CSV_HEADER_TAIL=['Target Ltr','Done Ltr','OIH','Bal Ltr','Target Realise','Actual Realise'];
 function buildChannelCsvRows(layoutNames,crByName,agg,actualRealise){
   var out=[['Channel','Area'].concat(SC2_CSV_HEADER_TAIL)];
   var showAll=!!sc2Seg();
