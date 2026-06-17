@@ -1172,9 +1172,9 @@ function prevSlide(){setSlide(currentSlide-1);}
    When selected it replaces the oils slides with a single dynamic-drill table
    (Variety / Sub-Group / SKU, reorderable) showing Quantity & Boxes. */
 var currentDataset='oils';
-var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
-var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',brand:'Brand',sku:'SKU',item:'Item Name',main_group:'Main Group',chain:'Chain',state:'State',customer:'Customer'};
-var BEV_TAG_CLS={variety:'group',sub_group:'state',brand:'item',sku:'item',item:'state',main_group:'person',chain:'person',state:'group',customer:'person'};
+var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'sales_person',label:'Sales Person'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
+var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',brand:'Brand',sku:'SKU',item:'Item Name',sales_person:'Sales Person',main_group:'Main Group',chain:'Chain',state:'State',customer:'Customer'};
+var BEV_TAG_CLS={variety:'group',sub_group:'state',brand:'item',sku:'item',item:'state',sales_person:'person',main_group:'person',chain:'person',state:'group',customer:'person'};
 var bevOrder=['variety','sub_group','brand'], bevChosen=bevOrder.slice();
 var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
 var bevTodayBoxes=0, bevYestBoxes=0;

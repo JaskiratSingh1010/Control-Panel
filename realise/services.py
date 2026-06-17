@@ -111,7 +111,7 @@ def _fetch_raw_beverages(start_date, end_date):
     # OITB join restricts to FINISHED goods so packaging materials (Pouch, Caps, …) and
     # assets (Office Equipment, Plant & Machinery) sold on invoices are excluded.
     sql = f'''SELECT
-        T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        T0."DocNum", T0."DocDate", T5."SlpName" AS "SalesPerson", T4."U_Main_Group", T4."U_Chain",
         (SELECT K."Name" FROM {BEVERAGES_SCHEMA}.OCST K
           WHERE K."Code" = T7."State" AND K."Country" = T7."Country") AS "State",
         T0."CardCode", T4."CardName",
@@ -130,12 +130,13 @@ def _fetch_raw_beverages(start_date, end_date):
     INNER JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
     INNER JOIN {BEVERAGES_SCHEMA}.OITB G ON T2."ItmsGrpCod" = G."ItmsGrpCod"
     INNER JOIN {BEVERAGES_SCHEMA}.OCRD T4 ON T0."CardCode" = T4."CardCode"
+    LEFT JOIN {BEVERAGES_SCHEMA}.OSLP T5 ON T0."SlpCode" = T5."SlpCode"
     LEFT JOIN {BEVERAGES_SCHEMA}.CRD1 T7
         ON T7."CardCode" = T0."CardCode" AND T7."AdresType" = 'S' AND T7."Address" = T0."ShipToCode"
     WHERE T0."CANCELED" = 'N' AND T4."GroupCode" <> 100 AND T1."TreeType" <> 'I'
         AND G."ItmsGrpNam" = 'FINISHED'
         AND T0."DocDate" BETWEEN ? AND ?
-    GROUP BY T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+    GROUP BY T0."DocNum", T0."DocDate", T5."SlpName", T4."U_Main_Group", T4."U_Chain",
         T7."State", T7."Country", T0."CardCode", T4."CardName",
         T2."U_SKU", T2."ItemName", T2."U_Sub_Group", T2."U_Variety", T2."U_Brand"
     ORDER BY T0."DocDate", T0."DocNum", T2."ItemName"'''
@@ -157,7 +158,7 @@ def _fetch_raw_beverages_oih(start_date, end_date):
     # FINISHED-goods filter as the sales query, date-filtered to the selected range so it
     # stays coherent with the period shown.
     sql = f'''SELECT
-        T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+        T0."DocNum", T0."DocDate", T5."SlpName" AS "SalesPerson", T4."U_Main_Group", T4."U_Chain",
         (SELECT K."Name" FROM {BEVERAGES_SCHEMA}.OCST K
           WHERE K."Code" = T7."State" AND K."Country" = T7."Country") AS "State",
         T0."CardCode", T4."CardName",
@@ -176,12 +177,13 @@ def _fetch_raw_beverages_oih(start_date, end_date):
     INNER JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
     INNER JOIN {BEVERAGES_SCHEMA}.OITB G ON T2."ItmsGrpCod" = G."ItmsGrpCod"
     INNER JOIN {BEVERAGES_SCHEMA}.OCRD T4 ON T0."CardCode" = T4."CardCode"
+    LEFT JOIN {BEVERAGES_SCHEMA}.OSLP T5 ON T0."SlpCode" = T5."SlpCode"
     LEFT JOIN {BEVERAGES_SCHEMA}.CRD1 T7
         ON T7."CardCode" = T0."CardCode" AND T7."AdresType" = 'S' AND T7."Address" = T0."ShipToCode"
     WHERE T0."CANCELED" = 'N' AND T4."GroupCode" <> 100 AND T1."TreeType" <> 'I'
         AND T1."LineStatus" = 'O' AND G."ItmsGrpNam" = 'FINISHED'
         AND T0."DocDate" BETWEEN ? AND ?
-    GROUP BY T0."DocNum", T0."DocDate", T4."U_Main_Group", T4."U_Chain",
+    GROUP BY T0."DocNum", T0."DocDate", T5."SlpName", T4."U_Main_Group", T4."U_Chain",
         T7."State", T7."Country", T0."CardCode", T4."CardName",
         T2."U_SKU", T2."ItemName", T2."U_Sub_Group", T2."U_Variety", T2."U_Brand"
     ORDER BY T0."DocDate", T0."DocNum"'''
@@ -296,12 +298,13 @@ def get_beverages_rows(start_date, end_date):
         brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
         chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
         customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
+        sales_person = _normalize_name(_bev_pick(r, 'SalesPerson', 'SALESPERSON', 'SlpName', 'sales_person')) or '—'
         qty = _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
         box = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Box', 'BOX', 'Boxes', 'box'))
         dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
         ym, mlabel = _bev_month_key(r, dd)
         ymk = ym or ''   # carried on each row so the client can filter to a single month
-        key = (variety, sub, sku, item, main_group, state, brand, chain, ymk)
+        key = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, ymk)
         cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0})
         cell['quantity'] += qty
         cell['boxes'] += box
@@ -332,11 +335,12 @@ def get_beverages_rows(start_date, end_date):
         brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
         chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
         customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
+        sales_person = _normalize_name(_bev_pick(r, 'SalesPerson', 'SALESPERSON', 'SlpName', 'sales_person')) or '—'
         opcs = _bev_num(_bev_pick(r, 'PCS_Ordered', 'PCS_ORDERED', 'PCS_Sold', 'Quantity', 'Qty'))
         obox = _bev_num(_bev_pick(r, 'Boxes_Ordered', 'BOXES_ORDERED', 'Boxes_Sold', 'Boxes', 'Box'))
         ym, _ml = _bev_month_key(r, _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date')))
         ymk = ym or ''
-        mk = (variety, sub, sku, item, main_group, state, brand, chain, ymk)
+        mk = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, ymk)
         oih_main[mk] = oih_main.get(mk, 0.0) + obox
         pk = (variety, sub, item, customer, brand, ymk)
         pc = oih_pop.setdefault(pk, {'pcs': 0.0, 'boxes': 0.0})
@@ -347,7 +351,8 @@ def get_beverages_rows(start_date, end_date):
     for k in set(agg) | set(oih_main):
         v = agg.get(k)
         rows.append({'variety': k[0], 'sub_group': k[1], 'sku': k[2], 'item': k[3],
-                     'main_group': k[4], 'state': k[5], 'brand': k[6], 'chain': k[7], 'ym': k[8],
+                     'main_group': k[4], 'state': k[5], 'brand': k[6], 'chain': k[7],
+                     'sales_person': k[8], 'ym': k[9],
                      'quantity': round(v['quantity'], 2) if v else 0.0,
                      'boxes': round(v['boxes'], 2) if v else 0.0,
                      'oih': round(oih_main.get(k, 0.0), 2)})
