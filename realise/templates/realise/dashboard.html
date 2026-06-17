@@ -600,13 +600,21 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <div class="sc2-kpi-ic"><span class="material-icons">local_shipping</span></div>
           <div class="sc2-kpi-body"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
         </div>
-        <div class="sc2-kpi sc2-kpi-click" onclick="openOihWindow()" title="Open OIH breakdown">
+        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openOihWindow()" title="Open OIH breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">warehouse</span></div>
           <div class="sc2-kpi-body"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
         </div>
-        <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
+        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
           <div class="sc2-kpi-body"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Top('customers')" title="Top customers by Done litres (descending)" style="display:none">
+          <div class="sc2-kpi-ic"><span class="material-icons">groups</span></div>
+          <div class="sc2-kpi-body"><label>Top Customers</label><div id="sc2KpiTopCust">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Top('months')" title="Top months by Done litres (descending)" style="display:none">
+          <div class="sc2-kpi-ic"><span class="material-icons">calendar_month</span></div>
+          <div class="sc2-kpi-body"><label>Top Months</label><div id="sc2KpiTopMonth">&mdash;</div></div>
         </div>
         <div class="sc2-kpi">
           <div class="sc2-kpi-ic"><span class="material-icons">bar_chart</span></div>
@@ -615,14 +623,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <div class="sc2-kpi">
           <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
           <div class="sc2-kpi-body"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click" onclick="openSc2Top('customers')" title="Top customers by Done litres (descending)">
-          <div class="sc2-kpi-ic"><span class="material-icons">groups</span></div>
-          <div class="sc2-kpi-body"><label>Top Customers</label><div id="sc2KpiTopCust">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click" onclick="openSc2Top('months')" title="Top months by Done litres (descending)">
-          <div class="sc2-kpi-ic"><span class="material-icons">calendar_month</span></div>
-          <div class="sc2-kpi-body"><label>Top Months</label><div id="sc2KpiTopMonth">&mdash;</div></div>
         </div>
       </div>
       <div class="sc2-grid" id="channelGrid"></div>
@@ -2139,6 +2139,10 @@ function setSc2Mode(m){
   document.getElementById('sc2ModeMonths').classList.toggle('active',month);
   document.getElementById('sc2RangeCtl').style.display=month?'none':'contents';
   document.getElementById('sc2MonthCtl').style.display=month?'inline-flex':'none';
+  // Month-Wise swaps OIH/Bal KPI cards for Top Customers / Top Months.
+  var rc=document.querySelectorAll('.sc2-range-card'), mc=document.querySelectorAll('.sc2-month-card'), i;
+  for(i=0;i<rc.length;i++)rc[i].style.display=month?'none':'';
+  for(i=0;i<mc.length;i++)mc[i].style.display=month?'':'none';
 }
 async function loadSlideTwoData(){
   if(sc2Mode==='months'){
