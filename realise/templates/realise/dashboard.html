@@ -618,9 +618,13 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <div class="sc2-kpi-ic"><span class="material-icons">calendar_month</span></div>
           <div class="sc2-kpi-body"><label>Top Months</label><div id="sc2KpiTopMonth">&mdash;</div></div>
         </div>
-        <div class="sc2-kpi">
+        <div class="sc2-kpi sc2-range-card">
           <div class="sc2-kpi-ic"><span class="material-icons">bar_chart</span></div>
           <div class="sc2-kpi-body"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Compare()" title="Premium vs Commodity sales by month" style="display:none">
+          <div class="sc2-kpi-ic"><span class="material-icons">table_chart</span></div>
+          <div class="sc2-kpi-body"><label>Compare</label><div id="sc2KpiCompare">Prem vs Comm</div></div>
         </div>
         <div class="sc2-kpi">
           <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
@@ -882,6 +886,25 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="bev-table">
         <thead><tr><th style="width:64px">#</th><th id="sc2TopNameHead" style="width:60%">Name</th><th class="num">Done Litres</th></tr></thead>
         <tbody id="sc2TopBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- OILS Slide 2: Premium vs Commodity monthly sales matrix -->
+<div class="modal-overlay" id="sc2CompareModal" onclick="if(event.target===this)closeSc2Compare()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3>Premium vs Commodity — Monthly Sales</h3>
+        <p id="sc2CompareSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeSc2Compare()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-sold-wrap" style="overflow-x:auto">
+      <table class="bev-table" style="table-layout:auto;width:max-content;min-width:100%">
+        <thead id="sc2CompareHead"></thead>
+        <tbody id="sc2CompareBody"></tbody>
       </table>
     </div>
   </div>
@@ -2274,6 +2297,32 @@ function openSc2Top(which){
   document.getElementById('sc2TopModal').classList.add('show');
 }
 function closeSc2Top(){document.getElementById('sc2TopModal').classList.remove('show');}
+// Compare popup: Premium/Commodity (rows) × months (columns), done litres, months by sales desc.
+function sc2CompareMatrix(){
+  var months={}, order=[], cells={PREMIUM:{},COMMODITY:{}};
+  (allData||[]).forEach(function(r){
+    var ut=String(r.u_type||'').toUpperCase(); if(ut!=='PREMIUM'&&ut!=='COMMODITY')return;
+    var ym=(r.year||'')+'-'+(r.month||''), label=((r.month||'')+' '+(r.year||'')).trim();
+    if(!months[ym]){months[ym]={ym:ym,label:label||'—',total:0};order.push(ym);}
+    var v=Number(r.litres)||0; months[ym].total+=v; cells[ut][ym]=(cells[ut][ym]||0)+v;
+  });
+  return {months:order.map(function(k){return months[k];}).sort(function(a,b){return b.total-a.total;}), cells:cells};
+}
+function openSc2Compare(){
+  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
+  var m=sc2CompareMatrix(), months=m.months, cells=m.cells;
+  document.getElementById('sc2CompareSub').textContent=months.length+' month(s) · done litres · highest-selling month first';
+  document.getElementById('sc2CompareHead').innerHTML='<tr><th>Segment</th>'+months.map(function(mo){return '<th class="num">'+esc(mo.label)+'</th>';}).join('')+'<th class="num">Total</th></tr>';
+  function row(type){
+    var rt=0, tds=months.map(function(mo){var v=cells[type][mo.ym]||0;rt+=v;return '<td class="num">'+(v?fN(Math.round(v)):'')+'</td>';}).join('');
+    return '<tr><td>'+type.charAt(0)+type.slice(1).toLowerCase()+'</td>'+tds+'<td class="num">'+fN(Math.round(rt))+'</td></tr>';
+  }
+  var colTot=0, totTds=months.map(function(mo){var v=(cells.PREMIUM[mo.ym]||0)+(cells.COMMODITY[mo.ym]||0);colTot+=v;return '<td class="num">'+fN(Math.round(v))+'</td>';}).join('');
+  document.getElementById('sc2CompareBody').innerHTML=row('PREMIUM')+row('COMMODITY')
+    +'<tr class="cd-total"><td>TOTAL</td>'+totTds+'<td class="num">'+fN(Math.round(colTot))+'</td></tr>';
+  document.getElementById('sc2CompareModal').classList.add('show');
+}
+function closeSc2Compare(){document.getElementById('sc2CompareModal').classList.remove('show');}
 function buildSlideTwoDrillRows(rows,dimension,groupFilter,targetNodes,oihRows){
   var isPerson=dimension==='person', map={};
   function cell(name){ if(!map[name])map[name]={name:name,target:0,done:0,oih:0,lineTotal:0,trWsum:0,trW:0}; return map[name]; }
