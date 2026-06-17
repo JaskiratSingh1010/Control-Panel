@@ -488,7 +488,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <tr class="grp-row">
             <th class="grp-sap" colspan="3">From SAP</th>
             <th class="grp-inp" colspan="3">&#9998; Target / Avg</th>
-            <th class="grp-sap" colspan="3">Actual / SAP</th>
+            <th class="grp-sap" colspan="2">Actual / SAP</th>
             <th class="grp-calc" colspan="3">Auto Calculated</th>
           </tr>
           <tr>
@@ -500,7 +500,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
             <th class="th-avg">Avg Realise</th>
             <th class="th-sap">Act Ltrs</th>
             <th class="th-sap">Act Realise</th>
-            <th class="th-sap">Revenue</th>
             <th class="th-calc">Variance</th>
             <th class="th-calc">Recovery</th>
             <th class="th-calc">Rate Impact</th>
@@ -1975,14 +1974,13 @@ function renderTable(){
     if(nodata){
       html+='<td class="ecell"><input type="number" value="'+(tr||'')+'" placeholder="0" readonly class="locked"></td>';
       html+='<td class="num" style="color:var(--indigo)">'+(ar?fN(ar,2):'<span class="v-dash">&mdash;</span>')+'</td>';
-      html+='<td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td>';
+      html+='<td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td>';
       html+='<td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td>';
     }else{
       html+='<td class="ecell"><input type="number" value="'+(tr||'')+'" placeholder="0" readonly class="locked"></td>';
       html+='<td class="num" style="color:var(--indigo)">'+(ar?fN(ar,2):'<span class="v-dash">&mdash;</span>')+'</td>';
       html+='<td class="num">'+fN(row.litres)+'</td>';
       html+='<td class="num">'+fN(row.realise,2)+'</td>';
-      html+='<td class="num">'+fC(row.linetotal)+'</td>';
       html+='<td class="ccell num '+vc(c.I)+'" id="cI'+i+'">'+fN(c.I)+'</td>';
       html+='<td class="ccell num" id="cJ'+i+'">'+(c.J?fN(c.J,2):'<span class="v-dash">&mdash;</span>')+'</td>';
       html+='<td class="ccell num" id="cK'+i+'">'+(c.K?fC(c.K):'<span class="v-dash">&mdash;</span>')+'</td>';
@@ -1996,12 +1994,11 @@ function renderTable(){
   html+='<td class="num">'+fN(t.twr,2)+'</td>';
   html+='<td></td>';
   if(!dataFetched){
-    html+='<td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td>';
+    html+='<td class="empty-sap">&mdash;</td><td class="empty-sap">&mdash;</td>';
     html+='<td class="empty-sap">&mdash;</td><td></td><td class="empty-sap">&mdash;</td>';
   }else{
     html+='<td class="num">'+fN(t.litres)+'</td>';
     html+='<td class="num">'+fN(t.nr,2)+'</td>';
-    html+='<td class="num">'+fC(t.lt)+'</td>';
     html+='<td class="num '+vc(t.cI)+'">'+fN(t.cI)+'</td>';
     html+='<td></td>';
     html+='<td class="num">'+(t.cK?fC(t.cK):'&mdash;')+'</td>';
@@ -2032,7 +2029,6 @@ function renderSubRows(productPK,uType,uSubGroup,parentPath,depth){
     html+='<td class="num" style="color:var(--indigo)">'+(subAr?fN(subAr,2):'<span class="v-dash">&mdash;</span>')+'</td>';
     html+='<td class="num">'+fN(s.litres)+'</td>';
     html+='<td class="num">'+fN(sr,2)+'</td>';
-    html+='<td class="num">'+fC(s.linetotal)+'</td>';
     html+='<td></td><td></td><td></td>';
     html+='</tr>';
     if(isChildOpen&&drillData[childPath])html+=renderSubRows(productPK,uType,uSubGroup,childPath,depth+1);
