@@ -316,6 +316,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-tt-col{text-align:center;font-size:11px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;color:rgba(255,255,255,.96)}
 .sc2-state-scroll{flex:1;min-height:0;overflow-y:auto}
 .sc2-state-row{display:grid;grid-template-columns:1.05fr .76fr .76fr .76fr .76fr .92fr;padding:9px 16px;border-bottom:1px solid #eef2f6;font-size:13px;color:#334155;align-items:center}
+.sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1.05fr .76fr .76fr .76fr .85fr .76fr .92fr}
 .sc2-state-row:nth-child(even){background:rgba(248,252,255,.5)}
 .sc2-state-row:last-child{border-bottom:none}
 /* 7-column card layout (adds Target Realise / Revenue / Actual Realise) */
@@ -398,6 +399,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .sc2-card-rest{height:auto}
   .sc2-state-scroll{max-height:240px}
   .sc2-thead,.sc2-state-row{grid-template-columns:1fr .72fr .72fr .72fr .72fr .85fr;font-size:11px}
+  .sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1fr .72fr .72fr .72fr .8fr .72fr .85fr}
   .sc2-drillhead,.sc2-drillrow{grid-template-columns:1.4fr .85fr .85fr .85fr;font-size:12px}
 }
 </style>
@@ -965,7 +967,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="cd-table">
         <thead><tr>
           <th id="cdFirstCol">State</th>
-          <th>Target L</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
+          <th>Target L</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>OIH Realise</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
         </tr></thead>
         <tbody id="cdBody"></tbody>
       </table>
@@ -2412,9 +2414,9 @@ function buildCommodityTree(rows,oihRows,lastRows,order){
   function group(salesSub,oihSub,lastSub,level){
     if(level>=order.length)return null;
     var dim=order[level], map={};
-    function cell(v){if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,oih:0,lastDone:0,_s:[],_o:[],_l:[]};return map[v];}
+    function cell(v){if(!map[v])map[v]={name:v,dim:dim,done:0,lineTotal:0,oih:0,oihLineTotal:0,lastDone:0,_s:[],_o:[],_l:[]};return map[v];}
     for(var i=0;i<salesSub.length;i++){var r=salesSub[i],c=cell(comDimValue(r,dim));c.done+=Number(r.liter)||0;c.lineTotal+=Number(r.line_total)||0;c._s.push(r);}
-    for(var j=0;j<oihSub.length;j++){var x=oihSub[j],c2=cell(comDimValue(x,dim));c2.oih+=Number(x.open_qty)||0;c2._o.push(x);}
+    for(var j=0;j<oihSub.length;j++){var x=oihSub[j],c2=cell(comDimValue(x,dim));c2.oih+=Number(x.open_qty)||0;c2.oihLineTotal+=Number(x.open_value)||0;c2._o.push(x);}
     for(var m=0;m<lastSub.length;m++){var y=lastSub[m],c3=cell(comDimValue(y,dim));c3.lastDone+=Number(y.liter)||0;c3._l.push(y);}
     return Object.keys(map).map(function(k){
       var n=map[k]; n.kids=group(n._s,n._o,n._l,level+1); delete n._s; delete n._o; delete n._l;
@@ -2427,7 +2429,7 @@ function buildCommodityTree(rows,oihRows,lastRows,order){
   if(order[0]==='product'){
     var present={}; tree.forEach(function(n){present[n.name]=1;});
     commoditySubGroups().forEach(function(sub){
-      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,oih:0,lastDone:0,kids:group([],[],[],1),
+      if(!present[sub])tree.push({name:sub,dim:'product',done:0,lineTotal:0,oih:0,oihLineTotal:0,lastDone:0,kids:group([],[],[],1),
         target:Number(getDefTS('COMMODITY',sub))||0,targetRealise:Number(getDefTR('COMMODITY',sub))||0});
     });
     tree.sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
@@ -2435,9 +2437,9 @@ function buildCommodityTree(rows,oihRows,lastRows,order){
   return tree;
 }
 function comTotal(products){
-  var t={name:'TOTAL',dim:'product',target:0,done:0,lineTotal:0,trWsum:0,trW:0};
+  var t={name:'TOTAL',dim:'product',target:0,done:0,lineTotal:0,oih:0,oihLineTotal:0,trWsum:0,trW:0};
   for(var i=0;i<products.length;i++){var c=products[i];
-    t.target+=c.target||0; t.done+=c.done||0; t.lineTotal+=c.lineTotal||0;
+    t.target+=c.target||0; t.done+=c.done||0; t.lineTotal+=c.lineTotal||0; t.oih+=c.oih||0; t.oihLineTotal+=c.oihLineTotal||0;
     if((c.targetRealise||0)>0&&(c.target||0)>0){t.trWsum+=c.targetRealise*c.target;t.trW+=c.target;}}
   t.targetRealise=t.trW>0?t.trWsum/t.trW:0;
   return t;
@@ -2452,12 +2454,15 @@ function comCells(node,isProduct){
   // Bal Realise = (target revenue − actual revenue) / balance litres; product rows with a target only.
   var balRlz=(isProduct&&(node.target||0)>0&&bal!==0)?(((node.target||0)*(node.targetRealise||0))-(node.lineTotal||0))/bal:NaN;
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var oihRlz=(node.oih||0)>0?((node.oihLineTotal||0)/node.oih):NaN;   // ₹/L of open orders
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
   return '<div class="sc2-drillval">'+(isProduct?fN(node.target||0):'&mdash;')+'</div>'
     +'<div class="sc2-drillval">'+(isProduct&&(node.targetRealise||0)>0?fNp(node.targetRealise,2):'&mdash;')+'</div>'
     +'<div class="'+doneCls+'">'+fN(node.done||0)+'</div>'
     +'<div class="sc2-drillval">'+fN(node.lastDone||0)+'</div>'
     +'<div class="sc2-drillval">'+(node.done>0?fNp(act,2):'&mdash;')+'</div>'
     +'<div class="'+oihCls+'">'+fN(node.oih||0)+'</div>'
+    +'<div class="sc2-drillval">'+oihRlzStr+'</div>'
     +'<div class="sc2-drillval '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
     +'<div class="sc2-drillval">'+balRlzStr+'</div>';
 }
@@ -2483,7 +2488,7 @@ function comRow(node,level,path,gs,filt){
   return html;
 }
 function renderCommodityTable(tree,tot){
-  var gs=' style="grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .8fr .85fr"';
+  var gs=' style="grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
   comNodeByPath={};
   comNodeByPath['__comtotal__']={filters:{},label:'TOTAL — Commodity'};
@@ -2493,7 +2498,7 @@ function renderCommodityTable(tree,tot){
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Tgt Rlz</div>'
       +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Act Rlz</div>'
-      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div>'
+      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">OIH Rlz</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div>'
     +'</div><div class="sc2-drillbody">';
   if(!tree.length){
     html+='<div class="sc2-state-empty">No commodity data in the current selection.</div>';
@@ -2506,7 +2511,7 @@ function renderCommodityTable(tree,tot){
 function buildCommodityCsvRows(tree,tot){
   function balRlz(n){var b=(n.target||0)-((n.done||0)+(n.oih||0));return ((n.target||0)>0&&b!==0)?(((n.target||0)*(n.targetRealise||0))-(n.lineTotal||0))/b:null;}
   var out=[['Sales Person',COMMODITY_PERSON],
-    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','Bal Ltr','Bal Realise']];
+    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','OIH Realise','Bal Ltr','Bal Realise']];
   function emit(node,level){
     var isProduct=node.dim==='product', act=node.done>0?node.lineTotal/node.done:0;
     var pad=level>0?new Array(level+1).join('  '):'';
@@ -2514,6 +2519,7 @@ function buildCommodityCsvRows(tree,tot){
     out.push([pad+node.name,
       isProduct?csvInt(node.target):'', isProduct?csvDec(node.targetRealise):'',
       csvInt(node.done), csvInt(node.lastDone), node.done>0?csvDec(act):'', csvInt(node.oih),
+      (node.oih>0?csvDec((node.oihLineTotal||0)/node.oih):''),
       isProduct?csvInt((node.target||0)-((node.done||0)+(node.oih||0))):'',
       (br!=null&&isFinite(br))?csvDec(br):'']);
     if(node.kids)node.kids.forEach(function(c){emit(c,level+1);});
@@ -2522,6 +2528,7 @@ function buildCommodityCsvRows(tree,tot){
   var tbr=balRlz(tot);
   out.push(['TOTAL',csvInt(tot.target),csvDec(tot.targetRealise),csvInt(tot.done),csvInt(tot.lastDone),
     tot.done>0?csvDec(tot.lineTotal/tot.done):'',csvInt(tot.oih),
+    (tot.oih>0?csvDec((tot.oihLineTotal||0)/tot.oih):''),
     csvInt((tot.target||0)-((tot.done||0)+(tot.oih||0))),
     (tbr!=null&&isFinite(tbr))?csvDec(tbr):'']);
   return out;
@@ -2799,10 +2806,13 @@ function cardCells(c,isTotal){
   // Only meaningful when a target exists (no target ⇒ no target revenue to balance against).
   var balRlz=((c.target||0)>0&&bal!==0)?(((c.target||0)*(c.targetRealise||0))-(c.lineTotal||0))/bal:NaN;
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var oihRlz=(c.oih||0)>0?((c.oihLineTotal||0)/c.oih):NaN;   // ₹/L of open orders
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
   return '<div class="sc2-state-name">'+esc(isTotal?'TOTAL':c.name)+'</div>'
     +'<div class="sc2-state-val">'+fN(c.target||0)+'</div>'
     +'<div class="sc2-state-val">'+fN(c.done||0)+'</div>'
     +'<div class="sc2-state-val">'+fN(c.oih||0)+'</div>'
+    +'<div class="sc2-state-val">'+oihRlzStr+'</div>'
     +'<div class="sc2-state-val '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-state-val">'+balRlzStr+'</div>';
 }
@@ -2819,9 +2829,9 @@ function themedChannelCardHtml(item){
   if(!data.length){
     rows='<div class="sc2-state-empty">No area data in the current selection.</div>';
   }else{
-    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row">'+cardCells(data[i],false)+'</div>';
+    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row sc2-oih">'+cardCells(data[i],false)+'</div>';
   }
-  var totRow='<div class="sc2-state-row sc2-state-total">'+cardCells(item,true)+'</div>';
+  var totRow='<div class="sc2-state-row sc2-state-total sc2-oih">'+cardCells(item,true)+'</div>';
   var shortCode=item.name.length>3?item.name.slice(0,2):item.name;
   item.title=cardTitle;
   item.members=(item.members&&item.members.length)?item.members:[item.name];
@@ -2830,11 +2840,12 @@ function themedChannelCardHtml(item){
       +'<div class="sc2-icon">'+esc(shortCode)+'</div>'
       +'<div class="sc2-titletext"><strong>'+esc(item.name)+' - '+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
     +'</div>'
-    +'<div class="sc2-thead">'
+    +'<div class="sc2-thead sc2-oih">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(firstColLabel)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div>'
       +'<div class="sc2-tt-col">Done L</div>'
       +'<div class="sc2-tt-col">OIH</div>'
+      +'<div class="sc2-tt-col">OIH Rlz</div>'
       +'<div class="sc2-tt-col">Bal</div>'
       +'<div class="sc2-tt-col">Bal Rlz</div>'
     +'</div>'
@@ -2931,7 +2942,7 @@ function modalChannelRows(){
 }
 function buildChannelDetailLeaves(){
   var channel=detailChannel, members=channelMembers(channel), map={};
-  function cell(group,state,person,customer,product,item){var k=group+'||'+state+'||'+person+'||'+customer+'||'+product+'||'+item;if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,product:product,item:item,target:0,done:0,oih:0,lineTotal:0,targetRealise:0};return map[k];}
+  function cell(group,state,person,customer,product,item){var k=group+'||'+state+'||'+person+'||'+customer+'||'+product+'||'+item;if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,product:product,item:item,target:0,done:0,oih:0,lineTotal:0,oihLineTotal:0,targetRealise:0};return map[k];}
   var rows=modalChannelRows();
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();if(members.indexOf(g)===-1)continue;
@@ -2955,7 +2966,7 @@ function buildChannelDetailLeaves(){
     var cust3=String(x.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
     var prod3=String(x.u_sub_group||'').trim().toUpperCase()||CD_NONE;
     var item3=String(x.item_name||'').trim().toUpperCase()||CD_NONE;
-    cell(g3,st3,p3,cust3,prod3,item3).oih+=Number(x.open_qty)||0;
+    var oc=cell(g3,st3,p3,cust3,prod3,item3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
   }
   return Object.keys(map).map(function(k){return map[k];});
 }
@@ -2983,10 +2994,10 @@ function orderValues(dim,m){
   return names.sort(function(a,b){return aggList(m[b]).done-aggList(m[a]).done||a.localeCompare(b);}); // group: by done desc
 }
 function aggList(list){
-  var t=0,d=0,o=0,lt=0,trws=0,trw=0,trS=0,trN=0;
-  for(var i=0;i<list.length;i++){var x=list[i];t+=x.target;d+=x.done;o+=x.oih;lt+=(x.lineTotal||0);
+  var t=0,d=0,o=0,lt=0,olt=0,trws=0,trw=0,trS=0,trN=0;
+  for(var i=0;i<list.length;i++){var x=list[i];t+=x.target;d+=x.done;o+=x.oih;lt+=(x.lineTotal||0);olt+=(x.oihLineTotal||0);
     if((x.targetRealise||0)>0){trN++;trS+=x.targetRealise;var wt=x.target>0?x.target:0;trws+=x.targetRealise*wt;trw+=wt;}}
-  return {target:t,done:d,oih:o,lineTotal:lt,
+  return {target:t,done:d,oih:o,lineTotal:lt,oihLineTotal:olt,
     targetRealise:trw>0?trws/trw:(trN>0?trS/trN:0),
     actualRealise:d>0?lt/d:0};
 }
@@ -3020,10 +3031,13 @@ function cdMetricCells(a){
   // shown as its own column. Columns are paired: Target+Tgt Rlz, Bal+Bal Rlz.
   var balRlz=((a.target||0)>0&&bal!==0)?(((a.target||0)*(a.targetRealise||0))-(a.lineTotal||0))/bal:NaN;
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var oihRlz=(a.oih||0)>0?((a.oihLineTotal||0)/a.oih):NaN;   // ₹/L of open orders
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
   return '<td>'+fN(a.target)+'</td>'
     +'<td>'+fNp(a.targetRealise||0,2)+'</td>'
     +'<td class="'+doneCls+'" data-metric="done">'+fN(a.done)+'</td>'
     +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
+    +'<td>'+oihRlzStr+'</td>'
     +'<td class="'+balCls+'">'+fN(bal)+'</td>'
     +'<td>'+balRlzStr+'</td>'
     +'<td>'+fNp(a.actualRealise||0,2)+'</td>';
@@ -3555,7 +3569,7 @@ async function renderSlideTwo(){
     if(ct.target>0){ agg.trWsum+=ct.targetRealise*ct.target; agg.trW+=ct.target; }
     cardByName[name]=themedChannelCardHtml({
       name:name, members:block.members,
-      target:ct.target, done:ct.done, oih:ct.oih,
+      target:ct.target, done:ct.done, oih:ct.oih, oihLineTotal:ct.oihLineTotal,
       lineTotal:ct.lineTotal, targetRealise:ct.targetRealise, actualRealise:ct.actualRealise,
       progress:ct.target>0?(ct.done/ct.target)*100:0,
       firstColLabel:name==='REST'?'Main Group':'State/Area',
@@ -3575,7 +3589,7 @@ function sc2Realise(rows){var l=0,lt=0;for(var i=0;i<rows.length;i++){l+=Number(
 // target realise (litres-weighted ₹/L) and actual realise (revenue/litres).
 function buildCardRows(channel,members,rows,targetNodes,oihRows){
   var isREST=channel==='REST', byKey={};
-  function cell(k){ if(!byKey[k])byKey[k]={name:k,target:0,done:0,oih:0,lineTotal:0,trWsum:0,trW:0}; return byKey[k]; }
+  function cell(k){ if(!byKey[k])byKey[k]={name:k,target:0,done:0,oih:0,lineTotal:0,oihLineTotal:0,trWsum:0,trW:0}; return byKey[k]; }
   if(!isREST && CHANNEL_STATE_WHITELIST[channel]){ CHANNEL_STATE_WHITELIST[channel].forEach(function(w){cell(w.label);}); }
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();
@@ -3600,7 +3614,7 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
     if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
     var k3=isREST?xg:detailStateLabel(channel,x.state);
     if(k3===null)continue;
-    cell(k3).oih+=Number(x.open_qty)||0;
+    var oc=cell(k3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
   }
   var list=Object.keys(byKey).map(function(k){
     var c=byKey[k];
@@ -3615,8 +3629,8 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
   return list;
 }
 function cardRowsTotal(list){
-  var t={target:0,done:0,oih:0,lineTotal:0,trWsum:0,trW:0};
-  list.forEach(function(c){ t.target+=c.target; t.done+=c.done; t.oih+=c.oih; t.lineTotal+=c.lineTotal;
+  var t={target:0,done:0,oih:0,lineTotal:0,oihLineTotal:0,trWsum:0,trW:0};
+  list.forEach(function(c){ t.target+=c.target; t.done+=c.done; t.oih+=c.oih; t.lineTotal+=c.lineTotal; t.oihLineTotal+=c.oihLineTotal||0;
     if(c.targetRealise>0&&c.target>0){t.trWsum+=c.targetRealise*c.target;t.trW+=c.target;} });
   t.targetRealise=t.trW>0?t.trWsum/t.trW:0;
   t.actualRealise=t.done>0?t.lineTotal/t.done:0;

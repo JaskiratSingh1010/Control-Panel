@@ -1350,7 +1350,8 @@ def _open_order_litres_by_group_code_customer():
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
-               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY",
+               SUM(L."LineTotal" * L."OpenQty" / NULLIF(L."Quantity", 0)) AS "OPEN_VALUE"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
@@ -1388,6 +1389,7 @@ def get_order_in_hand_rows():
             'u_sub_group': _normalize_name(d.get('SUBG')),
             'item_name': _normalize_name(d.get('ITEM')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
+            'open_value': float(d.get('OPEN_VALUE') or 0),  # net open-order value → OIH Realise
         })
     return rows
 
