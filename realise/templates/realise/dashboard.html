@@ -537,10 +537,20 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         </div>
       </div>
       <div class="sc2-drillbar sc2-period-bar">
-        <label for="sc2From">From</label>
-        <input type="date" id="sc2From">
-        <label for="sc2To">To</label>
-        <input type="date" id="sc2To">
+        <div class="sc2-modebar" role="group" aria-label="Fetch mode">
+          <button type="button" class="bev-mode-btn active" id="sc2ModeRange" onclick="setSc2Mode('range')">Date Range</button>
+          <button type="button" class="bev-mode-btn" id="sc2ModeMonths" onclick="setSc2Mode('months')">Month-Wise</button>
+        </div>
+        <span id="sc2RangeCtl" style="display:contents">
+          <label for="sc2From">From</label>
+          <input type="date" id="sc2From">
+          <label for="sc2To">To</label>
+          <input type="date" id="sc2To">
+        </span>
+        <span id="sc2MonthCtl" style="display:none;align-items:center;gap:6px">
+          <label for="sc2Months">Last (months)</label>
+          <input type="number" id="sc2Months" min="1" max="120" value="3" style="width:84px" onkeydown="if(event.key==='Enter')loadSlideTwoData()">
+        </span>
         <label for="sc2Segment">Segment</label>
         <select id="sc2Segment" onchange="renderSlideTwo()">
           <option value="">All</option>
@@ -623,6 +633,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   /* Fetch-mode toggle (Date Range | Month-Wise) — two standalone buttons above the inputs. */
   .bev-modebar{flex:0 0 100%;display:flex;gap:8px;align-items:center}
+  .sc2-modebar{display:inline-flex;gap:6px;align-items:center;margin-right:8px}
   .bev-view-sel{display:flex;align-items:center;gap:6px;margin-left:18px;padding-left:18px;border-left:1px solid var(--border)}
   .bev-view-sel label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px}
   .bev-view-sel select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;outline:none;cursor:pointer}
@@ -2093,7 +2104,26 @@ function getResolvedChannelPeriod(){
   return {month:dt.getMonth()+1, monthLabel:MONTHS[dt.getMonth()], year:dt.getFullYear()};
 }
 // Slide 2's Fetch button: same shared loader, just sourced from slide 2's dates.
-async function loadSlideTwoData(){ return loadData({source:'slide2'}); }
+var sc2Mode='range';   // 'range' = From/To, 'months' = last-N-months
+function setSc2Mode(m){
+  sc2Mode=m;
+  var month=(m==='months');
+  document.getElementById('sc2ModeRange').classList.toggle('active',!month);
+  document.getElementById('sc2ModeMonths').classList.toggle('active',month);
+  document.getElementById('sc2RangeCtl').style.display=month?'none':'contents';
+  document.getElementById('sc2MonthCtl').style.display=month?'inline-flex':'none';
+}
+async function loadSlideTwoData(){
+  if(sc2Mode==='months'){
+    var n=parseInt(document.getElementById('sc2Months').value,10);
+    if(!n||n<1){showToast('Enter number of months','err');return;}
+    if(n>120)n=120;
+    var now=new Date();
+    document.getElementById('sc2To').value=bevYmd(now);
+    document.getElementById('sc2From').value=bevYmd(new Date(now.getFullYear(), now.getMonth()-(n-1), 1));  // 1st of the (n-1)th month back
+  }
+  return loadData({source:'slide2'});
+}
 async function fetchChannelTargets(month,year){
   var key=year+'-'+String(month).padStart(2,'0');
   if(channelTargetCache[key])return channelTargetCache[key];
