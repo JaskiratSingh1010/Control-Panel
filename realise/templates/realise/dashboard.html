@@ -616,6 +616,14 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
           <div class="sc2-kpi-body"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
         </div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openSc2Top('customers')" title="Top customers by Done litres (descending)">
+          <div class="sc2-kpi-ic"><span class="material-icons">groups</span></div>
+          <div class="sc2-kpi-body"><label>Top Customers</label><div id="sc2KpiTopCust">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openSc2Top('months')" title="Top months by Done litres (descending)">
+          <div class="sc2-kpi-ic"><span class="material-icons">calendar_month</span></div>
+          <div class="sc2-kpi-body"><label>Top Months</label><div id="sc2KpiTopMonth">&mdash;</div></div>
+        </div>
       </div>
       <div class="sc2-grid" id="channelGrid"></div>
     </div>
@@ -853,6 +861,25 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="bev-table">
         <thead><tr><th id="oihFirstCol">Variety</th><th class="num">PCS</th><th class="num">Boxes</th></tr></thead>
         <tbody id="oihBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- OILS Slide 2: Top Customers / Top Months (descending) -->
+<div class="modal-overlay" id="sc2TopModal" onclick="if(event.target===this)closeSc2Top()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3 id="sc2TopTitle">Top</h3>
+        <p id="sc2TopSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeSc2Top()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th style="width:64px">#</th><th id="sc2TopNameHead" style="width:60%">Name</th><th class="num">Done Litres</th></tr></thead>
+        <tbody id="sc2TopBody"></tbody>
       </table>
     </div>
   </div>
@@ -2195,7 +2222,52 @@ function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr){
   }
   if(elTargetRealise)elTargetRealise.innerHTML=(targetRealise&&isFinite(targetRealise))?'₹'+fNp(targetRealise,2):'&mdash;';
   if(elCurrentRealise)elCurrentRealise.innerHTML=(currentRealise&&isFinite(currentRealise))?'₹'+fNp(currentRealise,2):'&mdash;';
+  sc2RenderTopKpis();
 }
+// ── Slide 2 Top Customers / Top Months (by Done litres; honours the Segment filter) ──
+function sc2TopCustomers(){
+  var seg=sc2Seg(), map={}, order=[];
+  (sc2Rows||[]).forEach(function(r){
+    if(seg&&r.u_type!==seg)return;
+    var k=r.card_name||'—'; if(!map[k]){map[k]={name:k,litres:0};order.push(k);}
+    map[k].litres+=Number(r.liter)||0;
+  });
+  return order.map(function(k){return map[k];}).sort(function(a,b){return b.litres-a.litres||String(a.name).localeCompare(String(b.name));});
+}
+function sc2TopMonths(){
+  var seg=sc2Seg(), map={}, order=[];
+  (allData||[]).forEach(function(r){
+    if(seg&&r.u_type!==seg)return;
+    var ym=(r.year||'')+'-'+(r.month||''), label=((r.month||'')+' '+(r.year||'')).trim();
+    if(!map[ym]){map[ym]={name:label||'—',litres:0};order.push(ym);}
+    map[ym].litres+=Number(r.litres)||0;
+  });
+  return order.map(function(k){return map[k];}).sort(function(a,b){return b.litres-a.litres||String(a.name).localeCompare(String(b.name));});
+}
+function sc2RenderTopKpis(){
+  var tc=sc2TopCustomers(), tm=sc2TopMonths();
+  var ec=document.getElementById('sc2KpiTopCust'); if(ec)ec.textContent=tc.length?tc[0].name:'—';
+  var em=document.getElementById('sc2KpiTopMonth'); if(em)em.textContent=tm.length?tm[0].name:'—';
+}
+function openSc2Top(which){
+  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
+  var isCust=(which==='customers'), list=isCust?sc2TopCustomers():sc2TopMonths();
+  document.getElementById('sc2TopTitle').textContent=(isCust?'Top Customers':'Top Months')+(sc2Seg()?(' — '+sc2Seg()):'');
+  document.getElementById('sc2TopNameHead').textContent=isCust?'Customer':'Month';
+  var tl=0; for(var i=0;i<list.length;i++)tl+=list[i].litres;
+  document.getElementById('sc2TopSub').textContent=list.length+(isCust?' customer(s) · ':' month(s) · ')+fN(Math.round(tl))+' done litres — highest first';
+  var body=document.getElementById('sc2TopBody');
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="3" style="padding:34px;text-align:center;color:#7b8794">No data'+(sc2Seg()?(' for '+esc(sc2Seg())):'')+'.</td></tr>';
+  }else{
+    var html='';
+    for(var k=0;k<list.length;k++){var r=list[k]; html+='<tr><td>'+(k+1)+'</td><td>'+esc(r.name)+'</td><td class="num">'+fN(Math.round(r.litres))+'</td></tr>';}
+    html+='<tr class="cd-total"><td colspan="2">TOTAL</td><td class="num">'+fN(Math.round(tl))+'</td></tr>';
+    body.innerHTML=html;
+  }
+  document.getElementById('sc2TopModal').classList.add('show');
+}
+function closeSc2Top(){document.getElementById('sc2TopModal').classList.remove('show');}
 function buildSlideTwoDrillRows(rows,dimension,groupFilter,targetNodes,oihRows){
   var isPerson=dimension==='person', map={};
   function cell(name){ if(!map[name])map[name]={name:name,target:0,done:0,oih:0,lineTotal:0,trWsum:0,trW:0}; return map[name]; }
