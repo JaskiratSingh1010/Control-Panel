@@ -269,6 +269,18 @@ def _bev_items_list(store):
     return out
 
 
+# Same salesperson under different SAP names — keyed by normalized (UPPER/stripped)
+# variant → canonical name. Add more pairs here as duplicates surface.
+_BEV_SALESPERSON_ALIAS = {
+    'GOLDY VG': 'GOLDY',
+}
+
+
+def _bev_salesperson(r):
+    sp = _normalize_name(_bev_pick(r, 'SalesPerson', 'SALESPERSON', 'SlpName', 'sales_person')) or '—'
+    return _BEV_SALESPERSON_ALIAS.get(sp, sp)
+
+
 def get_beverages_rows(start_date, end_date):
     """Beverage sales rows aggregated by (Variety, Sub_Group, SKU, Item, Main Group, State,
     Brand, Chain, Month) with Quantity (PCS) and Boxes, plus today's & yesterday's box
@@ -298,7 +310,7 @@ def get_beverages_rows(start_date, end_date):
         brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
         chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
         customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
-        sales_person = _normalize_name(_bev_pick(r, 'SalesPerson', 'SALESPERSON', 'SlpName', 'sales_person')) or '—'
+        sales_person = _bev_salesperson(r)
         qty = _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
         box = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Box', 'BOX', 'Boxes', 'box'))
         dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
@@ -335,7 +347,7 @@ def get_beverages_rows(start_date, end_date):
         brand = _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—'
         chain = _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—'
         customer = _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—'
-        sales_person = _normalize_name(_bev_pick(r, 'SalesPerson', 'SALESPERSON', 'SlpName', 'sales_person')) or '—'
+        sales_person = _bev_salesperson(r)
         opcs = _bev_num(_bev_pick(r, 'PCS_Ordered', 'PCS_ORDERED', 'PCS_Sold', 'Quantity', 'Qty'))
         obox = _bev_num(_bev_pick(r, 'Boxes_Ordered', 'BOXES_ORDERED', 'Boxes_Sold', 'Boxes', 'Box'))
         ym, _ml = _bev_month_key(r, _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date')))
