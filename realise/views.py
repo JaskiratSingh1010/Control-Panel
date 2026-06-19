@@ -84,6 +84,51 @@ def _aggregate_channel_rows(raw_rows):
     return out
 
 
+def _aggregate_channel_month_rows(raw_rows):
+    """Month-level channel buckets for the OILS month-wise pivot: distinct
+    (type, main_group, state, sales_person, sub_group, item_name, card_name, ym) with
+    summed litres. Carries every dimension the pivot's Drill By offers (State / Contact
+    Person / Product / Item Name / Customer) plus the month, so the States x Months pivot
+    can re-pivot its rows by any of them while months stay in the columns. `ym` is a
+    sortable 'YYYY-MM'; `mlabel` is the display label ('JUL 2025')."""
+    agg = {}
+    for row in raw_rows:
+        mon, year = services._parse_doc_date(row.get('DocDate', ''))
+        if not mon or not year:
+            continue
+        try:
+            mnum = datetime.strptime(mon, '%b').month
+        except ValueError:
+            continue
+        sales_person = ''
+        for k in ('U_SALES_PERSON', 'U_Sales_Person', 'SALES_PERSON', 'SalesPerson', 'SlpName'):
+            v = str(row.get(k, '') or '').strip().upper()
+            if v:
+                sales_person = v
+                break
+        u_type = str(row.get('U_TYPE', '') or '').strip().upper()
+        u_main = str(row.get('U_Main_Group', '') or '').strip().upper()
+        u_sub = str(row.get('U_Sub_Group', '') or '').strip().upper()
+        state = str(row.get('State', '') or '').strip().upper()
+        item_name = str(row.get('ItemName', '') or '').strip().upper()
+        card_name = str(row.get('CardName', '') or '').strip().upper()
+        ym = '%s-%02d' % (year, mnum)
+        key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym)
+        bucket = agg.get(key)
+        if bucket is None:
+            bucket = agg[key] = {
+                'u_type': u_type, 'main_group': u_main, 'state': state,
+                'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
+                'card_name': card_name, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
+                'liter': 0.0,
+            }
+        bucket['liter'] += float(row.get('Liter', 0) or 0)
+    out = list(agg.values())
+    for b in out:
+        b['liter'] = round(b['liter'], 2)
+    return out
+
+
 @group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['GET'])
 def api_health(request):
@@ -177,7 +222,9 @@ def api_sales_data(request):
     ))
 
     channel_rows = _aggregate_channel_rows(raw_rows)
-    return JsonResponse({'status': 'ok', 'data': output, 'count': len(output), 'channel_rows': channel_rows})
+    channel_month_rows = _aggregate_channel_month_rows(raw_rows)
+    return JsonResponse({'status': 'ok', 'data': output, 'count': len(output),
+                         'channel_rows': channel_rows, 'channel_month_rows': channel_month_rows})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -194,11 +241,21 @@ def api_beverages_data(request):
         data = services.get_beverages_rows_cached(start_date, end_date)
     except Exception as e:
         logger.error('[BEVERAGES] fetch error: %s', e)
-        return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0})
-    rows = data.get('rows', []) if isinstance(data, dict) else (data or [])
+        return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0,
+                             'today_items': [], 'yesterday_items': [], 'today_date': '', 'yesterday_date': '',
+                             'customer_rows': [], 'month_rows': [], 'oih_rows': []})
+    is_dict = isinstance(data, dict)
+    rows = data.get('rows', []) if is_dict else (data or [])
     return JsonResponse({'status': 'ok', 'data': rows, 'count': len(rows),
-                         'today_boxes': data.get('today_boxes', 0) if isinstance(data, dict) else 0,
-                         'yesterday_boxes': data.get('yesterday_boxes', 0) if isinstance(data, dict) else 0})
+                         'today_boxes': data.get('today_boxes', 0) if is_dict else 0,
+                         'yesterday_boxes': data.get('yesterday_boxes', 0) if is_dict else 0,
+                         'today_items': data.get('today_items', []) if is_dict else [],
+                         'yesterday_items': data.get('yesterday_items', []) if is_dict else [],
+                         'today_date': data.get('today_date', '') if is_dict else '',
+                         'yesterday_date': data.get('yesterday_date', '') if is_dict else '',
+                         'customer_rows': data.get('customer_rows', []) if is_dict else [],
+                         'month_rows': data.get('month_rows', []) if is_dict else [],
+                         'oih_rows': data.get('oih_rows', []) if is_dict else []})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -221,7 +278,9 @@ def api_drill_down(request):
     cache_key = f'{start_date}_{end_date}'
     if _raw_cache['key'] != cache_key:
         try:
-            _, raw_rows = services.get_sales_data(start_date, end_date)
+            # Reuse the 90s sales cache the initial render already populated for this
+            # range instead of re-running REPORT_SALES_ANALYSIS for the first drill.
+            _, raw_rows = services.get_sales_data_cached(start_date, end_date)
             _raw_cache['key']  = cache_key
             _raw_cache['rows'] = raw_rows
         except Exception as e:
