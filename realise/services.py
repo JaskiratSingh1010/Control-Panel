@@ -532,7 +532,9 @@ def get_drill_down(start_date, end_date, raw_rows, u_type=None, u_sub_group=None
 
 
 def get_historical_realise(start_date, end_date, period='12m'):
-    raw = _fetch_raw(start_date, end_date)
+    # Same range + same proc as the dashboard's sales pull — reuse the 90s cache
+    # instead of a second REPORT_SALES_ANALYSIS round-trip for the same data.
+    _, raw = get_sales_data_cached(start_date, end_date)
     if not raw:
         return {}, {}
 
@@ -1487,6 +1489,7 @@ _DONE_LINE_SQL = '''
            ''' + _SHIPTO_STATE + ''' AS "ST",
            ''' + _SHIPTO_CITY + ''' AS "CITY",
            COALESCE(TRIM(C."CardName"), '')     AS "CUST",
+           COALESCE(C."Balance", 0)             AS "BAL",
            COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
            COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
            COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
@@ -1513,7 +1516,7 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
     crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
     sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
-           f'SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
+           f'MAX("BAL") AS "BAL", SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
            f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
     try:
         rows = sap_connector.execute_query(sql, (start_date, end_date, start_date, end_date))
@@ -1549,7 +1552,8 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
         if rec is None:
             rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
                                 'party': customer, 'state': state_name,
-                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0, '_items': {}}
+                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0,
+                                'balance': float(row.get('BAL') or 0), '_items': {}}
         lit = float(row.get('LIT') or 0)
         rec['litres'] += lit
         icode = _normalize_name(row.get('ICODE'))
