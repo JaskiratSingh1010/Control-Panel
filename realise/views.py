@@ -45,6 +45,25 @@ def dashboard(request):
     })
 
 
+@group_required(*REALISE_GROUPS, json_response=False)
+def oih_vs_stock(request):
+    """Standalone tab: open-order litres (OIH) vs warehouse stock per product, with the
+    Required (OIH − Stock) gap. Reuses the /api/oih-breakdown/ data (OIH rows + per-item
+    on-hand stock across the three warehouses)."""
+    return render(request, 'realise/oih_vs_stock.html', {'sidebar_active': 'oih_vs_stock'})
+
+
+@group_required(*REALISE_GROUPS, json_response=False)
+def compare_sales(request):
+    """Standalone tab: month-wise sales pivot (rows = chosen dimension, columns = months)
+    with a Main Group filter (compare groups for the same period) and a Compare selector
+    (Litres / Realise / Both). Reuses /api/sales-data/ channel_month_rows."""
+    return render(request, 'realise/compare_sales.html', {
+        'sidebar_active': 'compare_sales',
+        'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
+    })
+
+
 def _aggregate_channel_rows(raw_rows):
     """Collapse raw SAP transaction rows to distinct
     (type, sub_group, main_group, state, sales_person, card_name, item_name) buckets
@@ -120,12 +139,14 @@ def _aggregate_channel_month_rows(raw_rows):
                 'u_type': u_type, 'main_group': u_main, 'state': state,
                 'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
                 'card_name': card_name, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
-                'liter': 0.0,
+                'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
+        bucket['line_total'] += float(row.get('LineTotal', 0) or 0)
     out = list(agg.values())
     for b in out:
         b['liter'] = round(b['liter'], 2)
+        b['line_total'] = round(b['line_total'], 2)
     return out
 
 
@@ -256,6 +277,30 @@ def api_beverages_data(request):
                          'customer_rows': data.get('customer_rows', []) if is_dict else [],
                          'month_rows': data.get('month_rows', []) if is_dict else [],
                          'oih_rows': data.get('oih_rows', []) if is_dict else []})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_beverages_docs(request):
+    """Invoice / open-SO documents behind a beverages driller cell, filtered to the clicked
+    node (customer + ancestor dims + brand/month). metric=sales -> invoices, oih -> SOs."""
+    start = request.GET.get('start', '') or ''
+    end = request.GET.get('end', '') or ''
+    metric = str(request.GET.get('metric', 'sales') or 'sales').strip().lower()
+    if not start or not end:
+        return JsonResponse({'status': 'error', 'error': 'start and end required'}, status=400)
+    filters = {}
+    for key in ('variety', 'sub_group', 'sku', 'item', 'main_group', 'state',
+                'brand', 'chain', 'sales_person', 'customer', 'ym'):
+        val = request.GET.get('f_' + key)
+        if val not in (None, ''):
+            filters[key] = str(val).strip().upper()
+    try:
+        data = services.get_beverages_documents(start, end, filters, metric)
+    except Exception as exc:
+        logger.error('[BEVERAGES] docs fetch failed: %s', exc)
+        return JsonResponse({'status': 'ok', 'metric': metric, 'count': 0, 'data': []})
+    return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data), 'data': data})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -410,6 +455,11 @@ def api_channel_detail_docs(request):
     else:
         start = request.GET.get('start') or _raw_cache.get('start') or ''
         end = request.GET.get('end') or _raw_cache.get('end') or ''
+        # Diagnostic: ?reconcile=1 returns a party-by-party comparison of the channel Done
+        # (proc) vs the popup Done (direct query) so any mismatch can be pinpointed.
+        if request.GET.get('reconcile'):
+            return JsonResponse({'status': 'ok', 'reconcile':
+                services.reconcile_channel_done(start, end, channel, seg, filters.get('state', ''))})
         data = services.get_channel_done_documents(start, end, channel, seg, filters)
     return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data),
                          'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})

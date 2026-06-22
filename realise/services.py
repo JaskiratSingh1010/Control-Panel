@@ -90,7 +90,7 @@ def _fetch_raw(start_date, end_date):
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             cursor.close()
-        return [dict(zip(columns, row)) for row in rows]
+        return _apply_delhi_gt_remap([dict(zip(columns, row)) for row in rows])
     except Exception as e:
         logger.error('[SAP] Procedure call failed: %s', e)
         return []
@@ -316,7 +316,7 @@ def get_beverages_rows(start_date, end_date):
         dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
         ym, mlabel = _bev_month_key(r, dd)
         ymk = ym or ''   # carried on each row so the client can filter to a single month
-        key = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, ymk)
+        key = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, customer, ymk)
         cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0})
         cell['quantity'] += qty
         cell['boxes'] += box
@@ -352,7 +352,7 @@ def get_beverages_rows(start_date, end_date):
         obox = _bev_num(_bev_pick(r, 'Boxes_Ordered', 'BOXES_ORDERED', 'Boxes_Sold', 'Boxes', 'Box'))
         ym, _ml = _bev_month_key(r, _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date')))
         ymk = ym or ''
-        mk = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, ymk)
+        mk = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, customer, ymk)
         oih_main[mk] = oih_main.get(mk, 0.0) + obox
         pk = (variety, sub, item, customer, brand, ymk)
         pc = oih_pop.setdefault(pk, {'pcs': 0.0, 'boxes': 0.0})
@@ -364,7 +364,7 @@ def get_beverages_rows(start_date, end_date):
         v = agg.get(k)
         rows.append({'variety': k[0], 'sub_group': k[1], 'sku': k[2], 'item': k[3],
                      'main_group': k[4], 'state': k[5], 'brand': k[6], 'chain': k[7],
-                     'sales_person': k[8], 'ym': k[9],
+                     'sales_person': k[8], 'customer': k[9], 'ym': k[10],
                      'quantity': round(v['quantity'], 2) if v else 0.0,
                      'boxes': round(v['boxes'], 2) if v else 0.0,
                      'oih': round(oih_main.get(k, 0.0), 2)})
@@ -398,6 +398,84 @@ def get_beverages_rows_cached(start_date, end_date):
         for k in [k for k, v in _BEV_CACHE.items() if v[0] <= now]:
             _BEV_CACHE.pop(k, None)
     return data
+
+
+# Per-document raw beverage rows (un-aggregated) cached so repeated document-drill
+# expansions within the TTL reuse one SAP round-trip. Keyed by range + metric.
+_BEV_RAW_CACHE = {}        # 'start|end|metric' -> (expires_at, raw_rows)
+_BEV_RAW_CACHE_TTL = 90    # seconds
+
+
+def _bev_raw_cached(start_date, end_date, metric):
+    key = f'{start_date}|{end_date}|{metric}'
+    now = time.time()
+    hit = _BEV_RAW_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    raw = (_fetch_raw_beverages_oih(start_date, end_date) if metric == 'oih'
+           else _fetch_raw_beverages(start_date, end_date))
+    if raw:
+        _BEV_RAW_CACHE[key] = (now + _BEV_RAW_CACHE_TTL, raw)
+        for k in [k for k, v in _BEV_RAW_CACHE.items() if v[0] <= now]:
+            _BEV_RAW_CACHE.pop(k, None)
+    return raw
+
+
+# Normalized extractor per driller dimension — mirrors the grouping in get_beverages_rows
+# so a document query filters the raw rows by exactly the values the client drilled into.
+_BEV_DIM_EXTRACT = {
+    'variety':      lambda r: _normalize_name(_bev_pick(r, 'Variety', 'VARIETY', 'variety')) or '—',
+    'sub_group':    lambda r: _normalize_name(_bev_pick(r, 'Sub_Group', 'SUB_GROUP', 'U_Sub_Group', 'sub_group')) or '—',
+    'sku':          lambda r: _normalize_name(_bev_pick(r, 'SKU', 'U_SKU', 'Sku', 'sku')) or '—',
+    'item':         lambda r: _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—',
+    'main_group':   lambda r: _normalize_name(_bev_pick(r, 'U_Main_Group', 'U_MAIN_GROUP', 'Main_Group', 'main_group')) or '—',
+    'state':        lambda r: _normalize_name(_bev_pick(r, 'State', 'STATE', 'state')) or '—',
+    'brand':        lambda r: _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—',
+    'chain':        lambda r: _normalize_name(_bev_pick(r, 'U_Chain', 'U_CHAIN', 'Chain', 'chain')) or '—',
+    'sales_person': _bev_salesperson,
+    'customer':     lambda r: _normalize_name(_bev_pick(r, 'CardName', 'CARDNAME', 'Customer', 'card_name')) or '—',
+}
+
+
+def get_beverages_documents(start_date, end_date, filters, metric='sales'):
+    """Invoice (sales) or open sales-order (oih) documents behind a beverages driller cell,
+    filtered to the clicked node's dimension path (customer + any ancestors) plus brand/month.
+    Re-derives the same normalized dimensions the driller buckets by and rolls the raw rows
+    up to document grain. metric='oih' -> open SOs (ORDR), else sales invoices (OINV)."""
+    metric = 'oih' if str(metric or '').strip().lower() == 'oih' else 'sales'
+    raw = _bev_raw_cached(start_date, end_date, metric)
+    filters = filters or {}
+    want_ym = str(filters.get('ym') or '').strip()
+    dim_filters = [(k, v) for k, v in filters.items() if k in _BEV_DIM_EXTRACT]
+    docs = {}
+    for r in raw or []:
+        ok = True
+        for k, v in dim_filters:
+            if _BEV_DIM_EXTRACT[k](r) != v:
+                ok = False
+                break
+        if not ok:
+            continue
+        dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
+        ym, _label = _bev_month_key(r, dd)
+        if want_ym and (ym or '') != want_ym:
+            continue
+        num = str(_bev_pick(r, 'DocNum', 'DOCNUM', 'Doc_Num', 'doc_num') or '').strip()
+        qty = _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'PCS_Ordered', 'PCS_ORDERED', 'Quantity', 'Qty'))
+        box = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Boxes_Ordered', 'BOXES_ORDERED', 'Boxes', 'Box'))
+        dkey = num or ((dd.isoformat() if dd else '') + '|' + _BEV_DIM_EXTRACT['customer'](r))
+        rec = docs.get(dkey)
+        if rec is None:
+            rec = docs[dkey] = {'doc_num': num, 'doc_date': dd.isoformat() if dd else '',
+                                'customer': _BEV_DIM_EXTRACT['customer'](r), 'quantity': 0.0, 'boxes': 0.0}
+        rec['quantity'] += qty
+        rec['boxes'] += box
+    out = list(docs.values())
+    for d in out:
+        d['quantity'] = round(d['quantity'], 2)
+        d['boxes'] = round(d['boxes'], 2)
+    out.sort(key=lambda x: (x['doc_date'] or '', x['doc_num']))
+    return out
 
 
 def _empty_result():
@@ -1348,6 +1426,7 @@ def _open_order_litres_by_group_code_customer():
         SELECT COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
                {_SHIPTO_STATE} AS "ST",
                {_SHIPTO_CITY} AS "CITY",
+               COALESCE(TRIM(H."CardCode"), '')      AS "CCODE",
                COALESCE(TRIM(C."CardName"), '')      AS "CUST",
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
@@ -1361,6 +1440,7 @@ def _open_order_litres_by_group_code_customer():
         {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
         WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
         GROUP BY COALESCE(TRIM(C."U_Main_Group"), ''), {_SHIPTO_STATE}, {_SHIPTO_CITY},
+                 COALESCE(TRIM(H."CardCode"), ''),
                  COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
                  COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."ItemName"), '')
     '''
@@ -1381,7 +1461,7 @@ def get_order_in_hand_rows():
     rows = []
     for d in _open_order_litres_by_group_code_customer():
         group = _normalize_name(d.get('GRP'))
-        state_name = _state_name(d)
+        state_name = _delhi_gt_state(d.get('CCODE'), _state_name(d))
         rows.append({
             'main_group': group,
             'state': state_name,
@@ -1475,6 +1555,98 @@ def _state_name(row):
     return STATE_CODE_NAMES.get(code, code)
 
 
+# ── Delhi-GT customer remap ────────────────────────────────────────────────
+# Management wants these customers counted under DELHI (so they land in the Delhi GT
+# channel) regardless of their BP/ship-to state — mostly Gurugram/Faridabad (HR)
+# accounts treated as Delhi-NCR territory. Matched by CardCode across every realise
+# state view: Done (sales proc), Order-in-Hand, the invoice/SO popups, and the OIH
+# breakdown. Source: management mapping (OCRD export, 2026-06-20). Edit this set to
+# add/remove customers.
+DELHI_GT_REMAP_STATE = 'DELHI'
+DELHI_GT_REMAP_CARDCODES = frozenset({
+    'CUSTA000365', 'CUSTA001073', 'CUSTA000998', 'CUSTA000578', 'CUSTA000352',
+    'CUSTA001093', 'CUSTA000789', 'CUSTA000990', 'CUSTA000575', 'CUSTA000971',
+    'CUSTA000184', 'CUSTA000587', 'CUSTA001038', 'CUSTA000670', 'CUSTA000053',
+    'CUSTA000084', 'CUSTA000280', 'CUSTA000288', 'CUSTA000530', 'CUSTA000888',
+    'CUSTA000938', 'CUSTA000086', 'CUSTA000309', 'CUSTA000565', 'CUSTA000329',
+    'CUSTA000956', 'CUSTA000347', 'CUSTA000373', 'CUSTA000869', 'CUSTA000589',
+    'CUSTA000618', 'CUSTA000801', 'CUSTA000811', 'CUSTA000415', 'CUSTA000988',
+    'CUSTA000882', 'CUSTA000825', 'CUSTA000826', 'CUSTA000827', 'CUSTA000881',
+    'CUSTA000433', 'CUSTA000839', 'CUSTA000456', 'CUSTA000469', 'CUSTA000691',
+    'CUSTA000010', 'CUSTA000041', 'CUSTA000043', 'CUSTA000507', 'CUSTA000694',
+    'CUSTA000057', 'CUSTA000058', 'CUSTA000071', 'CUSTA000078', 'CUSTA000081',
+    'CUSTA000134', 'CUSTA000138', 'CUSTA000157', 'CUSTA000175', 'CUSTA000270',
+    'CUSTA000203', 'CUSTA000703', 'CUSTA000221', 'CUSTA000954', 'CUSTA000527',
+    'CUSTA000714', 'CUSTA000732', 'CUSTA000504', 'CUSTA000867', 'CUSTA000760',
+    'CUSTA000764', 'CUSTA000783', 'CUSTA000798', 'CUSTA000355', 'CUSTA000099',
+    'CUSTA000027', 'CUSTA000429', 'CUSTA000722', 'CUSTA000927', 'CUSTA001078',
+    'CUSTA000708', 'CUSTA000650', 'CUSTA000926', 'CUSTA000372', 'CUSTA001075',
+})
+
+
+def _delhi_gt_state(cardcode, state_name):
+    """DELHI for management-mapped customers, else the row's own state."""
+    if cardcode and _normalize_name(cardcode) in DELHI_GT_REMAP_CARDCODES:
+        return DELHI_GT_REMAP_STATE
+    return state_name
+
+
+def reconcile_channel_done(start_date, end_date, channel, seg, state):
+    """Diagnostic only: compare the channel Done figure (from the REPORT_SALES_ANALYSIS
+    proc, what the channel table shows) with the popup Done (direct OINV/ORIN query),
+    broken down per party, so the source of any gap is visible. Read-only."""
+    members = CHANNEL_MEMBERS.get(channel)
+    seg_u = _normalize_name(seg)
+    state_u = _normalize_name(state)
+    _, raw = get_sales_data_cached(start_date, end_date)
+    proc = {}
+    for r in raw or []:
+        g = _normalize_name(r.get('U_Main_Group'))
+        if members is not None and g not in members:
+            continue
+        if seg_u and _normalize_name(r.get('U_TYPE')) != seg_u:
+            continue
+        if state_u and _normalize_name(r.get('State')) != state_u:
+            continue
+        party = _normalize_name(r.get('CardName')) or '—'
+        proc[party] = proc.get(party, 0.0) + float(r.get('Liter') or 0)
+    docp = {}
+    for d in get_channel_done_documents(start_date, end_date, channel, seg, {'state': state}) or []:
+        party = d.get('party') or '—'
+        docp[party] = docp.get(party, 0.0) + float(d.get('litres') or 0)
+
+    def pack(m):
+        parties = sorted(({'party': k, 'litres': round(v, 2)} for k, v in m.items()),
+                         key=lambda x: -abs(x['litres']))
+        return {'total': round(sum(m.values()), 2), 'party_count': len(parties), 'parties': parties}
+
+    proc_only = sorted(set(proc) - set(docp))
+    docs_only = sorted(set(docp) - set(proc))
+    return {'channel': channel, 'seg': seg, 'state': state,
+            'proc_channel_done': pack(proc), 'popup_done': pack(docp),
+            'gap': round(sum(docp.values()) - sum(proc.values()), 2),
+            'parties_in_proc_not_popup': proc_only, 'parties_in_popup_not_proc': docs_only}
+
+
+def _apply_delhi_gt_remap(rows):
+    """Force mapped customers' State to DELHI on raw REPORT_SALES_ANALYSIS rows, so Done,
+    drill-down, historical and the month pivot all attribute them to Delhi. Matched by the
+    proc's CardCode column; logs once (and no-ops) if that column isn't present."""
+    if not rows:
+        return rows
+    keys = list(rows[0].keys())
+    code_key = next((k for k in keys if _normalize_name(k).replace('_', '') == 'CARDCODE'), None)
+    state_key = next((k for k in keys if _normalize_name(k).replace('_', '') == 'STATE'), None)
+    if not code_key or not state_key:
+        logger.warning('[DELHI-GT] proc rows missing %s column; Done remap skipped',
+                       'CardCode' if not code_key else 'State')
+        return rows
+    for d in rows:
+        if _normalize_name(d.get(code_key)) in DELHI_GT_REMAP_CARDCODES:
+            d[state_key] = DELHI_GT_REMAP_STATE
+    return rows
+
+
 # State & City come from the order's ship-to address (CRD1 via ShipToCode); when an
 # order has no ship-to address we fall back to the BP-master OCRD.State1/City.
 _SHIPTO_STATE = "COALESCE(NULLIF(TRIM(A.\"State\"), ''), TRIM(C.\"State1\"))"
@@ -1488,6 +1660,7 @@ _DONE_LINE_SQL = '''
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
            ''' + _SHIPTO_STATE + ''' AS "ST",
            ''' + _SHIPTO_CITY + ''' AS "CITY",
+           COALESCE(TRIM(H."CardCode"), '')     AS "CCODE",
            COALESCE(TRIM(C."CardName"), '')     AS "CUST",
            COALESCE(C."Balance", 0)             AS "BAL",
            COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
@@ -1515,9 +1688,9 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     seg = str(seg or '').strip().upper()
     inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
     crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
-    sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
+    sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
            f'MAX("BAL") AS "BAL", SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
-           f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
+           f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
     try:
         rows = sap_connector.execute_query(sql, (start_date, end_date, start_date, end_date))
     except Exception as exc:
@@ -1532,7 +1705,7 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
             continue
         if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
-        state_name = _state_name(row)
+        state_name = _delhi_gt_state(row.get('CCODE'), _state_name(row))
         st = _channel_state_label(channel, state_name, whitelist)
         if st is None:
             continue
@@ -1570,7 +1743,9 @@ _OIH_LINE_SQL = f'''
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
            {_SHIPTO_STATE} AS "ST",
            {_SHIPTO_CITY} AS "CITY",
+           COALESCE(TRIM(H."CardCode"), '')     AS "CCODE",
            COALESCE(TRIM(C."CardName"), '')     AS "CUST",
+           COALESCE(C."Balance", 0)             AS "BAL",
            COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
            COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
            COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
@@ -1583,6 +1758,7 @@ _OIH_LINE_SQL = f'''
     {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
     WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
     GROUP BY H."DocNum", H."DocDate",
+             COALESCE(TRIM(H."CardCode"), ''), COALESCE(C."Balance", 0),
              COALESCE(TRIM(C."U_Main_Group"), ''), {_SHIPTO_STATE}, {_SHIPTO_CITY},
              COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
              COALESCE(TRIM(I."ItemName"), ''), COALESCE(TRIM(I."ItemCode"), ''),
@@ -1641,7 +1817,7 @@ def get_channel_oih_documents(channel, filters, seg=''):
             continue
         if seg and _normalize_name(row.get('UTYPE')) != seg:
             continue
-        state_name = _state_name(row)
+        state_name = _delhi_gt_state(row.get('CCODE'), _state_name(row))
         st = _channel_state_label(channel, state_name, whitelist)
         if st is None:
             continue
@@ -1661,7 +1837,8 @@ def get_channel_oih_documents(channel, filters, seg=''):
         if rec is None:
             rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
                                 'party': customer, 'state': state_name,
-                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0, '_items': {}}
+                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0,
+                                'balance': float(row.get('BAL') or 0), '_items': {}}
         lit = float(row.get('OPEN_QTY') or 0)
         rec['litres'] += lit
         # Per item (by ItemCode): accumulate open litres; stock is attached below.
@@ -1692,7 +1869,7 @@ def get_commodity_oih_rows():
             'u_type': 'COMMODITY',
             'u_main_group': _normalize_name(row.get('GRP')),
             'u_sub_group': _normalize_name(row.get('SUBG')),
-            'state': _state_name(row),
+            'state': _delhi_gt_state(row.get('CCODE'), _state_name(row)),
             'card_name': _normalize_name(row.get('CUST')),
             'item_name': _normalize_name(row.get('ITEM')),
             'open_qty': round(float(row.get('OPEN_QTY') or 0), 2),
@@ -1727,6 +1904,7 @@ def get_oih_dimension_rows():
                COALESCE(TRIM(I."{col}"), '—')         AS "PACK",
                COALESCE(TRIM(I."ItemName"), '—')      AS "ITEM",
                COALESCE(TRIM(I."ItemCode"), '')        AS "ICODE",
+               COALESCE(TRIM(H."CardCode"), '')        AS "CCODE",
                COALESCE(TRIM(C."CardName"), '—')      AS "CUST",
                COALESCE(TRIM(I."U_TYPE"), '')          AS "UTYPE",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY"
@@ -1739,6 +1917,7 @@ def get_oih_dimension_rows():
         GROUP BY COALESCE(TRIM(C."U_Main_Group"), '—'), {_SHIPTO_STATE},
                  COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
                  COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(I."ItemCode"), ''),
+                 COALESCE(TRIM(H."CardCode"), ''),
                  COALESCE(TRIM(C."CardName"), '—'), COALESCE(TRIM(I."U_TYPE"), '')
     '''
     try:
@@ -1757,7 +1936,7 @@ def get_oih_dimension_rows():
         icode = _normalize_name(r.get('ICODE'))
         if icode:
             name_codes.setdefault(item_name, set()).add(icode)
-        key = (_normalize_name(r.get('GRP')) or '—', _state_name(r) or '—',
+        key = (_normalize_name(r.get('GRP')) or '—', _delhi_gt_state(r.get('CCODE'), _state_name(r)) or '—',
                _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
                item_name, _normalize_name(r.get('CUST')) or '—')
         cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0})

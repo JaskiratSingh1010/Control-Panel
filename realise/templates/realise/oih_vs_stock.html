@@ -1,0 +1,215 @@
+{% extends "core/base.html" %}
+{% block title %}OIH vs Stock — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .ois-wrap{max-width:1120px;margin:0 auto}
+  .ois-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .ois-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .ois-psub{margin:6px 0 0;font-size:13px;color:#94a3b8;max-width:640px}
+  .ois-drill{display:flex;align-items:center;gap:10px;padding-top:6px}
+  .ois-drill-lbl{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+
+  /* Dynamic driller — same look as the Realise dashboard's Group-by control. */
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:190px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;width:240px;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6}
+  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:#f4f7fb}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6}
+  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  /* KPI strip */
+  .ois-kpis{display:flex;gap:14px;margin:18px 0 16px;flex-wrap:wrap}
+  .ois-kpi{flex:1;min-width:200px;background:#fff;border:1px solid #e2e8f0;border-left-width:4px;border-radius:14px;padding:15px 20px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .ois-kpi.oih{border-left-color:#ea580c}
+  .ois-kpi.stock{border-left-color:#0c7a6b}
+  .ois-kpi.req{border-left-color:#2563eb}
+  .ois-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b}
+  .ois-kpi-v{font-size:28px;font-weight:800;color:#0f172a;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums}
+
+  /* Tree table */
+  .ois-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .ois-table-wrap{overflow:auto;max-height:70vh}
+  table.ois-table{width:100%;border-collapse:collapse;font-size:13px}
+  table.ois-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px}
+  table.ois-table th.num,table.ois-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.ois-table tbody td{padding:10px 16px;border-bottom:1px solid #eef2f6;color:#334155;white-space:nowrap}
+  table.ois-table tbody tr:nth-child(even) td{background:#fafcff}
+  table.ois-table tbody tr:hover td{background:#f1f5ff}
+  table.ois-table tbody tr.ois-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  .ois-empty{padding:36px;text-align:center;color:#7b8794}
+  .ois-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:8px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .ois-tw.open{transform:rotate(90deg)}
+  .ois-tw-empty{display:inline-block;width:13px;margin-right:8px}
+  .ois-short{color:#dc2626;font-weight:700}    /* OIH > stock → must produce/procure */
+  .ois-surplus{color:#0c7a6b}                    /* stock covers OIH → surplus */
+  table.ois-table tbody tr.ois-total td.ois-short{color:#fca5a5}
+  table.ois-table tbody tr.ois-total td.ois-surplus{color:#6ee7b7}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ois-wrap">
+  <div class="ois-topbar">
+    <div>
+      <h1 class="ois-h1">OIH vs Stock</h1>
+      <p class="ois-psub">Open sales-order litres (OIH) vs available stock per product. Required = OIH &minus; Stock (positive = shortfall to cover open orders). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
+    </div>
+    <div class="ois-drill">
+      <span class="ois-drill-lbl">Group by</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="oisDrillBtn"><span id="oisDrillLabel">U_Sub_Group</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="oisDrillPanel">
+          <div class="com-dp-head"><a id="oisSelAll">Select All</a><a id="oisClrAll">Clear All</a></div>
+          <div class="com-dp-list" id="oisDpList"></div>
+          <div class="com-dp-foot"><button type="button" id="oisApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ois-kpis">
+    <div class="ois-kpi oih"><div class="ois-kpi-l">Total OIH (L)</div><div class="ois-kpi-v" id="oisKpiOih">&mdash;</div></div>
+    <div class="ois-kpi stock"><div class="ois-kpi-l">Total Stock Avl (L)</div><div class="ois-kpi-v" id="oisKpiStock">&mdash;</div></div>
+    <div class="ois-kpi req"><div class="ois-kpi-l">Total Required (L)</div><div class="ois-kpi-v" id="oisKpiReq">&mdash;</div></div>
+  </div>
+
+  <div class="ois-table-card">
+    <div class="ois-table-wrap">
+      <table class="ois-table">
+        <thead><tr><th id="oisColProduct">U_Sub_Group</th><th class="num">OIH (L)</th><th class="num">Stock Avl (L)</th><th class="num">Required (L)</th></tr></thead>
+        <tbody id="oisBody"><tr><td colspan="4" class="ois-empty">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+  // Product dimensions only — stock is warehouse on-hand per item, with no customer/state
+  // breakdown, so 'Required = OIH − Stock' stays meaningful at every level.
+  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'}];
+  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name'};
+  var order=['sub_group'], chosen=['sub_group'];
+  var rows=[], itemStock={}, err=null, expanded={}, loaded=false;
+
+  // Total on-hand litres for an item (sum across the three warehouses).
+  function itemStockTotal(name){var a=itemStock[name]; if(!a)return 0; var t=0; for(var i=0;i<a.length;i++)t+=Number(a[i])||0; return t;}
+
+  // Nest OIH rows by the chosen product order. OIH sums premium+commodity; Stock sums each
+  // UNIQUE item once (an item shows in many rows across customers/states), so it never
+  // multi-counts. Required = OIH − Stock.
+  function buildTree(subset,level){
+    if(level>=order.length)return [];
+    var dim=order[level],map={};
+    for(var i=0;i<subset.length;i++){var r=subset[i],v=r[dim]||'—';
+      var n=map[v]; if(!n){n=map[v]={name:v,dim:dim,oih:0,_rows:[],_items:{}};}
+      n.oih+=(Number(r.premium)||0)+(Number(r.commodity)||0);
+      if(r.item)n._items[r.item]=1;
+      n._rows.push(r);
+    }
+    return Object.keys(map).map(function(k){var n=map[k];
+      var st=0; for(var it in n._items)st+=itemStockTotal(it);
+      n.stock=Math.round(st*100)/100; n.oih=Math.round(n.oih*100)/100; n.req=Math.round((n.oih-n.stock)*100)/100;
+      n.kids=buildTree(n._rows,level+1); delete n._rows; delete n._items; return n;
+    }).sort(function(a,b){return b.oih-a.oih||String(a.name).localeCompare(String(b.name));});
+  }
+
+  function reqCell(v){var cls=v>0?'ois-short':(v<0?'ois-surplus':''); return '<td class="num '+cls+'">'+(v>0?'+':'')+num(v)+'</td>';}
+
+  function treeRows(nodes,level,prefix){
+    var html='';
+    for(var i=0;i<nodes.length;i++){var n=nodes[i];
+      var path=prefix+'>'+n.dim+':'+n.name, hasKids=n.kids&&n.kids.length>0, open=!!expanded[path];
+      var tw=hasKids?'<span class="ois-tw'+(open?' open':'')+'" data-oispath="'+esc(path)+'">&#9654;</span>':'<span class="ois-tw-empty"></span>';
+      html+='<tr><td style="padding-left:'+(14+level*20)+'px">'+tw+esc(n.name)+'</td>'
+        +'<td class="num">'+num(n.oih)+'</td><td class="num">'+num(n.stock)+'</td>'+reqCell(n.req)+'</tr>';
+      if(hasKids&&open)html+=treeRows(n.kids,level+1,path);
+    }
+    return html;
+  }
+
+  function render(){
+    var label=order.map(function(k){return DIM_NAME[k]||k;}).join(' › ')||'Dimension';
+    document.getElementById('oisDrillLabel').textContent=label;
+    document.getElementById('oisColProduct').textContent=label;
+    var body=document.getElementById('oisBody');
+    // Order-independent totals.
+    var tOih=0; for(var i=0;i<rows.length;i++)tOih+=(Number(rows[i].premium)||0)+(Number(rows[i].commodity)||0);
+    var allItems={}; for(var j=0;j<rows.length;j++){if(rows[j].item)allItems[rows[j].item]=1;}
+    var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
+    tOih=Math.round(tOih*100)/100; tStock=Math.round(tStock*100)/100; var tReq=Math.round((tOih-tStock)*100)/100;
+    document.getElementById('oisKpiOih').textContent=num(tOih);
+    document.getElementById('oisKpiStock').textContent=num(tStock);
+    var kr=document.getElementById('oisKpiReq'); kr.textContent=(tReq>0?'+':'')+num(tReq);
+    kr.className='ois-kpi-v '+(tReq>0?'ois-short':(tReq<0?'ois-surplus':''));
+    if(err){body.innerHTML='<tr><td colspan="4" class="ois-empty">Could not load ('+esc(err)+').</td></tr>';return;}
+    if(!loaded){body.innerHTML='<tr><td colspan="4" class="ois-empty">Loading…</td></tr>';return;}
+    if(!order.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">Select at least one dimension.</td></tr>';return;}
+    if(!rows.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">No open orders.</td></tr>';return;}
+    var html=treeRows(buildTree(rows,0),0,'');
+    html+='<tr class="ois-total"><td>TOTAL</td><td class="num">'+num(tOih)+'</td><td class="num">'+num(tStock)+'</td>'+reqCell(tReq)+'</tr>';
+    body.innerHTML=html;
+  }
+
+  function load(){
+    fetch('/realise/api/oih-breakdown/',{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{};})
+      .then(function(p){ rows=p.rows||[]; itemStock=p.item_stock||{}; err=p.error||null; loaded=true; render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); });
+  }
+
+  // Expand / collapse tree nodes.
+  document.getElementById('oisBody').addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.ois-tw'):null; if(!b)return;
+    var p=b.getAttribute('data-oispath'); expanded[p]=!expanded[p]; render();
+  });
+
+  // Drill-order builder (checkbox order, like the Realise cards).
+  function renderDp(){
+    var list=document.getElementById('oisDpList'); list.innerHTML='';
+    DIMS.forEach(function(d){
+      var pos=chosen.indexOf(d.key);
+      var item=document.createElement('label');
+      item.className='com-dp-item'+(pos!==-1?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'</span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=chosen.indexOf(d.key);
+        if(this.checked){if(i===-1)chosen.push(d.key);}else if(i!==-1)chosen.splice(i,1);
+        renderDp();
+      });
+      list.appendChild(item);
+    });
+  }
+  var btn=document.getElementById('oisDrillBtn'), panel=document.getElementById('oisDrillPanel');
+  btn.addEventListener('click',function(e){e.stopPropagation(); chosen=order.slice(); renderDp(); panel.classList.toggle('open');});
+  panel.addEventListener('click',function(e){e.stopPropagation();});
+  document.addEventListener('click',function(){panel.classList.remove('open');});
+  document.getElementById('oisSelAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;}); renderDp();});
+  document.getElementById('oisClrAll').addEventListener('click',function(){chosen=[]; renderDp();});
+  document.getElementById('oisApply').addEventListener('click',function(){
+    if(!chosen.length)return;
+    order=chosen.slice(); expanded={}; panel.classList.remove('open'); render();
+  });
+
+  render(); load();
+})();
+</script>
+{% endblock %}
