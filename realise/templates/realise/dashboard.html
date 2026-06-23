@@ -17,7 +17,8 @@
 /* Slide 2 keeps the control-panel sidebar + topbar visible (like slide 1); only the in-page filter bar is hidden. */
 body.slide-two-mode .rd-wrap .controls{display:none}
 .cp-main{padding:0!important}
-body.cp-sidebar-collapsed .cp-main{padding-left:64px!important}
+/* No extra left padding: the sidebar is a flex item that takes its own width and pushes
+   the content, so the old 64px collapsed offset would just leave a dead gap. */
 /* Slide 2: pin the page to the viewport (topbar is 56px) so the toolbar + KPI row
    stay fixed and only the channel-card grid (.sc2-grid) scrolls. Without a definite
    height here, .rd-wrap's height:100% collapses to auto and the whole page — KPIs

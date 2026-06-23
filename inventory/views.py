@@ -54,14 +54,14 @@ def stock_available_data(request):
     return JsonResponse({'data': data})
 
 
-@permission_flag_required('can_inventory')
+@permission_flag_required('can_production')
 def production(request):
     """Production feasibility: enter an FG code + planned qty, see its BOM's RM/PM
     requirement vs OnHand stock and whether/how much can actually be made."""
     return render(request, 'inventory/production.html', {'sidebar_active': 'production'})
 
 
-@permission_flag_required('can_inventory', json_response=True)
+@permission_flag_required('can_production', json_response=True)
 @require_http_methods(['GET'])
 def production_feasibility_data(request):
     from .services.production import get_bom_feasibility
@@ -76,7 +76,7 @@ def production_feasibility_data(request):
     return JsonResponse({'status': 'ok', 'data': data})
 
 
-@permission_flag_required('can_inventory', json_response=True)
+@permission_flag_required('can_production', json_response=True)
 @require_http_methods(['GET'])
 def production_fg_list(request):
     from .services.production import get_fg_list
@@ -88,7 +88,7 @@ def production_fg_list(request):
     return JsonResponse({'status': 'ok', 'data': data})
 
 
-@permission_flag_required('can_inventory', json_response=True)
+@permission_flag_required('can_production', json_response=True)
 @require_http_methods(['GET'])
 def production_plan_data(request):
     from .services.production import get_plan_feasibility
@@ -107,7 +107,7 @@ def production_plan_data(request):
     return JsonResponse({'status': 'ok', 'data': data})
 
 
-@permission_flag_required('can_inventory', json_response=True)
+@permission_flag_required('can_production', json_response=True)
 @require_http_methods(['GET'])
 def production_warehouses(request):
     from .services.production import get_warehouses

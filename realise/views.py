@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.cache import never_cache
 
-from core.decorators import group_required
+from core.decorators import group_required, permission_flag_required, any_permission_flag
 from core import sap_connector
 from core.simple_xlsx import build_workbook
 from . import services
@@ -61,7 +61,7 @@ def dashboard(request):
     })
 
 
-@group_required(*REALISE_GROUPS, json_response=False)
+@permission_flag_required('can_oih_vs_stock')
 def oih_vs_stock(request):
     """Standalone tab: open-order litres (OIH) vs warehouse stock per product, with the
     Required (OIH − Stock) gap. Reuses the /api/oih-breakdown/ data (OIH rows + per-item
@@ -69,7 +69,7 @@ def oih_vs_stock(request):
     return render(request, 'realise/oih_vs_stock.html', {'sidebar_active': 'oih_vs_stock'})
 
 
-@group_required(*REALISE_GROUPS, json_response=False)
+@permission_flag_required('can_compare_sales')
 def compare_sales(request):
     """Standalone tab: month-wise sales pivot (rows = chosen dimension, columns = months)
     with a Main Group filter (compare groups for the same period) and a Compare selector
@@ -198,7 +198,7 @@ def api_health(request):
     })
 
 
-@group_required(*REALISE_GROUPS, json_response=True)
+@any_permission_flag('can_realise', 'can_compare_sales', json_response=True)
 @require_http_methods(['POST'])
 def api_sales_data(request):
     body = _parse_body(request)
@@ -504,7 +504,7 @@ def api_commodity_oih_rows(request):
     return JsonResponse({'status': 'ok', 'data': services.get_commodity_oih_rows()})
 
 
-@group_required(*REALISE_GROUPS, json_response=True)
+@any_permission_flag('can_realise', 'can_oih_vs_stock', json_response=True)
 @require_http_methods(['GET'])
 def api_oih_breakdown(request):
     """Granular open-order litres by item dimensions (split Premium/Commodity) for the

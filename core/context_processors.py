@@ -49,6 +49,9 @@ def build_user_permissions(user):
             'can_inventory': False,
             'inventory_can_edit': False,
             'can_stock_available': False,
+            'can_production': False,
+            'can_oih_vs_stock': False,
+            'can_compare_sales': False,
             'can_sales': False,
             'can_expenses': False,
             'can_salaries': False,
@@ -62,6 +65,9 @@ def build_user_permissions(user):
             'can_inventory': True,
             'inventory_can_edit': True,
             'can_stock_available': True,
+            'can_production': True,
+            'can_oih_vs_stock': True,
+            'can_compare_sales': True,
             'can_sales': True,
             'can_expenses': True,
             'can_salaries': True,
@@ -98,6 +104,26 @@ def build_user_permissions(user):
             or user.has_perm('inventory.view_stock_available')
             or user.has_perm('inventory.view_inventory')
             or user.has_perm('inventory.manage_inventory')
+        ),
+        # Standalone, independently-shareable report tabs: granted by their dedicated
+        # viewer group, and to anyone with full access to the parent module (inventory
+        # for Production; realise for OIH-vs-Stock / Compare Sales) — same model as
+        # can_stock_available above.
+        'can_production': bool(
+            'production_viewer' in user_groups
+            or user_groups & INVENTORY_GROUPS
+            or user.has_perm('inventory.view_inventory')
+            or user.has_perm('inventory.manage_inventory')
+        ),
+        'can_oih_vs_stock': bool(
+            'oih_vs_stock_viewer' in user_groups
+            or user_groups & REALISE_GROUPS
+            or has_app_permission('realise')
+        ),
+        'can_compare_sales': bool(
+            'compare_sales_viewer' in user_groups
+            or user_groups & REALISE_GROUPS
+            or has_app_permission('realise')
         ),
         'can_sales': bool(user_groups & MODULE_GROUPS['sales'] or has_app_permission('sales')),
         'can_expenses': bool(user_groups & MODULE_GROUPS['expenses'] or has_app_permission('dashboard')),
