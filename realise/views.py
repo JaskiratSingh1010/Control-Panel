@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import logging
+import time
 from datetime import datetime
 
 from django.http import JsonResponse, HttpResponse
@@ -20,6 +21,14 @@ REALISE_GROUPS = ('realise_admin', 'realise_premium', 'realise_commodity')
 # In-memory cache: stores the last fetched raw SAP rows per session is not enough;
 # we use a module-level cache keyed by (start_date, end_date).
 _raw_cache = {'key': None, 'rows': [], 'columns': []}
+
+# channel_rows / channel_month_rows are a pure function of the (already cached) raw SAP
+# rows, but were re-aggregated on every /api/sales-data/ hit — two full O(n) passes over
+# tens of thousands of invoice lines (plus a strptime per row in the month pass) before the
+# response could be sent. Memoize them by date range so repeat loads / Fetch clicks within
+# the SAP cache window skip the rework. Same shape/TTL as services._SALES_CACHE.
+_CHANNEL_AGG_CACHE = {}        # 'start|end' -> (expires_at, channel_rows, channel_month_rows)
+_CHANNEL_AGG_TTL = 90          # seconds
 
 EDIT_PIN = 'gill'
 
@@ -150,6 +159,24 @@ def _aggregate_channel_month_rows(raw_rows):
     return out
 
 
+def _channel_aggregates(start_date, end_date, raw_rows):
+    """Memoized (channel_rows, channel_month_rows) for a date range. Only recomputes when
+    the SAP cache window has rolled over; otherwise returns the prior aggregation so a
+    cached sales-data load doesn't re-walk the full raw set on every request."""
+    key = f'{start_date}|{end_date}'
+    now = time.time()
+    hit = _CHANNEL_AGG_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1], hit[2]
+    channel_rows = _aggregate_channel_rows(raw_rows)
+    channel_month_rows = _aggregate_channel_month_rows(raw_rows)
+    if raw_rows:                          # only cache successful, non-empty pulls
+        _CHANNEL_AGG_CACHE[key] = (now + _CHANNEL_AGG_TTL, channel_rows, channel_month_rows)
+        for k in [k for k, v in _CHANNEL_AGG_CACHE.items() if v[0] <= now]:
+            _CHANNEL_AGG_CACHE.pop(k, None)
+    return channel_rows, channel_month_rows
+
+
 @group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['GET'])
 def api_health(request):
@@ -242,8 +269,7 @@ def api_sales_data(request):
         x['month'],
     ))
 
-    channel_rows = _aggregate_channel_rows(raw_rows)
-    channel_month_rows = _aggregate_channel_month_rows(raw_rows)
+    channel_rows, channel_month_rows = _channel_aggregates(start_date, end_date, raw_rows)
     return JsonResponse({'status': 'ok', 'data': output, 'count': len(output),
                          'channel_rows': channel_rows, 'channel_month_rows': channel_month_rows})
 
@@ -476,8 +502,9 @@ def api_commodity_oih_rows(request):
 @require_http_methods(['GET'])
 def api_oih_breakdown(request):
     """Granular open-order litres by item dimensions (split Premium/Commodity) for the
-    OIH KPI window's dynamic drill; the client nests them into any chosen order."""
-    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows()})
+    OIH KPI window's dynamic drill; the client nests them into any chosen order.
+    Cached (90s) so repeat opens of the OIH-vs-Stock tab / dashboard reuse one pull."""
+    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows_cached()})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

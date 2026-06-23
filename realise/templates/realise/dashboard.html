@@ -1570,19 +1570,40 @@ function bevTreeRows(nodes,level){
   }
   return html;
 }
-// Inline invoice/SO rows beneath a node, for one metric (sales -> INV, oih -> SO).
+// Inline breakdown beneath a node, for one metric (sales / oih). Rolls the documents up to
+// the customers behind the cell (name + their qty/boxes) — e.g. a Sales Person expands to
+// the customers they sold to. When the node is already a specific customer the customer
+// roll-up would be a single self-row, so we list that customer's invoices/SOs instead.
 function bevDocRows(path,metric,level){
   var st=bevDocState[path+'|'+metric];
   if(!st||!st.open)return '';
   var pad=12+(level+1)*18, noun=(metric==='oih'?'open SOs':'invoices');
-  if(st.loading)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">Loading '+noun+'&hellip;</td><td></td><td></td><td></td></tr>';
-  if(st.err)return '<tr class="bev-doc-row bev-doc-err"><td style="padding-left:'+pad+'px">Could not load '+noun+'.</td><td></td><td></td><td></td></tr>';
+  if(st.loading)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">Loading&hellip;</td><td></td><td></td><td></td></tr>';
+  if(st.err)return '<tr class="bev-doc-row bev-doc-err"><td style="padding-left:'+pad+'px">Could not load.</td><td></td><td></td><td></td></tr>';
   var docs=st.docs||[];
-  if(!docs.length)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">No '+noun+' in range.</td><td></td><td></td><td></td></tr>';
+  var pinnedCust=(bevNodeFilters[path]||{}).customer;
+  if(!docs.length)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">No '+(pinnedCust?noun:'customers')+' in range.</td><td></td><td></td><td></td></tr>';
+  if(!pinnedCust)return bevCustRows(docs,pad);
   var html='', lbl=(metric==='oih'?'SO':'INV');
   for(var i=0;i<docs.length;i++){var d=docs[i];
     html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">'+lbl+'</span>'+esc(d.doc_num||'—')+' &middot; '+esc(d.doc_date||'—')+'</td>'
       +'<td class="num">'+fN(d.quantity||0)+'</td><td class="num">'+fN(d.boxes||0)+'</td><td class="num"></td></tr>';
+  }
+  return html;
+}
+// Customers behind a cell, aggregated from its documents (qty/boxes summed), highest qty first.
+function bevCustRows(docs,pad){
+  var map={},order=[];
+  for(var i=0;i<docs.length;i++){var d=docs[i],c=d.customer||'—';
+    var g=map[c]; if(!g){g=map[c]={name:c,quantity:0,boxes:0};order.push(c);}
+    g.quantity+=Number(d.quantity)||0; g.boxes+=Number(d.boxes)||0;
+  }
+  var groups=order.map(function(c){return map[c];})
+    .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
+  var html='';
+  for(var j=0;j<groups.length;j++){var g=groups[j];
+    html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">CUST</span>'+esc(g.name)+'</td>'
+      +'<td class="num">'+fN(g.quantity)+'</td><td class="num">'+fN(g.boxes)+'</td><td class="num"></td></tr>';
   }
   return html;
 }
@@ -2033,6 +2054,7 @@ function clearCachedDashboardOnReload(){
   if(wasPageReload()||nocache){
     try{sessionStorage.removeItem(CACHE_KEY);}catch(e){}
     try{sessionStorage.removeItem(SC2_CACHE_KEY);}catch(e){}
+    try{sessionStorage.removeItem('cs_compare_v1');}catch(e){}   // Compare Sales pivot cache
   }
 }
 function saveDashboardCache(){

@@ -1957,6 +1957,25 @@ def get_oih_dimension_rows():
             'warehouses': OIH_STOCK_WAREHOUSES, 'error': None}
 
 
+# get_oih_dimension_rows runs two heavy SAP queries (the grouped open-order pull + the
+# warehouse stock pull) and takes no arguments, so the result is the same for everyone
+# within the window. Cache it like the sales/beverages pulls so the OIH-vs-Stock tab and
+# the dashboard OIH window open instantly on repeat loads instead of re-querying HANA.
+_OIH_DIM_CACHE = {}        # 'oih_dim' -> (expires_at, result)
+_OIH_DIM_CACHE_TTL = 90    # seconds, same as the other realise SAP caches
+
+
+def get_oih_dimension_rows_cached():
+    now = time.time()
+    hit = _OIH_DIM_CACHE.get('oih_dim')
+    if hit and hit[0] > now:
+        return hit[1]
+    result = get_oih_dimension_rows()
+    if result and result.get('rows') and not result.get('error'):   # cache only successful pulls
+        _OIH_DIM_CACHE['oih_dim'] = (now + _OIH_DIM_CACHE_TTL, result)
+    return result
+
+
 def get_target_nodes(month, year, segment=None):
     """Raw saved hierarchical targets for a period (group/state/person/ltrs/realise).
     segment PREMIUM/COMMODITY filters to that product segment; blank/None = all.

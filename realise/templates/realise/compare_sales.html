@@ -283,9 +283,30 @@
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; rebuildMgList(); render(); })
+      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; rebuildMgList(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  // Cache the fetched pivot for this browser session so leaving and returning to the tab
+  // doesn't re-hit SAP. It is NOT auto-fetched: the cache lives until the user clicks Fetch
+  // again (overwrites it) or does a full refresh / "Clear Cache & Refresh" (clears it).
+  var CS_CACHE_KEY='cs_compare_v1';
+  function wasReload(){ try{var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0]; return nav&&nav.type==='reload';}catch(e){return false;} }
+  function clearCacheOnReload(){
+    var nocache=new URLSearchParams(location.search).get('nocache')==='1';
+    if(wasReload()||nocache){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(e){} }
+  }
+  function saveCache(){
+    try{ sessionStorage.setItem(CS_CACHE_KEY,JSON.stringify({months:document.getElementById('csMonths').value,rows:rows})); }catch(e){}
+  }
+  function restoreCache(){
+    try{
+      var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
+      var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
+      if(c.months)document.getElementById('csMonths').value=c.months;
+      rows=c.rows; err=null; loaded=true; expanded={}; rebuildMgList(); render(); return true;
+    }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
   // Wiring
@@ -325,7 +346,10 @@
   })();
 
   renderDrillList();
-  load();
+  // No auto-fetch: restore a cached pivot if one exists (and wasn't invalidated by a
+  // refresh), else sit on the "Pick a period and click Fetch" empty state.
+  clearCacheOnReload();
+  restoreCache();
 })();
 </script>
 {% endblock %}

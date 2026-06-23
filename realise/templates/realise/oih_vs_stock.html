@@ -64,7 +64,7 @@
   <div class="ois-topbar">
     <div>
       <h1 class="ois-h1">OIH vs Stock</h1>
-      <p class="ois-psub">Open sales-order litres (OIH) vs available stock per product. Required = OIH &minus; Stock (positive = shortfall to cover open orders). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
+      <p class="ois-psub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
     </div>
     <div class="ois-drill">
       <span class="ois-drill-lbl">Group by</span>
@@ -103,10 +103,13 @@
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
-  // Product dimensions only — stock is warehouse on-hand per item, with no customer/state
-  // breakdown, so 'Required = OIH − Stock' stays meaningful at every level.
-  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'}];
-  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name'};
+  // Product dimensions own each item cleanly, so their Stock (warehouse on-hand per item)
+  // and 'Required = OIH − Stock' add up at every level. Customer is orthogonal — one item
+  // can sit under many customers — so a customer's Stock is the shared on-hand of the items
+  // that customer has on order (not reserved per customer) and customer rows won't sum back
+  // to a product parent; the order-independent TOTAL still counts each item once.
+  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'}];
+  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer'};
   var order=['sub_group'], chosen=['sub_group'];
   var rows=[], itemStock={}, err=null, expanded={}, loaded=false;
 
@@ -127,12 +130,13 @@
     }
     return Object.keys(map).map(function(k){var n=map[k];
       var st=0; for(var it in n._items)st+=itemStockTotal(it);
-      n.stock=Math.round(st*100)/100; n.oih=Math.round(n.oih*100)/100; n.req=Math.round((n.oih-n.stock)*100)/100;
+      n.stock=Math.round(st*100)/100; n.oih=Math.round(n.oih*100)/100; n.req=Math.round((n.stock-n.oih)*100)/100;
       n.kids=buildTree(n._rows,level+1); delete n._rows; delete n._items; return n;
     }).sort(function(a,b){return b.oih-a.oih||String(a.name).localeCompare(String(b.name));});
   }
 
-  function reqCell(v){var cls=v>0?'ois-short':(v<0?'ois-surplus':''); return '<td class="num '+cls+'">'+(v>0?'+':'')+num(v)+'</td>';}
+  // Required = Stock − OIH: negative = shortfall (red), positive = surplus (green).
+  function reqCell(v){var cls=v<0?'ois-short':(v>0?'ois-surplus':''); return '<td class="num '+cls+'">'+(v>0?'+':'')+num(v)+'</td>';}
 
   function treeRows(nodes,level,prefix){
     var html='';
@@ -155,11 +159,11 @@
     var tOih=0; for(var i=0;i<rows.length;i++)tOih+=(Number(rows[i].premium)||0)+(Number(rows[i].commodity)||0);
     var allItems={}; for(var j=0;j<rows.length;j++){if(rows[j].item)allItems[rows[j].item]=1;}
     var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
-    tOih=Math.round(tOih*100)/100; tStock=Math.round(tStock*100)/100; var tReq=Math.round((tOih-tStock)*100)/100;
+    tOih=Math.round(tOih*100)/100; tStock=Math.round(tStock*100)/100; var tReq=Math.round((tStock-tOih)*100)/100;
     document.getElementById('oisKpiOih').textContent=num(tOih);
     document.getElementById('oisKpiStock').textContent=num(tStock);
     var kr=document.getElementById('oisKpiReq'); kr.textContent=(tReq>0?'+':'')+num(tReq);
-    kr.className='ois-kpi-v '+(tReq>0?'ois-short':(tReq<0?'ois-surplus':''));
+    kr.className='ois-kpi-v '+(tReq<0?'ois-short':(tReq>0?'ois-surplus':''));
     if(err){body.innerHTML='<tr><td colspan="4" class="ois-empty">Could not load ('+esc(err)+').</td></tr>';return;}
     if(!loaded){body.innerHTML='<tr><td colspan="4" class="ois-empty">Loading…</td></tr>';return;}
     if(!order.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">Select at least one dimension.</td></tr>';return;}
@@ -169,11 +173,26 @@
     body.innerHTML=html;
   }
 
-  function load(){
+  var CACHE_KEY='ois_breakdown_v1', CACHE_TTL=90000;   // ms; matches the 90s server cache
+  function applyPayload(p){ rows=p.rows||[]; itemStock=p.item_stock||{}; err=p.error||null; loaded=true; render(); }
+  function fetchFresh(){
     fetch('/realise/api/oih-breakdown/',{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.rows||[]; itemStock=p.item_stock||{}; err=p.error||null; loaded=true; render(); })
-      .catch(function(){ err='load failed'; loaded=true; render(); });
+      .then(function(p){
+        applyPayload(p);
+        try{ if(p&&p.rows)sessionStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),p:p})); }catch(e){}
+      })
+      .catch(function(){ if(!loaded){err='load failed'; loaded=true; render();} });
+  }
+  // Paint instantly from a recent pull (this browser session) so flipping back to the tab
+  // feels immediate, then refresh in the background. Drill order is applied client-side, so
+  // a cached payload is valid regardless of the chosen Group-by.
+  function load(){
+    try{
+      var raw=sessionStorage.getItem(CACHE_KEY);
+      if(raw){var c=JSON.parse(raw); if(c&&c.p&&(Date.now()-c.t)<CACHE_TTL)applyPayload(c.p);}
+    }catch(e){}
+    fetchFresh();
   }
 
   // Expand / collapse tree nodes.

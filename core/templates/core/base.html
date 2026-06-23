@@ -127,14 +127,9 @@
           <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}" title="Control Panel">
             <span class="material-icons">dashboard</span>Control Panel
           </a>
-          {% if can_sales %}
-          <a class="cp-nav-item {% if sidebar_active == 'sales' %}active{% endif %}" href="{% url 'sales:dashboard' %}" title="Sales">
-            <span class="material-icons">trending_up</span>Sales
-          </a>
-          {% endif %}
           {% if can_realise %}
-          <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}" title="Realise">
-            <span class="material-icons">flash_on</span>Realise
+          <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}" title="Sales">
+            <span class="material-icons">flash_on</span>Sales
           </a>
           {% endif %}
         </nav>
