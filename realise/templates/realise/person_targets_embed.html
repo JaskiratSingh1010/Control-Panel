@@ -1,0 +1,22 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Person Mapping &amp; Targets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'realise/person_targets.css' %}?v={{ asset_ver }}">
+</head>
+<body>
+<div id="root"></div>
+
+{{ boot|json_script:"pt-boot" }}
+<script>
+  // Expose the Django-provided bootstrap (URLs, CSRF, period, role) to the React app.
+  window.__PT_BOOT__ = JSON.parse(document.getElementById('pt-boot').textContent);
+</script>
+<script src="{% static 'realise/vendor/react.production.min.js' %}"></script>
+<script src="{% static 'realise/vendor/react-dom.production.min.js' %}"></script>
+<script src="{% static 'realise/person_targets.js' %}?v={{ asset_ver }}"></script>
+</body>
+</html>

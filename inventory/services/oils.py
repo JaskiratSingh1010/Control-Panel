@@ -49,8 +49,6 @@ def get_stock_available(schema="jivo_oil"):
         )
         if ctype not in ("PREMIUM", "COMMODITY") or csub not in ALLOWED_SUB_GROUPS:
             continue
-        if csub == "EXTRA VIRGIN OLIVE":
-            csub = "OLIVE"   # fold Extra Virgin into the Olive card
         it = items.get(code)
         if it is None:
             it = items[code] = {
@@ -59,32 +57,25 @@ def get_stock_available(schema="jivo_oil"):
                 "item_code": code, "item_name": name,
                 "sku": str(r.get("U_SKU") or "").strip(),
                 "wh": {w: 0.0 for w in STOCK_WAREHOUSES},
-                "wh_litres": {w: 0.0 for w in STOCK_WAREHOUSES},
                 "grand_total": 0.0, "litres": 0.0,
             }
         wcode = str(r.get("Warehouse") or "").strip().upper()
         qty = float(r.get("Qty") or 0)
-        lit = float(r.get("Litres") or 0)
         if wcode in it["wh"]:
             it["wh"][wcode] += qty
-            it["wh_litres"][wcode] += lit
         it["grand_total"] += qty
-        it["litres"] += lit
+        it["litres"] += float(r.get("Litres") or 0)
 
     item_list = list(items.values())
     for it in item_list:
         it["wh"] = {w: round(v, 2) for w, v in it["wh"].items()}
-        it["wh_litres"] = {w: round(v, 2) for w, v in it["wh_litres"].items()}
         it["grand_total"] = round(it["grand_total"], 2)
         it["litres"] = round(it["litres"], 2)
 
-    # Canonical products get a card (even at zero stock). Extra Virgin is folded into
-    # Olive above, so skip its standalone card.
+    # All 16 canonical products always get a card (even at zero stock).
     products = {}
     for key in DEFAULT_TARGETS:
         ptype, psub = key.split("|", 1)
-        if psub == "EXTRA VIRGIN OLIVE":
-            continue
         products[(ptype, psub)] = {"type": ptype, "sub_group": psub, "qty": 0.0, "litres": 0.0, "sku_count": 0}
     for it in item_list:
         p = products.get((it["type"], it["sub_group"]))

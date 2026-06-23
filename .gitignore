@@ -33,3 +33,10 @@ media/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Claude Code session data — never commit
+.claude/
+server.err.log
+# temp preview/harness files
+_*.html
+_*.png
