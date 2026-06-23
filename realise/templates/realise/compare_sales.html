@@ -1,0 +1,355 @@
+{% extends "core/base.html" %}
+{% block title %}Compare Sales — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .cs-wrap{max-width:1500px;margin:0 auto}
+  .cs-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .cs-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+
+  /* Toolbar */
+  .cs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:16px 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .cs-fld{display:flex;flex-direction:column;gap:5px}
+  .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .cs-bar input[type=number],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .cs-bar input[type=number]{width:90px}
+  .cs-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .cs-fetch:hover{background:#c2410c}
+  /* Compare segmented control */
+  .cs-seg{display:inline-flex;background:#eef2f7;border-radius:10px;padding:3px}
+  .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .cs-seg button.active{background:#2563eb;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.3)}
+
+  /* Dropdown panels (Main Group + Drill By) — shared with the Realise theme */
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:260px;max-height:320px;overflow:auto;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6;position:sticky;top:0;background:#fff}
+  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:#f4f7fb}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
+  .com-dp-item .com-dp-sub{font-size:10px;color:#94a3b8;font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6;position:sticky;bottom:0;background:#fff}
+  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  /* Pivot table */
+  .cs-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .cs-table-wrap{overflow:auto;max-height:74vh}
+  table.cs-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.cs-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap}
+  table.cs-table thead th.gc-name{text-align:left;left:0;z-index:3}
+  table.cs-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:#334155;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.cs-table tbody td.gc-name{text-align:left;color:#0f172a;font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
+  table.cs-table tbody tr:nth-child(even) td.gc-name{background:#fafcff}
+  table.cs-table tbody tr:hover td{background:#f1f5ff}
+  table.cs-table tbody tr:hover td.gc-name{background:#eef3ff}
+  .cs-grand{background:#f1f5fb;font-weight:800;color:#0f172a}
+  table.cs-table thead th.cs-grand{background:#0f172a;color:#fff}
+  table.cs-table tbody tr.cs-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  table.cs-table tbody tr.cs-total td.gc-name{background:#1f3a5f;color:#fff}
+  .cs-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .cs-tw.open{transform:rotate(90deg)}
+  .cs-tw-empty{display:inline-block;width:13px;margin-right:7px}
+  .cs-r{font-size:11px;color:#0c7a6b;font-weight:700;margin-top:1px}      /* realise line in 'Both' */
+  table.cs-table tbody tr.cs-total .cs-r{color:#6ee7b7}
+  .cs-empty{padding:40px;text-align:center;color:#7b8794}
+  .cs-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:#e2e8f0;color:#475569;margin-right:8px;vertical-align:middle}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cs-wrap">
+  <div>
+    <h1 class="cs-h1">Compare Sales</h1>
+    <p class="cs-psub">Month-wise sales pivot — pick the period &amp; main group(s), then drill by any dimension. Compare Litres, Realise (₹/L), or both.</p>
+  </div>
+
+  <div class="cs-bar">
+    <div class="cs-fld"><span class="cs-lbl">Last (months)</span>
+      <input type="number" id="csMonths" min="1" max="120" step="1" value="6">
+    </div>
+    <button class="cs-fetch" id="csFetch">&#9654; Fetch</button>
+    <div class="cs-fld"><span class="cs-lbl">Type</span>
+      <select id="csType">
+        <option value="">All</option>
+        <option value="PREMIUM">Premium</option>
+        <option value="COMMODITY">Commodity</option>
+      </select>
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">Main Group</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="csMgBtn"><span id="csMgLabel">All groups</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="csMgPanel">
+          <div class="com-dp-head"><a id="csMgAll">Select All</a><a id="csMgClr">Clear All</a></div>
+          <div class="com-dp-list" id="csMgList"></div>
+          <div class="com-dp-foot"><button type="button" id="csMgApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">Compare</span>
+      <div class="cs-seg" id="csCompare">
+        <button type="button" data-mode="liters" class="active">Litres</button>
+        <button type="button" data-mode="realise">Realise</button>
+        <button type="button" data-mode="both">Both</button>
+      </div>
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">Drill By</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="csDrillBtn"><span id="csDrillLabel">Main Group</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="csDrillPanel">
+          <div class="com-dp-head"><a id="csDrillAll">Select All</a><a id="csDrillClr">Clear All</a></div>
+          <div class="com-dp-list" id="csDrillList"></div>
+          <div class="com-dp-foot"><button type="button" id="csDrillApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cs-table-card">
+    <div class="cs-table-wrap">
+      <table class="cs-table">
+        <thead id="csHead"></thead>
+        <tbody id="csBody"><tr><td class="cs-empty">Pick a period and click Fetch.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  var TERRITORY_DATA={{ territory_payload|safe }};
+  var TERRITORY=TERRITORY_DATA.map||{}, GROUP_OWNERS=TERRITORY_DATA.group_owners||{};
+  function assignedPerson(group,state){
+    group=String(group||'').trim().toUpperCase(); state=String(state||'').trim().toUpperCase();
+    return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
+  }
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
+  function fRz(n){return '₹'+(Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+  var DIMS=[
+    {key:'group',label:'Main Group',sub:'GT / MT / ROI / …'},
+    {key:'state',label:'State',sub:'Full state names'},
+    {key:'person',label:'Contact Person',sub:'Assigned territory owner'},
+    {key:'product',label:'Product',sub:'Sub-group / category'},
+    {key:'item',label:'Item Name',sub:'SAP item name'},
+    {key:'customer',label:'Customer',sub:'CardName / buyer'},
+  ];
+  var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
+
+  var rows=[], loaded=false, err=null, expanded={};
+  var order=['group'], chosen=['group'];                 // drill order
+  var typeF='', compareMode='liters';
+  var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
+
+  function rowVal(r,dim){
+    var g=String(r.main_group||'').toUpperCase();
+    if(dim==='group')return g||'—';
+    if(dim==='person')return assignedPerson(g,r.state)||'—';
+    if(dim==='product')return String(r.u_sub_group||'').trim().toUpperCase()||'—';
+    if(dim==='item')return String(r.item_name||'').trim().toUpperCase()||'—';
+    if(dim==='customer')return String(r.card_name||'').trim().toUpperCase()||'—';
+    return String(r.state||'').trim().toUpperCase()||'UNKNOWN';
+  }
+
+  function activeRows(){
+    var out=[], months={};
+    var mgAll=mgSelected.length===0||mgSelected.length===mgAllGroups.length;
+    var mgset={}; mgSelected.forEach(function(g){mgset[g]=1;});
+    for(var i=0;i<rows.length;i++){var r=rows[i];
+      if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
+      if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
+      if(!r.ym)continue;
+      if(!months[r.ym])months[r.ym]={ym:r.ym,label:r.mlabel||r.ym};
+      out.push(r);
+    }
+    return {rows:out, months:Object.keys(months).sort().map(function(k){return months[k];})};
+  }
+
+  function buildTree(subset,dims,depth,prefix){
+    if(depth>=dims.length)return [];
+    var dim=dims[depth], map={}, ord=[];
+    for(var i=0;i<subset.length;i++){var r=subset[i],k=rowVal(r,dim);
+      var n=map[k]; if(!n){n=map[k]={label:k,dim:dim,byL:{},byR:{},totL:0,totR:0,_rows:[]};ord.push(k);}
+      var L=Number(r.liter)||0, R=Number(r.line_total)||0;
+      n.byL[r.ym]=(n.byL[r.ym]||0)+L; n.byR[r.ym]=(n.byR[r.ym]||0)+R; n.totL+=L; n.totR+=R; n._rows.push(r);
+    }
+    return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
+      n.kids=buildTree(n._rows,dims,depth+1,n.path); n.leaf=!n.kids.length; delete n._rows; return n;
+    }).sort(function(a,b){return b.totL-a.totL||String(a.label).localeCompare(String(b.label));});
+  }
+
+  // One cell for liters L and revenue R under the active Compare mode.
+  function cell(L,R){
+    if(compareMode==='realise')return L>0?fRz(R/L):'';
+    if(compareMode==='both'){
+      if(!L&&!R)return '';
+      return '<div>'+(L?fN(Math.round(L)):'—')+'</div><div class="cs-r">'+(L>0?fRz(R/L):'')+'</div>';
+    }
+    return L?fN(Math.round(L)):'';
+  }
+
+  function treeRows(nodes,months,depth){
+    var html='';
+    nodes.forEach(function(n){
+      var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
+      var tw=hasKids?'<span class="cs-tw'+(open?' open':'')+'" data-cspath="'+esc(n.path)+'">&#9654;</span>':'<span class="cs-tw-empty"></span>';
+      var tag='<span class="cs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
+      var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-cstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
+      var cells=months.map(function(mo){return '<td>'+cell(n.byL[mo.ym]||0,n.byR[mo.ym]||0)+'</td>';}).join('');
+      html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR)+'</td></tr>';
+      if(hasKids&&open)html+=treeRows(n.kids,months,depth+1);
+    });
+    return html;
+  }
+
+  function render(){
+    document.getElementById('csDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none —';
+    var body=document.getElementById('csBody'), head=document.getElementById('csHead');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="cs-empty">Could not load ('+esc(err)+').</td></tr>';return;}
+    if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="cs-empty">Pick a period and click Fetch.</td></tr>';return;}
+    var a=activeRows(), months=a.months, dims=order.length?order:['group'];
+    var rowLabel=dims.map(function(k){return DIM_LABEL[k];}).join(' › ');
+    head.innerHTML='<tr><th class="gc-name">'+esc(rowLabel)+'</th>'
+      +months.map(function(mo){return '<th>'+esc(mo.label)+'</th>';}).join('')
+      +'<th class="cs-grand">Grand Total</th></tr>';
+    if(!a.rows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+2)+'">No sales in this selection.</td></tr>';return;}
+    var tree=buildTree(a.rows,dims,0,'');
+    var html=treeRows(tree,months,0);
+    // Totals row
+    var colL={},colR={},gL=0,gR=0;
+    a.rows.forEach(function(r){var L=Number(r.liter)||0,R=Number(r.line_total)||0;colL[r.ym]=(colL[r.ym]||0)+L;colR[r.ym]=(colR[r.ym]||0)+R;gL+=L;gR+=R;});
+    var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0)+'</td>';}).join('');
+    html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td></tr>';
+    body.innerHTML=html;
+  }
+
+  function rebuildMgList(){
+    var seen={}; mgAllGroups=[];
+    rows.forEach(function(r){var g=String(r.main_group||'').toUpperCase()||'—'; if(!seen[g]){seen[g]=1;mgAllGroups.push(g);}});
+    mgAllGroups.sort();
+    mgSelected=mgAllGroups.slice();           // default: all
+    renderMgList(); updateMgLabel();
+  }
+  function updateMgLabel(){
+    var el=document.getElementById('csMgLabel');
+    el.textContent=(mgSelected.length===0||mgSelected.length===mgAllGroups.length)?'All groups':(mgSelected.length+' group(s)');
+  }
+  function renderMgList(){
+    var list=document.getElementById('csMgList'); list.innerHTML='';
+    mgAllGroups.forEach(function(g){
+      var on=mgChosen.indexOf(g)!==-1;
+      var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(g)+'</span><span class="com-pos">&#10003;</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=mgChosen.indexOf(g); if(this.checked){if(i===-1)mgChosen.push(g);}else if(i!==-1)mgChosen.splice(i,1);
+        renderMgList();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function renderDrillList(){
+    var list=document.getElementById('csDrillList'); list.innerHTML='';
+    DIMS.forEach(function(d){
+      var pos=chosen.indexOf(d.key);
+      var item=document.createElement('label'); item.className='com-dp-item'+(pos!==-1?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'<div class="com-dp-sub">'+esc(d.sub)+'</div></span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=chosen.indexOf(d.key); if(this.checked){if(i===-1)chosen.push(d.key);}else if(i!==-1)chosen.splice(i,1);
+        renderDrillList();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function load(){
+    var n=parseInt(document.getElementById('csMonths').value,10); if(!n||n<1)n=6; if(n>120)n=120;
+    var now=new Date();
+    var ed=ymd(now), sd=ymd(new Date(now.getFullYear(), now.getMonth()-(n-1), 1));
+    var btn=document.getElementById('csFetch'); btn.disabled=true; btn.textContent='Loading…';
+    document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
+    fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
+      .then(function(r){return r.ok?r.json():{};})
+      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; rebuildMgList(); render(); if(!err)saveCache(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  // Cache the fetched pivot for this browser session so leaving and returning to the tab
+  // doesn't re-hit SAP. It is NOT auto-fetched: the cache lives until the user clicks Fetch
+  // again (overwrites it) or does a full refresh / "Clear Cache & Refresh" (clears it).
+  var CS_CACHE_KEY='cs_compare_v1';
+  function wasReload(){ try{var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0]; return nav&&nav.type==='reload';}catch(e){return false;} }
+  function clearCacheOnReload(){
+    var nocache=new URLSearchParams(location.search).get('nocache')==='1';
+    if(wasReload()||nocache){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(e){} }
+  }
+  function saveCache(){
+    try{ sessionStorage.setItem(CS_CACHE_KEY,JSON.stringify({months:document.getElementById('csMonths').value,rows:rows})); }catch(e){}
+  }
+  function restoreCache(){
+    try{
+      var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
+      var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
+      if(c.months)document.getElementById('csMonths').value=c.months;
+      rows=c.rows; err=null; loaded=true; expanded={}; rebuildMgList(); render(); return true;
+    }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
+  }
+
+  // Wiring
+  document.getElementById('csFetch').addEventListener('click',load);
+  document.getElementById('csMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('csType').addEventListener('change',function(){typeF=this.value;render();});
+  document.getElementById('csBody').addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
+    var p=t.getAttribute('data-cstoggle'); expanded[p]=!expanded[p]; render();
+  });
+  // Compare segmented control
+  document.getElementById('csCompare').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    compareMode=b.getAttribute('data-mode');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    render();
+  });
+  // Main Group panel
+  (function(){
+    var btn=document.getElementById('csMgBtn'), panel=document.getElementById('csMgPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();mgChosen=mgSelected.slice();renderMgList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('csMgAll').addEventListener('click',function(){mgChosen=mgAllGroups.slice();renderMgList();});
+    document.getElementById('csMgClr').addEventListener('click',function(){mgChosen=[];renderMgList();});
+    document.getElementById('csMgApply').addEventListener('click',function(){mgSelected=mgChosen.slice();updateMgLabel();panel.classList.remove('open');render();});
+  })();
+  // Drill By panel
+  (function(){
+    var btn=document.getElementById('csDrillBtn'), panel=document.getElementById('csDrillPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();chosen=order.slice();renderDrillList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('csDrillAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;});renderDrillList();});
+    document.getElementById('csDrillClr').addEventListener('click',function(){chosen=[];renderDrillList();});
+    document.getElementById('csDrillApply').addEventListener('click',function(){if(!chosen.length){return;}order=chosen.slice();expanded={};panel.classList.remove('open');render();});
+  })();
+
+  renderDrillList();
+  // No auto-fetch: restore a cached pivot if one exists (and wasn't invalidated by a
+  // refresh), else sit on the "Pick a period and click Fetch" empty state.
+  clearCacheOnReload();
+  restoreCache();
+})();
+</script>
+{% endblock %}

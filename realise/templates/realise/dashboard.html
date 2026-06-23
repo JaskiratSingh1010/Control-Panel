@@ -17,7 +17,8 @@
 /* Slide 2 keeps the control-panel sidebar + topbar visible (like slide 1); only the in-page filter bar is hidden. */
 body.slide-two-mode .rd-wrap .controls{display:none}
 .cp-main{padding:0!important}
-body.cp-sidebar-collapsed .cp-main{padding-left:64px!important}
+/* No extra left padding: the sidebar is a flex item that takes its own width and pushes
+   the content, so the old 64px collapsed offset would just leave a dead gap. */
 /* Slide 2: pin the page to the viewport (topbar is 56px) so the toolbar + KPI row
    stay fixed and only the channel-card grid (.sc2-grid) scrolls. Without a definite
    height here, .rd-wrap's height:100% collapses to auto and the whole page — KPIs
@@ -225,6 +226,11 @@ td.ccell{font-weight:500}
 .cd-table.doc-table tr.doc-total-top td#docDetailTot{color:#fff}
 /* Customer outstanding balance shown beside the party name */
 .doc-bal{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;background:#eef2f7;color:#475569;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;vertical-align:middle;white-space:nowrap}
+/* Party group rows (default view) — click to expand that party's documents */
+.cd-table.doc-table tr.doc-party-row td{cursor:pointer;font-weight:700;background:#eef3f8;border-bottom:1px solid #d7e0ea}
+.cd-table.doc-table tr.doc-party-row:hover td{background:#e2ebf5}
+.doc-party-count{font-weight:600;color:#64748b;font-size:11px;margin-left:6px}
+.cd-table.doc-table tr.doc-inv-row td:first-child{padding-left:30px;color:var(--text2)}
 /* Litres expands to the document's line items */
 .doc-table td.doc-lit:not(.doc-lit-empty){cursor:pointer;color:#1d4ed8}
 .doc-table td.doc-lit:not(.doc-lit-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
@@ -541,19 +547,11 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         </div>
       </div>
       <div class="sc2-drillbar sc2-period-bar">
-        <div class="sc2-modebar" role="group" aria-label="Fetch mode">
-          <button type="button" class="bev-mode-btn active" id="sc2ModeRange" onclick="setSc2Mode('range')">Date Range</button>
-          <button type="button" class="bev-mode-btn" id="sc2ModeMonths" onclick="setSc2Mode('months')">Month-Wise</button>
-        </div>
         <span id="sc2RangeCtl" style="display:contents">
           <label for="sc2From">From</label>
           <input type="date" id="sc2From">
           <label for="sc2To">To</label>
           <input type="date" id="sc2To">
-        </span>
-        <span id="sc2MonthCtl" style="display:none;align-items:center;gap:6px">
-          <label for="sc2Months">Last (months)</label>
-          <input type="number" id="sc2Months" min="1" max="120" value="3" style="width:84px" onkeydown="if(event.key==='Enter')loadSlideTwoData()">
         </span>
         <label for="sc2Segment">Segment</label>
         <select id="sc2Segment" onchange="renderSlideTwo()">
@@ -615,21 +613,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
           <div class="sc2-kpi-body"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
         </div>
-        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Top('customers')" title="Top customers by Done litres (descending)" style="display:none">
-          <div class="sc2-kpi-ic"><span class="material-icons">groups</span></div>
-          <div class="sc2-kpi-body"><label>Top Customers</label><div id="sc2KpiTopCust">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Top('months')" title="Top months by Done litres (descending)" style="display:none">
-          <div class="sc2-kpi-ic"><span class="material-icons">calendar_month</span></div>
-          <div class="sc2-kpi-body"><label>Top Months</label><div id="sc2KpiTopMonth">&mdash;</div></div>
-        </div>
         <div class="sc2-kpi sc2-range-card">
           <div class="sc2-kpi-ic"><span class="material-icons">bar_chart</span></div>
           <div class="sc2-kpi-body"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click sc2-month-card" onclick="openSc2Compare()" title="Premium vs Commodity sales by month" style="display:none">
-          <div class="sc2-kpi-ic"><span class="material-icons">table_chart</span></div>
-          <div class="sc2-kpi-body"><label>Compare</label><div id="sc2KpiCompare">Prem vs Comm</div></div>
         </div>
         <div class="sc2-kpi">
           <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
@@ -768,6 +754,13 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-tw{display:inline-flex;width:14px;justify-content:center;color:#64748b;font-size:10px;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
   .bev-tw.open{transform:rotate(90deg)}
   .bev-tw-empty{display:inline-block;width:14px;margin-right:7px}
+  /* Clickable Quantity/Boxes/OIH values that expand a node's invoices / open SOs inline */
+  .bev-docval{cursor:pointer;color:#1d4ed8;border-bottom:1px dashed rgba(29,78,216,.4)}
+  .bev-docval:hover{border-bottom-style:solid;background:rgba(37,99,235,.08)}
+  .bev-docval.open{font-weight:800}
+  table.bev-table tbody tr.bev-doc-row td{background:#f4f8fc;color:#475569;font-size:12px;border-bottom:1px solid #e8eef5}
+  table.bev-table tbody tr.bev-doc-row.bev-doc-err td{color:#b91c1c}
+  .bev-doc-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;background:#e2e8f0;color:#475569;margin-right:7px;vertical-align:middle}
 </style>
 
 <div class="bev-view" id="beveragesView" style="display:none">
@@ -791,6 +784,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <button type="button" class="bev-mode-btn" id="bevModeMonths" onclick="setBevMode('months')">Month-Wise</button>
       <div class="bev-view-sel"><label>View</label>
         <select id="bevView" onchange="bevSetView(this.value)">
+          <option value="customer">Customer View</option>
           <option value="main">Main View</option>
           <option value="person">Sales Person View</option>
         </select>
@@ -811,7 +805,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     <div class="cg"><label>Drill Order</label>
       <div class="com-drill">
         <div class="com-drill-box">
-          <button type="button" class="com-drill-btn" id="bevDrillBtn"><span id="bevDrillLabel">Variety › Sub-Group › Brand</span><span class="com-caret">&#9662;</span></button>
+          <button type="button" class="com-drill-btn" id="bevDrillBtn"><span id="bevDrillLabel">Customer</span><span class="com-caret">&#9662;</span></button>
           <div class="com-drill-panel" id="bevDrillPanel">
             <div class="com-dp-head"><a id="bevSelAll">Select All</a><a id="bevClrAll">Clear All</a></div>
             <div class="com-dp-list" id="bevDpList"></div>
@@ -844,7 +838,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   </div>
   <div class="bev-tablewrap">
     <table class="bev-table">
-      <thead><tr><th id="bevFirstCol">Variety › Sub-Group › Brand</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num">OIH</th></tr></thead>
+      <thead><tr><th id="bevFirstCol">Customer</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num">OIH</th></tr></thead>
       <tbody id="bevBody"><tr><td colspan="4" class="cd-empty" style="padding:40px;text-align:center;color:#7b8794">Pick a date range and click Fetch to load beverages.</td></tr></tbody>
     </table>
   </div>
@@ -1399,13 +1393,18 @@ function prevSlide(){setSlide(currentSlide-1);}
    When selected it replaces the oils slides with a single dynamic-drill table
    (Variety / Sub-Group / SKU, reorderable) showing Quantity & Boxes. */
 var currentDataset='oils';
-var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'sales_person',label:'Sales Person'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
+var BEV_DIMS=[{key:'customer',label:'Customer'},{key:'variety',label:'Variety'},{key:'sub_group',label:'Sub-Group'},{key:'brand',label:'Brand'},{key:'sku',label:'SKU'},{key:'item',label:'Item Name'},{key:'sales_person',label:'Sales Person'},{key:'main_group',label:'Main Group'},{key:'chain',label:'Chain'},{key:'state',label:'State'}];
 var BEV_DIM_NAME={variety:'Variety',sub_group:'Sub-Group',brand:'Brand',sku:'SKU',item:'Item Name',sales_person:'Sales Person',main_group:'Main Group',chain:'Chain',state:'State',customer:'Customer'};
 var BEV_TAG_CLS={variety:'group',sub_group:'state',brand:'item',sku:'item',item:'state',sales_person:'person',main_group:'person',chain:'person',state:'group',customer:'person'};
-// Drill-order presets for the View selector. Main = product breakdown; Person = by salesperson.
-var BEV_VIEWS={main:['variety','sub_group','brand'],person:['sales_person']};
-var bevOrder=BEV_VIEWS.main.slice(), bevChosen=bevOrder.slice();
+// Drill-order presets for the View selector. Customer = by party (default); Main = product
+// breakdown; Person = by salesperson.
+var BEV_VIEWS={customer:['customer'],main:['variety','sub_group','brand'],person:['sales_person']};
+var bevOrder=BEV_VIEWS.customer.slice(), bevChosen=bevOrder.slice();
 var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
+// Inline invoice/SO expansion under a driller value. bevDocState: path+'|'+metric ->
+// {open,loading,docs,err}; bevNodeFilters: path -> {dim:value} accumulated down the tree;
+// bevRangeStart/End: the date range of the loaded data (so doc queries match it).
+var bevDocState={}, bevNodeFilters={}, bevRangeStart='', bevRangeEnd='';
 var bevTodayBoxes=0, bevYestBoxes=0;
 var bevBrand='', bevTodayItems=[], bevYestItems=[], bevTodayDate='', bevYestDate='';
 var bevMode='range';   // 'range' = From/To dates, 'months' = last-N-months
@@ -1454,18 +1453,21 @@ function bevSnapshot(){
   return {rows:bevRows, todayBoxes:bevTodayBoxes, yestBoxes:bevYestBoxes,
     todayItems:bevTodayItems, yestItems:bevYestItems, todayDate:bevTodayDate, yestDate:bevYestDate,
     customerRows:bevCustomerRows, monthRows:bevMonthRows, oihRows:bevOihRows,
-    fetched:bevFetched, brand:bevBrand, month:bevMonth, expanded:bevExpanded};
+    fetched:bevFetched, brand:bevBrand, month:bevMonth, expanded:bevExpanded,
+    rangeStart:bevRangeStart, rangeEnd:bevRangeEnd};
 }
 function bevRestore(e){
   bevRows=e.rows; bevTodayBoxes=e.todayBoxes; bevYestBoxes=e.yestBoxes;
   bevTodayItems=e.todayItems; bevYestItems=e.yestItems; bevTodayDate=e.todayDate; bevYestDate=e.yestDate;
   bevCustomerRows=e.customerRows; bevMonthRows=e.monthRows; bevOihRows=e.oihRows||[];
   bevFetched=e.fetched; bevBrand=e.brand; bevMonth=e.month; bevExpanded=e.expanded;
+  bevRangeStart=e.rangeStart||''; bevRangeEnd=e.rangeEnd||''; bevDocState={};
 }
 function bevResetData(){
   bevRows=[]; bevTodayBoxes=0; bevYestBoxes=0; bevTodayItems=[]; bevYestItems=[];
   bevTodayDate=''; bevYestDate=''; bevCustomerRows=[]; bevMonthRows=[]; bevOihRows=[];
   bevFetched=false; bevBrand=''; bevMonth=''; bevExpanded={};
+  bevRangeStart=''; bevRangeEnd=''; bevDocState={};
 }
 // Toggle between Date Range and Month-Wise fetch modes. Each mode keeps its own
 // dataset, so switching tabs restores that mode's last results (or an empty state).
@@ -1513,7 +1515,8 @@ async function loadBeverages(opts){
     var res=await fetch(API+'/api/beverages-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed})});
     if(!res.ok){var e=await res.json();throw new Error(e.detail||e.error||'Server error');}
     var result=await res.json();
-    bevRows=result.data||[]; bevFetched=true; if(!silent)bevExpanded={};   // keep expanded rows on auto-refresh
+    bevRows=result.data||[]; bevFetched=true; bevRangeStart=sd; bevRangeEnd=ed;
+    if(!silent){bevExpanded={}; bevDocState={};}   // keep expanded rows on auto-refresh
     bevTodayBoxes=result.today_boxes||0; bevYestBoxes=result.yesterday_boxes||0;
     bevTodayItems=result.today_items||[]; bevYestItems=result.yesterday_items||[];
     bevTodayDate=result.today_date||''; bevYestDate=result.yesterday_date||'';
@@ -1538,14 +1541,16 @@ function bevStartAutoRefresh(){
   }, BEV_REFRESH_MS);
 }
 bevStartAutoRefresh();
-function buildBevTree(rows,order,depth,prefix){
+function buildBevTree(rows,order,depth,prefix,pfilters){
   if(depth>=order.length)return [];
   var dim=order[depth], map={};
   for(var i=0;i<rows.length;i++){var r=rows[i],v=r[dim]||'—';
     if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,oih:0,_rows:[]};
     map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v].oih+=r.oih||0; map[v]._rows.push(r);
   }
-  return Object.keys(map).map(function(k){var n=map[k];var path=prefix+'>'+dim+':'+n.name;n.path=path;n.kids=buildBevTree(n._rows,order,depth+1,path);delete n._rows;n.leaf=!n.kids.length;return n;})
+  return Object.keys(map).map(function(k){var n=map[k];var path=prefix+'>'+dim+':'+n.name;n.path=path;
+      var nf={}; for(var fk in (pfilters||{}))nf[fk]=pfilters[fk]; nf[dim]=n.name; n.filters=nf; bevNodeFilters[path]=nf;
+      n.kids=buildBevTree(n._rows,order,depth+1,path,nf);delete n._rows;n.leaf=!n.kids.length;return n;})
     .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
 }
 function bevTreeRows(nodes,level){
@@ -1554,10 +1559,72 @@ function bevTreeRows(nodes,level){
     var hasKids=n.kids&&n.kids.length>0, open=!!bevExpanded[n.path];
     var tw=hasKids?'<span class="bev-tw'+(open?' open':'')+'" data-bevpath="'+esc(n.path)+'">&#9654;</span>':'<span class="bev-tw-empty"></span>';
     var tag='<span class="cd-tag '+(BEV_TAG_CLS[n.dim]||'')+'">'+esc(BEV_DIM_NAME[n.dim]||n.dim)+'</span>';
-    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+fN(n.quantity)+'</td><td class="num">'+fN(n.boxes)+'</td><td class="num">'+fN(n.oih||0)+'</td></tr>';
+    // Quantity & Boxes -> invoices (sales); OIH -> open SO numbers. Click toggles inline docs.
+    var sOpen=!!(bevDocState[n.path+'|sales']&&bevDocState[n.path+'|sales'].open);
+    var oOpen=!!(bevDocState[n.path+'|oih']&&bevDocState[n.path+'|oih'].open);
+    var qv='<span class="bev-docval'+(sOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="sales" title="Show invoices">'+fN(n.quantity)+'</span>';
+    var bv='<span class="bev-docval'+(sOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="sales" title="Show invoices">'+fN(n.boxes)+'</span>';
+    var ov=(n.oih>0)?('<span class="bev-docval'+(oOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="oih" title="Show open SOs">'+fN(n.oih||0)+'</span>'):fN(n.oih||0);
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+qv+'</td><td class="num">'+bv+'</td><td class="num">'+ov+'</td></tr>';
+    html+=bevDocRows(n.path,'sales',level)+bevDocRows(n.path,'oih',level);
     if(hasKids&&open)html+=bevTreeRows(n.kids,level+1);
   }
   return html;
+}
+// Inline breakdown beneath a node, for one metric (sales / oih). Rolls the documents up to
+// the customers behind the cell (name + their qty/boxes) — e.g. a Sales Person expands to
+// the customers they sold to. When the node is already a specific customer the customer
+// roll-up would be a single self-row, so we list that customer's invoices/SOs instead.
+function bevDocRows(path,metric,level){
+  var st=bevDocState[path+'|'+metric];
+  if(!st||!st.open)return '';
+  var pad=12+(level+1)*18, noun=(metric==='oih'?'open SOs':'invoices');
+  if(st.loading)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">Loading&hellip;</td><td></td><td></td><td></td></tr>';
+  if(st.err)return '<tr class="bev-doc-row bev-doc-err"><td style="padding-left:'+pad+'px">Could not load.</td><td></td><td></td><td></td></tr>';
+  var docs=st.docs||[];
+  var pinnedCust=(bevNodeFilters[path]||{}).customer;
+  if(!docs.length)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">No '+(pinnedCust?noun:'customers')+' in range.</td><td></td><td></td><td></td></tr>';
+  if(!pinnedCust)return bevCustRows(docs,pad);
+  var html='', lbl=(metric==='oih'?'SO':'INV');
+  for(var i=0;i<docs.length;i++){var d=docs[i];
+    html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">'+lbl+'</span>'+esc(d.doc_num||'—')+' &middot; '+esc(d.doc_date||'—')+'</td>'
+      +'<td class="num">'+fN(d.quantity||0)+'</td><td class="num">'+fN(d.boxes||0)+'</td><td class="num"></td></tr>';
+  }
+  return html;
+}
+// Customers behind a cell, aggregated from its documents (qty/boxes summed), highest qty first.
+function bevCustRows(docs,pad){
+  var map={},order=[];
+  for(var i=0;i<docs.length;i++){var d=docs[i],c=d.customer||'—';
+    var g=map[c]; if(!g){g=map[c]={name:c,quantity:0,boxes:0};order.push(c);}
+    g.quantity+=Number(d.quantity)||0; g.boxes+=Number(d.boxes)||0;
+  }
+  var groups=order.map(function(c){return map[c];})
+    .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
+  var html='';
+  for(var j=0;j<groups.length;j++){var g=groups[j];
+    html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">CUST</span>'+esc(g.name)+'</td>'
+      +'<td class="num">'+fN(g.quantity)+'</td><td class="num">'+fN(g.boxes)+'</td><td class="num"></td></tr>';
+  }
+  return html;
+}
+// Toggle (and lazily fetch) the invoice/SO list under a node value.
+function bevToggleDocs(path,metric){
+  var key=path+'|'+metric, st=bevDocState[key];
+  if(st&&st.open){ st.open=false; renderBeverages(); return; }
+  if(st&&st.docs){ st.open=true; renderBeverages(); return; }   // reopen cached
+  if(!bevRangeStart||!bevRangeEnd){ showToast('Fetch beverages first','info'); return; }
+  bevDocState[key]={open:true,loading:true,docs:null,err:false};
+  renderBeverages();
+  var filters=bevNodeFilters[path]||{};
+  var qs='metric='+encodeURIComponent(metric)+'&start='+encodeURIComponent(bevRangeStart)+'&end='+encodeURIComponent(bevRangeEnd);
+  for(var k in filters)qs+='&f_'+encodeURIComponent(k)+'='+encodeURIComponent(filters[k]);
+  if(bevBrand)qs+='&f_brand='+encodeURIComponent(bevBrand);
+  if(bevMonth)qs+='&f_ym='+encodeURIComponent(bevMonth);
+  fetch(API+'/api/beverages-docs/?'+qs,{headers:{'X-CSRFToken':getCSRF()}})
+    .then(function(r){return r.ok?r.json():{data:[]};})
+    .then(function(p){var s=bevDocState[key]; if(!s)return; s.loading=false; s.docs=p.data||[]; renderBeverages();})
+    .catch(function(){var s=bevDocState[key]; if(!s)return; s.loading=false; s.err=true; renderBeverages();});
 }
 // Rows narrowed to the selected brand and/or month ('' = no filter).
 function bevActiveRows(){
@@ -1568,9 +1635,9 @@ function bevActiveRows(){
 function bevDayBoxes(items,brand){var t=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand)t+=a[i].boxes||0;}return Math.round(t*100)/100;}
 // View selector → swap the drill order to a preset (Main / Sales Person).
 function bevSetView(view){
-  bevOrder=(BEV_VIEWS[view]||BEV_VIEWS.main).slice();
+  bevOrder=(BEV_VIEWS[view]||BEV_VIEWS.customer).slice();
   bevChosen=bevOrder.slice();
-  bevExpanded={};
+  bevExpanded={}; bevDocState={};
   renderBeverages();
 }
 // Keep the dropdown truthful: match the current drill order to a preset, else show "Custom".
@@ -1608,7 +1675,8 @@ function renderBeverages(){
     body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevMode==='months'?'Enter a number of months and click Fetch to load beverages.':'Pick a date range and click Fetch to load beverages.')+'</td></tr>';return;}
   if(!bevOrder.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
   if(!rows.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevBrand?('No rows for brand "'+esc(bevBrand)+'".'):'No beverage rows in this range.')+'</td></tr>';return;}
-  bevTree=buildBevTree(rows,bevOrder,0,'');
+  bevNodeFilters={};
+  bevTree=buildBevTree(rows,bevOrder,0,'',{});
   var html=bevTreeRows(bevTree,0);
   html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td><td class="num">'+fN(toih)+'</td></tr>';
   body.innerHTML=html;
@@ -1623,7 +1691,7 @@ function bevPopulateBrands(){
   sel.innerHTML=html;
   if(bevBrand && list.indexOf(bevBrand)!==-1)sel.value=bevBrand; else { bevBrand=''; sel.value=''; }
 }
-function onBevBrandChange(){ bevBrand=document.getElementById('bevBrandFilter').value; bevExpanded={}; renderBeverages(); }
+function onBevBrandChange(){ bevBrand=document.getElementById('bevBrandFilter').value; bevExpanded={}; bevDocState={}; renderBeverages(); }
 function bevPopulateMonths(){
   var sel=document.getElementById('bevMonthFilter'); if(!sel)return;
   var labels={}, list=[];
@@ -1634,7 +1702,7 @@ function bevPopulateMonths(){
   sel.innerHTML=html;
   if(bevMonth && labels[bevMonth])sel.value=bevMonth; else { bevMonth=''; sel.value=''; }
 }
-function onBevMonthChange(){ bevMonth=document.getElementById('bevMonthFilter').value; bevExpanded={}; renderBeverages(); }
+function onBevMonthChange(){ bevMonth=document.getElementById('bevMonthFilter').value; bevExpanded={}; bevDocState={}; renderBeverages(); }
 function openBevSold(which){
   if(!bevFetched){showToast('Fetch beverages first','info');return;}
   var items=(which==='today'?bevTodayItems:bevYestItems)||[];
@@ -1884,14 +1952,17 @@ function bevInitDrillPanel(){
   document.getElementById('bevClrAll').addEventListener('click',function(){ bevChosen=[]; bevRenderDpList(); });
   document.getElementById('bevApply').addEventListener('click',function(){
     if(!bevChosen.length){ showToast('Pick at least one dimension','info'); return; }
-    bevOrder=bevChosen.slice(); bevExpanded={};
+    bevOrder=bevChosen.slice(); bevExpanded={}; bevDocState={};
     panel.classList.remove('open'); renderBeverages();
   });
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bevInitDrillPanel);
 else bevInitDrillPanel();
 document.addEventListener('click',function(e){
-  var b=e.target&&e.target.closest?e.target.closest('#bevBody .bev-tw'):null;
+  if(!e.target||!e.target.closest)return;
+  var v=e.target.closest('#bevBody .bev-docval');
+  if(v){ bevToggleDocs(v.getAttribute('data-bevpath'), v.getAttribute('data-metric')); return; }
+  var b=e.target.closest('#bevBody .bev-tw');
   if(!b)return;
   var p=b.getAttribute('data-bevpath'); bevExpanded[p]=!bevExpanded[p];
   renderBeverages();
@@ -1984,6 +2055,7 @@ function clearCachedDashboardOnReload(){
   if(wasPageReload()||nocache){
     try{sessionStorage.removeItem(CACHE_KEY);}catch(e){}
     try{sessionStorage.removeItem(SC2_CACHE_KEY);}catch(e){}
+    try{sessionStorage.removeItem('cs_compare_v1');}catch(e){}   // Compare Sales pivot cache
   }
 }
 function saveDashboardCache(){
@@ -3368,9 +3440,8 @@ async function fetchOrderInHandRows(){
   return detailOihRowsCache;
 }
 async function openChannelDetail(name){
-  // Month-Wise is a totally independent view: the card opens a States×Months pivot
-  // (with customer drill on each value) instead of the date-range Target/Done detail.
-  if(sc2Mode==='months'){openChannelMonthly(name);return;}
+  // Month-wise comparison moved to the standalone "Compare Sales" tab; slide-2 is
+  // date-range only now.
   detailChannel=name;
   var overlay=document.getElementById('channelDetailModal');
   var header=document.getElementById('cdHeaderEl');
@@ -3642,35 +3713,59 @@ async function openChannelDocs(metric,filters,label,opts){
     body.innerHTML='<tr><td colspan="6" class="cd-empty">Could not load documents.</td></tr>';
   }
 }
-var docDetailRows=[], docExpanded={}, docStockWarehouses=[], docMetric='oih';
+var docDetailRows=[], docExpanded={}, docPartyExpanded={}, docPartyGroups=[], docStockWarehouses=[], docMetric='oih';
+// Group the flat document list by party so the popup opens grouped by customer; each party
+// row carries the party total + outstanding balance and expands to its individual docs.
+function docGroupByParty(rows){
+  var map={}, order=[];
+  for(var i=0;i<rows.length;i++){var r=rows[i], p=r.party||'—';
+    var g=map[p]; if(!g){g=map[p]={party:p, balance:(r.balance!=null?r.balance:null), litres:0, docs:[], st:{}, ct:{}}; order.push(p);}
+    g.litres+=Number(r.litres)||0; g.docs.push({r:r, idx:i});
+    if(g.balance==null&&r.balance!=null)g.balance=r.balance;
+    if(r.state)g.st[r.state]=1; if(r.city)g.ct[r.city]=1;
+  }
+  var groups=order.map(function(p){var g=map[p]; g.states=Object.keys(g.st); g.cities=Object.keys(g.ct); return g;});
+  groups.sort(function(a,b){return b.litres-a.litres||String(a.party).localeCompare(String(b.party));});
+  return groups;
+}
 function renderChannelDocs(rows){
-  docDetailRows=rows||[]; docExpanded={};
+  docDetailRows=rows||[]; docExpanded={}; docPartyExpanded={};
+  docPartyGroups=docGroupByParty(docDetailRows);
   var body=document.getElementById('docDetailBody');
   if(!docDetailRows.length){body.innerHTML='<tr><td colspan="6" class="cd-empty">No documents in the current selection.</td></tr>';document.getElementById('docDetailCount').textContent='0 documents';document.getElementById('docDetailTot').textContent='';return;}
   var tot=0;for(var i=0;i<docDetailRows.length;i++)tot+=Number(docDetailRows[i].litres)||0;
   body.innerHTML=docDocsHtml();
-  document.getElementById('docDetailCount').textContent=docDetailRows.length+(docDetailRows.length===1?' document':' documents');
+  var np=docPartyGroups.length, nd=docDetailRows.length;
+  document.getElementById('docDetailCount').textContent=np+(np===1?' party · ':' parties · ')+nd+(nd===1?' document':' documents');
   document.getElementById('docDetailTot').textContent=fN(tot);
 }
-// Each document's Litres expands to its line items (item name + litres).
+// Party rows (collapsed by default) expand to their docs; each doc's Litres expands to line items.
 function docDocsHtml(){
   var html='';
-  for(var i=0;i<docDetailRows.length;i++){
-    var r=docDetailRows[i],items=r.items||[],hasItems=items.length>0,open=!!docExpanded[i];
-    var litCls='doc-lit'+(hasItems?'':' doc-lit-empty');
-    var twirl=hasItems?'<span class="doc-twirl'+(open?' open':'')+'">&#9654;</span>':'';
-    var balTag=(r.balance!=null)?'<span class="doc-bal" title="Customer outstanding balance (OCRD)">&#8377;'+fN(r.balance)+'</span>':'';
-    html+='<tr class="doc-row"><td>'+esc(r.doc_date||'—')+'</td><td>'+esc(r.doc_num||'—')+'</td><td>'+esc(r.party||'—')+balTag+'</td>'
-      +'<td>'+esc(r.state||'—')+'</td><td>'+esc(r.city||'—')+'</td>'
-      +'<td class="num '+litCls+'" data-docidx="'+i+'">'+twirl+fN(r.litres||0)+'</td></tr>';
-    if(hasItems&&open){
-      // OIH items carry per-warehouse on-hand stock; Done items are just name + litres.
-      var detailed=items[0]&&items[0].stock!==undefined;
-      if(detailed){
-        html+='<tr class="doc-detail-row"><td colspan="6">'+docItemsTable(items)+'</td></tr>';
-      }else{
-        for(var k=0;k<items.length;k++){
-          html+='<tr class="doc-item-row"><td></td><td colspan="4">'+esc(items[k].name||'—')+'</td><td class="num">'+fN(items[k].litres||0)+'</td></tr>';
+  for(var gi=0;gi<docPartyGroups.length;gi++){
+    var g=docPartyGroups[gi], pkey=g.party, popen=!!docPartyExpanded[pkey], nDocs=g.docs.length;
+    var balTag=(g.balance!=null)?'<span class="doc-bal" title="Customer outstanding balance (OCRD)">&#8377;'+fN(g.balance)+'</span>':'';
+    var stTxt=g.states.length===1?g.states[0]:(g.states.length>1?'Multiple':'—');
+    var ctTxt=g.cities.length===1?g.cities[0]:(g.cities.length>1?'Multiple':'—');
+    var ptw='<span class="doc-twirl'+(popen?' open':'')+'">&#9654;</span>';
+    html+='<tr class="doc-party-row" data-party="'+esc(pkey)+'"><td colspan="3">'+ptw+esc(g.party)+balTag+' <span class="doc-party-count">'+nDocs+(nDocs===1?' doc':' docs')+'</span></td>'
+      +'<td>'+esc(stTxt)+'</td><td>'+esc(ctTxt)+'</td><td class="num">'+fN(g.litres)+'</td></tr>';
+    if(!popen)continue;
+    for(var di=0;di<g.docs.length;di++){
+      var r=g.docs[di].r, idx=g.docs[di].idx, items=r.items||[], hasItems=items.length>0, open=!!docExpanded[idx];
+      var litCls='doc-lit'+(hasItems?'':' doc-lit-empty');
+      var twirl=hasItems?'<span class="doc-twirl'+(open?' open':'')+'">&#9654;</span>':'';
+      html+='<tr class="doc-row doc-inv-row"><td>'+esc(r.doc_date||'—')+'</td><td>'+esc(r.doc_num||'—')+'</td><td></td><td></td><td></td>'
+        +'<td class="num '+litCls+'" data-docidx="'+idx+'">'+twirl+fN(r.litres||0)+'</td></tr>';
+      if(hasItems&&open){
+        // OIH items carry per-warehouse on-hand stock; Done items are just name + litres.
+        var detailed=items[0]&&items[0].stock!==undefined;
+        if(detailed){
+          html+='<tr class="doc-detail-row"><td colspan="6">'+docItemsTable(items)+'</td></tr>';
+        }else{
+          for(var k=0;k<items.length;k++){
+            html+='<tr class="doc-item-row"><td></td><td colspan="4">'+esc(items[k].name||'—')+'</td><td class="num">'+fN(items[k].litres||0)+'</td></tr>';
+          }
         }
       }
     }
@@ -3693,9 +3788,15 @@ function docItemsTable(items){
   }
   return '<table class="doc-items"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
 }
-// Toggle a document's item breakdown when its Litres cell is clicked.
+// Click a party row to expand its docs; click a doc's Litres cell to expand its line items.
 document.addEventListener('click',function(e){
   if(!e.target||!e.target.closest)return;
+  var prow=e.target.closest('#docDetailBody tr.doc-party-row');
+  if(prow){
+    var p=prow.getAttribute('data-party'); docPartyExpanded[p]=!docPartyExpanded[p];
+    document.getElementById('docDetailBody').innerHTML=docDocsHtml();
+    return;
+  }
   var cell=e.target.closest('#docDetailBody td.doc-lit');
   if(!cell||cell.classList.contains('doc-lit-empty'))return;
   var idx=cell.getAttribute('data-docidx');

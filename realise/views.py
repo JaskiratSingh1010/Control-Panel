@@ -2,13 +2,16 @@ import csv
 import io
 import json
 import logging
+import time
 from datetime import datetime
 
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+from django.views.decorators.cache import never_cache
 
-from core.decorators import group_required
+from core.decorators import group_required, permission_flag_required, any_permission_flag
 from core import sap_connector
 from core.simple_xlsx import build_workbook
 from . import services
@@ -20,6 +23,14 @@ REALISE_GROUPS = ('realise_admin', 'realise_premium', 'realise_commodity')
 # In-memory cache: stores the last fetched raw SAP rows per session is not enough;
 # we use a module-level cache keyed by (start_date, end_date).
 _raw_cache = {'key': None, 'rows': [], 'columns': []}
+
+# channel_rows / channel_month_rows are a pure function of the (already cached) raw SAP
+# rows, but were re-aggregated on every /api/sales-data/ hit — two full O(n) passes over
+# tens of thousands of invoice lines (plus a strptime per row in the month pass) before the
+# response could be sent. Memoize them by date range so repeat loads / Fetch clicks within
+# the SAP cache window skip the rework. Same shape/TTL as services._SALES_CACHE.
+_CHANNEL_AGG_CACHE = {}        # 'start|end' -> (expires_at, channel_rows, channel_month_rows)
+_CHANNEL_AGG_TTL = 90          # seconds
 
 EDIT_PIN = 'gill'
 
@@ -37,10 +48,34 @@ def _parse_body(request):
         return {}
 
 
+@never_cache
 @group_required(*REALISE_GROUPS, json_response=False)
 def dashboard(request):
+    # never_cache: the territory_payload (person map + per-channel state whitelist) is
+    # baked into the HTML at render time, so the browser must re-fetch the page after a
+    # mapping change instead of serving a stale copy (else newly-assigned states like a
+    # freshly-added ECOM/NAGALAND wouldn't appear until a hard refresh).
     return render(request, 'realise/dashboard.html', {
         'sidebar_active': 'realise',
+        'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
+    })
+
+
+@permission_flag_required('can_oih_vs_stock')
+def oih_vs_stock(request):
+    """Standalone tab: open-order litres (OIH) vs warehouse stock per product, with the
+    Required (OIH − Stock) gap. Reuses the /api/oih-breakdown/ data (OIH rows + per-item
+    on-hand stock across the three warehouses)."""
+    return render(request, 'realise/oih_vs_stock.html', {'sidebar_active': 'oih_vs_stock'})
+
+
+@permission_flag_required('can_compare_sales')
+def compare_sales(request):
+    """Standalone tab: month-wise sales pivot (rows = chosen dimension, columns = months)
+    with a Main Group filter (compare groups for the same period) and a Compare selector
+    (Litres / Realise / Both). Reuses /api/sales-data/ channel_month_rows."""
+    return render(request, 'realise/compare_sales.html', {
+        'sidebar_active': 'compare_sales',
         'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
     })
 
@@ -120,13 +155,33 @@ def _aggregate_channel_month_rows(raw_rows):
                 'u_type': u_type, 'main_group': u_main, 'state': state,
                 'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
                 'card_name': card_name, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
-                'liter': 0.0,
+                'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
+        bucket['line_total'] += float(row.get('LineTotal', 0) or 0)
     out = list(agg.values())
     for b in out:
         b['liter'] = round(b['liter'], 2)
+        b['line_total'] = round(b['line_total'], 2)
     return out
+
+
+def _channel_aggregates(start_date, end_date, raw_rows):
+    """Memoized (channel_rows, channel_month_rows) for a date range. Only recomputes when
+    the SAP cache window has rolled over; otherwise returns the prior aggregation so a
+    cached sales-data load doesn't re-walk the full raw set on every request."""
+    key = f'{start_date}|{end_date}'
+    now = time.time()
+    hit = _CHANNEL_AGG_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1], hit[2]
+    channel_rows = _aggregate_channel_rows(raw_rows)
+    channel_month_rows = _aggregate_channel_month_rows(raw_rows)
+    if raw_rows:                          # only cache successful, non-empty pulls
+        _CHANNEL_AGG_CACHE[key] = (now + _CHANNEL_AGG_TTL, channel_rows, channel_month_rows)
+        for k in [k for k, v in _CHANNEL_AGG_CACHE.items() if v[0] <= now]:
+            _CHANNEL_AGG_CACHE.pop(k, None)
+    return channel_rows, channel_month_rows
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -143,7 +198,7 @@ def api_health(request):
     })
 
 
-@group_required(*REALISE_GROUPS, json_response=True)
+@any_permission_flag('can_realise', 'can_compare_sales', json_response=True)
 @require_http_methods(['POST'])
 def api_sales_data(request):
     body = _parse_body(request)
@@ -153,9 +208,10 @@ def api_sales_data(request):
         return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
 
     type_filter = _get_type_filter(request)
+    force = bool(body.get('refresh') or body.get('force'))   # "Refresh from SAP" → fresh pull
 
     try:
-        result, raw_rows = services.get_sales_data_cached(start_date, end_date)
+        result, raw_rows = services.get_sales_data_cached(start_date, end_date, force=force)
     except Exception as e:
         logger.error('[REALISE] get_sales_data error: %s', e)
         return JsonResponse({'status': 'ok', 'data': [], 'count': 0})
@@ -221,8 +277,7 @@ def api_sales_data(request):
         x['month'],
     ))
 
-    channel_rows = _aggregate_channel_rows(raw_rows)
-    channel_month_rows = _aggregate_channel_month_rows(raw_rows)
+    channel_rows, channel_month_rows = _channel_aggregates(start_date, end_date, raw_rows)
     return JsonResponse({'status': 'ok', 'data': output, 'count': len(output),
                          'channel_rows': channel_rows, 'channel_month_rows': channel_month_rows})
 
@@ -259,6 +314,30 @@ def api_beverages_data(request):
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_beverages_docs(request):
+    """Invoice / open-SO documents behind a beverages driller cell, filtered to the clicked
+    node (customer + ancestor dims + brand/month). metric=sales -> invoices, oih -> SOs."""
+    start = request.GET.get('start', '') or ''
+    end = request.GET.get('end', '') or ''
+    metric = str(request.GET.get('metric', 'sales') or 'sales').strip().lower()
+    if not start or not end:
+        return JsonResponse({'status': 'error', 'error': 'start and end required'}, status=400)
+    filters = {}
+    for key in ('variety', 'sub_group', 'sku', 'item', 'main_group', 'state',
+                'brand', 'chain', 'sales_person', 'customer', 'ym'):
+        val = request.GET.get('f_' + key)
+        if val not in (None, ''):
+            filters[key] = str(val).strip().upper()
+    try:
+        data = services.get_beverages_documents(start, end, filters, metric)
+    except Exception as exc:
+        logger.error('[BEVERAGES] docs fetch failed: %s', exc)
+        return JsonResponse({'status': 'ok', 'metric': metric, 'count': 0, 'data': []})
+    return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data), 'data': data})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['POST'])
 def api_drill_down(request):
     body = _parse_body(request)
@@ -278,9 +357,7 @@ def api_drill_down(request):
     cache_key = f'{start_date}_{end_date}'
     if _raw_cache['key'] != cache_key:
         try:
-            # Reuse the 90s sales cache the initial render already populated for this
-            # range instead of re-running REPORT_SALES_ANALYSIS for the first drill.
-            _, raw_rows = services.get_sales_data_cached(start_date, end_date)
+            _, raw_rows = services.get_sales_data(start_date, end_date)
             _raw_cache['key']  = cache_key
             _raw_cache['rows'] = raw_rows
         except Exception as e:
@@ -410,6 +487,11 @@ def api_channel_detail_docs(request):
     else:
         start = request.GET.get('start') or _raw_cache.get('start') or ''
         end = request.GET.get('end') or _raw_cache.get('end') or ''
+        # Diagnostic: ?reconcile=1 returns a party-by-party comparison of the channel Done
+        # (proc) vs the popup Done (direct query) so any mismatch can be pinpointed.
+        if request.GET.get('reconcile'):
+            return JsonResponse({'status': 'ok', 'reconcile':
+                services.reconcile_channel_done(start, end, channel, seg, filters.get('state', ''))})
         data = services.get_channel_done_documents(start, end, channel, seg, filters)
     return JsonResponse({'status': 'ok', 'metric': metric, 'count': len(data),
                          'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})
@@ -422,12 +504,13 @@ def api_commodity_oih_rows(request):
     return JsonResponse({'status': 'ok', 'data': services.get_commodity_oih_rows()})
 
 
-@group_required(*REALISE_GROUPS, json_response=True)
+@any_permission_flag('can_realise', 'can_oih_vs_stock', json_response=True)
 @require_http_methods(['GET'])
 def api_oih_breakdown(request):
     """Granular open-order litres by item dimensions (split Premium/Commodity) for the
-    OIH KPI window's dynamic drill; the client nests them into any chosen order."""
-    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows()})
+    OIH KPI window's dynamic drill; the client nests them into any chosen order.
+    Cached (90s) so repeat opens of the OIH-vs-Stock tab / dashboard reuse one pull."""
+    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows_cached()})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -455,6 +538,210 @@ def api_segment_targets(request):
     segment = str(request.GET.get('segment', 'state') or 'state').strip().lower()
     data = services.get_segment_target_map(segment, month, year, request.GET.get('seg', ''))
     return JsonResponse({'status': 'ok', 'segment': segment, 'month': month, 'year': year, 'data': data})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_map(request):
+    """The fixed channel×state grid with each cell's current sales person, plus the
+    channel order and the distinct people list (for the reassign dropdown)."""
+    return JsonResponse({'status': 'ok', **services.get_territory_map_payload()})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_map(request):
+    """Update ONLY the sales_person on existing grid cells (admin only)."""
+    body = _parse_body(request)
+    assignments = body.get('assignments', [])
+    if not isinstance(assignments, list):
+        return JsonResponse({'status': 'error', 'error': 'assignments must be a list'}, status=400)
+    saved = services.save_territory_persons(assignments, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_refresh_territory_map(request):
+    """Re-sync the fixed grid from live SAP (adds new channel×state cells; never
+    wipes existing person assignments). Admin only."""
+    from django.core.management import call_command
+    try:
+        call_command('seed_territory_map', refresh=True)
+    except Exception as e:
+        logger.error('[TERRITORY] refresh failed: %s', e)
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
+    return JsonResponse({'status': 'ok', **services.get_territory_map_payload()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_targets(request):
+    """Single target (litres) per (channel, state) territory for a month/year."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', 'month': month, 'year': year,
+                         'data': services.get_territory_targets(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_targets(request):
+    """Save one target (litres) per (channel, state) territory (admin only)."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    targets = body.get('targets', [])
+    if not month or not year or not isinstance(targets, list):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets[] required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_territory_targets(month, year, targets)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_product_targets(request):
+    """Per-product targets (litres+realise) per (channel,state) for a period, plus the
+    product master — the shape the Person Mapping 'Set product targets' UI consumes."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', 'month': month, 'year': year,
+                         'products': services.get_product_master(),
+                         'data': services.get_territory_product_targets(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_product_targets(request):
+    """Save the full per-product target set for a period; rolls up into the dashboard's
+    TargetNode (channel/state) and MonthlyTarget (per-product). Admin only."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    targets = body.get('targets', {})
+    if not month or not year or not isinstance(targets, dict):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets{} required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_territory_product_targets(month, year, targets, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_channel_quick_targets(request):
+    """Channel Targets editor data: each channel's previous-month actual sale +
+    current channel-level target for the selected (month, year)."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', **services.get_channel_quick_payload(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_channel_quick_targets(request):
+    """Save channel-level targets (one total per channel) for a period. Stored as
+    state-blank TargetNodes that survive per-product saves and drive the dashboard's
+    channel TGT-L. Admin only."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    items = body.get('targets', [])
+    if not month or not year or not isinstance(items, list):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets[] required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_channel_node_targets(month, year, items, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_product_actuals(request):
+    """Previous-month actual sale per product for one (channel, state) — feeds the
+    'last month sold' reference on each product card in the target editor."""
+    channel = request.GET.get('channel', '')
+    state = request.GET.get('state', '')
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    if not channel:
+        return JsonResponse({'status': 'error', 'error': 'channel required'}, status=400)
+    return JsonResponse({'status': 'ok', **services.get_product_actuals_payload(channel, state, month, year)})
+
+
+@never_cache
+@group_required(*REALISE_GROUPS, json_response=False)
+@require_http_methods(['GET'])
+def person_targets_page(request):
+    """Person Mapping + Targets page (the React 'Persons Frontend'). Replaces the old
+    hierarchical Update Targets editor — reached from the dashboard's Update Targets
+    button. Hosts the React app in a same-origin iframe so its global CSS can't touch
+    the dashboard chrome. Person reassignment → TerritoryMapping; single target per
+    territory → TargetNode."""
+    return render(request, 'realise/person_targets.html', {'sidebar_active': 'realise'})
+
+
+@xframe_options_sameorigin
+@never_cache
+@group_required(*REALISE_GROUPS, json_response=False)
+@require_http_methods(['GET'])
+def person_targets_embed(request):
+    """Standalone React app (Person Mapping & Targets) shown inside the iframe.
+    Marked same-origin-frameable because Django's default X-Frame-Options is DENY,
+    which would otherwise block our own iframe."""
+    import os
+    from django.conf import settings
+    from django.middleware.csrf import get_token
+    from django.urls import reverse
+    from core.context_processors import derive_realise_profile
+    role, _, _ = derive_realise_profile(request.user)
+    now = datetime.now()
+
+    # Cache-bust the iframe's JS/CSS by their file mtime, so a recompiled bundle is
+    # picked up immediately (browsers cache iframe sub-resources aggressively).
+    _sdir = os.path.join(str(settings.BASE_DIR), 'realise', 'static', 'realise')
+    try:
+        asset_ver = int(max(os.path.getmtime(os.path.join(_sdir, 'person_targets.js')),
+                            os.path.getmtime(os.path.join(_sdir, 'person_targets.css'))))
+    except OSError:
+        asset_ver = 1
+    boot = {
+        'csrf': get_token(request),
+        'isAdmin': role == 'admin',
+        'month': now.month,
+        'year': now.year,
+        'monthOptions': list(enumerate(services.MONTHS_ORDER, start=1)),
+        'yearOptions': list(range(now.year + 1, now.year - 5, -1)),
+        'dashboardUrl': reverse('realise:dashboard') + '#slide2',
+        'urls': {
+            'map':                reverse('realise:api_territory_map'),
+            'mapSave':            reverse('realise:api_save_territory_map'),
+            'refresh':            reverse('realise:api_refresh_territory_map'),
+            'productTargets':     reverse('realise:api_territory_product_targets'),
+            'productTargetsSave': reverse('realise:api_save_territory_product_targets'),
+            'channelTargets':     reverse('realise:api_channel_quick_targets'),
+            'channelTargetsSave': reverse('realise:api_save_channel_quick_targets'),
+            'productActuals':     reverse('realise:api_product_actuals'),
+        },
+    }
+    return render(request, 'realise/person_targets_embed.html', {'boot': boot, 'asset_ver': asset_ver})
 
 
 @group_required('realise_admin', json_response=False)

@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sales Target Assignment — 5 Visual Styles</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="lib/react.production.min.js"></script>
+<script src="lib/react-dom.production.min.js"></script>
+<script src="lib/babel.min.js"></script>
+<style>
+  :root{
+    --bg:#f1f5f9;--card:#ffffff;--border:#e2e8f0;--ac:#4f46e5;--ac2:#7c3aed;
+    --ac-light:#eef2ff;--tx:#0f172a;--tx2:#334155;--tx3:#94a3b8;
+    --green:#10b981;--green-light:#d1fae5;--amber:#f59e0b;--amber-light:#fef3c7;
+    --red:#ef4444;--red-light:#fee2e2;--rose:#ec4899;--purple:#8b5cf6;
+    --font:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--tx);font-size:15px;-webkit-font-smoothing:antialiased}
+  .app{max-width:1180px;margin:0 auto;padding:28px 22px 60px}
+
+  .hero h1{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .hero p{color:var(--tx2);margin-top:6px;font-size:14.5px;max-width:760px}
+
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin:22px 0}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .kpi-card .v{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .kpi-card .l{font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+  .kpi-card.accent{background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;color:#fff}
+  .kpi-card.accent .l{color:rgba(255,255,255,.85)}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:6px;flex-wrap:wrap}
+  .tab{padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;color:var(--tx2);cursor:pointer;border:none;background:transparent;transition:.15s;white-space:nowrap}
+  .tab:hover{background:var(--ac-light);color:var(--ac)}
+  .tab.active{background:var(--ac);color:#fff;box-shadow:0 4px 12px rgba(79,70,229,.3)}
+  .tab.add{color:var(--green)}
+  .tab.add.active{background:var(--green);color:#fff;box-shadow:0 4px 12px rgba(16,185,129,.3)}
+  .actions{display:flex;gap:8px}
+  .btn{padding:9px 15px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--tx2);transition:.15s}
+  .btn:hover{border-color:var(--ac);color:var(--ac)}
+  .btn-primary{background:var(--ac);color:#fff;border-color:var(--ac)}
+  .btn-primary:hover{background:#4338ca;color:#fff}
+  .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+  .btn-green:hover{background:#059669;color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:0 1px 3px rgba(15,23,42,.05);min-height:420px}
+  .panel-hint{font-size:13.5px;color:var(--tx3);margin-bottom:18px;display:flex;align-items:center;gap:8px;line-height:1.5}
+  .panel-hint b{color:var(--ac)}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700}
+  .avatar{border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;flex-shrink:0}
+  .tinput-wrap{display:inline-flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;transition:.15s}
+  .tinput-wrap:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-light)}
+  .tinput-wrap .pre{padding:0 8px;color:var(--tx3);font-weight:700;font-size:13px;background:#f8fafc;align-self:stretch;display:flex;align-items:center}
+  .tinput{border:none;outline:none;padding:8px 10px;width:110px;font-family:var(--font);font-size:14px;font-weight:600;color:var(--tx)}
+  select.sel,input.combo{appearance:none;width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-family:var(--font);font-size:14px;font-weight:600;color:var(--tx);background:#fff;transition:.15s}
+  select.sel{padding-right:36px;cursor:pointer;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 12px center}
+  select.sel:focus,input.combo:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-light)}
+  .lbl{font-size:11.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+  .new-badge{font-size:9.5px;font-weight:800;color:var(--green);background:var(--green-light);padding:2px 6px;border-radius:999px;letter-spacing:.3px}
+  .pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--green-light);color:#047857}
+
+  .cascade-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .row-card{display:flex;align-items:center;gap:14px;padding:13px 16px;border:1px solid var(--border);border-radius:14px;margin-top:10px;transition:.15s}
+  .row-card:hover{border-color:#c7d2fe;background:#fafbff}
+
+  .ch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+  .ch-tile{border:2px solid var(--border);border-radius:16px;padding:18px;cursor:pointer;transition:.18s;background:#fff}
+  .ch-tile:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(15,23,42,.08)}
+  .ch-tile.sel{border-color:currentColor;box-shadow:0 8px 22px rgba(79,70,229,.16)}
+  .state-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:13px;margin-top:18px}
+  .state-card{border:1px solid var(--border);border-radius:14px;padding:14px;transition:.15s}
+  .state-card:hover{border-color:#c7d2fe;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+
+  .matrix{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+  .matrix th,.matrix td{padding:10px;text-align:center;border-bottom:1px solid var(--border)}
+  .matrix th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:800;position:sticky;top:0;background:#fff}
+  .matrix td.state-h{text-align:left;font-weight:700;white-space:nowrap}
+  .matrix td.empty{color:#cbd5e1}
+  .matrix .cell-input{width:84px;border:1px solid transparent;border-radius:8px;padding:5px 6px;text-align:center;font-family:var(--font);font-weight:700;font-size:12.5px;background:transparent;color:var(--tx)}
+  .matrix .cell-input:focus{outline:none;border-color:var(--ac);background:#fff}
+  .matrix tfoot td{font-weight:800;background:#f8fafc}
+  .matrix .total-col{font-weight:800;background:#f8fafc}
+
+  .tree-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;transition:.12s}
+  .tree-row:hover{background:#f8fafc}
+  .tree-chev{width:18px;color:var(--tx3);font-size:11px}
+  .tree-kids{margin-left:22px;border-left:2px dashed var(--border);padding-left:14px}
+  .tree-leaf{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px}
+
+  .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;align-items:start}
+  .board-col{background:#f8fafc;border:1px solid var(--border);border-radius:16px;padding:12px}
+  .board-col-hd{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 12px}
+  .board-card{background:#fff;border:1px solid var(--border);border-radius:13px;padding:13px;margin-bottom:11px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .board-state{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0}
+
+  /* Manage tab */
+  .add-card{background:#f8fafc;border:1.5px dashed #c7d2fe;border-radius:16px;padding:16px 18px}
+  .pick-field{margin-bottom:15px}
+  .chip-pick{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .pick{padding:8px 14px;border-radius:999px;border:1.5px solid var(--border);background:#fff;font-family:var(--font);font-weight:700;font-size:13px;color:var(--tx2);cursor:pointer;transition:.12s;display:inline-flex;align-items:center;gap:7px}
+  .pick:hover{border-color:#c7d2fe;background:#fafbff}
+  .pick.add{border-style:dashed;color:var(--green);border-color:#86efac}
+  .pick.add:hover{background:var(--green-light);border-color:var(--green)}
+  .pick-input{padding:8px 13px;border-radius:999px;border:1.5px solid var(--ac);outline:none;font-family:var(--font);font-weight:700;font-size:13px;width:175px;box-shadow:0 0 0 3px var(--ac-light)}
+  .pick.more{border-color:#c7d2fe;color:var(--ac);background:var(--ac-light)}
+  .pick.more:hover{background:#e0e7ff;border-color:var(--ac)}
+  /* Modal / popup */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .modal{background:#fff;border-radius:20px;width:100%;max-width:660px;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.32);overflow:hidden}
+  .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
+  .modal-hd h3{font-size:16px;font-weight:800}
+  .modal-x{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:18px;color:var(--tx3);line-height:1}
+  .modal-x:hover{border-color:var(--red);color:var(--red);background:var(--red-light)}
+  .modal-search{margin:16px 22px 2px;padding:11px 14px;border:1.5px solid var(--border);border-radius:12px;font-family:var(--font);font-size:14px;font-weight:600;outline:none}
+  .modal-search:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-light)}
+  .modal-body{padding:8px 22px 22px;overflow-y:auto}
+  .modal-sec-l{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);margin:16px 0 10px}
+  /* Product target cards (colourful grid) */
+  .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .prod-card{border-radius:15px;padding:13px 14px;color:#fff;position:relative;overflow:hidden;box-shadow:0 4px 12px rgba(15,23,42,.13)}
+  .prod-badge{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.6px;background:rgba(255,255,255,.28);color:#fff;padding:3px 8px;border-radius:999px}
+  .prod-name{font-weight:800;font-size:13.5px;margin:9px 0 11px;line-height:1.2;text-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .prod-input-wrap{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.95);border-radius:10px;padding:0 9px}
+  .prod-input-wrap>span{color:var(--tx3);font-weight:700;font-size:13px}
+  .prod-input{border:none;outline:none;background:transparent;font-family:var(--font);font-weight:800;font-size:15px;color:var(--tx);width:100%;padding:7px 2px}
+  /* Current mappings — card grid */
+  .seg{display:inline-flex;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px}
+  .seg-b{padding:6px 12px;border:none;background:transparent;border-radius:8px;font-family:var(--font);font-weight:700;font-size:12.5px;color:var(--tx2);cursor:pointer;transition:.12s}
+  .seg-b.on{background:#fff;color:var(--ac);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+  .map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:4px}
+  .map-card{border:1px solid var(--border);border-radius:16px;padding:15px;background:#fff;transition:.15s}
+  .map-card:hover{box-shadow:0 6px 16px rgba(15,23,42,.07);border-color:#c7d2fe}
+  .map-card-hd{display:flex;align-items:center;gap:10px;padding-bottom:11px;margin-bottom:11px;border-bottom:1px solid var(--border)}
+  .map-card-hd b{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .map-card-hd .count{margin-left:auto;font-size:11px;font-weight:800;color:var(--tx3);background:#f1f5f9;padding:3px 9px;border-radius:999px;flex-shrink:0}
+  .map-pills{display:flex;flex-direction:column;gap:7px}
+  .map-pill{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:10px;background:#f8fafc;transition:.12s}
+  .map-pill:hover{background:#eef2ff}
+  .map-pill .st{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mini-av{width:22px;height:22px;border-radius:6px;color:#fff;font-weight:800;font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .pill-x{width:22px;height:22px;border-radius:7px;border:none;background:transparent;color:var(--tx3);cursor:pointer;font-size:14px;font-weight:700;flex-shrink:0}
+  .pill-x:hover{background:var(--red-light);color:var(--red)}
+  .card-add{width:27px;height:27px;border-radius:8px;border:1.5px dashed #86efac;background:#fff;color:var(--green);font-weight:800;font-size:16px;cursor:pointer;line-height:1;flex-shrink:0;margin-left:8px;transition:.12s}
+  .card-add:hover{background:var(--green-light);border-color:var(--green)}
+  /* SO (Sales Officer) sub-rows under each ASM territory */
+  .terr{border:1px solid var(--border);border-radius:11px;margin-bottom:8px;overflow:hidden;background:#f8fafc}
+  .terr-hd{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;transition:.12s}
+  .terr-hd:hover{background:#eef2ff}
+  .chev{color:var(--tx3);font-size:10px;transition:.15s;flex-shrink:0}
+  .so-badge{font-size:10px;font-weight:800;background:var(--ac-light);color:var(--ac);padding:2px 7px;border-radius:999px;flex-shrink:0}
+  .so-wrap{padding:0 10px 11px;display:flex;flex-direction:column;gap:8px}
+  .so-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .so-chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700}
+  .so-x{border:none;background:transparent;color:var(--tx3);cursor:pointer;font-weight:700;font-size:13px;padding:0 1px}
+  .so-x:hover{color:var(--red)}
+  .so-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px}
+  .so-input{padding:7px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:var(--font);font-size:12.5px;font-weight:600;outline:none;width:130px}
+  .so-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-light)}
+  .preview{display:flex;align-items:center;gap:12px;margin-top:16px;padding:12px 16px;background:#fff;border:1px solid var(--border);border-radius:12px}
+  .warn{margin-top:12px;padding:10px 14px;border-radius:10px;background:var(--amber-light);color:#92400e;font-size:13px;font-weight:600;display:flex;gap:8px}
+  .mtable{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;margin-top:8px}
+  .mtable th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);font-weight:800;padding:10px 12px;border-bottom:2px solid var(--border)}
+  .mtable td{padding:10px 12px;border-bottom:1px solid var(--border)}
+  .mtable tr:hover td{background:#fafbff}
+  .del{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--tx3);cursor:pointer;font-weight:700;transition:.15s}
+  .del:hover{border-color:var(--red);color:var(--red);background:var(--red-light)}
+
+  .muted{color:var(--tx3)}
+  .foot-note{margin-top:18px;font-size:12.5px;color:var(--tx3);border-top:1px solid var(--border);padding-top:14px;line-height:1.6}
+  @media(max-width:880px){.kpi{grid-template-columns:repeat(2,1fr)}.cascade-grid{grid-template-columns:1fr}.add-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useCallback, useEffect, useRef } = React;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SEED — initial mapping from expanded_main_group_state_mapping.xlsx.
+   This is just the STARTING data. Everything below is fully dynamic — add or
+   remove salespeople / states / channels in the "Manage / Add" tab and all
+   five visuals update + save to the browser automatically.
+   ───────────────────────────────────────────────────────────────────────── */
+const SEED = [
+  { person:'SUNNY JI',           channel:'GT',     state:'DELHI' },
+  { person:'RAMINDER JI',        channel:'GT',     state:'PUNJAB' },
+  { person:'RAMINDER JI',        channel:'GT',     state:'RAJASTHAN' },
+  { person:'TANJEET JI',         channel:'GT',     state:'HARYANA' },
+  { person:'RAVINDER CHADHA JI', channel:'GT',     state:'UTTAR PRADESH' },
+  { person:'RAVINDER CHADHA JI', channel:'GT',     state:'UTTARAKHAND' },
+  { person:'PRINCE',             channel:'MT',     state:'DELHI' },
+  { person:'PRINCE',             channel:'MT',     state:'PUNJAB' },
+  { person:'PRINCE',             channel:'MT',     state:'HARYANA' },
+  { person:'PRINCE',             channel:'ROI',    state:'KARNATAKA' },
+  { person:'PRINCE',             channel:'ROI',    state:'TELANGANA' },
+  { person:'PRINCE',             channel:'ROI',    state:'RAJASTHAN' },
+  { person:'HAPPY',              channel:'ROI',    state:'MAHARASHTRA' },
+  { person:'HAPPY',              channel:'ROI',    state:'GUJARAT' },
+  { person:'HAPPY',              channel:'ROI',    state:'GOA' },
+  { person:'TARUN',              channel:'ROI',    state:'WEST BENGAL' },
+  { person:'TARUN',              channel:'ROI',    state:'ASSAM' },
+  { person:'RAVINDER CHADHA JI', channel:'HORECA', state:'DELHI' },
+];
+
+/* Known channels get curated colors; any NEW channel gets an auto colour. */
+const KNOWN = {
+  GT:    { full:'General Trade',           color:'#4f46e5' },
+  MT:    { full:'Modern Trade',            color:'#10b981' },
+  ROI:   { full:'Rest of India',           color:'#f59e0b' },
+  HORECA:{ full:'Hotel · Restaurant · Café', color:'#ec4899' },
+};
+const KNOWN_ORDER = ['GT','MT','ROI','HORECA'];
+const AV_COLORS = ['#4f46e5','#0891b2','#7c3aed','#db2777','#ea580c','#0d9488','#9333ea','#2563eb','#c026d3'];
+
+/* Full India list — 28 states + 8 union territories. The 6 PRIORITY states show
+   inline; everything else lives behind the "More" popup. */
+const INDIA_STATES = ['ANDHRA PRADESH','ARUNACHAL PRADESH','ASSAM','BIHAR','CHHATTISGARH','GOA','GUJARAT','HARYANA','HIMACHAL PRADESH','JHARKHAND','KARNATAKA','KERALA','MADHYA PRADESH','MAHARASHTRA','MANIPUR','MEGHALAYA','MIZORAM','NAGALAND','ODISHA','PUNJAB','RAJASTHAN','SIKKIM','TAMIL NADU','TELANGANA','TRIPURA','UTTAR PRADESH','UTTARAKHAND','WEST BENGAL'];
+const INDIA_UTS = ['ANDAMAN AND NICOBAR ISLANDS','CHANDIGARH','DADRA AND NAGAR HAVELI AND DAMAN AND DIU','DELHI','JAMMU AND KASHMIR','LADAKH','LAKSHADWEEP','PUDUCHERRY'];
+const PRIORITY_STATES = ['DELHI','PUNJAB','HARYANA','UTTAR PRADESH','RAJASTHAN','GOA'];
+
+/* Full channel master. The 4 PRIORITY channels show inline; the rest live in the
+   "More channels" popup. */
+const ALL_CHANNELS = ['BRANCH','CASH SALE','CORPORATE','CSD','E-COMMERCE','GT','HORECA','MT','PURCHASE OIL','REFERENCE','ROI','SANGAT','STAFF'];
+const PRIORITY_CHANNELS = ['GT','MT','ROI','HORECA'];
+
+/* District master per state (standard lists; a "+ Add custom" fallback covers any
+   gaps/renames). The SO "City / District" step shows the list for the chosen state;
+   states not in this map fall back to a free-text box. */
+const DISTRICTS = {
+  'DELHI': ['NEW DELHI','CENTRAL DELHI','NORTH DELHI','SOUTH DELHI','EAST DELHI','WEST DELHI','NORTH EAST DELHI','NORTH WEST DELHI','SOUTH WEST DELHI','SOUTH EAST DELHI','SHAHDARA'],
+  'PUNJAB': ['AMRITSAR','BARNALA','BATHINDA','FARIDKOT','FATEHGARH SAHIB','FAZILKA','FEROZEPUR','GURDASPUR','HOSHIARPUR','JALANDHAR','KAPURTHALA','LUDHIANA','MALERKOTLA','MANSA','MOGA','PATHANKOT','PATIALA','RUPNAGAR','MOHALI','SANGRUR','NAWANSHAHR','SRI MUKTSAR SAHIB','TARN TARAN'],
+  'HARYANA': ['AMBALA','BHIWANI','CHARKHI DADRI','FARIDABAD','FATEHABAD','GURUGRAM','HISAR','JHAJJAR','JIND','KAITHAL','KARNAL','KURUKSHETRA','MAHENDRAGARH','NUH','PALWAL','PANCHKULA','PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNANAGAR'],
+  'UTTAR PRADESH': ['AGRA','ALIGARH','AMBEDKAR NAGAR','AMETHI','AMROHA','AURAIYA','AYODHYA','AZAMGARH','BAGHPAT','BAHRAICH','BALLIA','BALRAMPUR','BANDA','BARABANKI','BAREILLY','BASTI','BHADOHI','BIJNOR','BUDAUN','BULANDSHAHR','CHANDAULI','CHITRAKOOT','DEORIA','ETAH','ETAWAH','FARRUKHABAD','FATEHPUR','FIROZABAD','GAUTAM BUDDHA NAGAR','GHAZIABAD','GHAZIPUR','GONDA','GORAKHPUR','HAMIRPUR','HAPUR','HARDOI','HATHRAS','JALAUN','JAUNPUR','JHANSI','KANNAUJ','KANPUR DEHAT','KANPUR NAGAR','KASGANJ','KAUSHAMBI','LAKHIMPUR KHERI','KUSHINAGAR','LALITPUR','LUCKNOW','MAHARAJGANJ','MAHOBA','MAINPURI','MATHURA','MAU','MEERUT','MIRZAPUR','MORADABAD','MUZAFFARNAGAR','PILIBHIT','PRATAPGARH','PRAYAGRAJ','RAEBARELI','RAMPUR','SAHARANPUR','SAMBHAL','SANT KABIR NAGAR','SHAHJAHANPUR','SHAMLI','SHRAVASTI','SIDDHARTHNAGAR','SITAPUR','SONBHADRA','SULTANPUR','UNNAO','VARANASI'],
+  'UTTARAKHAND': ['ALMORA','BAGESHWAR','CHAMOLI','CHAMPAWAT','DEHRADUN','HARIDWAR','NAINITAL','PAURI GARHWAL','PITHORAGARH','RUDRAPRAYAG','TEHRI GARHWAL','UDHAM SINGH NAGAR','UTTARKASHI'],
+  'RAJASTHAN': ['AJMER','ALWAR','BANSWARA','BARAN','BARMER','BHARATPUR','BHILWARA','BIKANER','BUNDI','CHITTORGARH','CHURU','DAUSA','DHOLPUR','DUNGARPUR','HANUMANGARH','JAIPUR','JAISALMER','JALORE','JHALAWAR','JHUNJHUNU','JODHPUR','KARAULI','KOTA','NAGAUR','PALI','PRATAPGARH','RAJSAMAND','SAWAI MADHOPUR','SIKAR','SIROHI','SRI GANGANAGAR','TONK','UDAIPUR'],
+  'GOA': ['NORTH GOA','SOUTH GOA'],
+  'KARNATAKA': ['BAGALKOT','BALLARI','BELAGAVI','BENGALURU RURAL','BENGALURU URBAN','BIDAR','CHAMARAJANAGAR','CHIKKABALLAPUR','CHIKKAMAGALURU','CHITRADURGA','DAKSHINA KANNADA','DAVANAGERE','DHARWAD','GADAG','HASSAN','HAVERI','KALABURAGI','KODAGU','KOLAR','KOPPAL','MANDYA','MYSURU','RAICHUR','RAMANAGARA','SHIVAMOGGA','TUMAKURU','UDUPI','UTTARA KANNADA','VIJAYANAGARA','VIJAYAPURA','YADGIR'],
+  'TELANGANA': ['ADILABAD','BHADRADRI KOTHAGUDEM','HANUMAKONDA','HYDERABAD','JAGTIAL','JANGAON','JAYASHANKAR BHUPALPALLY','JOGULAMBA GADWAL','KAMAREDDY','KARIMNAGAR','KHAMMAM','KOMARAM BHEEM','MAHABUBABAD','MAHABUBNAGAR','MANCHERIAL','MEDAK','MEDCHAL-MALKAJGIRI','MULUGU','NAGARKURNOOL','NALGONDA','NARAYANPET','NIRMAL','NIZAMABAD','PEDDAPALLI','RAJANNA SIRCILLA','RANGAREDDY','SANGAREDDY','SIDDIPET','SURYAPET','VIKARABAD','WANAPARTHY','WARANGAL','YADADRI BHUVANAGIRI'],
+  'MAHARASHTRA': ['AHMEDNAGAR','AKOLA','AMRAVATI','CHHATRAPATI SAMBHAJINAGAR','BEED','BHANDARA','BULDHANA','CHANDRAPUR','DHULE','GADCHIROLI','GONDIA','HINGOLI','JALGAON','JALNA','KOLHAPUR','LATUR','MUMBAI CITY','MUMBAI SUBURBAN','NAGPUR','NANDED','NANDURBAR','NASHIK','DHARASHIV','PALGHAR','PARBHANI','PUNE','RAIGAD','RATNAGIRI','SANGLI','SATARA','SINDHUDURG','SOLAPUR','THANE','WARDHA','WASHIM','YAVATMAL'],
+  'GUJARAT': ['AHMEDABAD','AMRELI','ANAND','ARAVALLI','BANASKANTHA','BHARUCH','BHAVNAGAR','BOTAD','CHHOTA UDEPUR','DAHOD','DANG','DEVBHOOMI DWARKA','GANDHINAGAR','GIR SOMNATH','JAMNAGAR','JUNAGADH','KHEDA','KUTCH','MAHISAGAR','MEHSANA','MORBI','NARMADA','NAVSARI','PANCHMAHAL','PATAN','PORBANDAR','RAJKOT','SABARKANTHA','SURAT','SURENDRANAGAR','TAPI','VADODARA','VALSAD'],
+  'WEST BENGAL': ['ALIPURDUAR','BANKURA','BIRBHUM','COOCH BEHAR','DAKSHIN DINAJPUR','DARJEELING','HOOGHLY','HOWRAH','JALPAIGURI','JHARGRAM','KALIMPONG','KOLKATA','MALDA','MURSHIDABAD','NADIA','NORTH 24 PARGANAS','PASCHIM BARDHAMAN','PASCHIM MEDINIPUR','PURBA BARDHAMAN','PURBA MEDINIPUR','PURULIA','SOUTH 24 PARGANAS','UTTAR DINAJPUR'],
+  'ASSAM': ['BAKSA','BARPETA','BISWANATH','BONGAIGAON','CACHAR','CHARAIDEO','CHIRANG','DARRANG','DHEMAJI','DHUBRI','DIBRUGARH','DIMA HASAO','GOALPARA','GOLAGHAT','HAILAKANDI','HOJAI','JORHAT','KAMRUP','KAMRUP METROPOLITAN','KARBI ANGLONG','KARIMGANJ','KOKRAJHAR','LAKHIMPUR','MAJULI','MORIGAON','NAGAON','NALBARI','SIVASAGAR','SONITPUR','SOUTH SALMARA-MANKACHAR','TINSUKIA','UDALGURI','WEST KARBI ANGLONG'],
+};
+
+/* helpers */
+const keyOf = (channel,state) => `${channel}||${state}`;
+const fmt = n => '₹' + new Intl.NumberFormat('en-IN').format(Math.round(n||0));
+const pid = (type,name) => type+'#'+name;                                                     // product id, e.g. P#CANOLA
+const _pl = x => (x && typeof x==='object') ? (+x.l||0) : (+x||0);                            // tgt litres of a product entry (legacy number = litres)
+const _pr = x => (x && typeof x==='object') ? (+x.r||0) : 0;                                  // tgt realise of a product entry
+const tProdL = (v,id) => (v && typeof v==='object') ? _pl(v[id]) : 0;                         // target litres for one product
+const tProdR = (v,id) => (v && typeof v==='object') ? _pr(v[id]) : 0;                         // target realise for one product
+const tSum = v => (v && typeof v==='object') ? Object.values(v).reduce((s,x)=>s+_pl(x),0) : (+v||0);   // total litres
+const tByType = (v,type) => {                                                                  // premium 'P' / commodity 'C' litres subtotal
+  if(!v || typeof v!=='object') return type==='C' ? (+v||0) : 0;                               // legacy bare number = litres
+  if(('p' in v) || ('c' in v)) return type==='P' ? (+v.p||0) : (+v.c||0);                      // very old {p,c}
+  let s=0; for(const k in v){ if(k[0]===type && k[1]==='#') s+=_pl(v[k]); } return s;           // product map (litres)
+};
+const fmtL = n => new Intl.NumberFormat('en-IN').format(Math.round(n||0)) + ' L';              // litres formatter
+const PRODUCT_SEED = [
+  {name:'CANOLA',type:'P'},{name:'OLIVE',type:'P'},{name:'GROUNDNUT',type:'P'},{name:'EXTRA VIRGIN OLIVE',type:'P'},{name:'GHEE',type:'P'},{name:'BLENDED',type:'P'},{name:'YELLOW MUSTARD',type:'P'},{name:'COCONUT',type:'P'},{name:'SESAME',type:'P'},{name:'SLICED OLIVE',type:'P'},
+  {name:'MUSTARD',type:'C'},{name:'SOYABEAN',type:'C'},{name:'SUNFLOWER',type:'C'},{name:'BLENDED',type:'C'},{name:'RICE BRAN',type:'C'},{name:'COTTON SEED',type:'C'},
+];
+const distinct = arr => [...new Set(arr)];
+const norm = s => (s||'').trim().toUpperCase();
+function hashColor(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return AV_COLORS[h%AV_COLORS.length]; }
+function hexToRgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+function channelMeta(ch){
+  const k = KNOWN[ch];
+  const color = k ? k.color : hashColor(ch);
+  return { full: k ? k.full : ch, color, light: hexToRgba(color,0.13) };
+}
+function orderChannels(rows){
+  const present = distinct(rows.map(r=>r.channel));
+  return [...KNOWN_ORDER.filter(c=>present.includes(c)), ...present.filter(c=>!KNOWN_ORDER.includes(c))];
+}
+const initials = name => name.replace(/ JI$/,'').split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('');
+
+function Avatar({name,size}){
+  const s = size||34;
+  return <div className="avatar" style={{background:hashColor(name),width:s,height:s,fontSize:s*0.37}}>{initials(name)}</div>;
+}
+function ChannelChip({ch}){
+  const c = channelMeta(ch);
+  return <span className="chip" style={{background:c.light,color:c.color}}>{ch}</span>;
+}
+function TargetInput({value,onChange,width}){
+  return (
+    <span className="tinput-wrap">
+      <span className="pre">₹</span>
+      <input className="tinput" style={width?{width}:null} type="number" min="0" step="10000"
+        placeholder="0" value={value??''} onChange={e=>onChange(e.target.value)} />
+    </span>
+  );
+}
+/* Click-to-select chips instead of a dropdown: all options visible, tap to pick,
+   "+ New" reveals a tiny inline box to create a brand-new value. */
+function ChipPicker({label,value,onChange,options,accentFor,icon,addLabel}){
+  const [adding,setAdding] = useState(false);
+  const [draft,setDraft] = useState('');
+  const known = options.map(norm);
+  const custom = norm(value) && !known.includes(norm(value));
+  const commit = ()=>{ const v=norm(draft); if(v) onChange(v); setDraft(''); setAdding(false); };
+  const onStyle = ac => ({borderColor:ac,background:hexToRgba(ac,.12),color:ac,boxShadow:'0 0 0 3px '+hexToRgba(ac,.16)});
+  return (
+    <div className="pick-field">
+      <span className="lbl">{label} {custom && <span className="new-badge">✦ NEW</span>}</span>
+      <div className="chip-pick">
+        {options.map(o=>{
+          const ac = accentFor ? accentFor(o) : '#4f46e5';
+          const on = norm(value)===norm(o);
+          return (
+            <button key={o} className="pick" onClick={()=>onChange(o)} style={on?onStyle(ac):null}>
+              {icon&&icon(o)}{o}
+            </button>
+          );
+        })}
+        {custom && (
+          <button className="pick" onClick={()=>onChange('')} title="Click to clear" style={onStyle(accentFor?accentFor(value):'#16a34a')}>
+            {icon&&icon(value)}{value} ✕
+          </button>
+        )}
+        {adding
+          ? <input autoFocus className="pick-input" value={draft} placeholder={'New '+(addLabel||label)+'…'}
+              onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter')commit(); if(e.key==='Escape'){setAdding(false);setDraft('');} }}
+              onBlur={commit} />
+          : <button className="pick add" onClick={()=>setAdding(true)}>+ New</button>}
+      </div>
+    </div>
+  );
+}
+
+/* State picker: 6 key states inline + a "More" popup with every Indian state & UT. */
+const PICK_ON = {borderColor:'#4f46e5',background:hexToRgba('#4f46e5',.12),color:'#4f46e5',boxShadow:'0 0 0 3px '+hexToRgba('#4f46e5',.16)};
+function StatePicker({value,onChange}){
+  const [open,setOpen] = useState(false);
+  const [adding,setAdding] = useState(false);
+  const [draft,setDraft] = useState('');
+  const [q,setQ] = useState('');
+  const all = [...INDIA_STATES,...INDIA_UTS];
+  const custom = norm(value) && !all.map(norm).includes(norm(value));
+  const selectedExtra = norm(value) && !PRIORITY_STATES.includes(norm(value)) && !custom;
+  const moreStates = INDIA_STATES.filter(s=>!PRIORITY_STATES.includes(s));
+  const moreUTs = INDIA_UTS.filter(s=>!PRIORITY_STATES.includes(s));
+  const moreCount = moreStates.length + moreUTs.length;
+  const commit = ()=>{ const v=norm(draft); if(v) onChange(v); setDraft(''); setAdding(false); };
+  const pick = s=>{ onChange(s); setOpen(false); setQ(''); };
+  const greenOn = {borderColor:'#16a34a',background:hexToRgba('#16a34a',.12),color:'#16a34a',boxShadow:'0 0 0 3px '+hexToRgba('#16a34a',.16)};
+  useEffect(()=>{ if(!open) return; const h=e=>{ if(e.key==='Escape') setOpen(false); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[open]);
+  const f = s => s.includes(norm(q));
+  const fStates = moreStates.filter(f), fUTs = moreUTs.filter(f);
+  return (
+    <div className="pick-field">
+      <span className="lbl">State {custom && <span className="new-badge">✦ NEW</span>}</span>
+      <div className="chip-pick">
+        {PRIORITY_STATES.map(s=>(
+          <button key={s} className="pick" style={norm(value)===s?PICK_ON:null} onClick={()=>onChange(s)}>{s}</button>
+        ))}
+        {selectedExtra && <button className="pick" style={PICK_ON} onClick={()=>onChange('')}>{value} ✕</button>}
+        {custom && <button className="pick" style={greenOn} onClick={()=>onChange('')}>{value} ✕</button>}
+        <button className="pick more" onClick={()=>setOpen(true)}>⋯ More states ({moreCount})</button>
+        {adding
+          ? <input autoFocus className="pick-input" value={draft} placeholder="New state…"
+              onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter')commit(); if(e.key==='Escape'){setAdding(false);setDraft('');} }}
+              onBlur={commit} />
+          : <button className="pick add" onClick={()=>setAdding(true)}>+ New</button>}
+      </div>
+
+      {open && (
+        <div className="modal-overlay" onClick={()=>setOpen(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <h3>📍 All States &amp; Union Territories</h3>
+              <button className="modal-x" onClick={()=>setOpen(false)}>×</button>
+            </div>
+            <input className="modal-search" autoFocus placeholder="Search state…" value={q} onChange={e=>setQ(e.target.value)} />
+            <div className="modal-body">
+              <div className="modal-sec-l">States ({fStates.length})</div>
+              <div className="chip-pick">
+                {fStates.map(s=><button key={s} className="pick" style={norm(value)===s?PICK_ON:null} onClick={()=>pick(s)}>{s}</button>)}
+              </div>
+              <div className="modal-sec-l">Union Territories ({fUTs.length})</div>
+              <div className="chip-pick">
+                {fUTs.map(s=><button key={s} className="pick" style={norm(value)===s?PICK_ON:null} onClick={()=>pick(s)}>{s}</button>)}
+              </div>
+              {fStates.length===0 && fUTs.length===0 && <div className="muted" style={{padding:'16px 2px'}}>No state matches “{q}”.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Channel picker: 4 key channels inline + a "More" popup with the full master. */
+function ChannelPicker({value,onChange}){
+  const [open,setOpen] = useState(false);
+  const [adding,setAdding] = useState(false);
+  const [draft,setDraft] = useState('');
+  const [q,setQ] = useState('');
+  const custom = norm(value) && !ALL_CHANNELS.map(norm).includes(norm(value));
+  const selectedExtra = norm(value) && !PRIORITY_CHANNELS.includes(norm(value)) && !custom;
+  const more = ALL_CHANNELS.filter(c=>!PRIORITY_CHANNELS.includes(c));
+  const commit = ()=>{ const v=norm(draft); if(v) onChange(v); setDraft(''); setAdding(false); };
+  const pick = c=>{ onChange(c); setOpen(false); setQ(''); };
+  const onStyle = ac => ({borderColor:ac,background:hexToRgba(ac,.12),color:ac,boxShadow:'0 0 0 3px '+hexToRgba(ac,.16)});
+  const dot = c => <span style={{width:9,height:9,borderRadius:3,background:channelMeta(c).color,display:'inline-block'}}/>;
+  useEffect(()=>{ if(!open) return; const h=e=>{ if(e.key==='Escape') setOpen(false); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[open]);
+  const fMore = more.filter(c=>c.includes(norm(q)));
+  return (
+    <div className="pick-field">
+      <span className="lbl">Channel {custom && <span className="new-badge">✦ NEW</span>}</span>
+      <div className="chip-pick">
+        {PRIORITY_CHANNELS.map(c=>(
+          <button key={c} className="pick" style={norm(value)===c?onStyle(channelMeta(c).color):null} onClick={()=>onChange(c)}>{dot(c)}{c}</button>
+        ))}
+        {selectedExtra && <button className="pick" style={onStyle(channelMeta(value).color)} onClick={()=>onChange('')}>{dot(value)}{value} ✕</button>}
+        {custom && <button className="pick" style={onStyle(channelMeta(value).color)} onClick={()=>onChange('')}>{dot(value)}{value} ✕</button>}
+        <button className="pick more" onClick={()=>setOpen(true)}>⋯ More channels ({more.length})</button>
+        {adding
+          ? <input autoFocus className="pick-input" value={draft} placeholder="New channel…"
+              onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter')commit(); if(e.key==='Escape'){setAdding(false);setDraft('');} }}
+              onBlur={commit} />
+          : <button className="pick add" onClick={()=>setAdding(true)}>+ New</button>}
+      </div>
+
+      {open && (
+        <div className="modal-overlay" onClick={()=>setOpen(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <h3>🏷️ All Channels</h3>
+              <button className="modal-x" onClick={()=>setOpen(false)}>×</button>
+            </div>
+            <input className="modal-search" autoFocus placeholder="Search channel…" value={q} onChange={e=>setQ(e.target.value)} />
+            <div className="modal-body">
+              <div className="modal-sec-l">Other channels ({fMore.length})</div>
+              <div className="chip-pick">
+                {fMore.map(c=><button key={c} className="pick" style={norm(value)===c?onStyle(channelMeta(c).color):null} onClick={()=>pick(c)}>{dot(c)}{c}</button>)}
+              </div>
+              {fMore.length===0 && <div className="muted" style={{padding:'16px 2px'}}>No channel matches “{q}”.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* City / District picker — shows all districts of the chosen state in a searchable
+   popup (+ Add custom). Falls back to a free-text box for states without a list. */
+function CityPicker({state,value,onChange}){
+  const [open,setOpen] = useState(false);
+  const [q,setQ] = useState('');
+  const [adding,setAdding] = useState(false);
+  const [draft,setDraft] = useState('');
+  const list = DISTRICTS[norm(state)] || [];
+  useEffect(()=>{ if(!open) return; const h=e=>{ if(e.key==='Escape') setOpen(false); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[open]);
+  if(!norm(state)) return <div className="muted" style={{fontSize:13,padding:'6px 2px'}}>Pick a state first.</div>;
+  if(!list.length)
+    return <input className="combo" style={{maxWidth:300}} placeholder="Type city / district…" value={value} onChange={e=>onChange(e.target.value)} />;
+  const custom = norm(value) && !list.map(norm).includes(norm(value));
+  const greenOn = {borderColor:'#16a34a',background:hexToRgba('#16a34a',.12),color:'#16a34a',boxShadow:'0 0 0 3px '+hexToRgba('#16a34a',.16)};
+  const pick = c=>{ onChange(c); setOpen(false); setQ(''); };
+  const commit = ()=>{ const v=norm(draft); if(v) onChange(v); setDraft(''); setAdding(false); setOpen(false); };
+  const f = list.filter(c=>c.includes(norm(q)));
+  return (
+    <div className="chip-pick">
+      {norm(value) && <button className="pick" style={custom?greenOn:PICK_ON} onClick={()=>onChange('')}>{value} ✕</button>}
+      <button className="pick more" onClick={()=>setOpen(true)}>📍 {norm(value)?'Change':'Choose'} city / district ({list.length})</button>
+      {open && (
+        <div className="modal-overlay" onClick={()=>setOpen(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <h3>📍 {norm(state)} — City / District</h3>
+              <button className="modal-x" onClick={()=>setOpen(false)}>×</button>
+            </div>
+            <input className="modal-search" autoFocus placeholder="Search district…" value={q} onChange={e=>setQ(e.target.value)} />
+            <div className="modal-body">
+              <div className="modal-sec-l">Districts ({f.length})</div>
+              <div className="chip-pick">
+                {f.map(c=><button key={c} className="pick" style={norm(value)===c?PICK_ON:null} onClick={()=>pick(c)}>{c}</button>)}
+                {adding
+                  ? <input autoFocus className="pick-input" value={draft} placeholder="Custom city…"
+                      onChange={e=>setDraft(e.target.value)}
+                      onKeyDown={e=>{ if(e.key==='Enter')commit(); if(e.key==='Escape'){setAdding(false);setDraft('');} }} onBlur={commit} />
+                  : <button className="pick add" onClick={()=>setAdding(true)}>+ Add custom</button>}
+              </div>
+              {f.length===0 && !adding && <div className="muted" style={{padding:'12px 2px'}}>No district matches “{q}” — use <b>+ Add custom</b>.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── STYLE 1 — Cascade Filter Builder ────────────────────────────────────── */
+function CascadeBuilder({rows,targets,setTarget}){
+  const [f,setF] = useState({channel:'',state:'',person:''});
+  const optsFor = (dim) => {
+    const r = rows.filter(x =>
+      (dim==='channel'||!f.channel||x.channel===f.channel) &&
+      (dim==='state'  ||!f.state  ||x.state  ===f.state  ) &&
+      (dim==='person' ||!f.person ||x.person ===f.person ));
+    return distinct(r.map(x=>x[dim])).sort();
+  };
+  const out = rows.filter(x =>
+    (!f.channel||x.channel===f.channel) && (!f.state||x.state===f.state) && (!f.person||x.person===f.person));
+  const Sel = ({dim,label}) => (
+    <div>
+      <span className="lbl">{label}</span>
+      <select className="sel" value={f[dim]} onChange={e=>setF({...f,[dim]:e.target.value})}>
+        <option value="">— Any {label} —</option>
+        {optsFor(dim).map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  return (
+    <div>
+      <div className="panel-hint">🧭 Pick <b>any</b> criteria in <b>any</b> order — choose a channel and it narrows the states &amp; people; choose a person and it shows their territory. Then type a target.</div>
+      <div className="cascade-grid">
+        <Sel dim="channel" label="Channel" />
+        <Sel dim="state"   label="State" />
+        <Sel dim="person"  label="ASM" />
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',margin:'18px 2px 4px'}}>
+        <span className="muted" style={{fontSize:13,fontWeight:600}}>Showing {out.length} of {rows.length} territories</span>
+        {(f.channel||f.state||f.person) && <button className="btn" onClick={()=>setF({channel:'',state:'',person:''})}>Clear filters</button>}
+      </div>
+      {out.map(r=>{
+        const v = targets[keyOf(r.channel,r.state)];
+        return (
+          <div className="row-card" key={keyOf(r.channel,r.state)}>
+            <Avatar name={r.person} />
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700}}>{r.person}</div>
+              <div className="muted" style={{fontSize:12.5,marginTop:2}}>{r.state}</div>
+            </div>
+            <ChannelChip ch={r.channel} />
+            <TargetInput value={v} onChange={val=>setTarget(r.channel,r.state,val)} />
+            {v>0 && <span className="pill">Assigned ✓</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── STYLE 2 — Drill-Down Cards ──────────────────────────────────────────── */
+function DrillCards({rows,channels,targets,setTarget,totalsByChannel,products}){
+  const [sel,setSel] = useState(channels[0]);
+  const [editProd,setEditProd] = useState(null);   // {channel,state} whose product-target modal is open
+  const [prodFilter,setProdFilter] = useState('all');  // modal filter: all | P | C
+  const cur = channels.includes(sel) ? sel : channels[0];
+  const states = rows.filter(r=>r.channel===cur);
+  useEffect(()=>{ if(!editProd) return; const h=e=>{ if(e.key==='Escape') setEditProd(null); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[editProd]);
+  return (
+    <div>
+      <div className="ch-grid">
+        {channels.map(ch=>{
+          const c = channelMeta(ch);
+          const n = rows.filter(r=>r.channel===ch).length;
+          return (
+            <div key={ch} className={'ch-tile'+(cur===ch?' sel':'')} style={{color:c.color}} onClick={()=>setSel(ch)}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span className="chip" style={{background:c.light,color:c.color}}>{ch}</span>
+                <span style={{fontWeight:800,fontSize:18,color:'var(--tx)'}}>{n}</span>
+              </div>
+              <div style={{fontSize:12.5,color:'var(--tx2)',marginTop:10,fontWeight:600}}>{c.full}</div>
+              <div style={{fontSize:13,color:'var(--tx3)',marginTop:6}}>{fmtL(totalsByChannel[ch]||0)} assigned</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{margin:'22px 2px 0',fontWeight:700,fontSize:14}}>
+        <span style={{color:channelMeta(cur).color}}>{cur}</span> ▸ {states.length} states
+      </div>
+      <div className="state-grid">
+        {states.map(r=>(
+          <div className="state-card" key={r.state}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:11}}>
+              <Avatar name={r.person} size={30} />
+              <div style={{minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:14}}>{r.state}</div>
+                <div className="muted" style={{fontSize:12}}>{r.person}</div>
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12.5}}>
+                <span style={{fontWeight:700,color:'#0d9488'}}>Premium</span><b>{fmtL(tByType(targets[keyOf(r.channel,r.state)],'P'))}</b>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12.5}}>
+                <span style={{fontWeight:700,color:'#d97706'}}>Commodity</span><b>{fmtL(tByType(targets[keyOf(r.channel,r.state)],'C'))}</b>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',borderTop:'1px dashed var(--border)',paddingTop:6}}>
+                <span className="muted" style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'.4px'}}>Total</span>
+                <b style={{fontSize:13.5}}>{fmtL(tSum(targets[keyOf(r.channel,r.state)]))}</b>
+              </div>
+              <button className="btn btn-green" style={{padding:'8px 12px',fontSize:12.5,marginTop:4,width:'100%'}} onClick={()=>setEditProd({channel:r.channel,state:r.state})}>🎯 Set product targets</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {editProd && (()=>{
+        const k = keyOf(editProd.channel,editProd.state);
+        const v = targets[k];
+        const shown = products.filter(p=> prodFilter==='all' ? true : p.type===prodFilter);
+        const ProdCard = p => {
+          const id = pid(p.type,p.name), color = hashColor(p.name+p.type);
+          return (
+            <div className="prod-card" key={id} style={{background:color,backgroundImage:'linear-gradient(135deg,rgba(255,255,255,.16),rgba(0,0,0,.20))'}}>
+              <span className="prod-badge">{p.type==='P'?'PREMIUM':'COMMODITY'}</span>
+              <div className="prod-name">{p.name}</div>
+              <div style={{display:'flex',gap:6,marginTop:4}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:'.4px',marginBottom:3,opacity:.9}}>TGT LTRS</div>
+                  <div className="prod-input-wrap"><input className="prod-input" type="number" min="0" placeholder="0" value={tProdL(v,id)||''} onChange={e=>setTarget(editProd.channel,editProd.state,id,'l',e.target.value)} /></div>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:8.5,fontWeight:800,letterSpacing:'.4px',marginBottom:3,opacity:.9}}>TGT REL</div>
+                  <div className="prod-input-wrap"><input className="prod-input" type="number" min="0" placeholder="0" value={tProdR(v,id)||''} onChange={e=>setTarget(editProd.channel,editProd.state,id,'r',e.target.value)} /></div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+        const group = (type,label,color) => {
+          const list = products.filter(p=>p.type===type);
+          if(!list.length) return null;
+          return (
+            <div>
+              <div className="modal-sec-l" style={{color}}>{label} — {fmtL(tByType(v,type))}</div>
+              <div className="prod-grid">{list.map(ProdCard)}</div>
+            </div>
+          );
+        };
+        return (
+          <div className="modal-overlay" onClick={()=>setEditProd(null)}>
+            <div className="modal" style={{maxWidth:780}} onClick={e=>e.stopPropagation()}>
+              <div className="modal-hd">
+                <h3 style={{display:'flex',alignItems:'center',gap:8}}>🎯 Targets — <ChannelChip ch={editProd.channel}/> {editProd.state}</h3>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <div className="seg">
+                    <button className={'seg-b'+(prodFilter==='all'?' on':'')} onClick={()=>setProdFilter('all')}>All</button>
+                    <button className={'seg-b'+(prodFilter==='P'?' on':'')} onClick={()=>setProdFilter('P')}>Premium</button>
+                    <button className={'seg-b'+(prodFilter==='C'?' on':'')} onClick={()=>setProdFilter('C')}>Commodity</button>
+                  </div>
+                  <button className="modal-x" onClick={()=>setEditProd(null)}>×</button>
+                </div>
+              </div>
+              <div className="modal-body">
+                {(prodFilter==='all'||prodFilter==='P') && group('P','Premium','#0d9488')}
+                {(prodFilter==='all'||prodFilter==='C') && group('C','Commodity','#d97706')}
+                {shown.length===0 && <div className="muted" style={{padding:'10px 2px'}}>No products here — add them in Manage / Add → 📦 Products.</div>}
+              </div>
+              <div style={{padding:'14px 22px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <b style={{fontSize:14}}>Total: {fmtL(tSum(v))}</b>
+                <button className="btn btn-green" onClick={()=>setEditProd(null)}>Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/* ─── STYLE 3 — Pivot Matrix / Heatmap ────────────────────────────────────── */
+function Matrix({rows,channels,targets,setTarget}){
+  const states = distinct(rows.map(r=>r.state)).sort();
+  const combo = {}; rows.forEach(r=>{combo[keyOf(r.channel,r.state)]=r.person;});
+  const max = Math.max(1,...Object.values(targets).map(Number).filter(Boolean));
+  const colTotal = ch => rows.filter(r=>r.channel===ch).reduce((s,r)=>s+(+targets[keyOf(ch,r.state)]||0),0);
+  const rowTotal = st => channels.reduce((s,ch)=>s+(+targets[keyOf(ch,st)]||0),0);
+  const grand = states.reduce((s,st)=>s+rowTotal(st),0);
+  return (
+    <div>
+      <div className="panel-hint">📊 The classic management view: <b>states × channels</b>. Each filled cell is an owned territory — type a target and the cell heats up. Totals roll up live.</div>
+      <div style={{overflowX:'auto'}}>
+        <table className="matrix">
+          <thead><tr>
+            <th style={{textAlign:'left'}}>State</th>
+            {channels.map(ch=><th key={ch}><ChannelChip ch={ch}/></th>)}
+            <th>Total</th>
+          </tr></thead>
+          <tbody>
+            {states.map(st=>(
+              <tr key={st}>
+                <td className="state-h">{st}</td>
+                {channels.map(ch=>{
+                  const person = combo[keyOf(ch,st)];
+                  if(!person) return <td key={ch} className="empty">·</td>;
+                  const v = +targets[keyOf(ch,st)]||0;
+                  return (
+                    <td key={ch} style={{background:v?hexToRgba('#4f46e5',0.06+(v/max)*0.32):'#fff'}}>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:10.5,fontWeight:700,color:hashColor(person)}}>{initials(person)}</span>
+                        <input className="cell-input" type="number" min="0" step="10000" placeholder="—"
+                          value={targets[keyOf(ch,st)]??''} onChange={e=>setTarget(ch,st,e.target.value)} />
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="total-col">{rowTotal(st)?fmt(rowTotal(st)):'—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr>
+            <td style={{textAlign:'left'}}>Channel total</td>
+            {channels.map(ch=><td key={ch}>{colTotal(ch)?fmt(colTotal(ch)):'—'}</td>)}
+            <td style={{background:'var(--ac-light)',color:'var(--ac)'}}>{fmt(grand)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─── STYLE 4 — Tree / Org Hierarchy ──────────────────────────────────────── */
+function Tree({rows,channels,targets,setTarget}){
+  const [open,setOpen] = useState(()=>({[channels[0]]:true}));
+  const toggle = k => setOpen(o=>({...o,[k]:!o[k]}));
+  const chTotal = ch => rows.filter(r=>r.channel===ch).reduce((s,r)=>s+(+targets[keyOf(ch,r.state)]||0),0);
+  return (
+    <div>
+      <div className="panel-hint">🌳 Roll-up ownership: <b>Channel → Salesperson → State</b>. Great for “who owns what” conversations, with subtotals at every level.</div>
+      {channels.map(ch=>{
+        const people = distinct(rows.filter(r=>r.channel===ch).map(r=>r.person));
+        return (
+          <div key={ch}>
+            <div className="tree-row" onClick={()=>toggle(ch)} style={{fontWeight:800}}>
+              <span className="tree-chev">{open[ch]?'▼':'▶'}</span>
+              <ChannelChip ch={ch}/>
+              <span>{channelMeta(ch).full}</span>
+              <span style={{marginLeft:'auto',color:'var(--ac)',fontWeight:800}}>{fmt(chTotal(ch))}</span>
+            </div>
+            {open[ch] && <div className="tree-kids">
+              {people.map(p=>{
+                const pk = ch+'|'+p;
+                const prows = rows.filter(r=>r.channel===ch&&r.person===p);
+                const ptot = prows.reduce((s,r)=>s+(+targets[keyOf(ch,r.state)]||0),0);
+                return (
+                  <div key={pk}>
+                    <div className="tree-row" onClick={()=>toggle(pk)} style={{fontWeight:700}}>
+                      <span className="tree-chev">{open[pk]?'▼':'▶'}</span>
+                      <Avatar name={p} size={26} />
+                      <span>{p}</span>
+                      <span className="muted" style={{fontSize:12}}>· {prows.length} state{prows.length>1?'s':''}</span>
+                      <span style={{marginLeft:'auto',fontWeight:700}}>{fmt(ptot)}</span>
+                    </div>
+                    {open[pk] && <div className="tree-kids">
+                      {prows.map(r=>(
+                        <div className="tree-leaf" key={r.state}>
+                          <span style={{fontSize:13.5}}>📍 {r.state}</span>
+                          <TargetInput value={targets[keyOf(ch,r.state)]} onChange={val=>setTarget(ch,r.state,val)} />
+                        </div>
+                      ))}
+                    </div>}
+                  </div>
+                );
+              })}
+            </div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── STYLE 5 — Assignment Board (Kanban) ─────────────────────────────────── */
+function Board({rows,channels,targets,setTarget,totalsByChannel}){
+  return (
+    <div>
+      <div className="panel-hint">🧱 A planning board — one column per <b>channel</b>, one card per <b>salesperson</b>, a target per state, with live column totals. The “whiteboard” management can sign off on.</div>
+      <div className="board">
+        {channels.map(ch=>{
+          const people = distinct(rows.filter(r=>r.channel===ch).map(r=>r.person));
+          const c = channelMeta(ch);
+          return (
+            <div className="board-col" key={ch}>
+              <div className="board-col-hd">
+                <span className="chip" style={{background:c.light,color:c.color}}>{ch}</span>
+                <span style={{fontWeight:800,fontSize:13}}>{fmt(totalsByChannel[ch]||0)}</span>
+              </div>
+              {people.map(p=>{
+                const prows = rows.filter(r=>r.channel===ch&&r.person===p);
+                const ptot = prows.reduce((s,r)=>s+(+targets[keyOf(ch,r.state)]||0),0);
+                return (
+                  <div className="board-card" key={p}>
+                    <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:8}}>
+                      <Avatar name={p} size={28} />
+                      <span style={{fontWeight:700,fontSize:13.5}}>{p}</span>
+                      <span style={{marginLeft:'auto',fontSize:12,fontWeight:700,color:'var(--ac)'}}>{fmt(ptot)}</span>
+                    </div>
+                    {prows.map(r=>(
+                      <div className="board-state" key={r.state}>
+                        <span style={{fontSize:12.5}} className="muted">{r.state}</span>
+                        <TargetInput value={targets[keyOf(ch,r.state)]} onChange={val=>setTarget(ch,r.state,val)} width={92} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Current mappings shown as grouped cards (by salesperson or by channel) — no table.
+   In "By channel" view each card has a + button → popup to add a person+state to it. */
+function MappingCards({rows,channels,targets,removeRow,addRow,sos,addSO,removeSO,moveTerritory,swapOwners,undo,histLen,restoreSeed,showAdd,view}){
+  const [grp,setGrp] = useState('person');
+  const [drag,setDrag] = useState(null);       // territory being dragged {person,channel,state}
+  const [dragOver,setDragOver] = useState(null);// channel code being hovered as drop target (card)
+  const [dragOverRow,setDragOverRow] = useState(null);// row key being hovered (swap/fill)
+  const [editMode,setEditMode] = useState(false);     // click-to-swap edit mode (By channel)
+  const [sel,setSel] = useState([]);                  // up to 2 selected row keys
+  const toggleSel = rk => setSel(s => s.includes(rk) ? s.filter(x=>x!==rk) : (s.length<2 ? [...s,rk] : [s[1],rk]));
+  const closeEdit = ()=>{ setEditMode(false); setSel([]); };
+  const doChange = ()=>{ if(sel.length!==2) return; const [a,b]=sel.map(k=>k.split('||')); swapOwners(a[0],a[1],b[0],b[1]); setSel([]); };
+  const rowLabel = rk => { const [c,st]=rk.split('||'); const r=rows.find(x=>x.channel===c&&x.state===st); return r ? `${r.person||'Unassigned'} · ${st}` : st; };
+  const [addTo,setAddTo] = useState(null);   // {mode:'channel'|'asm', value} whose + popup is open
+  const [ap,setAp] = useState('');           // chosen ASM (channel-mode)
+  const [ac,setAc] = useState('');           // chosen channel (asm-mode)
+  const [ast,setAst] = useState('');         // chosen state
+  const [aNew,setANew] = useState(false);
+  const [aDraft,setADraft] = useState('');
+  const [showAll,setShowAll] = useState(false);
+  const [showAllCh,setShowAllCh] = useState(false);
+  const [exp,setExp] = useState({});          // expanded territories (By ASM)
+  const [soDraft,setSoDraft] = useState({});  // {terrKey:{so,city}}
+  const [soName,setSoName] = useState('');     // SO reverse-cascade — new SO name
+  const [soCh,setSoCh] = useState('');         //   → channel
+  const [soSt,setSoSt] = useState('');         //   → state (filtered by channel)
+  const [soCity,setSoCity] = useState('');     //   → optional city
+  const [soShowAllCh,setSoShowAllCh] = useState(false);
+  const people = distinct(rows.map(r=>r.person)).filter(Boolean).sort();
+  const allStates = [...INDIA_STATES,...INDIA_UTS].sort();
+  const customAp = norm(ap) && !people.map(norm).includes(norm(ap));
+  const chOrder = ch => { const i=channels.indexOf(ch); return i<0?999:i; };
+  const sosFor = (ch,st)=> sos.filter(s=>s.channel===ch && s.state===st);
+  const groups = grp==='person'
+    ? people.map(p=>({ key:'p_'+p, head:'person', title:p,
+        items: rows.filter(r=>r.person===p).sort((a,b)=> chOrder(a.channel)-chOrder(b.channel) || a.state.localeCompare(b.state)) }))
+    : channels.map(ch=>({ key:'c_'+ch, head:'channel', title:ch,
+        items: rows.filter(r=>r.channel===ch).sort((a,b)=> a.state.localeCompare(b.state)) })).filter(g=>g.items.length);
+  const closeAdd = ()=>{ setAddTo(null); setAp(''); setAc(''); setAst(''); setANew(false); setADraft(''); setShowAll(false); setShowAllCh(false); };
+  const commitNew = ()=>{ const v=norm(aDraft); if(v) setAp(v); setADraft(''); setANew(false); };
+  const doAdd = ()=>{
+    if(!addTo) return;
+    if(addTo.mode==='fill'){ if(!norm(ap)) return; addRow({person:ap,channel:addTo.value,state:addTo.state}); }
+    else if(addTo.mode==='channel'){ if(!(norm(ap)&&norm(ast))) return; addRow({person:ap,channel:addTo.value,state:ast}); }
+    else { if(!(norm(ac)&&norm(ast))) return; addRow({person:addTo.value,channel:ac,state:ast}); }
+    closeAdd();
+  };
+  useEffect(()=>{ if(!addTo) return; const h=e=>{ if(e.key==='Escape') closeAdd(); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[addTo]);
+  const greenOn = {borderColor:'#16a34a',background:hexToRgba('#16a34a',.12),color:'#16a34a',boxShadow:'0 0 0 3px '+hexToRgba('#16a34a',.16)};
+  const chStyle = c => ({borderColor:channelMeta(c).color,background:hexToRgba(channelMeta(c).color,.12),color:channelMeta(c).color,boxShadow:'0 0 0 3px '+hexToRgba(channelMeta(c).color,.16)});
+  const canAdd = addTo ? (addTo.mode==='fill' ? !!norm(ap) : addTo.mode==='channel' ? (norm(ap)&&norm(ast)) : (norm(ac)&&norm(ast))) : false;
+  const addSummary = addTo ? (addTo.mode==='fill' ? `${norm(ap)} · ${addTo.value} · ${addTo.state}` : addTo.mode==='channel' ? `${norm(ap)} · ${addTo.value} · ${norm(ast)}` : `${addTo.value} · ${norm(ac)} · ${norm(ast)}`) : '';
+  const toggleExp = k => setExp(e=>({...e,[k]:!e[k]}));
+  const setDraft = (k,f,v)=> setSoDraft(d=>({...d,[k]:{...(d[k]||{so:'',city:''}),[f]:v}}));
+  const submitSO = (ch,st)=>{ const k=keyOf(ch,st); const d=soDraft[k]||{}; if(norm(d.so)&&norm(d.city)){ addSO(ch,st,d.so,d.city); setSoDraft(s=>({...s,[k]:{so:'',city:''}})); } };
+  // ── SO tab (reverse cascade): channel → states it serves → owning ASM (auto) ──
+  const soStates = norm(soCh) ? distinct(rows.filter(r=>r.channel===norm(soCh)).map(r=>r.state)).sort() : [];
+  const soAsm = (norm(soCh)&&norm(soSt)) ? ((rows.find(r=>r.channel===norm(soCh)&&r.state===norm(soSt))||{}).person||'') : '';
+  const soReady = norm(soName)&&norm(soCh)&&norm(soSt)&&soAsm;
+  const resetSo = ()=>{ setSoName('');setSoCh('');setSoSt('');setSoCity('');setSoShowAllCh(false); };
+  const submitNewSO = ()=>{ if(!soReady) return; addSO(norm(soCh),norm(soSt),norm(soName),norm(soCity)); resetSo(); };
+  const soByAsm = (()=>{ const m={}; sos.forEach(s=>{ const owner=(rows.find(r=>r.channel===s.channel&&r.state===s.state)||{}).person||'— Unassigned'; (m[owner]=m[owner]||[]).push(s); }); return m; })();
+  return (
+    <div>
+      {view==='asm' &&
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',margin:'18px 2px 12px',flexWrap:'wrap',gap:10}}>
+          <b style={{fontSize:14}}>Current mappings <span className="muted">({rows.length})</span></b>
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <button className="btn" disabled={!histLen} onClick={undo} title="Undo last change">↶ Undo{histLen?` (${histLen})`:''}</button>
+            <button className="btn" onClick={restoreSeed} title="Restore the original mapping">⟳ Restore</button>
+            <div className="seg">
+              <button className={'seg-b'+(grp==='person'?' on':'')} onClick={()=>{setGrp('person');closeEdit();}}>By ASM</button>
+              <button className={'seg-b'+(grp==='channel'?' on':'')} onClick={()=>{setGrp('channel');closeEdit();}}>By channel</button>
+            </div>
+          </div>
+        </div>}
+
+      {view==='asm' && grp==='channel' &&
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,margin:'-2px 2px 12px',flexWrap:'wrap'}}>
+          <div className="muted" style={{fontSize:12.5,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+            {editMode
+              ? (sel.length===2
+                  ? <>✏️ Swap <b style={{color:'var(--ac)'}}>{rowLabel(sel[0])}</b> ↔ <b style={{color:'var(--ac)'}}>{rowLabel(sel[1])}</b> — click <b>Change</b>.</>
+                  : <>✏️ <b style={{color:'var(--ac)'}}>Edit mode</b> — <b>drag</b> to move/swap, or click <b>two rows</b> ({sel.length}/2) then <b>Change</b>. Use <b>+ / ×</b> to add/remove.</>)
+              : <>👁️ <b style={{color:'var(--ac)'}}>View only</b> — click <b>✏️ Edit</b> to move, swap, add or remove ASMs.</>}
+          </div>
+          <div style={{display:'flex',gap:8,flexShrink:0}}>
+            {editMode
+              ? <>
+                  <button className="btn btn-primary" disabled={sel.length!==2} onClick={doChange}>🔄 Change</button>
+                  <button className="btn" onClick={closeEdit}>✖ Close</button>
+                </>
+              : <button className="btn" onClick={()=>setEditMode(true)}>✏️ Edit</button>}
+          </div>
+        </div>}
+
+      {view==='so' && (
+        <div>
+          <div className="add-card" style={showAdd?null:{display:'none'}}>
+            <div className="pick-field">
+              <span className="lbl">Step 1 · SO name {norm(soName) && <span className="new-badge">✦ NEW</span>}</span>
+              <input className="combo" style={{maxWidth:300}} placeholder="Enter new Sales Officer name…" value={soName} onChange={e=>setSoName(e.target.value)} />
+            </div>
+            <div className="pick-field">
+              <span className="lbl">Step 2 · Channel</span>
+              <div className="chip-pick">
+                {(soShowAllCh?ALL_CHANNELS:PRIORITY_CHANNELS).map(c=>(
+                  <button key={c} className="pick" style={norm(soCh)===c?chStyle(c):null} onClick={()=>{setSoCh(c);setSoSt('');}}>
+                    <span style={{width:9,height:9,borderRadius:3,background:channelMeta(c).color,display:'inline-block'}}/>{c}
+                  </button>
+                ))}
+                {!soShowAllCh && <button className="pick more" onClick={()=>setSoShowAllCh(true)}>⋯ Show all ({ALL_CHANNELS.length})</button>}
+              </div>
+            </div>
+            <div className="pick-field">
+              <span className="lbl">Step 3 · State {norm(soCh) && <span className="muted" style={{textTransform:'none',fontWeight:600,letterSpacing:0}}>— served by {norm(soCh)}</span>}</span>
+              {!norm(soCh)
+                ? <div className="muted" style={{fontSize:13,padding:'6px 2px'}}>↑ Pick a channel first.</div>
+                : soStates.length===0
+                  ? <div className="muted" style={{fontSize:13,padding:'6px 2px'}}>No states mapped to {norm(soCh)} yet — add a territory in the <b>ASM</b> view first.</div>
+                  : <div className="chip-pick">
+                      {soStates.map(s=>(
+                        <button key={s} className="pick" style={norm(soSt)===s?PICK_ON:null} onClick={()=>{setSoSt(s);setSoCity('');}}>{s}</button>
+                      ))}
+                    </div>}
+            </div>
+            <div className="pick-field">
+              <span className="lbl">Step 4 · Reports to (ASM)</span>
+              {soAsm
+                ? <span className="pick" style={{...greenOn,cursor:'default'}}><Avatar name={soAsm} size={18}/>{soAsm}<span className="muted" style={{fontWeight:800,fontSize:9.5,marginLeft:2}}>AUTO</span></span>
+                : <div className="muted" style={{fontSize:13,padding:'6px 2px'}}>Auto-fills once channel &amp; state are chosen.</div>}
+            </div>
+            <div className="pick-field">
+              <span className="lbl">City / District <span className="muted" style={{textTransform:'none',fontWeight:600,letterSpacing:0}}>(optional)</span></span>
+              <CityPicker state={soSt} value={soCity} onChange={setSoCity} />
+            </div>
+            <div style={{display:'flex',gap:10,alignItems:'center',marginTop:8}}>
+              <button className="btn btn-green" style={{padding:'12px 24px',fontSize:14}} disabled={!soReady} onClick={submitNewSO}>+ Add SO</button>
+              <button className="btn" disabled={!(soName||soCh||soSt||soCity)} onClick={resetSo}>Clear</button>
+            </div>
+            {soReady && (
+              <div className="preview" style={{marginTop:14,flexWrap:'wrap'}}>
+                <span className="muted" style={{fontSize:12,fontWeight:700}}>PREVIEW</span>
+                <span className="mini-av" style={{background:hashColor(norm(soName))}}>{initials(norm(soName))}</span>
+                <b>{norm(soName)}</b><span className="muted" style={{fontSize:10.5,fontWeight:800}}>SO</span>
+                <ChannelChip ch={norm(soCh)} />
+                <span>📍 {norm(soSt)}{norm(soCity)?' · '+norm(soCity):''}</span>
+                <span className="muted">→</span>
+                <Avatar name={soAsm} size={22} /><b>{soAsm}</b>
+              </div>
+            )}
+          </div>
+
+          <div style={{margin:'24px 2px 12px'}}><b style={{fontSize:14}}>Sales Officers <span className="muted">({sos.length})</span></b></div>
+          {sos.length===0
+            ? <div className="muted" style={{fontSize:13.5,padding:'8px 2px'}}>No SOs yet — click <b>➕ Add SO</b> above. Each SO reports to the ASM who owns its channel + state, and also shows under that territory in the <b>ASM</b> view.</div>
+            : <div className="map-grid">
+                {Object.keys(soByAsm).sort().map(asm=>(
+                  <div className="map-card" key={asm}>
+                    <div className="map-card-hd">
+                      <Avatar name={asm} size={30}/><b>{asm}</b><span className="muted" style={{fontSize:10.5,fontWeight:800}}>ASM</span>
+                      <span className="count">{soByAsm[asm].length} SO</span>
+                    </div>
+                    <div className="map-pills">
+                      {soByAsm[asm].map((s,i)=>(
+                        <div className="map-pill" key={i}>
+                          <span className="mini-av" style={{background:hashColor(s.so)}}>{initials(s.so)}</span>
+                          <div style={{display:'flex',flexDirection:'column',flex:1,minWidth:0}}>
+                            <span className="st">{s.so}</span>
+                            <span className="muted" style={{fontSize:11.5,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}><b style={{fontWeight:700}}>{s.channel}</b> · {s.state}{s.city?' · '+s.city:''}</span>
+                          </div>
+                          <button className="pill-x" title="Remove SO" onClick={()=>removeSO(s.channel,s.state,s.so,s.city)}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>}
+        </div>
+      )}
+
+      {view==='asm' && <div className="map-grid">
+        {groups.map(g=>(
+          <div className="map-card" key={g.key}
+            onDragOver={(g.head==='channel'&&editMode)?(e=>{ e.preventDefault(); if(drag && drag.channel!==g.title) setDragOver(g.title); }):undefined}
+            onDragLeave={(g.head==='channel'&&editMode)?(()=>setDragOver(o=>o===g.title?null:o)):undefined}
+            onDrop={(g.head==='channel'&&editMode)?(()=>{ if(drag && drag.channel!==g.title) moveTerritory(drag.person,drag.channel,g.title,drag.state); setDrag(null); setDragOver(null); }):undefined}
+            style={(dragOver===g.title && drag && drag.channel!==g.title)?{borderColor:'#16a34a',boxShadow:'0 0 0 3px '+hexToRgba('#16a34a',.18),background:'#f0fdf4'}:null}>
+            <div className="map-card-hd">
+              {g.head==='person'
+                ? <><Avatar name={g.title} size={30}/><b>{g.title}</b><span className="muted" style={{fontSize:10.5,fontWeight:800}}>ASM</span></>
+                : <><ChannelChip ch={g.title}/><b>{channelMeta(g.title).full}</b></>}
+              <span className="count">{g.items.length}</span>
+              {(g.head==='person' || editMode) && <button className="card-add" title={g.head==='person'?('Add territory to '+g.title):('Add ASM to '+g.title)} onClick={()=>setAddTo({mode:g.head==='person'?'asm':'channel',value:g.title})}>+</button>}
+            </div>
+            <div className="map-pills">
+              {g.items.map(r=>{
+                const t = tSum(targets[keyOf(r.channel,r.state)]);
+                if(g.head==='channel'){
+                  const un = !r.person;   // unassigned slot — state stays fixed, no owner
+                  const rk = keyOf(r.channel,r.state);
+                  const isTarget = drag && !(drag.channel===r.channel && drag.state===r.state);  // valid swap/fill target
+                  const hot = dragOverRow===rk && isTarget;
+                  const selected = editMode && sel.includes(rk);
+                  return (
+                    <div className="map-pill" key={rk}
+                      draggable={editMode && !un}
+                      onDragStart={(editMode && !un)?(()=>setDrag({person:r.person,channel:r.channel,state:r.state})):undefined}
+                      onDragEnd={()=>{setDrag(null);setDragOver(null);setDragOverRow(null);}}
+                      onClick={editMode?(()=>toggleSel(rk)):undefined}
+                      onDragOver={(editMode&&isTarget)?(e=>{ e.preventDefault(); e.stopPropagation(); setDragOverRow(rk); setDragOver(null); }):undefined}
+                      onDragLeave={(editMode&&isTarget)?(e=>{ e.stopPropagation(); setDragOverRow(o=>o===rk?null:o); }):undefined}
+                      onDrop={(editMode&&isTarget)?(e=>{ e.stopPropagation(); swapOwners(drag.channel,drag.state,r.channel,r.state); setDrag(null); setDragOver(null); setDragOverRow(null); }):undefined}
+                      style={{cursor:editMode?'pointer':'default',opacity:(drag&&drag.channel===r.channel&&drag.state===r.state)?.4:1,
+                        ...(selected
+                          ? {background:'#eef2ff',border:'1.5px solid #4f46e5',boxShadow:'0 0 0 3px '+hexToRgba('#4f46e5',.18)}
+                          : hot
+                            ? {background:'#ecfdf5',border:'1px solid #16a34a',boxShadow:'0 0 0 2px '+hexToRgba('#16a34a',.18)}
+                            : {background:un?'#fffbeb':undefined,border:un?'1px dashed #fcd34d':undefined})}}>
+                      <div style={{display:'flex',alignItems:'center',gap:9,flex:1,minWidth:0}}>
+                        {editMode && <span style={{width:18,height:18,borderRadius:5,border:'1.5px solid '+(selected?'#4f46e5':'#cbd5e1'),background:selected?'#4f46e5':'#fff',color:'#fff',fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{selected?(sel.indexOf(rk)+1):''}</span>}
+                        {un
+                          ? <><span className="mini-av" style={{background:'#cbd5e1'}}>—</span><span className="st" style={{fontStyle:'italic',color:'var(--tx3)'}}>Unassigned</span></>
+                          : <><span className="mini-av" style={{background:hashColor(r.person)}}>{initials(r.person)}</span><span className="st">{r.person}</span></>}
+                        <span className="muted" style={{fontSize:12,whiteSpace:'nowrap'}}>· {r.state}</span>
+                      </div>
+                      {!un && t>0 && <span className="muted" style={{fontSize:11.5,fontWeight:700,whiteSpace:'nowrap'}}>{fmtL(t)}</span>}
+                      {editMode && <button className="pill-x" title={un?'Remove empty slot':'Remove'} onClick={e=>{e.stopPropagation();removeRow(r.channel,r.state);}}>×</button>}
+                    </div>
+                  );
+                }
+                // By ASM — expandable territory with SO (city-level) management
+                const k = keyOf(r.channel,r.state);
+                const list = sosFor(r.channel,r.state);
+                const open = exp[k];
+                return (
+                  <div className="terr" key={k}>
+                    <div className="terr-hd" onClick={()=>toggleExp(k)}>
+                      <span className="chev" style={open?{transform:'rotate(90deg)'}:null}>▶</span>
+                      <ChannelChip ch={r.channel}/>
+                      <span className="st" style={{flex:1}}>{r.state}</span>
+                      {t>0 && <span className="muted" style={{fontSize:11.5,fontWeight:700}}>{fmtL(t)}</span>}
+                      <span className="so-badge">{list.length} SO</span>
+                      <button className="pill-x" title="Remove territory" onClick={e=>{e.stopPropagation();removeRow(r.channel,r.state);}}>×</button>
+                    </div>
+                    {open && (
+                      <div className="so-wrap">
+                        {list.length>0
+                          ? <div className="so-chips">
+                              {list.map((s,i)=>(
+                                <span className="so-chip" key={i}>
+                                  <span className="mini-av" style={{background:hashColor(s.so),width:18,height:18,fontSize:8}}>{initials(s.so)}</span>
+                                  {s.so}<span className="muted" style={{fontWeight:600}}>{s.city?' · '+s.city:''}</span>
+                                  <button className="so-x" title="Remove SO" onClick={()=>removeSO(r.channel,r.state,s.so,s.city)}>×</button>
+                                </span>
+                              ))}
+                            </div>
+                          : <div className="muted" style={{fontSize:12.5,padding:'2px 0 4px'}}>No SOs yet — add them in the <b>SO</b> tab.</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {addTo && (
+        <div className="modal-overlay" onClick={closeAdd}>
+          <div className="modal" style={{maxWidth:580}} onClick={e=>e.stopPropagation()}>
+            <div className="modal-hd">
+              <h3 style={{display:'flex',alignItems:'center',gap:8}}>
+                {addTo.mode==='fill'?'🎯 Assign':'➕ Add to'}
+                {addTo.mode==='asm'
+                  ? <><Avatar name={addTo.value} size={22}/><span style={{fontSize:15}}>{addTo.value}</span><span className="muted" style={{fontWeight:800,fontSize:10.5}}>ASM</span></>
+                  : <><ChannelChip ch={addTo.value}/><span className="muted" style={{fontWeight:600,fontSize:13}}>{addTo.mode==='fill'?('· '+addTo.state):channelMeta(addTo.value).full}</span></>}
+              </h3>
+              <button className="modal-x" onClick={closeAdd}>×</button>
+            </div>
+            <div className="modal-body">
+              {(addTo.mode==='channel'||addTo.mode==='fill') ? (
+                <div>
+                  <span className="lbl">{addTo.mode==='fill'?'Pick an ASM for this slot':'Step 1 · ASM'} {customAp && <span className="new-badge">✦ NEW</span>}</span>
+                  <div className="chip-pick" style={{marginBottom:18}}>
+                    {people.map(p=>(
+                      <button key={p} className="pick" style={norm(ap)===p?PICK_ON:null} onClick={()=>setAp(p)}><Avatar name={p} size={18}/>{p}</button>
+                    ))}
+                    {customAp && <button className="pick" style={greenOn} onClick={()=>setAp('')}>{ap} ✕</button>}
+                    {aNew
+                      ? <input autoFocus className="pick-input" value={aDraft} placeholder="New ASM…"
+                          onChange={e=>setADraft(e.target.value)}
+                          onKeyDown={e=>{ if(e.key==='Enter')commitNew(); if(e.key==='Escape'){setANew(false);setADraft('');} }} onBlur={commitNew} />
+                      : <button className="pick add" onClick={()=>setANew(true)}>+ New</button>}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <span className="lbl">Step 1 · Channel</span>
+                  <div className="chip-pick" style={{marginBottom:18}}>
+                    {(showAllCh?ALL_CHANNELS:PRIORITY_CHANNELS).map(c=>(
+                      <button key={c} className="pick" style={norm(ac)===c?chStyle(c):null} onClick={()=>setAc(c)}>
+                        <span style={{width:9,height:9,borderRadius:3,background:channelMeta(c).color,display:'inline-block'}}/>{c}
+                      </button>
+                    ))}
+                    {!showAllCh && <button className="pick more" onClick={()=>setShowAllCh(true)}>⋯ Show all ({ALL_CHANNELS.length})</button>}
+                  </div>
+                </div>
+              )}
+              {addTo.mode!=='fill' && (<>
+              <span className="lbl">Step 2 · State</span>
+              <div className="chip-pick">
+                {(showAll?allStates:PRIORITY_STATES).map(s=>(
+                  <button key={s} className="pick" style={norm(ast)===s?PICK_ON:null} onClick={()=>setAst(s)}>{s}</button>
+                ))}
+                {!showAll && <button className="pick more" onClick={()=>setShowAll(true)}>⋯ Show all ({allStates.length})</button>}
+              </div>
+              </>)}
+            </div>
+            <div style={{padding:'14px 22px',borderTop:'1px solid var(--border)',display:'flex',gap:10,alignItems:'center'}}>
+              {canAdd && <span className="muted" style={{marginRight:'auto',fontSize:13,fontWeight:600}}>{addSummary}</span>}
+              <button className="btn" style={canAdd?null:{marginLeft:'auto'}} onClick={closeAdd}>Cancel</button>
+              <button className="btn btn-green" disabled={!canAdd} onClick={doAdd}>+ Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Product master manager — Premium / Commodity lists, add & remove. */
+function ProductManager({products,addProduct,removeProduct}){
+  const [draft,setDraft] = useState({P:'',C:''});
+  const add = (type)=>{ const v=draft[type].trim(); if(v){ addProduct(v,type); setDraft(d=>({...d,[type]:''})); } };
+  const section = (type,label,color)=>{
+    const list = products.filter(p=>p.type===type);
+    return (
+      <div className="pick-field">
+        <span className="lbl" style={{color}}>{label} <span className="muted">({list.length})</span></span>
+        <div className="chip-pick">
+          {list.map(p=>(
+            <span key={p.name} className="pick" style={{cursor:'default'}}><span style={{width:8,height:8,borderRadius:3,background:color,display:'inline-block'}}/>{p.name}<button className="so-x" title="Remove" onClick={()=>removeProduct(p.name,type)}>×</button></span>
+          ))}
+          <span style={{display:'inline-flex',gap:6,alignItems:'center'}}>
+            <input className="so-input" placeholder={'New '+label.toLowerCase()+'…'} value={draft[type]} onChange={e=>setDraft(d=>({...d,[type]:e.target.value}))} onKeyDown={e=>{ if(e.key==='Enter')add(type); }} />
+            <button className="btn btn-green" style={{padding:'7px 13px',fontSize:12.5}} disabled={!draft[type].trim()} onClick={()=>add(type)}>+ Add</button>
+          </span>
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="add-card">
+      <div className="panel-hint" style={{marginBottom:14}}>📦 The <b>product master</b> — these appear when you set product-level targets in the Data View. (A product can sit in both lists, e.g. <b>Blended</b>.)</div>
+      {section('P','Premium','#0d9488')}
+      {section('C','Commodity','#d97706')}
+    </div>
+  );
+}
+
+/* ─── TAB 6 — Manage / Add (the data-management screen) ────────────────────── */
+function ManageData({rows,channels,addRow,removeRow,targets,sos,addSO,removeSO,moveTerritory,swapOwners,undo,histLen,restoreSeed,products,addProduct,removeProduct}){
+  const [form,setForm] = useState({person:'',channel:'',state:''});
+  const [view,setView] = useState('asm');   // top-right master toggle: ASM territory mgmt | SO mgmt
+  const [showAdd,setShowAdd] = useState(false);  // the add form is collapsed by default
+  const people = distinct(rows.map(r=>r.person)).sort();
+  const states = distinct(rows.map(r=>r.state)).sort();
+  const isNew = (val,opts) => norm(val) && !opts.map(norm).includes(norm(val));
+  const ready = form.person.trim() && form.channel.trim() && form.state.trim();
+  const dupOwner = (()=>{ const r = rows.find(x=>x.channel===norm(form.channel)&&x.state===norm(form.state)); return r?r.person:null; })();
+  const submit = ()=>{ if(!ready) return; addRow(form); setForm({person:'',channel:'',state:''}); };
+
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:showAdd?10:8}}>
+        <div className="seg">
+          <button className={'seg-b'+(view==='asm'?' on':'')} onClick={()=>{setView('asm');setShowAdd(false);}}>👤 ASM</button>
+          <button className={'seg-b'+(view==='so'?' on':'')} onClick={()=>{setView('so');setShowAdd(false);}}>🧑‍💼 SO</button>
+          <button className={'seg-b'+(view==='products'?' on':'')} onClick={()=>{setView('products');setShowAdd(false);}}>📦 Products</button>
+        </div>
+        {view!=='products' && <button className="btn btn-green" onClick={()=>setShowAdd(s=>!s)}>{showAdd?'✕ Close':(view==='asm'?'➕ Add ASM':'➕ Add SO')}</button>}
+      </div>
+
+      {view==='products' && <ProductManager products={products} addProduct={addProduct} removeProduct={removeProduct} />}
+
+      {view==='asm' && showAdd && (
+      <div className="add-card">
+        <ChipPicker label="ASM (Area Sales Manager)" value={form.person} onChange={v=>setForm({...form,person:v})} options={people}
+          icon={o=><Avatar name={o} size={18}/>} addLabel="ASM" />
+        <ChannelPicker value={form.channel} onChange={v=>setForm({...form,channel:v})} />
+        <StatePicker value={form.state} onChange={v=>setForm({...form,state:v})} />
+        <div style={{display:'flex',gap:10,alignItems:'center',marginTop:8}}>
+          <button className="btn btn-green" style={{padding:'12px 24px',fontSize:14}} disabled={!ready} onClick={submit}>+ Add territory</button>
+          <button className="btn" disabled={!(form.person||form.channel||form.state)} onClick={()=>setForm({person:'',channel:'',state:''})}>Clear selection</button>
+        </div>
+
+        {ready && (
+          <div className="preview">
+            <span className="muted" style={{fontSize:12,fontWeight:700}}>PREVIEW</span>
+            <Avatar name={norm(form.person)} size={28} />
+            <b>{norm(form.person)}</b>
+            <ChannelChip ch={norm(form.channel)} />
+            <span>📍 {norm(form.state)}</span>
+          </div>
+        )}
+        {dupOwner && dupOwner!==norm(form.person) && (
+          <div className="warn">⚠️ {norm(form.channel)} · {norm(form.state)} is currently owned by <b style={{margin:'0 4px'}}>{dupOwner}</b> — adding will reassign it to {norm(form.person)}.</div>
+        )}
+      </div>
+      )}
+
+      <MappingCards rows={rows} channels={channels} targets={targets} removeRow={removeRow} addRow={addRow} sos={sos} addSO={addSO} removeSO={removeSO} moveTerritory={moveTerritory} swapOwners={swapOwners} undo={undo} histLen={histLen} restoreSeed={restoreSeed} showAdd={showAdd} view={view} />
+    </div>
+  );
+}
+
+/* ─── APP shell ───────────────────────────────────────────────────────────── */
+const TABS = [
+  { id:'cards', label:'📊 Data View' },
+];
+
+function App(){
+  const [tab,setTab] = useState('cards');
+  const [rows,setRows] = useState(()=>{ try{const s=localStorage.getItem('tm_rows'); if(s)return JSON.parse(s);}catch(e){} return SEED; });
+  const [targets,setTargets] = useState(()=>{ try{const s=localStorage.getItem('tm_targets'); if(s)return JSON.parse(s);}catch(e){} return {}; });
+  const [sos,setSos] = useState(()=>{ try{const s=localStorage.getItem('tm_sos'); if(s)return JSON.parse(s);}catch(e){} return []; });
+  const [products,setProducts] = useState(()=>{ try{const s=localStorage.getItem('tm_products'); if(s)return JSON.parse(s);}catch(e){} return PRODUCT_SEED; });
+  useEffect(()=>{ try{localStorage.setItem('tm_products',JSON.stringify(products));}catch(e){} },[products]);
+  useEffect(()=>{ try{localStorage.setItem('tm_rows',JSON.stringify(rows));}catch(e){} },[rows]);
+  useEffect(()=>{ try{localStorage.setItem('tm_targets',JSON.stringify(targets));}catch(e){} },[targets]);
+  useEffect(()=>{ try{localStorage.setItem('tm_sos',JSON.stringify(sos));}catch(e){} },[sos]);
+
+  const channels = useMemo(()=>orderChannels(rows),[rows]);
+
+  // ── Undo history: snapshot rows/targets/SOs before each change ──────────────
+  const stateRef = useRef({rows,sos,targets}); stateRef.current = {rows,sos,targets};
+  const histRef = useRef([]);
+  const [histLen,setHistLen] = useState(0);
+  const snapshot = useCallback(()=>{ histRef.current.push(stateRef.current); if(histRef.current.length>60) histRef.current.shift(); setHistLen(histRef.current.length); },[]);
+  const undo = useCallback(()=>{ const prev=histRef.current.pop(); if(prev){ setRows(prev.rows); setTargets(prev.targets); setSos(prev.sos); } setHistLen(histRef.current.length); },[]);
+
+  const setTarget = useCallback((channel,state,productId,field,val)=>{
+    setTargets(t=>{
+      const k=keyOf(channel,state);
+      const legacy = t[k] && typeof t[k]==='object' && (('p' in t[k])||('c' in t[k]));
+      const cur = (t[k] && typeof t[k]==='object' && !legacy) ? t[k] : {};   // legacy resets to a product map
+      const cp0 = (cur[productId] && typeof cur[productId]==='object') ? cur[productId] : {l:(+cur[productId]||0),r:0};
+      const np = {...cp0,[field]: val===''?0:Number(val)};
+      const next = {...cur};
+      if(!(+np.l) && !(+np.r)) delete next[productId]; else next[productId]=np;
+      if(Object.keys(next).length===0){ const x={...t}; delete x[k]; return x; }
+      return {...t,[k]:next};
+    });
+  },[]);
+  const addRow = useCallback((f)=>{
+    const person=norm(f.person), channel=norm(f.channel), state=norm(f.state);
+    if(!person||!channel||!state) return;
+    snapshot();
+    setRows(rs=>{
+      const i=rs.findIndex(r=>r.channel===channel&&r.state===state);
+      if(i>=0){ const cp=[...rs]; cp[i]={person,channel,state}; return cp; }  // reassign owner
+      return [...rs,{person,channel,state}];
+    });
+  },[]);
+  const removeRow = useCallback((channel,state)=>{
+    snapshot();
+    setRows(rs=>rs.filter(r=>!(r.channel===channel&&r.state===state)));
+    setTargets(t=>{ const c={...t}; delete c[keyOf(channel,state)]; return c; });
+    setSos(ss=>ss.filter(s=>!(s.channel===channel&&s.state===state)));
+  },[]);
+  const addSO = useCallback((channel,state,so,city)=>{
+    const C=norm(channel),S=norm(state),SO=norm(so),CT=norm(city);
+    if(!C||!S||!SO) return;   // city is optional (SO tab adds without it)
+    snapshot();
+    setSos(ss=> ss.some(x=>x.channel===C&&x.state===S&&x.so===SO&&x.city===CT) ? ss : [...ss,{channel:C,state:S,so:SO,city:CT}]);
+  },[]);
+  const removeSO = useCallback((channel,state,so,city)=>{
+    snapshot();
+    setSos(ss=>ss.filter(s=>!(s.channel===channel&&s.state===state&&s.so===so&&s.city===city)));
+  },[]);
+  const addProduct = useCallback((name,type)=>{
+    const N=norm(name), T=(type==='P'?'P':'C');
+    if(!N) return;
+    setProducts(ps=> ps.some(p=>p.name===N&&p.type===T) ? ps : [...ps,{name:N,type:T}]);
+  },[]);
+  const removeProduct = useCallback((name,type)=>{
+    setProducts(ps=>ps.filter(p=>!(p.name===name&&p.type===type)));
+  },[]);
+  // Move an existing ASM territory from one channel to another (drag & drop).
+  // Carries its target + SOs along; guards the one-owner-per-channel+state rule.
+  const moveTerritory = useCallback((person,fromCh,toCh,state)=>{
+    const F=norm(fromCh),T=norm(toCh),P=norm(person),S=norm(state);
+    if(!T||F===T) return;
+    const existing = rows.find(r=>r.channel===T&&r.state===S);
+    if(existing && existing.person && existing.person!==P && !confirm(`${T} · ${S} is already owned by ${existing.person}.\nMove ${P} here and replace them?`)) return;
+    snapshot();
+    setRows(rs=>{
+      const cleared = rs.filter(r=>!(r.channel===T&&r.state===S));                        // drop current owner of the target slot
+      const freed = cleared.map(r=> (r.channel===F&&r.state===S) ? {...r,person:''} : r);  // free source slot — state stays, owner cleared
+      return [...freed, {person:P,channel:T,state:S}];                                     // assign person to the target slot
+    });
+    setTargets(t=>{ const c={...t}; const v=c[keyOf(F,S)]; delete c[keyOf(F,S)]; if(v!==undefined) c[keyOf(T,S)]=v; return c; });
+    setSos(ss=>{ const out=[]; ss.forEach(s=>{ const ns=(s.channel===F&&s.state===S)?{...s,channel:T}:s; if(!out.some(x=>x.channel===ns.channel&&x.state===ns.state&&x.so===ns.so&&x.city===ns.city)) out.push(ns); }); return out; });
+  },[rows]);
+  // Swap (or fill) the OWNERS of two slots — each slot's state, target & SOs stay put; only the person changes.
+  // If the target slot is empty, this fills it and frees the dragged slot.
+  const swapOwners = useCallback((aCh,aState,bCh,bState)=>{
+    const A=norm(aCh),AS=norm(aState),B=norm(bCh),BS=norm(bState);
+    if(A===B&&AS===BS) return;
+    snapshot();
+    setRows(rs=>{
+      const a=rs.find(r=>r.channel===A&&r.state===AS), b=rs.find(r=>r.channel===B&&r.state===BS);
+      const pa=a?a.person:'', pb=b?b.person:'';
+      return rs.map(r=> (r.channel===A&&r.state===AS)?{...r,person:pb} : (r.channel===B&&r.state===BS)?{...r,person:pa} : r);
+    });
+  },[]);
+  const restoreSeed = ()=>{ if(confirm('Restore the original 18 mappings? This replaces your current list.')){ snapshot(); setRows(SEED); } };
+
+  const totalsByChannel = useMemo(()=>{
+    const o={}; rows.forEach(r=>{o[r.channel]=(o[r.channel]||0)+tSum(targets[keyOf(r.channel,r.state)]);}); return o;
+  },[rows,targets]);
+  const grand = Object.values(totalsByChannel).reduce((a,b)=>a+b,0);
+  const grandP = rows.reduce((s,r)=>s+tByType(targets[keyOf(r.channel,r.state)],'P'),0);
+  const grandC = rows.reduce((s,r)=>s+tByType(targets[keyOf(r.channel,r.state)],'C'),0);
+  const assignedCount = rows.filter(r=>tSum(targets[keyOf(r.channel,r.state)])>0).length;
+
+  const loadSample = ()=>{
+    snapshot();
+    const base={GT:2200000,MT:3500000,ROI:1800000,HORECA:1200000};
+    const prem=products.filter(p=>p.type==='P'), comm=products.filter(p=>p.type==='C');
+    const o={}; rows.forEach((r,i)=>{ const tot=(base[r.channel]||1500000)+(i%5)*150000; const m={}; if(prem.length) m[pid('P',prem[i%prem.length].name)]={l:Math.round(tot*0.4),r:200}; if(comm.length) m[pid('C',comm[i%comm.length].name)]={l:Math.round(tot*0.6),r:140}; o[keyOf(r.channel,r.state)]=m; }); setTargets(o);
+  };
+  const exportCSV = ()=>{
+    const head='Salesperson,Channel,State,Premium Ltrs,Commodity Ltrs,Total Ltrs\n';
+    const body=rows.map(r=>{ const v=targets[keyOf(r.channel,r.state)]; return `${r.person},${r.channel},${r.state},${tByType(v,'P')},${tByType(v,'C')},${tSum(v)}`; }).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([head+body],{type:'text/csv'}));
+    a.download='sales_targets.csv'; a.click();
+  };
+
+  const assignedRows = rows.filter(r=>r.person);   // the 5 visuals only show owned territories
+  const shared = {rows:assignedRows,channels,targets,setTarget,totalsByChannel,products};
+  return (
+    <div className="app">
+      <div className="hero">
+        <h1>🎯 Sales Target Assignment</h1>
+      </div>
+
+      <div className="kpi">
+        <div className="kpi-card"><div className="v">{distinct(rows.map(r=>r.person)).filter(Boolean).length}</div><div className="l">ASMs</div></div>
+        <div className="kpi-card"><div className="v">{sos.length}</div><div className="l">SOs</div></div>
+        <div className="kpi-card"><div className="v">{channels.length}</div><div className="l">Channels</div></div>
+        <div className="kpi-card"><div className="v">{rows.length}</div><div className="l">Territories</div></div>
+        <div className="kpi-card"><div className="v">{assignedCount}/{rows.length}</div><div className="l">Assigned</div></div>
+        <div className="kpi-card"><div className="v" style={{color:'#0d9488'}}>{fmtL(grandP)}</div><div className="l">Premium Ltrs</div></div>
+        <div className="kpi-card"><div className="v" style={{color:'#d97706'}}>{fmtL(grandC)}</div><div className="l">Commodity Ltrs</div></div>
+        <div className="kpi-card accent"><div className="v">{fmtL(grand)}</div><div className="l">Total Target Ltrs</div></div>
+      </div>
+
+      <div className="toolbar">
+        <div className="tabs">
+          {TABS.map(t=>(
+            <button key={t.id} className={'tab'+(tab===t.id?' active':'')} onClick={()=>setTab(t.id)}>{t.label}</button>
+          ))}
+          <button className={'tab add'+(tab==='manage'?' active':'')} onClick={()=>setTab('manage')}>⚙️ Manage / Add</button>
+        </div>
+        <div className="actions">
+          <button className="btn" onClick={loadSample}>Load sample</button>
+          <button className="btn" onClick={()=>{snapshot();setTargets({});}}>Clear targets</button>
+          <button className="btn btn-primary" onClick={exportCSV}>Export CSV</button>
+        </div>
+      </div>
+
+      <div className="panel">
+        {tab==='cards'   && <DrillCards {...shared} />}
+        {tab==='manage'  && <ManageData rows={rows} channels={channels} addRow={addRow} removeRow={removeRow} targets={targets} sos={sos} addSO={addSO} removeSO={removeSO} moveTerritory={moveTerritory} swapOwners={swapOwners} undo={undo} histLen={histLen} restoreSeed={restoreSeed} products={products} addProduct={addProduct} removeProduct={removeProduct} />}
+        <div className="foot-note">
+          {tab==='manage'
+            ? <>Changes save to <b>this browser</b> (localStorage). <a href="#" onClick={e=>{e.preventDefault();restoreSeed();}} style={{color:'var(--ac)',fontWeight:700}}>Restore original 18 mappings</a>. In production this list lives in a DB table and is edited here or in Django admin.</>
+            : <>Data source: <b>expanded_main_group_state_mapping.xlsx</b> (seed) — now fully editable in the <b>⚙️ Manage / Add</b> tab. New channels auto-get a colour; new states &amp; people flow into every view. Targets &amp; mappings save in this browser; wire <b>Export CSV</b> or a Django endpoint to persist server-side.</>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

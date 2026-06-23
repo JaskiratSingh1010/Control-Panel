@@ -54,6 +54,71 @@ def stock_available_data(request):
     return JsonResponse({'data': data})
 
 
+@permission_flag_required('can_production')
+def production(request):
+    """Production feasibility: enter an FG code + planned qty, see its BOM's RM/PM
+    requirement vs OnHand stock and whether/how much can actually be made."""
+    return render(request, 'inventory/production.html', {'sidebar_active': 'production'})
+
+
+@permission_flag_required('can_production', json_response=True)
+@require_http_methods(['GET'])
+def production_feasibility_data(request):
+    from .services.production import get_bom_feasibility
+    fg_code = request.GET.get('fg_code', '')
+    qty = request.GET.get('qty', '0')
+    whs = [w.strip() for w in request.GET.get('warehouses', '').split(',') if w.strip()] or None
+    try:
+        data = get_bom_feasibility(fg_code, qty, warehouses=whs)
+    except Exception:
+        logger.exception('[inventory] production feasibility failed')
+        return JsonResponse({'status': 'error', 'error': 'Could not read BOM from SAP.', 'data': None})
+    return JsonResponse({'status': 'ok', 'data': data})
+
+
+@permission_flag_required('can_production', json_response=True)
+@require_http_methods(['GET'])
+def production_fg_list(request):
+    from .services.production import get_fg_list
+    try:
+        data = get_fg_list()
+    except Exception:
+        logger.exception('[inventory] FG list failed')
+        return JsonResponse({'status': 'error', 'data': []})
+    return JsonResponse({'status': 'ok', 'data': data})
+
+
+@permission_flag_required('can_production', json_response=True)
+@require_http_methods(['GET'])
+def production_plan_data(request):
+    from .services.production import get_plan_feasibility
+    try:
+        items = json.loads(request.GET.get('items', '[]'))
+        if not isinstance(items, list):
+            items = []
+    except (ValueError, TypeError):
+        items = []
+    whs = [w.strip() for w in request.GET.get('warehouses', '').split(',') if w.strip()] or None
+    try:
+        data = get_plan_feasibility(items, warehouses=whs)
+    except Exception:
+        logger.exception('[inventory] plan feasibility failed')
+        return JsonResponse({'status': 'error', 'error': 'Could not build the plan.', 'data': None})
+    return JsonResponse({'status': 'ok', 'data': data})
+
+
+@permission_flag_required('can_production', json_response=True)
+@require_http_methods(['GET'])
+def production_warehouses(request):
+    from .services.production import get_warehouses
+    try:
+        data = get_warehouses()
+    except Exception:
+        logger.exception('[inventory] warehouses list failed')
+        return JsonResponse({'status': 'error', 'data': []})
+    return JsonResponse({'status': 'ok', 'data': data})
+
+
 @permission_flag_required('inventory_can_edit', json_response=True)
 @require_http_methods(['POST'])
 def oils_api_chat(request):
