@@ -4,6 +4,8 @@ import time
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 
+from django.utils import timezone
+
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,

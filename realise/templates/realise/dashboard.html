@@ -538,9 +538,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
             <button type="button" class="ds-btn ds-oils active" onclick="switchDataset('oils')">OILS</button>
             <button type="button" class="ds-btn ds-bev" onclick="switchDataset('beverages')">BEVERAGES</button>
           </div>
-          <div class="sc2-nav" aria-label="Slide 2 navigation">
-            <button class="slide-btn" onclick="prevSlide()" aria-label="Previous slide">&#8249;</button>
-            <div class="slide-indicator">Slide 2 / 2</div>
+          <div class="sc2-nav" aria-label="Slide navigation">
+            <button class="slide-btn" onclick="nextSlide()" aria-label="Next slide">&#8250;</button>
+            <div class="slide-indicator">Slide 1 / 2</div>
           </div>
           <button type="button" class="btn btn-ghost" id="sc2ExportBtn" onclick="exportChannelCSV()">&#11015; Export CSV</button>
           <a class="btn btn-edit" id="sc2TargetsLink" href="{% url 'realise:channel_targets' %}">Update Targets</a>
@@ -771,9 +771,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <button type="button" class="ds-btn ds-oils" onclick="switchDataset('oils')">OILS</button>
         <button type="button" class="ds-btn ds-bev active" onclick="switchDataset('beverages')">BEVERAGES</button>
       </div>
-      <div class="sc2-nav" aria-label="Slide 2 navigation">
-        <button class="slide-btn" onclick="prevSlide()" aria-label="Previous slide">&#8249;</button>
-        <div class="slide-indicator">Slide 2 / 2</div>
+      <div class="sc2-nav" aria-label="Slide navigation">
+        <button class="slide-btn" onclick="nextSlide()" aria-label="Next slide">&#8250;</button>
+        <div class="slide-indicator">Slide 1 / 2</div>
       </div>
       <button type="button" class="btn btn-ghost" onclick="exportBeveragesCSV()">&#11015; Export CSV</button>
     </div>
@@ -1360,14 +1360,21 @@ async function fetchOrderInHand(){
 for(var pi=0;pi<PRODUCTS.length;pi++)selectedProducts[PRODUCTS[pi].u_type+'|'+PRODUCTS[pi].u_sub_group]=true;
 function isProdSelected(type,sub){return selectedProducts[type+'|'+sub]!==false;}
 
+// Visual slide order: the channel/beverages dashboard (internal index 1) is shown FIRST and
+// the OILS product table (internal index 0) second. Internal indices are left unchanged so
+// all the currentSlide===1 logic (slide-two-mode, channel data load) stays valid; only the
+// displayed position, indicator and prev/next direction are remapped.
+var SLIDE_ORDER=[1,0];
+function slidePos(idx){var p=SLIDE_ORDER.indexOf(idx);return p<0?0:p;}
 function setSlide(idx){
   currentSlide=idx<0?0:(idx>1?1:idx);
   var slides=document.querySelectorAll('.rd-slide');
   for(var i=0;i<slides.length;i++)slides[i].classList.toggle('active',i===currentSlide);
   document.body.classList.toggle('slide-two-mode',currentSlide===1);
-  document.getElementById('slideIndicator').textContent='Slide '+(currentSlide+1)+' / 2';
-  document.getElementById('slidePrevBtn').disabled=currentSlide===0;
-  document.getElementById('slideNextBtn').disabled=currentSlide===slides.length-1;
+  var pos=slidePos(currentSlide);
+  document.getElementById('slideIndicator').textContent='Slide '+(pos+1)+' / 2';
+  document.getElementById('slidePrevBtn').disabled=pos===0;
+  document.getElementById('slideNextBtn').disabled=pos===SLIDE_ORDER.length-1;
   // Slide 2 in OILS mode = channel dashboard (needs oils data). In BEVERAGES mode
   // it shows the beverages table instead (handled by applyView).
   if(currentSlide===1 && currentDataset==='oils'){
@@ -1385,8 +1392,8 @@ function ensureSlideTwoDates(){
   if(!sc2RangeFrom&&f&&f.value)sc2RangeFrom=f.value;
   if(!sc2RangeTo&&t&&t.value)sc2RangeTo=t.value;
 }
-function nextSlide(){setSlide(currentSlide+1);}
-function prevSlide(){setSlide(currentSlide-1);}
+function nextSlide(){var p=slidePos(currentSlide);if(p<SLIDE_ORDER.length-1)setSlide(SLIDE_ORDER[p+1]);}
+function prevSlide(){var p=slidePos(currentSlide);if(p>0)setSlide(SLIDE_ORDER[p-1]);}
 
 /* ===== OILS / BEVERAGES dataset toggle + Beverages view =====
    Beverages is a separate dataset (JIVO_BEVERAGES_HANADB / REPORT_SALES_COGS).
@@ -2133,7 +2140,9 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('dFrom').value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-01';
   document.getElementById('dTo').value=n.toISOString().split('T')[0];
   checkHealth();
-  var startSlide=(location.hash==='#slide2'||location.hash==='#hier')?1:0;
+  // Channel/beverages dashboard is the default first slide now (internal index 1);
+  // #products deep-links to the OILS product table (internal index 0, shown second).
+  var startSlide=(location.hash==='#products')?0:1;
   restoreSlideTwoCache();
   setSlide(startSlide);
   applyRoleRestrictions();
