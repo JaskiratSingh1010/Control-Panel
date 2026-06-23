@@ -58,13 +58,6 @@
   table.sa-table tbody tr.sa-total:hover td{background:linear-gradient(135deg,#1e293b,#4338ca);color:#fcd34d;font-weight:800;position:sticky;bottom:0}
   .sa-empty{padding:34px;text-align:center;color:#6b7280;font-size:13px}
   .sa-var{display:inline-block;font-size:11px;font-weight:700;color:#3730a3;background:#eef2ff;padding:2px 8px;border-radius:6px}
-  .sa-kpis{display:flex;gap:14px;margin:0 0 16px;flex-wrap:wrap}
-  .sa-kpi{flex:1;min-width:240px;background:#fff;border:1px solid #e2e8f0;border-left-width:4px;border-radius:14px;padding:16px 20px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
-  .sa-kpi.prem{border-left-color:#0c7a6b}
-  .sa-kpi.comm{border-left-color:#2563eb}
-  .sa-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b}
-  .sa-kpi-v{font-size:30px;font-weight:800;color:#0f172a;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums}
-  .sa-kpi-s{font-size:12px;font-weight:600;color:#94a3b8;margin-top:4px}
 </style>
 {% endblock %}
 
@@ -86,11 +79,6 @@
         <button data-type="COMMODITY">Commodity</button>
       </div>
     </div>
-  </div>
-
-  <div class="sa-kpis">
-    <div class="sa-kpi prem"><div class="sa-kpi-l">Premium — Total Stock</div><div class="sa-kpi-v" id="saKpiPremQty">&mdash;</div><div class="sa-kpi-s" id="saKpiPremSub"></div></div>
-    <div class="sa-kpi comm"><div class="sa-kpi-l">Commodity — Total Stock</div><div class="sa-kpi-v" id="saKpiCommQty">&mdash;</div><div class="sa-kpi-s" id="saKpiCommSub"></div></div>
   </div>
 
   <div class="sa-grid" id="saGrid"><div class="sa-empty" style="grid-column:1/-1">Loading…</div></div>
@@ -217,22 +205,8 @@
 
   function detachPanel(){ if(panel.parentNode)panel.parentNode.removeChild(panel); panel.style.display='none'; }
 
-  // Premium & Commodity totals — summed across all products (independent of the type toggle).
-  function renderKpis(){
-    var pq=0,pl=0,ps=0,cq=0,cl=0,cs=0;
-    (DATA.products||[]).forEach(function(p){
-      if(p.type==='PREMIUM'){pq+=Number(p.qty)||0;pl+=Number(p.litres)||0;ps+=Number(p.sku_count)||0;}
-      else if(p.type==='COMMODITY'){cq+=Number(p.qty)||0;cl+=Number(p.litres)||0;cs+=Number(p.sku_count)||0;}
-    });
-    document.getElementById('saKpiPremQty').textContent=num(pl)+' L';
-    document.getElementById('saKpiPremSub').textContent=ps+' SKUs';
-    document.getElementById('saKpiCommQty').textContent=num(cl)+' L';
-    document.getElementById('saKpiCommSub').textContent=cs+' SKUs';
-  }
-
   function renderCards(){
     detachPanel();
-    renderKpis();
     var prods=(DATA.products||[]).filter(function(p){return !typeF||p.type===typeF;});
     if(!prods.length){grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">No products in this view.</div>';return;}
     grid.innerHTML=prods.map(function(p,i){
@@ -241,8 +215,8 @@
         +'<div class="sa-motif">'+motifFor(p)+'</div>'
         +'<span class="sa-badge">'+esc(p.type)+'</span>'
         +'<h3>'+esc(p.sub_group)+'</h3>'
-        +'<div class="sa-qty">'+num(p.litres)+' <span style="font-size:.5em;font-weight:600;opacity:.85">L</span></div>'
-        +'<div class="sa-sub">'+(p.sku_count||0)+' SKUs</div>'
+        +'<div class="sa-qty">'+num(p.qty)+'</div>'
+        +'<div class="sa-sub">'+num(p.litres)+' L · '+(p.sku_count||0)+' SKUs</div>'
         +'</div>';
     }).join('');
     if(selected)openTable();
@@ -278,23 +252,22 @@
   function renderTable(){
     var whs=DATA.warehouses||[];
     var rows=(DATA.items||[]).filter(function(it){return selected&&it.type===selected.type&&it.sub_group===selected.sub_group&&(!skuF||it.sku===skuF);})
-      .sort(function(a,b){return (Number(b.litres)||0)-(Number(a.litres)||0);});
+      .sort(function(a,b){return (Number(b.grand_total)||0)-(Number(a.grand_total)||0);});
     document.getElementById('saTableTitle').textContent=selected.type+' — '+selected.sub_group;
-    document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items')+' · litres';
+    document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items');
     document.getElementById('saTableHead').innerHTML='<tr><th>U_Variety</th><th>ItemCode</th><th>ItemName</th><th>U_SKU</th>'
-      +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total (L)</th></tr>';
+      +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total</th></tr>';
     if(!rows.length){
       document.getElementById('saTableBody').innerHTML='<tr><td colspan="'+(5+whs.length)+'" class="sa-empty">No stock for this product.</td></tr>';
       return;
     }
     var tot={}; whs.forEach(function(w){tot[w]=0;}); var gt=0;
-    var wl=function(it,w){return Number(it.wh_litres&&it.wh_litres[w])||0;};
     var body=rows.map(function(it){
-      whs.forEach(function(w){tot[w]+=wl(it,w);}); gt+=Number(it.litres)||0;
+      whs.forEach(function(w){tot[w]+=Number(it.wh[w])||0;}); gt+=Number(it.grand_total)||0;
       return '<tr><td><span class="sa-var">'+esc(it.variety||'—')+'</span></td>'
         +'<td>'+esc(it.item_code)+'</td><td>'+esc(it.item_name)+'</td><td>'+esc(it.sku||'—')+'</td>'
-        +whs.map(function(w){var v=wl(it,w);return '<td class="num">'+(v?num(v):'')+'</td>';}).join('')
-        +'<td class="num">'+num(it.litres)+'</td></tr>';
+        +whs.map(function(w){var v=Number(it.wh[w])||0;return '<td class="num">'+(v?num(v):'')+'</td>';}).join('')
+        +'<td class="num">'+num(it.grand_total)+'</td></tr>';
     }).join('');
     body+='<tr class="sa-total"><td colspan="4">TOTAL</td>'
       +whs.map(function(w){return '<td class="num">'+num(tot[w])+'</td>';}).join('')

@@ -8,6 +8,8 @@ from datetime import datetime
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+from django.views.decorators.cache import never_cache
 
 from core.decorators import group_required
 from core import sap_connector
@@ -46,8 +48,13 @@ def _parse_body(request):
         return {}
 
 
+@never_cache
 @group_required(*REALISE_GROUPS, json_response=False)
 def dashboard(request):
+    # never_cache: the territory_payload (person map + per-channel state whitelist) is
+    # baked into the HTML at render time, so the browser must re-fetch the page after a
+    # mapping change instead of serving a stale copy (else newly-assigned states like a
+    # freshly-added ECOM/NAGALAND wouldn't appear until a hard refresh).
     return render(request, 'realise/dashboard.html', {
         'sidebar_active': 'realise',
         'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
@@ -201,9 +208,10 @@ def api_sales_data(request):
         return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
 
     type_filter = _get_type_filter(request)
+    force = bool(body.get('refresh') or body.get('force'))   # "Refresh from SAP" → fresh pull
 
     try:
-        result, raw_rows = services.get_sales_data_cached(start_date, end_date)
+        result, raw_rows = services.get_sales_data_cached(start_date, end_date, force=force)
     except Exception as e:
         logger.error('[REALISE] get_sales_data error: %s', e)
         return JsonResponse({'status': 'ok', 'data': [], 'count': 0})
@@ -349,9 +357,7 @@ def api_drill_down(request):
     cache_key = f'{start_date}_{end_date}'
     if _raw_cache['key'] != cache_key:
         try:
-            # Reuse the 90s sales cache the initial render already populated for this
-            # range instead of re-running REPORT_SALES_ANALYSIS for the first drill.
-            _, raw_rows = services.get_sales_data_cached(start_date, end_date)
+            _, raw_rows = services.get_sales_data(start_date, end_date)
             _raw_cache['key']  = cache_key
             _raw_cache['rows'] = raw_rows
         except Exception as e:
@@ -532,6 +538,210 @@ def api_segment_targets(request):
     segment = str(request.GET.get('segment', 'state') or 'state').strip().lower()
     data = services.get_segment_target_map(segment, month, year, request.GET.get('seg', ''))
     return JsonResponse({'status': 'ok', 'segment': segment, 'month': month, 'year': year, 'data': data})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_map(request):
+    """The fixed channel×state grid with each cell's current sales person, plus the
+    channel order and the distinct people list (for the reassign dropdown)."""
+    return JsonResponse({'status': 'ok', **services.get_territory_map_payload()})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_map(request):
+    """Update ONLY the sales_person on existing grid cells (admin only)."""
+    body = _parse_body(request)
+    assignments = body.get('assignments', [])
+    if not isinstance(assignments, list):
+        return JsonResponse({'status': 'error', 'error': 'assignments must be a list'}, status=400)
+    saved = services.save_territory_persons(assignments, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_refresh_territory_map(request):
+    """Re-sync the fixed grid from live SAP (adds new channel×state cells; never
+    wipes existing person assignments). Admin only."""
+    from django.core.management import call_command
+    try:
+        call_command('seed_territory_map', refresh=True)
+    except Exception as e:
+        logger.error('[TERRITORY] refresh failed: %s', e)
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
+    return JsonResponse({'status': 'ok', **services.get_territory_map_payload()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_targets(request):
+    """Single target (litres) per (channel, state) territory for a month/year."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', 'month': month, 'year': year,
+                         'data': services.get_territory_targets(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_targets(request):
+    """Save one target (litres) per (channel, state) territory (admin only)."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    targets = body.get('targets', [])
+    if not month or not year or not isinstance(targets, list):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets[] required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_territory_targets(month, year, targets)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_territory_product_targets(request):
+    """Per-product targets (litres+realise) per (channel,state) for a period, plus the
+    product master — the shape the Person Mapping 'Set product targets' UI consumes."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', 'month': month, 'year': year,
+                         'products': services.get_product_master(),
+                         'data': services.get_territory_product_targets(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_territory_product_targets(request):
+    """Save the full per-product target set for a period; rolls up into the dashboard's
+    TargetNode (channel/state) and MonthlyTarget (per-product). Admin only."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    targets = body.get('targets', {})
+    if not month or not year or not isinstance(targets, dict):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets{} required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_territory_product_targets(month, year, targets, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_channel_quick_targets(request):
+    """Channel Targets editor data: each channel's previous-month actual sale +
+    current channel-level target for the selected (month, year)."""
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', **services.get_channel_quick_payload(month, year)})
+
+
+@group_required('realise_admin', json_response=True)
+@require_http_methods(['POST'])
+def api_save_channel_quick_targets(request):
+    """Save channel-level targets (one total per channel) for a period. Stored as
+    state-blank TargetNodes that survive per-product saves and drive the dashboard's
+    channel TGT-L. Admin only."""
+    body = _parse_body(request)
+    month, year = body.get('month'), body.get('year')
+    items = body.get('targets', [])
+    if not month or not year or not isinstance(items, list):
+        return JsonResponse({'status': 'error', 'error': 'month, year, targets[] required'}, status=400)
+    try:
+        month, year = int(month), int(year)
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
+    saved = services.save_channel_node_targets(month, year, items, request.user)
+    return JsonResponse({'status': 'ok', 'saved': saved})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_product_actuals(request):
+    """Previous-month actual sale per product for one (channel, state) — feeds the
+    'last month sold' reference on each product card in the target editor."""
+    channel = request.GET.get('channel', '')
+    state = request.GET.get('state', '')
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    if not channel:
+        return JsonResponse({'status': 'error', 'error': 'channel required'}, status=400)
+    return JsonResponse({'status': 'ok', **services.get_product_actuals_payload(channel, state, month, year)})
+
+
+@never_cache
+@group_required(*REALISE_GROUPS, json_response=False)
+@require_http_methods(['GET'])
+def person_targets_page(request):
+    """Person Mapping + Targets page (the React 'Persons Frontend'). Replaces the old
+    hierarchical Update Targets editor — reached from the dashboard's Update Targets
+    button. Hosts the React app in a same-origin iframe so its global CSS can't touch
+    the dashboard chrome. Person reassignment → TerritoryMapping; single target per
+    territory → TargetNode."""
+    return render(request, 'realise/person_targets.html', {'sidebar_active': 'realise'})
+
+
+@xframe_options_sameorigin
+@never_cache
+@group_required(*REALISE_GROUPS, json_response=False)
+@require_http_methods(['GET'])
+def person_targets_embed(request):
+    """Standalone React app (Person Mapping & Targets) shown inside the iframe.
+    Marked same-origin-frameable because Django's default X-Frame-Options is DENY,
+    which would otherwise block our own iframe."""
+    import os
+    from django.conf import settings
+    from django.middleware.csrf import get_token
+    from django.urls import reverse
+    from core.context_processors import derive_realise_profile
+    role, _, _ = derive_realise_profile(request.user)
+    now = datetime.now()
+
+    # Cache-bust the iframe's JS/CSS by their file mtime, so a recompiled bundle is
+    # picked up immediately (browsers cache iframe sub-resources aggressively).
+    _sdir = os.path.join(str(settings.BASE_DIR), 'realise', 'static', 'realise')
+    try:
+        asset_ver = int(max(os.path.getmtime(os.path.join(_sdir, 'person_targets.js')),
+                            os.path.getmtime(os.path.join(_sdir, 'person_targets.css'))))
+    except OSError:
+        asset_ver = 1
+    boot = {
+        'csrf': get_token(request),
+        'isAdmin': role == 'admin',
+        'month': now.month,
+        'year': now.year,
+        'monthOptions': list(enumerate(services.MONTHS_ORDER, start=1)),
+        'yearOptions': list(range(now.year + 1, now.year - 5, -1)),
+        'dashboardUrl': reverse('realise:dashboard') + '#slide2',
+        'urls': {
+            'map':                reverse('realise:api_territory_map'),
+            'mapSave':            reverse('realise:api_save_territory_map'),
+            'refresh':            reverse('realise:api_refresh_territory_map'),
+            'productTargets':     reverse('realise:api_territory_product_targets'),
+            'productTargetsSave': reverse('realise:api_save_territory_product_targets'),
+            'channelTargets':     reverse('realise:api_channel_quick_targets'),
+            'channelTargetsSave': reverse('realise:api_save_channel_quick_targets'),
+            'productActuals':     reverse('realise:api_product_actuals'),
+        },
+    }
+    return render(request, 'realise/person_targets_embed.html', {'boot': boot, 'asset_ver': asset_ver})
 
 
 @group_required('realise_admin', json_response=False)

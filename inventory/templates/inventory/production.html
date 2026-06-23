@@ -1,0 +1,512 @@
+{% extends "core/base.html" %}
+{% block title %}Production Feasibility{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .pf-wrap{max-width:none;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#0f172a}
+  .pf-head h1{font-size:24px;font-weight:800;margin:0 0 4px}
+  .pf-head p{margin:0 0 18px;color:#64748b;font-size:13.5px}
+
+  .pf-input{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 20px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .pf-field{display:flex;flex-direction:column;gap:6px}
+  .pf-field label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+  .pf-field input{padding:11px 13px;border:1.5px solid #e2e8f0;border-radius:10px;font:inherit;font-size:14px;outline:none;transition:border-color .12s,box-shadow .12s}
+  .pf-field input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  #pfCode{width:230px;text-transform:uppercase;font-weight:700;letter-spacing:.02em}
+  #pfQty{width:160px;text-align:right;font-variant-numeric:tabular-nums}
+  #pfBtn,#pfPlanBtn{padding:12px 22px;border:0;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(79,70,229,.35);transition:.12s}
+  #pfBtn:hover:not(:disabled),#pfPlanBtn:hover:not(:disabled){background:linear-gradient(135deg,#818cf8,#6366f1)}
+  #pfBtn:disabled,#pfPlanBtn:disabled{opacity:.55;cursor:not-allowed}
+  /* mode tabs + production plan rows */
+  .pf-modetabs{display:inline-flex;gap:4px;background:#e2e8f0;padding:4px;border-radius:12px;margin-bottom:14px}
+  .pf-mode{padding:8px 18px;border:0;border-radius:9px;background:transparent;color:#475569;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;transition:.12s}
+  .pf-mode.on{background:#fff;color:#4338ca;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+  .pf-planrow{display:flex;gap:10px;align-items:center;margin-bottom:9px}
+  .pf-prow-code{flex:1;min-width:160px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font:inherit;font-size:14px;outline:none;text-transform:uppercase;font-weight:700}
+  .pf-prow-code:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .pf-prow-qty{width:120px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font:inherit;font-size:14px;text-align:right;outline:none;font-variant-numeric:tabular-nums}
+  .pf-prow-qty:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .pf-prow-name{flex:1.4;min-width:0;font-size:12.5px;color:#64748b;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pf-prow-rm{width:36px;height:36px;flex:0 0 auto;border:1px solid #fecaca;border-radius:9px;background:#fef2f2;color:#dc2626;font-size:18px;cursor:pointer;line-height:1}
+  .pf-prow-rm:hover{background:#fee2e2}
+  .pf-addrow{padding:10px 16px;border:1.5px dashed #c7d2fe;border-radius:10px;background:#fff;color:#4338ca;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+  .pf-addrow:hover{background:#eef2ff}
+  .pf-usedin{font-size:11px;color:#64748b}
+  /* warehouse selector */
+  .pf-whbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:12px}
+  .pf-whbar-l{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#475569}
+  .pf-whbar-hint{font-size:12px;color:#94a3b8}
+  .pf-whbtn{padding:8px 14px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#4338ca;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .pf-whbtn:hover{background:#e0e7ff}
+  .pf-whpanel{position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:320px;max-width:88vw;background:#fff;border:1px solid #e2e8f0;border-radius:13px;box-shadow:0 18px 44px rgba(15,23,42,.22);padding:12px}
+  .pf-whpresets{display:flex;gap:7px;margin-bottom:9px}
+  .pf-whpresets button{flex:1;padding:7px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .pf-whpresets button:hover{background:#eef2ff;border-color:#c7d2fe;color:#4338ca}
+  .pf-whsearch{width:100%;padding:9px 11px;border:1.5px solid #e2e8f0;border-radius:9px;font:inherit;font-size:13px;outline:none;margin-bottom:8px}
+  .pf-whsearch:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .pf-whlist{max-height:240px;overflow-y:auto}
+  .pf-whopt{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:#334155}
+  .pf-whopt:hover{background:#f8fafc}
+  .pf-whopt input{width:16px;height:16px;accent-color:#4f46e5;cursor:pointer}
+  .pf-whopt .pf-whopt-name{color:#94a3b8;font-weight:500;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pf-namestock{font-size:11.5px;font-weight:700;color:#4338ca;margin-top:2px}
+  .pf-namestock.short{color:#dc2626}
+  .pf-whpill.sel{outline:2px solid #4338ca;outline-offset:-2px}
+  .pf-whapply{width:100%;margin-top:10px;padding:11px;border:0;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+  .pf-whapply:hover{background:linear-gradient(135deg,#818cf8,#6366f1)}
+
+  .pf-msg{margin:14px 2px;font-size:13.5px;font-weight:600;color:#64748b}
+  .pf-msg.err{color:#b91c1c}
+
+  .pf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin:18px 0}
+  .pf-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .pf-kpi-l{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;margin-bottom:7px}
+  .pf-kpi-v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .pf-kpi.ok{background:#ecfdf5;border-color:#a7f3d0}
+  .pf-kpi.ok .pf-kpi-v{color:#047857}
+  .pf-kpi.bad{background:#fef2f2;border-color:#fecaca}
+  .pf-kpi.bad .pf-kpi-v{color:#b91c1c}
+  .pf-kpi-stock{background:#eef2ff;border-color:#c7d2fe}
+  .pf-kpi-stock .pf-kpi-v{color:#4338ca}
+
+  .pf-table-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .pf-table{width:100%;border-collapse:collapse;font-size:13.5px}
+  .pf-table th{background:#f8fafc;color:#64748b;font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:13px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid #e2e8f0}
+  .pf-table th:nth-child(-n+4){text-align:left}
+  .pf-table td{padding:12px 14px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .pf-table td:nth-child(-n+4){text-align:left}
+  .pf-table tbody tr:hover{background:#fafbff}
+  .pf-table tr.pf-short{background:#fef2f2}
+  .pf-table tr.pf-short:hover{background:#fee2e2}
+  .pf-desc{color:#334155;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+  .pf-pos{color:#059669;font-weight:700}
+  .pf-neg{color:#dc2626;font-weight:800}
+  .pf-whhead{text-align:left !important}
+  .pf-table td.pf-whcell{text-align:left;white-space:normal;min-width:230px;max-width:460px;line-height:1.9}
+  .pf-whpill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:7px;margin:1px 4px 1px 0;background:#fef3c7;color:#b45309;white-space:nowrap}
+  .pf-whpill.bom{background:#eef2ff;color:#4338ca;box-shadow:inset 0 0 0 1px #c7d2fe}
+  .pf-whpill-0{background:#fef2f2;color:#dc2626}
+  .pf-whtag{background:#dcfce7;color:#15803d}
+  .pf-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:6px}
+  .pf-rm{background:#dbeafe;color:#1d4ed8}
+  .pf-pm{background:#fef3c7;color:#b45309}
+  .pf-fg,.pf-other{background:#e2e8f0;color:#475569}
+  .pf-foot-note{margin:12px 2px;color:#94a3b8;font-size:12px}
+
+  /* FG picker */
+  .pf-codewrap{display:flex;gap:8px;align-items:stretch}
+  .pf-browse{flex:0 0 auto;padding:0 14px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#4338ca;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;white-space:nowrap}
+  .pf-browse:hover{background:#e0e7ff}
+  .pf-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .pf-modal{background:#fff;border-radius:18px;width:100%;max-width:680px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.32);overflow:hidden}
+  .pf-modal-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e8f0}
+  .pf-modal-hd h3{margin:0;font-size:16px;font-weight:800}
+  .pf-modal-x{width:32px;height:32px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:18px;color:#94a3b8;line-height:1}
+  .pf-modal-x:hover{border-color:#fecaca;color:#dc2626;background:#fef2f2}
+  .pf-modal-tools{padding:14px 20px 8px;display:flex;flex-direction:column;gap:10px}
+  .pf-search{padding:11px 13px;border:1.5px solid #e2e8f0;border-radius:10px;font:inherit;font-size:14px;outline:none}
+  .pf-search:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .pf-types{display:flex;gap:8px;flex-wrap:wrap}
+  .pf-type{padding:7px 14px;border:1.5px solid #e2e8f0;border-radius:999px;background:#fff;color:#475569;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:.12s}
+  .pf-type:hover{border-color:#c7d2fe}
+  .pf-type.on{background:#4f46e5;border-color:#4f46e5;color:#fff}
+  .pf-crumb{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:4px 20px 10px;font-size:12.5px;color:#64748b}
+  .pf-crumb-seg{border:0;background:none;font:inherit;font-size:12.5px;font-weight:700;color:#4f46e5;cursor:pointer;padding:2px 4px;border-radius:6px}
+  .pf-crumb-seg:hover{background:#eef2ff}
+  .pf-crumb-seg.active{color:#0f172a;cursor:default}
+  .pf-crumb-arrow{color:#cbd5e1;font-weight:700}
+  .pf-list{overflow-y:auto;padding:4px 14px 16px;flex:1}
+  .pf-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 14px;border:1px solid #eef2f7;border-radius:11px;background:#fff;font:inherit;cursor:pointer;margin-bottom:7px;transition:.1s}
+  .pf-row:hover{border-color:#c7d2fe;background:#fafbff}
+  .pf-row-l{font-size:14px;font-weight:700;color:#1e293b;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .pf-item-meta{font-size:11.5px;font-weight:600;color:#94a3b8}
+  .pf-row-r{font-size:12px;font-weight:700;color:#94a3b8;white-space:nowrap;flex-shrink:0}
+  .pf-item .pf-row-r{color:#4f46e5}
+  .pf-empty{padding:30px 10px;text-align:center;color:#94a3b8;font-weight:600}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pf-wrap">
+  <div class="pf-head">
+    <h1>🏭 Production Feasibility</h1>
+    <p>Enter a finished-good code and how many you want to make — it explodes the BOM and shows the raw &amp; packing material <b>required</b> vs current <b>OnHand</b> stock, and how many you can actually build.</p>
+  </div>
+
+  <div class="pf-modetabs">
+    <button id="pfMode_single" class="pf-mode on" onclick="pfSetMode('single')">📦 Single item</button>
+    <button id="pfMode_plan" class="pf-mode" onclick="pfSetMode('plan')">📋 Production plan (multiple)</button>
+  </div>
+
+  <div class="pf-whbar">
+    <span class="pf-whbar-l">🏬 Stock from</span>
+    <div style="position:relative">
+      <button type="button" id="pfWhBtn" class="pf-whbtn" onclick="pfWhToggle(event)">All warehouses ▾</button>
+      <div id="pfWhPanel" class="pf-whpanel" style="display:none" onclick="event.stopPropagation()">
+        <div class="pf-whpresets">
+          <button type="button" onclick="pfWhPreset('all')">✓ All</button>
+          <button type="button" onclick="pfWhPreset('none')">Clear</button>
+        </div>
+        <input id="pfWhSearch" class="pf-whsearch" placeholder="🔍 filter warehouses…" oninput="pfWhRender()" autocomplete="off">
+        <div id="pfWhList" class="pf-whlist">Loading…</div>
+        <button type="button" class="pf-whapply" onclick="pfWhApply()">✓ Apply &amp; recalculate</button>
+      </div>
+    </div>
+    <span class="pf-whbar-hint" id="pfWhHint">Availability checked across <b>all</b> warehouses. Pick specific ones below to narrow.</span>
+  </div>
+
+  <div id="pfSingle">
+    <div class="pf-input">
+      <div class="pf-field" style="flex:1;min-width:240px"><label>FG Item Code</label>
+        <div class="pf-codewrap">
+          <input id="pfCode" placeholder="Type code, or click Browse →" autocomplete="off" style="flex:1">
+          <button type="button" class="pf-browse" onclick="pfOpenPicker()">📂 Browse</button>
+        </div>
+      </div>
+      <div class="pf-field"><label>Quantity to make</label><input id="pfQty" type="number" min="0" placeholder="e.g. 5000"></div>
+      <button id="pfBtn" onclick="pfCalc()">🔍 Calculate</button>
+    </div>
+  </div>
+
+  <div id="pfPlan" style="display:none">
+    <div class="pf-input" style="flex-direction:column;align-items:stretch;gap:11px">
+      <div id="pfPlanRows"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="pf-addrow" onclick="pfAddRow()">＋ Add product</button>
+        <div style="flex:1"></div>
+        <button id="pfPlanBtn" onclick="pfCalcPlan()">🔍 Calculate plan</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pfPicker" class="pf-modal-overlay" style="display:none" onclick="pfClosePicker(event)">
+    <div class="pf-modal" onclick="event.stopPropagation()">
+      <div class="pf-modal-hd">
+        <h3>📂 Select a finished product</h3>
+        <button class="pf-modal-x" onclick="pfClosePicker()">×</button>
+      </div>
+      <div class="pf-modal-tools">
+        <input id="pfSearch" class="pf-search" placeholder="🔍 Search by name or code…" oninput="pfRenderPicker()" autocomplete="off">
+        <div class="pf-types" id="pfTypes"></div>
+      </div>
+      <div class="pf-crumb" id="pfCrumb"></div>
+      <div class="pf-list" id="pfList"><div class="pf-empty">Loading products…</div></div>
+    </div>
+  </div>
+
+  <div id="pfMsg" class="pf-msg"></div>
+
+  <div id="pfResult" style="display:none">
+    <div class="pf-kpis">
+      <div class="pf-kpi"><div class="pf-kpi-l">Product</div><div class="pf-kpi-v" id="pfName" style="font-size:15px">—</div></div>
+      <div class="pf-kpi pf-kpi-stock"><div class="pf-kpi-l">🏷️ In stock now (FG)</div><div class="pf-kpi-v" id="pfStock">—</div></div>
+      <div class="pf-kpi" id="pfFeasCard"><div class="pf-kpi-l">Can make it?</div><div class="pf-kpi-v" id="pfFeas">—</div></div>
+      <div class="pf-kpi"><div class="pf-kpi-l">Max possible</div><div class="pf-kpi-v" id="pfMax">—</div></div>
+      <div class="pf-kpi"><div class="pf-kpi-l">Short items</div><div class="pf-kpi-v" id="pfShort">—</div></div>
+    </div>
+
+    <div class="pf-table-wrap">
+      <table class="pf-table">
+        <thead><tr>
+          <th>#</th><th>Type</th><th>Item Code</th><th>Description</th>
+          <th>Per FG</th><th>Required</th><th>Available</th><th>Balance</th><th>Max FG</th><th>UoM Name</th><th class="pf-whhead">Warehouses (stock)</th>
+        </tr></thead>
+        <tbody id="pfBody"></tbody>
+      </table>
+    </div>
+    <div class="pf-foot-note">🔴 Red rows = short in the selected warehouses. <b>Available</b> = stock across the warehouses chosen in <b>Stock from</b> above; <b>Balance</b> &amp; <b>Max&nbsp;FG</b> use it. <b>Warehouses</b> = where the item's stock physically sits (<span class="pf-whpill bom" style="margin:0">blue</span> = BOM warehouse); a <span class="pf-whpill pf-whtag" style="margin:0">↪ transferable</span> tag means it's short in your selection but enough exists in other warehouses. Resources/labour excluded.</div>
+  </div>
+
+  <div id="pfPlanResult" style="display:none">
+    <div class="pf-kpis">
+      <div class="pf-kpi" id="pfPlanFeasCard"><div class="pf-kpi-l">Can make whole plan?</div><div class="pf-kpi-v" id="pfPlanFeas">—</div></div>
+      <div class="pf-kpi"><div class="pf-kpi-l">Products in plan</div><div class="pf-kpi-v" id="pfPlanProds">—</div></div>
+      <div class="pf-kpi"><div class="pf-kpi-l">Distinct materials</div><div class="pf-kpi-v" id="pfPlanMats">—</div></div>
+      <div class="pf-kpi"><div class="pf-kpi-l">Short materials</div><div class="pf-kpi-v" id="pfPlanShort">—</div></div>
+    </div>
+    <div class="pf-table-wrap">
+      <table class="pf-table">
+        <thead><tr>
+          <th>#</th><th>Type</th><th>Item Code</th><th>Description</th>
+          <th>Total&nbsp;Required</th><th>Available</th><th>Balance</th><th>UoM Name</th><th class="pf-whhead">Used in</th><th class="pf-whhead">Warehouses (stock)</th>
+        </tr></thead>
+        <tbody id="pfPlanBody"></tbody>
+      </table>
+    </div>
+    <div class="pf-foot-note">📋 <b>Total Required</b> = each material summed across <b>all</b> products in the plan (shared RM/PM merged into one line). <b>Available</b> &amp; warehouse pills as above. <b>Used in</b> = which products in the plan need this material.</div>
+  </div>
+</div>
+
+<script>
+  var pfNum  = function(n){ return new Intl.NumberFormat('en-IN').format(Math.round(n||0)); };
+  var pfNum2 = function(n){ return new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(n||0); };
+  function pfMsg(t,kind){ var e=document.getElementById('pfMsg'); e.textContent=t||''; e.className='pf-msg'+(kind?' '+kind:''); }
+
+  async function pfCalc(){
+    var code=(document.getElementById('pfCode').value||'').trim();
+    var qty=parseFloat(document.getElementById('pfQty').value)||0;
+    if(!code){ pfMsg('Enter an FG item code.','err'); return; }
+    if(qty<=0){ pfMsg('Enter a quantity greater than 0.','err'); return; }
+    pfMsg('Reading BOM from SAP…');
+    document.getElementById('pfResult').style.display='none';
+    document.getElementById('pfBtn').disabled=true;
+    try{
+      var res=await fetch('/inventory/production/api/feasibility/?fg_code='+encodeURIComponent(code)+'&qty='+qty+'&warehouses='+encodeURIComponent(pfWhParam()));
+      var p=await res.json();
+      document.getElementById('pfBtn').disabled=false;
+      if(!p || p.status!=='ok' || !p.data){ pfMsg((p&&p.error)||'Could not read BOM from SAP.','err'); return; }
+      var d=p.data;
+      if(!d.found){ pfMsg('No BOM found for '+code+(d.fg_name?' ('+d.fg_name+')':'')+'. Check the FG code.','err'); return; }
+      if(!d.components.length){ pfMsg('This FG has no material components in its BOM.','err'); return; }
+      pfMsg('');
+      document.getElementById('pfName').textContent=d.fg_name+' · '+d.fg_code;
+      document.getElementById('pfStock').textContent=pfNum(d.fg_onhand)+(d.fg_uom?(' '+d.fg_uom):'');
+      var feas=document.getElementById('pfFeas'), card=document.getElementById('pfFeasCard');
+      feas.textContent=d.feasible?('Yes ✅'):'No ❌';
+      card.className='pf-kpi '+(d.feasible?'ok':'bad');
+      document.getElementById('pfMax').textContent=pfNum(d.max_fg);
+      document.getElementById('pfShort').textContent=d.short_count;
+      var body=document.getElementById('pfBody'); body.innerHTML='';
+      d.components.forEach(function(c,i){
+        var tr=document.createElement('tr'); if(c.short)tr.className='pf-short';
+        var kind=(c.kind||'OTHER');
+        tr.innerHTML='<td>'+(i+1)+'</td>'
+          +'<td><span class="pf-badge pf-'+kind.toLowerCase()+'">'+kind+'</span></td>'
+          +'<td>'+c.code+'</td>'
+          +'<td class="pf-desc" title="'+(c.name||'').replace(/"/g,"&quot;")+'">'+(c.name||'')+pfNameStock(c)+'</td>'
+          +'<td>'+pfNum2(c.per_fg)+'</td>'
+          +'<td><b>'+pfNum2(c.required)+'</b></td>'
+          +'<td><b>'+pfNum2(c.available)+'</b></td>'
+          +'<td class="'+(c.short?'pf-neg':'pf-pos')+'">'+(c.balance>=0?'+':'')+pfNum2(c.balance)+'</td>'
+          +'<td>'+(c.max_fg!=null?pfNum(c.max_fg):'—')+'</td>'
+          +'<td>'+(c.uom||'')+'</td>'
+          +'<td class="pf-whcell">'+pfWhPillsHtml(c)+'</td>';
+        body.appendChild(tr);
+      });
+      document.getElementById('pfResult').style.display='block';
+    }catch(e){ document.getElementById('pfBtn').disabled=false; pfMsg('Error: '+e.message,'err'); }
+  }
+  document.getElementById('pfCode').addEventListener('keydown',function(e){ if(e.key==='Enter')document.getElementById('pfQty').focus(); });
+  document.getElementById('pfQty').addEventListener('keydown',function(e){ if(e.key==='Enter')pfCalc(); });
+
+  /* ===== FG drill-down picker (Type → Sub-group → Variety → SKU → item) ===== */
+  var pfFgAll=null, pfLoaded=false, pfTypeFilter='', pfSel={sub:'',vry:'',sku:''}, pfPickTarget=null;
+
+  function pfOpenPicker(target){
+    pfPickTarget = target || document.getElementById('pfCode');
+    document.getElementById('pfPicker').style.display='flex';
+    document.getElementById('pfSearch').value='';
+    if(!pfLoaded){
+      fetch('/inventory/production/api/fg-list/').then(function(r){return r.json();}).then(function(p){
+        pfFgAll=(p&&p.data)||[]; pfLoaded=true;
+        pfTypeFilter=''; pfSel={sub:'',vry:'',sku:''};
+        pfRenderTypes(); pfRenderPicker();
+      }).catch(function(){ document.getElementById('pfList').innerHTML='<div class="pf-empty">Could not load products.</div>'; });
+    } else { pfRenderTypes(); pfRenderPicker(); setTimeout(function(){document.getElementById('pfSearch').focus();},50); }
+  }
+  function pfClosePicker(){ document.getElementById('pfPicker').style.display='none'; }
+
+  function pfMatch(it){ return (!pfTypeFilter||it.type===pfTypeFilter)
+      &&(!pfSel.sub||it.sub_group===pfSel.sub)&&(!pfSel.vry||it.variety===pfSel.vry)&&(!pfSel.sku||it.sku===pfSel.sku); }
+
+  function pfRenderTypes(){
+    var box=document.getElementById('pfTypes'); box.innerHTML='';
+    var cnt={}; (pfFgAll||[]).forEach(function(it){ cnt[it.type]=(cnt[it.type]||0)+1; });
+    function mk(val,label){ var b=document.createElement('button'); b.className='pf-type'+(pfTypeFilter===val?' on':''); b.textContent=label;
+      b.onclick=function(){ pfTypeFilter=val; pfSel={sub:'',vry:'',sku:''}; document.getElementById('pfSearch').value=''; pfRenderTypes(); pfRenderPicker(); }; box.appendChild(b); }
+    mk('','All ('+(pfFgAll||[]).length+')');
+    ['PREMIUM','COMMODITY','OTHERS'].forEach(function(t){ if(cnt[t]) mk(t, t.charAt(0)+t.slice(1).toLowerCase()+' ('+cnt[t]+')'); });
+  }
+
+  function pfRenderCrumb(){
+    var c=document.getElementById('pfCrumb'); c.innerHTML='';
+    function arrow(){ var a=document.createElement('span'); a.className='pf-crumb-arrow'; a.textContent='›'; c.appendChild(a); }
+    function seg(label,onClick,active){ var s=document.createElement(active?'span':'button'); s.className='pf-crumb-seg'+(active?' active':''); s.textContent=label; if(!active&&onClick)s.onclick=onClick; c.appendChild(s); }
+    seg('All products',function(){ pfSel={sub:'',vry:'',sku:''}; pfRenderPicker(); },!pfSel.sub);
+    if(pfSel.sub){ arrow(); seg(pfSel.sub,function(){ pfSel.vry=''; pfSel.sku=''; pfRenderPicker(); },!pfSel.vry); }
+    if(pfSel.vry){ arrow(); seg(pfSel.vry,function(){ pfSel.sku=''; pfRenderPicker(); },!pfSel.sku); }
+    if(pfSel.sku){ arrow(); seg(pfSel.sku,null,true); }
+  }
+
+  function pfLevelRows(list,items,field,setFn){
+    var cnt={}; items.forEach(function(it){ cnt[it[field]]=(cnt[it[field]]||0)+1; });
+    var keys=Object.keys(cnt).sort();
+    if(!keys.length){ list.innerHTML='<div class="pf-empty">No products here.</div>'; return; }
+    keys.forEach(function(k){
+      var row=document.createElement('button'); row.className='pf-row';
+      row.innerHTML='<span class="pf-row-l">'+(k||'—')+'</span><span class="pf-row-r">'+cnt[k]+' item'+(cnt[k]>1?'s':'')+' ›</span>';
+      row.onclick=function(){ setFn(k); pfRenderPicker(); }; list.appendChild(row);
+    });
+  }
+  function pfItemRow(it){
+    var row=document.createElement('button'); row.className='pf-row pf-item';
+    row.innerHTML='<span class="pf-row-l"><span>'+it.name+'</span><span class="pf-item-meta">'+it.code+' · '+it.sku+'</span></span><span class="pf-row-r">Select ›</span>';
+    row.onclick=function(){ pfPick(it.code); }; return row;
+  }
+  function pfPick(code){
+    var tgt = pfPickTarget || document.getElementById('pfCode');
+    tgt.value=code;
+    if(tgt.classList&&tgt.classList.contains('pf-prow-code')) pfRowName(tgt);
+    pfClosePicker();
+    if(tgt.id==='pfCode'){ var q=document.getElementById('pfQty'); if(q.value){ pfCalc(); } else { q.focus(); } }
+  }
+
+  function pfRenderPicker(){
+    pfRenderCrumb();
+    var list=document.getElementById('pfList'); list.innerHTML='';
+    var q=(document.getElementById('pfSearch').value||'').trim().toUpperCase();
+    if(q){
+      var hits=(pfFgAll||[]).filter(function(it){ return (!pfTypeFilter||it.type===pfTypeFilter) && (it.code.toUpperCase().indexOf(q)>=0||it.name.toUpperCase().indexOf(q)>=0); });
+      if(!hits.length){ list.innerHTML='<div class="pf-empty">No product matches “'+q+'”.</div>'; return; }
+      hits.slice(0,300).forEach(function(it){ list.appendChild(pfItemRow(it)); });
+      return;
+    }
+    var f=(pfFgAll||[]).filter(pfMatch);
+    if(!pfSel.sub) pfLevelRows(list,f,'sub_group',function(v){pfSel.sub=v;});
+    else if(!pfSel.vry) pfLevelRows(list,f,'variety',function(v){pfSel.vry=v;});
+    else if(!pfSel.sku) pfLevelRows(list,f,'sku',function(v){pfSel.sku=v;});
+    else { f.forEach(function(it){ list.appendChild(pfItemRow(it)); }); }
+  }
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.getElementById('pfPicker').style.display==='flex') pfClosePicker(); });
+
+  /* ===== Production plan (multiple FGs → aggregated materials) ===== */
+  function pfSetMode(mode){
+    var single=mode==='single';
+    document.getElementById('pfMode_single').classList.toggle('on',single);
+    document.getElementById('pfMode_plan').classList.toggle('on',!single);
+    document.getElementById('pfSingle').style.display=single?'block':'none';
+    document.getElementById('pfPlan').style.display=single?'none':'block';
+    document.getElementById('pfResult').style.display='none';
+    document.getElementById('pfPlanResult').style.display='none';
+    pfMsg('');
+    if(!single){
+      if(!document.querySelectorAll('#pfPlanRows .pf-planrow').length){ pfAddRow(); pfAddRow(); }
+      if(!pfLoaded){ fetch('/inventory/production/api/fg-list/').then(function(r){return r.json();}).then(function(p){ pfFgAll=(p&&p.data)||[]; pfLoaded=true; }).catch(function(){}); }
+    }
+  }
+  function pfRowName(ci){ var nm=ci._name; if(!nm)return; var code=(ci.value||'').trim().toUpperCase(); var hit=(pfFgAll||[]).find(function(x){return x.code===code;}); nm.textContent=hit?hit.name:''; }
+  function pfAddRow(code,qty){
+    var rows=document.getElementById('pfPlanRows');
+    var div=document.createElement('div'); div.className='pf-planrow';
+    var ci=document.createElement('input'); ci.className='pf-prow-code'; ci.placeholder='FG code'; ci.autocomplete='off'; if(code)ci.value=code;
+    var br=document.createElement('button'); br.type='button'; br.className='pf-browse'; br.textContent='📂'; br.title='Browse'; br.onclick=function(){ pfOpenPicker(ci); };
+    var nm=document.createElement('span'); nm.className='pf-prow-name';
+    var qi=document.createElement('input'); qi.className='pf-prow-qty'; qi.type='number'; qi.min='0'; qi.placeholder='Qty'; if(qty)qi.value=qty;
+    var rm=document.createElement('button'); rm.type='button'; rm.className='pf-prow-rm'; rm.textContent='×'; rm.title='Remove'; rm.onclick=function(){ div.remove(); };
+    ci._name=nm; ci.addEventListener('change',function(){ pfRowName(ci); });
+    div.appendChild(ci); div.appendChild(br); div.appendChild(nm); div.appendChild(qi); div.appendChild(rm);
+    rows.appendChild(div); pfRowName(ci);
+  }
+  async function pfCalcPlan(){
+    var items=[];
+    document.querySelectorAll('#pfPlanRows .pf-planrow').forEach(function(r){
+      var code=(r.querySelector('.pf-prow-code').value||'').trim();
+      var qty=parseFloat(r.querySelector('.pf-prow-qty').value)||0;
+      if(code&&qty>0) items.push({fg_code:code,qty:qty});
+    });
+    if(!items.length){ pfMsg('Add at least one product with a quantity.','err'); return; }
+    pfMsg('Building plan from SAP…');
+    document.getElementById('pfPlanResult').style.display='none';
+    document.getElementById('pfPlanBtn').disabled=true;
+    try{
+      var res=await fetch('/inventory/production/api/plan/?items='+encodeURIComponent(JSON.stringify(items))+'&warehouses='+encodeURIComponent(pfWhParam()));
+      var p=await res.json();
+      document.getElementById('pfPlanBtn').disabled=false;
+      if(!p||p.status!=='ok'||!p.data){ pfMsg((p&&p.error)||'Could not build the plan.','err'); return; }
+      pfRenderPlan(p.data);
+    }catch(e){ document.getElementById('pfPlanBtn').disabled=false; pfMsg('Error: '+e.message,'err'); }
+  }
+  function pfRenderPlan(d){
+    pfMsg('');
+    var feas=document.getElementById('pfPlanFeas'), card=document.getElementById('pfPlanFeasCard');
+    feas.textContent=d.feasible?'Yes ✅':'No ❌'; card.className='pf-kpi '+(d.feasible?'ok':'bad');
+    document.getElementById('pfPlanProds').textContent=(d.items||[]).filter(function(x){return x.found;}).length;
+    document.getElementById('pfPlanMats').textContent=d.material_count;
+    document.getElementById('pfPlanShort').textContent=d.short_count;
+    var body=document.getElementById('pfPlanBody'); body.innerHTML='';
+    (d.materials||[]).forEach(function(m,i){
+      var tr=document.createElement('tr'); if(m.short)tr.className='pf-short';
+      var kind=(m.kind||'OTHER');
+      tr.innerHTML='<td>'+(i+1)+'</td>'
+        +'<td><span class="pf-badge pf-'+kind.toLowerCase()+'">'+kind+'</span></td>'
+        +'<td>'+m.code+'</td>'
+        +'<td class="pf-desc" title="'+(m.name||'').replace(/"/g,"&quot;")+'">'+(m.name||'')+pfNameStock(m)+'</td>'
+        +'<td><b>'+pfNum2(m.required)+'</b></td>'
+        +'<td><b>'+pfNum2(m.available)+'</b></td>'
+        +'<td class="'+(m.short?'pf-neg':'pf-pos')+'">'+(m.balance>=0?'+':'')+pfNum2(m.balance)+'</td>'
+        +'<td>'+(m.uom||'')+'</td>'
+        +'<td class="pf-whcell"><span class="pf-usedin">'+(m.used_in||[]).join(', ')+'</span></td>'
+        +'<td class="pf-whcell">'+pfWhPillsHtml(m)+'</td>';
+      body.appendChild(tr);
+    });
+    document.getElementById('pfPlanResult').style.display='block';
+    var nf=(d.items||[]).filter(function(x){return !x.found;});
+    if(nf.length) pfMsg('⚠️ No BOM found for: '+nf.map(function(x){return x.fg_code;}).join(', '),'err');
+  }
+
+  /* ===== Warehouse selection (which warehouses' stock to count for Available) ===== */
+  var pfWhAll=null, pfWhMode='all', pfWhSet=new Set();
+  function pfWhParam(){ if(pfWhMode==='all')return 'ALL'; return Array.from(pfWhSet).join(','); }
+  function pfWhLabel(){
+    var b=document.getElementById('pfWhBtn'), h=document.getElementById('pfWhHint');
+    if(pfWhMode==='all'){ b.textContent='All warehouses ▾'; h.innerHTML='Availability checked across <b>all</b> warehouses. Pick specific ones below to narrow.'; }
+    else { b.textContent=(pfWhSet.size||'No')+' warehouse'+(pfWhSet.size===1?'':'s')+' ▾'; h.innerHTML='Availability across the <b>'+pfWhSet.size+'</b> selected warehouse(s) — click <b>✓ Apply</b> in the dropdown.'; }
+  }
+  function pfWhToggle(e){ if(e)e.stopPropagation();
+    var p=document.getElementById('pfWhPanel'); var open=p.style.display!=='none';
+    p.style.display=open?'none':'block';
+    if(!open){ if(!pfWhAll){ fetch('/inventory/production/api/warehouses/').then(function(r){return r.json();}).then(function(d){ pfWhAll=(d&&d.data)||[]; pfWhRender(); }).catch(function(){ document.getElementById('pfWhList').textContent='Could not load warehouses.'; }); } else pfWhRender(); }
+  }
+  function pfWhPreset(m){ if(m==='all')pfWhMode='all'; else { pfWhMode='custom'; pfWhSet=new Set(); } pfWhRender(); pfWhLabel(); }
+  function pfWhToggleCode(code){
+    if(pfWhMode==='all'){ pfWhSet=new Set((pfWhAll||[]).map(function(w){return w.code;})); }
+    pfWhMode='custom';
+    if(pfWhSet.has(code)) pfWhSet.delete(code); else pfWhSet.add(code);
+    if(pfWhAll && pfWhSet.size===pfWhAll.length) pfWhMode='all';
+    pfWhRender(); pfWhLabel();
+  }
+  function pfWhRender(){
+    var list=document.getElementById('pfWhList'); if(!pfWhAll){ list.textContent='Loading…'; return; }
+    list.innerHTML='';
+    var q=(document.getElementById('pfWhSearch').value||'').trim().toUpperCase();
+    pfWhAll.filter(function(w){ return !q || w.code.toUpperCase().indexOf(q)>=0 || (w.name||'').toUpperCase().indexOf(q)>=0; }).forEach(function(w){
+      var checked = pfWhMode==='all' || (pfWhMode==='custom' && pfWhSet.has(w.code));
+      var lbl=document.createElement('label'); lbl.className='pf-whopt';
+      lbl.innerHTML='<input type="checkbox" '+(checked?'checked':'')+'><span>'+w.code+'</span><span class="pf-whopt-name">'+(w.name||'')+'</span>';
+      lbl.querySelector('input').onchange=function(){ pfWhToggleCode(w.code); };
+      list.appendChild(lbl);
+    });
+    if(!list.children.length) list.innerHTML='<div class="pf-empty" style="padding:14px">No warehouse matches.</div>';
+  }
+  // pills HTML (shared single + plan) — highlight the warehouses being counted
+  function pfWhPillsHtml(c){
+    var html=(c.warehouses||[]).map(function(w){
+      var isBom=(w.wh===c.warehouse), counted=(pfWhMode==='custom'&&pfWhSet.has(w.wh));
+      return '<span class="pf-whpill'+(isBom?' bom':'')+(counted?' sel':'')+'">'+w.wh+': '+pfNum(w.qty)+'</span>';
+    }).join('');
+    if(!html) html='<span class="pf-whpill pf-whpill-0">'+(c.warehouse||'—')+': 0</span>';
+    if(c.elsewhere) html='<span class="pf-whpill pf-whtag">↪ transferable</span>'+html;
+    return html;
+  }
+  // stock value shown right under the item name
+  function pfNameStock(c){ return '<div class="pf-namestock'+(c.short?' short':'')+'">📦 in stock: '+pfNum2(c.available)+(c.uom?(' '+c.uom):'')+'</div>'; }
+  // Apply the warehouse selection → close panel + re-run the current calculation
+  function pfWhApply(){
+    document.getElementById('pfWhPanel').style.display='none';
+    pfWhLabel();
+    var single=document.getElementById('pfSingle').style.display!=='none';
+    if(single){
+      var shown=document.getElementById('pfResult').style.display!=='none';
+      var ready=document.getElementById('pfCode').value.trim() && (parseFloat(document.getElementById('pfQty').value)||0)>0;
+      if(shown||ready) pfCalc();
+    } else {
+      var shown2=document.getElementById('pfPlanResult').style.display!=='none';
+      var anyRow=Array.prototype.some.call(document.querySelectorAll('#pfPlanRows .pf-planrow'),function(r){ return r.querySelector('.pf-prow-code').value.trim() && (parseFloat(r.querySelector('.pf-prow-qty').value)||0)>0; });
+      if(shown2||anyRow) pfCalcPlan();
+    }
+  }
+
+  document.addEventListener('click',function(){ var p=document.getElementById('pfWhPanel'); if(p)p.style.display='none'; });
+  pfWhLabel();
+</script>
+{% endblock %}

@@ -38,6 +38,11 @@ urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('stock-available/', views.stock_available, name='stock_available'),
     path('stock-available/api/data/', views.stock_available_data, name='stock_available_data'),
+    path('production/', views.production, name='production'),
+    path('production/api/feasibility/', views.production_feasibility_data, name='production_feasibility_data'),
+    path('production/api/fg-list/', views.production_fg_list, name='production_fg_list'),
+    path('production/api/plan/', views.production_plan_data, name='production_plan_data'),
+    path('production/api/warehouses/', views.production_warehouses, name='production_warehouses'),
 ]
 
 for path_name, view_name in _ENDPOINTS:

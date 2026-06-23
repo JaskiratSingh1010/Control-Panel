@@ -1,12 +1,13 @@
 import logging
+import threading
 import time
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 
-from django.utils import timezone
-
 from core import sap_connector
-from .models import MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster, TargetMaster, TargetNode
+from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
+                     TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
+                     CityOwner)
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +97,9 @@ def _fetch_raw(start_date, end_date):
         return []
 
 
-# ── Beverages dataset (separate HANA schema) ──────────────────────────────
-# Sales pulled with a direct invoice query (OINV/INV1) rather than a proc. Shape:
-# Variety / Sub-Group / Brand / Main Group / Chain / State dimensions, PCS_Sold (qty)
-# and Boxes_Sold (boxes) metrics, by customer & month.
+# ── Beverages dataset (separate HANA schema + proc) ───────────────────────
+# Same fetch mechanism as oils, but a different schema/proc and a product-only
+# shape: Variety / Sub-Group / SKU dimensions with Quantity & Boxes metrics.
 BEVERAGES_SCHEMA = 'JIVO_BEVERAGES_HANADB'
 _BEV_CACHE = {}
 _BEV_CACHE_TTL = 90   # seconds, same as oils
@@ -540,26 +540,69 @@ def get_sales_data(start_date, end_date):
     }, raw
 
 
-# Short-lived in-process cache for the expensive REPORT_SALES_ANALYSIS call.
-# Both slides (and quick re-fetches / hard refreshes / other users) hitting the same
-# date range within the TTL reuse one SAP round-trip instead of re-querying HANA.
-_SALES_CACHE = {}          # 'start|end' -> (expires_at, (result, raw_rows))
-_SALES_CACHE_TTL = 90      # seconds
+# In-process cache for the expensive REPORT_SALES_ANALYSIS call (a full-FY pull is a
+# ~25s HANA round-trip). Strategy = stale-while-revalidate: once a range is cached, a
+# request that finds it expired gets the STALE rows back INSTANTLY and a background
+# thread refreshes them — so no user ever waits on a cold proc again (except the very
+# first ever pull of a range, which startup pre-warming handles). The manual "Refresh
+# from SAP" path passes force=True for a synchronous fresh pull.
+_SALES_CACHE = {}                 # 'start|end' -> {'exp', 'val', 'refreshing'}
+_SALES_CACHE_TTL = 1800           # 30 min — historical SAP data drifts slowly; bg-refreshed
+_SALES_CACHE_LOCK = threading.Lock()
 
 
-def get_sales_data_cached(start_date, end_date):
+def _sales_fetch_and_store(key, start_date, end_date):
+    """Pull fresh rows from SAP and store them. Keeps any existing stale value on a
+    failed/empty pull so the dashboard never blanks out. Used both synchronously (cold
+    / forced) and from the stale-while-revalidate background thread."""
+    try:
+        value = get_sales_data(start_date, end_date)
+    except Exception:
+        logger.exception('sales-data refresh failed for %s', key)
+        value = None
+    with _SALES_CACHE_LOCK:
+        if value and value[1]:        # only cache successful, non-empty pulls
+            _SALES_CACHE[key] = {'exp': time.time() + _SALES_CACHE_TTL,
+                                 'val': value, 'refreshing': False}
+            for k in [k for k, v in _SALES_CACHE.items() if v['exp'] <= time.time() - _SALES_CACHE_TTL]:
+                _SALES_CACHE.pop(k, None)   # evict long-dead entries
+        elif key in _SALES_CACHE:
+            _SALES_CACHE[key]['refreshing'] = False   # keep stale value on failure
+    return value
+
+
+def get_sales_data_cached(start_date, end_date, force=False):
     key = f'{start_date}|{end_date}'
     now = time.time()
-    hit = _SALES_CACHE.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
-    value = get_sales_data(start_date, end_date)
-    if value and value[1]:                 # only cache successful, non-empty pulls
-        _SALES_CACHE[key] = (now + _SALES_CACHE_TTL, value)
-        # Drop any other expired entries so the dict can't grow unbounded.
-        for k in [k for k, v in _SALES_CACHE.items() if v[0] <= now]:
-            _SALES_CACHE.pop(k, None)
-    return value
+    with _SALES_CACHE_LOCK:
+        entry = _SALES_CACHE.get(key)
+        if entry and not force:
+            if entry['exp'] > now:
+                return entry['val']                    # fresh hit
+            # Expired but present: serve stale NOW, refresh in the background once.
+            if not entry.get('refreshing'):
+                entry['refreshing'] = True
+                threading.Thread(target=_sales_fetch_and_store,
+                                 args=(key, start_date, end_date), daemon=True).start()
+            return entry['val']
+    # Cold (never cached) or forced refresh → fetch synchronously.
+    return _sales_fetch_and_store(key, start_date, end_date)
+
+
+def prewarm_sales_cache():
+    """Pre-fetch the ranges the dashboard opens with (current month + current FY) so the
+    first load after a server start is warm. Safe to call from a daemon thread."""
+    try:
+        today = date.today()
+        fy_start = date(today.year if today.month >= 4 else today.year - 1, 4, 1)
+        ranges = [
+            (today.replace(day=1).isoformat(), today.isoformat()),   # current month (main view)
+            (fy_start.isoformat(), today.isoformat()),               # full FY (slide 2 / historical)
+        ]
+        for sd, ed in ranges:
+            get_sales_data_cached(sd, ed)
+    except Exception:
+        logger.exception('sales cache pre-warm failed')
 
 
 def get_drill_down(start_date, end_date, raw_rows, u_type=None, u_sub_group=None,
@@ -610,9 +653,7 @@ def get_drill_down(start_date, end_date, raw_rows, u_type=None, u_sub_group=None
 
 
 def get_historical_realise(start_date, end_date, period='12m'):
-    # Same range + same proc as the dashboard's sales pull — reuse the 90s cache
-    # instead of a second REPORT_SALES_ANALYSIS round-trip for the same data.
-    _, raw = get_sales_data_cached(start_date, end_date)
+    raw = _fetch_raw(start_date, end_date)
     if not raw:
         return {}, {}
 
@@ -753,11 +794,20 @@ def get_channel_target_map(month, year, segment=None):
     if seg:
         node_rows = node_rows.filter(segment=seg)
     if node_rows.exists():
+        # A channel-level target (state='') is the channel's headline total and takes
+        # precedence; otherwise sum the per-state rollup nodes.
+        per_state = {}
+        channel_level = {}
         for node in node_rows:
             name = _normalize_name(node.main_group)
             if not name:
                 continue
-            grouped[name] = grouped.get(name, Decimal('0')) + (node.target_ltrs or Decimal('0'))
+            if not _normalize_name(node.state):
+                channel_level[name] = channel_level.get(name, Decimal('0')) + (node.target_ltrs or Decimal('0'))
+            else:
+                per_state[name] = per_state.get(name, Decimal('0')) + (node.target_ltrs or Decimal('0'))
+        for name in set(per_state) | set(channel_level):
+            grouped[name] = channel_level[name] if channel_level.get(name, 0) > 0 else per_state.get(name, Decimal('0'))
         return {key: float(val) for key, val in grouped.items()}
 
     # Prefer the flat per-main-group editor (SegmentTarget).
@@ -802,6 +852,164 @@ def save_channel_targets(month, year, targets):
         )
         saved += 1
     return saved
+
+
+# ── Channel Targets editor (set a whole channel's target directly, vs last-month sale) ──
+# Display order matches the dashboard's 7 channel cards.
+CHANNEL_DISPLAY_ORDER = ['GT', 'MT', 'ROI', 'ECOM', 'HORECA', 'CSD', 'REST']
+
+
+def _prev_month(month, year):
+    """Previous calendar month for (month, year)."""
+    return (12, year - 1) if month == 1 else (month - 1, year)
+
+
+def month_date_range(month, year):
+    """First and last day (inclusive) of a calendar month as 'YYYY-MM-DD' strings."""
+    from calendar import monthrange
+    last = monthrange(year, month)[1]
+    return f'{year:04d}-{month:02d}-01', f'{year:04d}-{month:02d}-{last:02d}'
+
+
+def _seg_stats(pair):
+    """[litres, linetotal] -> {'litres', 'realise'}."""
+    return {'litres': round(pair[0], 2),
+            'realise': round(pair[1] / pair[0], 2) if pair[0] > 0 else 0}
+
+
+def get_channel_actuals(start_date, end_date):
+    """Per display-channel actual oil litres + realise (₹/L) for a date range, split by
+    Premium / Commodity — the same rows the dashboard counts, bucketed by display channel."""
+    _, raw = get_sales_data_cached(start_date, end_date)
+    agg = {}   # channel -> {'PREMIUM':[ltrs,linetotal], 'COMMODITY':[...]}
+    for d in (raw or []):
+        u_type = str(d.get('U_TYPE', '') or '').strip().upper()
+        u_sub  = str(d.get('U_Sub_Group', '') or '').strip().upper()
+        item   = str(d.get('ItemName', '') or '').strip().upper()
+        u_type, u_sub = _reclassify(u_type, u_sub, item)
+        if u_type not in ('PREMIUM', 'COMMODITY'):
+            continue
+        if u_sub not in ALLOWED_SUB_GROUPS:
+            continue
+        ch = _raw_to_channel(d.get('U_Main_Group'))
+        seg = agg.setdefault(ch, {'PREMIUM': [0.0, 0.0], 'COMMODITY': [0.0, 0.0]})
+        s = seg[u_type]
+        s[0] += float(d.get('Liter', 0) or 0)
+        s[1] += float(d.get('LineTotal', 0) or 0)
+    out = {}
+    for ch in CHANNEL_DISPLAY_ORDER:
+        seg = agg.get(ch, {'PREMIUM': [0.0, 0.0], 'COMMODITY': [0.0, 0.0]})
+        tl = seg['PREMIUM'][0] + seg['COMMODITY'][0]
+        tr = seg['PREMIUM'][1] + seg['COMMODITY'][1]
+        out[ch] = {'premium': _seg_stats(seg['PREMIUM']),
+                   'commodity': _seg_stats(seg['COMMODITY']),
+                   'litres': round(tl, 2),
+                   'realise': round(tr / tl, 2) if tl > 0 else 0}
+    return out
+
+
+def get_channel_node_targets(month, year):
+    """Current channel-level targets per channel, split by Premium / Commodity. Stored as
+    state-blank TargetNodes with segment PREMIUM / COMMODITY."""
+    out = {ch: {'premium_ltrs': 0.0, 'premium_realise': 0.0,
+                'commodity_ltrs': 0.0, 'commodity_realise': 0.0} for ch in CHANNEL_DISPLAY_ORDER}
+    for n in TargetNode.objects.filter(month=month, year=year, state='', sales_person='',
+                                       segment__in=['PREMIUM', 'COMMODITY']):
+        ch = _normalize_name(n.main_group)
+        if ch not in out:
+            continue
+        pref = 'premium' if n.segment == 'PREMIUM' else 'commodity'
+        out[ch][pref + '_ltrs'] = float(n.target_ltrs or 0)
+        out[ch][pref + '_realise'] = float(n.target_realise or 0)
+    return out
+
+
+def save_channel_node_targets(month, year, items, user=None):
+    """Upsert channel-level Premium + Commodity TargetNodes (state='', person='',
+    segment=PREMIUM/COMMODITY) per channel. A segment with both litres and realise zero is
+    deleted (clears that channel-segment target)."""
+    saved = 0
+    for it in (items or []):
+        ch = _normalize_name(it.get('channel'))
+        if ch not in CHANNEL_DISPLAY_ORDER:
+            continue
+        for seg, lk, rk in (('PREMIUM', 'premium_ltrs', 'premium_realise'),
+                            ('COMMODITY', 'commodity_ltrs', 'commodity_realise')):
+            try:
+                ltrs = Decimal(str(it.get(lk) or 0))
+                rlz  = Decimal(str(it.get(rk) or 0))
+            except Exception:
+                continue
+            if ltrs <= 0 and rlz <= 0:
+                TargetNode.objects.filter(main_group=ch, state='', sales_person='', segment=seg,
+                                          month=month, year=year).delete()
+                continue
+            TargetNode.objects.update_or_create(
+                main_group=ch, state='', sales_person='', segment=seg, month=month, year=year,
+                defaults={'target_ltrs': ltrs, 'target_realise': rlz})
+            saved += 1
+    return saved
+
+
+def get_channel_quick_payload(month, year):
+    """Everything the Channel Targets editor needs: last calendar month's actual sale per
+    channel (split Premium/Commodity) + each channel's current channel-level targets."""
+    pm, py = _prev_month(month, year)
+    start, end = month_date_range(pm, py)
+    actuals = get_channel_actuals(start, end)
+    targets = get_channel_node_targets(month, year)
+    rows = []
+    for ch in CHANNEL_DISPLAY_ORDER:
+        a = actuals.get(ch, {})
+        t = targets.get(ch, {})
+        p = a.get('premium', {'litres': 0, 'realise': 0})
+        c = a.get('commodity', {'litres': 0, 'realise': 0})
+        rows.append({'channel': ch,
+                     'last_litres': a.get('litres', 0), 'last_realise': a.get('realise', 0),
+                     'last_premium_ltrs': p['litres'], 'last_premium_realise': p['realise'],
+                     'last_commodity_ltrs': c['litres'], 'last_commodity_realise': c['realise'],
+                     'premium_ltrs': t.get('premium_ltrs', 0), 'premium_realise': t.get('premium_realise', 0),
+                     'commodity_ltrs': t.get('commodity_ltrs', 0), 'commodity_realise': t.get('commodity_realise', 0)})
+    return {'rows': rows, 'last_month': pm, 'last_year': py, 'month': month, 'year': year}
+
+
+def get_product_actuals(channel, state, start_date, end_date):
+    """Last-month actual litres + realise per product (keyed 'P#SUB' / 'C#SUB', matching the
+    target editor's product ids) for ONE (channel, state) — the per-product, per-state
+    equivalent of get_channel_actuals. Merged sub-groups fold into their parent product."""
+    _, raw = get_sales_data_cached(start_date, end_date)
+    ch = _normalize_name(channel)
+    st = _normalize_name(state)
+    agg = {}
+    for d in (raw or []):
+        u_type = str(d.get('U_TYPE', '') or '').strip().upper()
+        u_sub  = str(d.get('U_Sub_Group', '') or '').strip().upper()
+        item   = str(d.get('ItemName', '') or '').strip().upper()
+        u_type, u_sub = _reclassify(u_type, u_sub, item)
+        if u_type not in ('PREMIUM', 'COMMODITY'):
+            continue
+        if u_sub not in ALLOWED_SUB_GROUPS:
+            continue
+        if u_sub == 'EXTRA VIRGIN OLIVE':        # folded into the OLIVE card (PRODUCT_MERGED)
+            u_sub = 'OLIVE'
+        if _raw_to_channel(d.get('U_Main_Group')) != ch:
+            continue
+        if _normalize_name(d.get('State')) != st:
+            continue
+        code = 'P' if u_type == 'PREMIUM' else 'C'
+        a = agg.setdefault(code + '#' + u_sub, [0.0, 0.0])
+        a[0] += float(d.get('Liter', 0) or 0)
+        a[1] += float(d.get('LineTotal', 0) or 0)
+    return {k: {'litres': round(l, 2), 'realise': round(lt / l, 2) if l > 0 else 0}
+            for k, (l, lt) in agg.items()}
+
+
+def get_product_actuals_payload(channel, state, month, year):
+    """Previous calendar month's per-product actual sale for a (channel, state)."""
+    pm, py = _prev_month(month, year)
+    start, end = month_date_range(pm, py)
+    return {'products': get_product_actuals(channel, state, start, end),
+            'last_month': pm, 'last_year': py}
 
 
 def _normalize_name(value):
@@ -1278,12 +1486,115 @@ CHANNEL_OWNERS = {
 }
 
 
-def person_for_group_state(group, state_name):
-    """Territory owner for a (group, state); falls back to the channel-level owner
-    for national channels (E-Commerce, CSD) that have no per-state assignment."""
-    group = _normalize_name(group)
-    person = _PERSON_BY_GROUP_STATE.get((group, _normalize_name(state_name)))
-    return person or CHANNEL_OWNERS.get(group, '')
+# ── DB-backed territory mapping (TerritoryMapping) ─────────────────────────
+# TERRITORY_SHEET / CHANNEL_OWNERS above are now only the SEED + fallback. The
+# live source of truth is the TerritoryMapping table (editable in the Person
+# Mapping tab). Reads are cached for a few seconds because the derived lookups
+# are hit on hot dashboard paths (channel-detail, order-in-hand).
+_TERRITORY_CACHE = {'exp': 0.0, 'derived': None}
+_TERRITORY_TTL = 60
+
+
+def invalidate_territory_cache():
+    """Drop the cached territory lookups (call after any mapping write)."""
+    _TERRITORY_CACHE['derived'] = None
+    _TERRITORY_CACHE['exp'] = 0.0
+
+
+def _raw_to_channel(raw_group):
+    """Raw SAP U_Main_Group -> 7-channel display name. Unknown groups pass through."""
+    g = _normalize_name(raw_group)
+    for channel, members in CHANNEL_MEMBERS.items():
+        if g in members:
+            return channel
+    return g
+
+
+def _territory_effective_rows():
+    """List of {channel, state_code, state_name, sales_person}. Falls back to the
+    hardcoded TERRITORY_SHEET + CHANNEL_OWNERS when the DB table is empty (fresh
+    install / not yet seeded), so the dashboard behaves identically pre-seed."""
+    rows = list(TerritoryMapping.objects.all()
+                .values('channel', 'state_code', 'state_name', 'sales_person'))
+    if rows:
+        return rows
+    fallback = []
+    for (group, code, name, person) in TERRITORY_SHEET:
+        fallback.append({'channel': group, 'state_code': code,
+                         'state_name': name, 'sales_person': person})
+    for raw_group, person in CHANNEL_OWNERS.items():
+        fallback.append({'channel': _raw_to_channel(raw_group), 'state_code': '',
+                         'state_name': '', 'sales_person': person})
+    return fallback
+
+
+def _territory_derived():
+    """Cached derived lookups built from the effective territory rows."""
+    now = time.time()
+    cache = _TERRITORY_CACHE
+    if cache['derived'] is not None and cache['exp'] > now:
+        return cache['derived']
+
+    rows = _territory_effective_rows()
+    d = {
+        'rows': rows,
+        'person_by_ch_state_name': {},   # (channel, state_name) -> person
+        'person_by_ch_state_code': {},   # (channel, state_code) -> person
+        'person_by_channel': {},         # channel -> national/blank-state owner
+        'group_by_state_person': {},     # (state_name, person) -> channel
+        'persons_order': [],
+    }
+    seen = set()
+    for r in rows:
+        ch = _normalize_name(r['channel'])
+        name = _normalize_name(r['state_name'])
+        code = _normalize_name(r['state_code'])
+        person = _normalize_name(r['sales_person'])
+        if name and person:
+            d['person_by_ch_state_name'][(ch, name)] = person
+            d['group_by_state_person'].setdefault((name, person), ch)
+        if code and person:
+            d['person_by_ch_state_code'][(ch, code)] = person
+        if not name and person:
+            d['person_by_channel'][ch] = person
+        if person and person not in seen:
+            seen.add(person)
+            d['persons_order'].append(person)
+
+    # City-level overrides: a (channel, state) territory split among multiple ASMs by
+    # ship-to city. A matching city wins over the territory's default owner.
+    d['person_by_ch_state_city'] = {}   # (channel, state_name, city) -> person
+    for co in CityOwner.objects.all().values('channel', 'state_name', 'city', 'sales_person'):
+        person = _normalize_name(co['sales_person'])
+        if not person:
+            continue
+        key = (_normalize_name(co['channel']), _normalize_name(co['state_name']), _normalize_name(co['city']))
+        d['person_by_ch_state_city'][key] = person
+        if person not in seen:
+            seen.add(person)
+            d['persons_order'].append(person)
+
+    cache['derived'] = d
+    cache['exp'] = now + _TERRITORY_TTL
+    return d
+
+
+def person_for_group_state(group, state_name, city=''):
+    """Territory owner for a (raw group, state[, city]); resolves the raw SAP main group
+    to its dashboard channel. A city-level owner (CityOwner) wins when the ship-to city
+    matches, so a territory can be split among multiple ASMs; otherwise it falls back to
+    the territory's default owner, then the channel-level (national) owner."""
+    channel = _raw_to_channel(group)
+    state_name = _normalize_name(state_name)
+    d = _territory_derived()
+    city = _normalize_name(city)
+    if city:
+        owner = d['person_by_ch_state_city'].get((channel, state_name, city))
+        if owner:
+            return owner
+    return (d['person_by_ch_state_name'].get((channel, state_name))
+            or d['person_by_channel'].get(channel)
+            or '')
 
 
 def complete_target_triple(group, state, person):
@@ -1293,10 +1604,11 @@ def complete_target_triple(group, state, person):
     group = _normalize_name(group)
     state = _normalize_name(state)
     person = _normalize_name(person)
+    d = _territory_derived()
     if state and person and not group:
-        group = _GROUP_BY_STATE_PERSON.get((state, person), group)
+        group = d['group_by_state_person'].get((state, person), group)
     if group and state and not person:
-        person = _PERSON_BY_GROUP_STATE.get((group, state), person)
+        person = d['person_by_ch_state_name'].get((group, state), person)
     return group, state, person
 
 
@@ -1322,16 +1634,7 @@ def normalize_target_nodes(month=None, year=None):
 
 
 def _assigned_persons_in_order():
-    seen, ordered = set(), []
-    for (_g, _c, _n, person) in TERRITORY_SHEET:
-        if person not in seen:
-            seen.add(person)
-            ordered.append(person)
-    for person in CHANNEL_OWNERS.values():
-        if person not in seen:
-            seen.add(person)
-            ordered.append(person)
-    return ordered
+    return list(_territory_derived()['persons_order'])
 
 
 # REST-segment groups (no person/state owner) — targetable at group level in the
@@ -1341,40 +1644,63 @@ REST_GROUPS = ['CSD', 'E-COMMERCE', 'CASH SALE', 'CORPORATE', 'SANGAT',
 
 
 def get_territory_master_rows():
-    """Editor rows built straight from the territory sheet (one row per
-    group+state+person), plus group-level rows for the REST segment so those
-    channels can be targeted too. Independent of live OCRD data."""
+    """Editor rows built from the live TerritoryMapping table (one row per
+    channel+state+person). Drives the Update Targets editor hierarchy. DB-backed,
+    so reassigning a person in the Person Mapping tab reflows here too."""
     rows, seen = [], set()
-    for (group, _code, name, person) in TERRITORY_SHEET:
-        key = (group, name, person)
+    for r in _territory_derived()['rows']:
+        ch = _normalize_name(r['channel'])
+        name = _normalize_name(r['state_name'])
+        person = _normalize_name(r['sales_person'])
+        key = (ch, name, person)
         if key in seen:
             continue
         seen.add(key)
-        rows.append({'main_group': group, 'state': name, 'sales_person': person})
-    for group in REST_GROUPS:
-        # Channels with a named owner (E-Commerce → Prabhu Sir, CSD → Sachin Stephen)
-        # carry that person so they show up in the Update Targets person list and a
-        # target entered for them resolves back to the channel's main group.
-        rows.append({'main_group': group, 'state': '', 'sales_person': CHANNEL_OWNERS.get(group, '')})
+        rows.append({'main_group': ch, 'state': name, 'sales_person': person})
     return rows
 
 
 def get_territory_dashboard_payload():
-    """Mapping the dashboard JS uses to remap live sales/orders onto persons and
-    to fix the GT/MT channel state lists. Single source = TERRITORY_SHEET."""
+    """Mapping the dashboard JS uses to remap live sales/orders onto persons and to
+    fix the GT/MT channel state lists. DB-backed (TerritoryMapping). person_map is
+    keyed by both the channel and each underlying raw group ('ECOM|DELHI' AND
+    'E-COMMERCE|DELHI') so callers that pass the raw SAP main group still resolve."""
+    d = _territory_derived()
     person_map = {}   # "GROUP|STATENAME" -> person
     whitelist = {}    # channel -> [{label, match[]}]
-    for (group, code, name, person) in TERRITORY_SHEET:
-        person_map[group + '|' + name] = person
-        if group in ('GT', 'MT'):
-            bucket = whitelist.setdefault(group, [])
+    group_owners = {}
+    for r in d['rows']:
+        channel = _normalize_name(r['channel'])
+        name = _normalize_name(r['state_name'])
+        code = _normalize_name(r['state_code'])
+        person = _normalize_name(r['sales_person'])
+        if name and person:
+            person_map[channel + '|' + name] = person
+            for raw in CHANNEL_MEMBERS.get(channel, [channel]):
+                person_map[_normalize_name(raw) + '|' + name] = person
+            # Build the per-channel whitelist for EVERY channel that has a per-state
+            # owner (not just GT/MT) so an assigned state always shows as a card row in
+            # that channel — even with zero live Done. The dashboard treats this list
+            # additively (union with live sales states), so nothing is dropped.
+            bucket = whitelist.setdefault(channel, [])
             if not any(e['label'] == name for e in bucket):
-                bucket.append({'label': name, 'match': [name, code]})
+                bucket.append({'label': name, 'match': [name] + ([code] if code else [])})
+        if not name and person:
+            for raw in CHANNEL_MEMBERS.get(channel, [channel]):
+                group_owners[_normalize_name(raw)] = person
+    # City overrides: "GROUP|STATE|CITY" -> person (keyed by channel + each raw group),
+    # so the dashboard can attribute a sale to its city's ASM before the territory owner.
+    city_map = {}
+    for (channel, state, city), person in d['person_by_ch_state_city'].items():
+        city_map[channel + '|' + state + '|' + city] = person
+        for raw in CHANNEL_MEMBERS.get(channel, [channel]):
+            city_map[_normalize_name(raw) + '|' + state + '|' + city] = person
     return {
-        'persons': _assigned_persons_in_order(),
+        'persons': d['persons_order'],
         'map': person_map,
+        'city_map': city_map,
         'whitelist': whitelist,
-        'group_owners': dict(CHANNEL_OWNERS),
+        'group_owners': group_owners,
     }
 
 
@@ -1407,11 +1733,241 @@ def _open_order_qty_by_group_code():
     return out
 
 
+DASHBOARD_CHANNELS = ['GT', 'MT', 'ROI', 'ECOM', 'HORECA', 'CSD', 'REST']
+
+
+def get_territory_map_payload():
+    """Shape the TerritoryMapping grid for the Person Mapping UI: the fixed cells
+    (channel + state, read-only) with their current editable person, the channel
+    order, and the distinct people list (for the reassign dropdown)."""
+    d = _territory_derived()
+    cells = []
+    people = set()
+    for r in d['rows']:
+        channel = _normalize_name(r['channel'])
+        cells.append({
+            'channel': channel,
+            'state_code': _normalize_name(r['state_code']),
+            'state_name': _normalize_name(r['state_name']),
+            'sales_person': _normalize_name(r['sales_person']),
+        })
+        if r['sales_person']:
+            people.add(_normalize_name(r['sales_person']))
+    cells.sort(key=lambda c: (DASHBOARD_CHANNELS.index(c['channel'])
+                              if c['channel'] in DASHBOARD_CHANNELS else 99,
+                              c['state_name']))
+    present = {c['channel'] for c in cells}
+    channels = [c for c in DASHBOARD_CHANNELS if c in present] + \
+               sorted(present - set(DASHBOARD_CHANNELS))
+    return {'channels': channels, 'people': sorted(people), 'cells': cells}
+
+
+def save_territory_persons(assignments, user=None):
+    """Upsert the sales_person of each (channel, state_name) cell. Existing cells are
+    updated; NEW (channel, state) territories the user adds are created (the grid is
+    extensible). The channel is normalised from a raw SAP group to its dashboard
+    channel (e.g. 'E-COMMERCE' -> 'ECOM') so added cells line up with the dashboard
+    cards. Returns the number of rows created or changed."""
+    name_to_code = {v: k for k, v in STATE_CODE_NAMES.items()}
+    saved = 0
+    for entry in assignments or []:
+        channel = _raw_to_channel(_normalize_name(entry.get('channel')))
+        state_name = _normalize_name(entry.get('state_name'))
+        person = _normalize_name(entry.get('sales_person'))
+        if not channel:
+            continue
+        obj, created = TerritoryMapping.objects.get_or_create(
+            channel=channel, state_name=state_name,
+            defaults={'state_code': name_to_code.get(state_name, ''),
+                      'sales_person': person, 'updated_by': user})
+        if created:
+            saved += 1
+            continue
+        if obj.sales_person != person:
+            obj.sales_person = person
+            obj.updated_by = user
+            obj.save(update_fields=['sales_person', 'updated_by', 'updated_at'])
+            # Re-own any existing targets for this cell so the person-level target
+            # views / drills follow the reassignment too (across all periods).
+            TargetNode.objects.filter(main_group=channel, state=state_name).update(sales_person=person)
+            saved += 1
+    if saved:
+        invalidate_territory_cache()
+    return saved
+
+
+def get_territory_targets(month, year):
+    """{'CHANNEL|STATE': target_ltrs} — single target per (channel, state) territory
+    for a period, read from the saved TargetNode rows (segment-agnostic roll-up).
+    Keyed to match the Person Mapping UI's keyOf(channel, state)."""
+    out = {}
+    for node in TargetNode.objects.filter(month=month, year=year):
+        ch = _normalize_name(node.main_group)
+        state = _normalize_name(node.state)
+        if not ch:
+            continue
+        key = f'{ch}|{state}'
+        out[key] = out.get(key, 0.0) + float(node.target_ltrs or 0)
+    return out
+
+
+def save_territory_targets(month, year, items):
+    """Upsert one target (litres) per (channel, state) territory into TargetNode,
+    stamping the owning person from the territory map and PRESERVING any existing
+    target_realise. Blank/zero clears the node. Returns rows written."""
+    saved = 0
+    for item in items or []:
+        channel = _normalize_name(item.get('channel'))
+        state = _normalize_name(item.get('state_name') or item.get('state'))
+        if not channel:
+            continue
+        ltrs = _to_decimal(item.get('target_ltrs'))
+        # Stamp the owner so the target reflects in the person drill / channel cards.
+        mg, st, sp = complete_target_triple(channel, state, '')
+        node_qs = TargetNode.objects.filter(main_group=mg, state=st, sales_person=sp,
+                                            month=month, year=year)
+        if ltrs <= 0:
+            if node_qs.exists():
+                node_qs.update(target_ltrs=Decimal('0'))
+                saved += 1
+            continue
+        existing = node_qs.first()
+        realise = existing.target_realise if existing else Decimal('0')
+        TargetNode.objects.update_or_create(
+            main_group=mg, state=st, sales_person=sp, segment='',
+            month=month, year=year,
+            defaults={'target_ltrs': ltrs, 'target_realise': realise or Decimal('0')},
+        )
+        saved += 1
+    return saved
+
+
+# Sub-groups that are folded into a parent product in the target editor (shown under
+# the parent, not as their own card). 'EXTRA VIRGIN OLIVE' is part of the OLIVE family.
+PRODUCT_MERGED = {'EXTRA VIRGIN OLIVE'}
+
+
+def get_product_master():
+    """Canonical product list for the 'Set product targets' UI: each sub_group with
+    its type code ('P' = Premium, 'C' = Commodity). Sourced from DEFAULT_TARGETS so it
+    matches the dashboard's known products / sub-groups. Merged sub-groups
+    (PRODUCT_MERGED) are excluded so they don't appear as separate cards."""
+    out = []
+    for key in DEFAULT_TARGETS:
+        ptype, sub = key.split('|', 1)
+        if sub in PRODUCT_MERGED:
+            continue
+        out.append({'name': sub, 'type': 'P' if ptype == 'PREMIUM' else 'C'})
+    out.sort(key=lambda p: (p['type'] != 'P', p['name']))
+    return out
+
+
+def get_territory_product_targets(month, year):
+    """{'CHANNEL||STATE': {'P#SUBGROUP': {'l': ltrs, 'r': realise}, ...}} — the exact
+    shape the Person Mapping UI consumes (keyOf = channel||state, pid = type#name)."""
+    out = {}
+    for r in TerritoryProductTarget.objects.filter(month=month, year=year):
+        k = f'{_normalize_name(r.channel)}||{_normalize_name(r.state_name)}'
+        code = 'P' if r.product_type == 'PREMIUM' else 'C'
+        pid = f'{code}#{_normalize_name(r.sub_group)}'
+        out.setdefault(k, {})[pid] = {
+            'l': float(r.target_ltrs or 0),
+            'r': float(r.target_realise or 0),
+        }
+    return out
+
+
+def _rebuild_target_rollups(month, year):
+    """Recompute the dashboard's target rows for a period from TerritoryProductTarget:
+      • TargetNode  — one row per (channel, state, segment) = sum litres + litres-
+        weighted realise. The dashboard's channel TGT-L and Premium/Commodity toggle
+        read these (authoritative: the period's TargetNode rows are replaced).
+      • MonthlyTarget — per (product_type, sub_group) totals across all territories,
+        feeding the slide-1 product TARGET SALE / TARGET REALISE (upsert-only)."""
+    rows = list(TerritoryProductTarget.objects.filter(month=month, year=year))
+
+    cell_seg = {}   # (channel, state, segment) -> [sum_l, sum_l*r]
+    prod = {}       # (product_type, sub_group) -> [sum_l, sum_l*r]
+    for r in rows:
+        l = float(r.target_ltrs or 0)
+        rate = float(r.target_realise or 0)
+        seg = r.product_type
+        a = cell_seg.setdefault((_normalize_name(r.channel), _normalize_name(r.state_name), seg), [0.0, 0.0])
+        a[0] += l; a[1] += l * rate
+        b = prod.setdefault((r.product_type, _normalize_name(r.sub_group)), [0.0, 0.0])
+        b[0] += l; b[1] += l * rate
+
+    # TargetNode: rebuild this period's per-(channel,state,segment) rollup rows from
+    # scratch (the per-product UI is their source of truth). PRESERVE channel-level
+    # targets (state='', person='' — any segment, incl. Premium/Commodity) which are set
+    # independently in the channel cards and must survive a product-target save.
+    TargetNode.objects.filter(month=month, year=year)\
+        .exclude(state='', sales_person='').delete()
+    for (channel, state, seg), (suml, sumlr) in cell_seg.items():
+        if suml <= 0:
+            continue
+        mg, st, sp = complete_target_triple(channel, state, '')
+        realise = sumlr / suml if suml else 0
+        TargetNode.objects.update_or_create(
+            main_group=mg, state=st, sales_person=sp, segment=seg, month=month, year=year,
+            defaults={'target_ltrs': Decimal(str(round(suml, 2))),
+                      'target_realise': Decimal(str(round(realise, 2)))})
+
+    # MonthlyTarget: per-product totals (upsert; leaves products not edited here intact).
+    for (ptype, sub), (suml, sumlr) in prod.items():
+        rate = sumlr / suml if suml else 0
+        MonthlyTarget.objects.update_or_create(
+            product_type=ptype, sub_group=sub, month=month, year=year,
+            defaults={'tgt_ltrs': round(suml, 2), 'tgt_rate': round(rate, 2)})
+
+
+def save_territory_product_targets(month, year, targets_obj, user=None):
+    """Replace a period's per-product territory targets with the submitted set (the UI
+    always holds the full set), then rebuild the dashboard roll-ups. targets_obj shape:
+    {'CHANNEL||STATE': {'P#SUBGROUP': {'l': ltrs, 'r': realise}, ...}}."""
+    TerritoryProductTarget.objects.filter(month=month, year=year).delete()
+    saved = 0
+    for key, prodmap in (targets_obj or {}).items():
+        if '||' not in str(key):
+            continue
+        channel, state = key.split('||', 1)
+        channel, state = _normalize_name(channel), _normalize_name(state)
+        if not channel:
+            continue
+        for pidkey, val in (prodmap or {}).items():
+            if '#' not in str(pidkey):
+                continue
+            code, sub = pidkey.split('#', 1)
+            ptype = 'PREMIUM' if code.strip().upper() == 'P' else 'COMMODITY'
+            sub = _normalize_name(sub)
+            if not sub:
+                continue
+            ltrs = _to_decimal(val.get('l') if isinstance(val, dict) else val)
+            realise = _to_decimal(val.get('r') if isinstance(val, dict) else 0)
+            if ltrs <= 0 and realise <= 0:
+                continue
+            # Stamp the owning person from the territory map (channel+state -> person)
+            # so each row carries its full main-group / state / person / product identity.
+            _, _, person = complete_target_triple(channel, state, '')
+            TerritoryProductTarget.objects.create(
+                channel=channel, state_name=state, sales_person=person,
+                product_type=ptype, sub_group=sub,
+                month=month, year=year, target_ltrs=ltrs, target_realise=realise,
+                updated_by=user)
+            saved += 1
+    _rebuild_target_rollups(month, year)
+    return saved
+
+
 def get_order_in_hand_by_person():
-    """Open-order LITRES per territory owner (assigned only). Live snapshot."""
-    data = {p: 0.0 for p in _assigned_persons_in_order()}
+    """Open-order LITRES per territory owner (assigned only). Live snapshot. Resolves
+    the raw SAP main group + state code to its owner via the TerritoryMapping table."""
+    d = _territory_derived()
+    data = {p: 0.0 for p in d['persons_order']}
     for (group, code), qty in _open_order_qty_by_group_code().items():
-        person = _PERSON_ASSIGNMENTS.get((group, code)) or CHANNEL_OWNERS.get(group)
+        channel = _raw_to_channel(group)
+        person = (d['person_by_ch_state_code'].get((channel, _normalize_name(code)))
+                  or d['person_by_channel'].get(channel))
         if person:
             data[person] = data.get(person, 0.0) + qty
     return data
@@ -1431,8 +1987,7 @@ def _open_order_litres_by_group_code_customer():
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
-               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY",
-               SUM(L."LineTotal" * L."OpenQty" / NULLIF(L."Quantity", 0)) AS "OPEN_VALUE"
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
@@ -1471,7 +2026,6 @@ def get_order_in_hand_rows():
             'u_sub_group': _normalize_name(d.get('SUBG')),
             'item_name': _normalize_name(d.get('ITEM')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
-            'open_value': float(d.get('OPEN_VALUE') or 0),  # net open-order value → OIH Realise
         })
     return rows
 
@@ -1724,9 +2278,8 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
         rec = docs.get(dkey)
         if rec is None:
             rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
-                                'party': customer, 'state': state_name,
-                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0,
-                                'balance': float(row.get('BAL') or 0), '_items': {}}
+                                'party': customer, 'state': state_name, 'balance': float(row.get('BAL') or 0),
+                                'city': _normalize_name(row.get('CITY')), 'litres': 0.0, '_items': {}}
         lit = float(row.get('LIT') or 0)
         rec['litres'] += lit
         icode = _normalize_name(row.get('ICODE'))
