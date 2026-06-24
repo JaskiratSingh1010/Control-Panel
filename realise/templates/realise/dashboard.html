@@ -148,11 +148,13 @@ td.ccell{font-weight:500}
 .ut-table input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
 .btn-edit{background:var(--amber);color:#fff;border:none}
 .btn-edit:hover:not(:disabled){background:#b45309}
-/* Channel detail modal (large, centered) */
+/* Channel detail modal. The channel card (#cdBoxEl) opens full-screen; the doc
+   drill-down popup keeps the centered-window sizing from the shared .cd-box rule. */
 .cd-box{width:92vw;max-width:1180px;height:86vh;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden}
-.cd-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--accent,#2563eb),var(--accent-strong,#1d4ed8));color:#fff;flex-wrap:wrap}
-.cd-header h3{margin:0;font-size:20px;color:#fff}
-.cd-header p{margin:2px 0 0;font-size:12px;color:rgba(255,255,255,.85)}
+#cdBoxEl{width:100vw;height:100vh;max-width:none;border-radius:0}
+.cd-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 22px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--accent,#2563eb),var(--accent-strong,#1d4ed8));color:#fff;flex-wrap:wrap}
+.cd-header h3{margin:0;font-size:16px;color:#fff}
+.cd-header p{margin:2px 0 0;font-size:11px;color:rgba(255,255,255,.85)}
 .cd-controls{display:flex;align-items:center;gap:12px}
 .cd-view-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:rgba(255,255,255,.9)}
 .cd-type-sel{background:#fff;border:none;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;color:#1d4ed8;font-family:inherit;cursor:pointer;outline:none}
@@ -177,11 +179,11 @@ td.ccell{font-weight:500}
 .cd-dp-foot{padding:10px 14px;border-top:1px solid #eceff1}
 .cd-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;padding:9px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
 .cd-dp-foot button:hover{background:#1d4ed8}
-.cd-table-wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 24px 20px}
-.cd-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
-.cd-table thead th{position:sticky;top:0;z-index:1;background:var(--surface2);padding:12px 14px;text-align:right;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:2px solid var(--border)}
+.cd-table-wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 22px 16px}
+.cd-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+.cd-table thead th{position:sticky;top:0;z-index:1;background:var(--surface2);padding:9px 12px;text-align:right;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);border-bottom:2px solid var(--border)}
 .cd-table thead th:first-child{text-align:left}
-.cd-table td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text2);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+.cd-table td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text2);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 .cd-table td:first-child{text-align:left;font-weight:700;color:var(--text)}
 .cd-table tr.cd-parent td{background:var(--surface);font-weight:800;color:var(--text)}
 .cd-table tr.cd-child td:first-child{font-weight:600;color:var(--text2)}
@@ -203,6 +205,25 @@ td.ccell{font-weight:500}
 .cd-table tr.cd-parent{cursor:pointer}
 .cd-table tr.cd-parent:hover td{background:rgba(59,130,246,.1)}
 .cd-empty{padding:48px;text-align:center;color:var(--text3)}
+/* Flexible View: editable "Flex TGT" + computed "Dent" columns, sitting right after
+   Target L. Hidden until the header View selector is set to Flexible. Values are
+   temporary / client-side scratch (never persisted to the server). */
+.cd-table .cd-flexcol{display:none}
+.cd-table.cd-flex-on .cd-flexcol{display:table-cell}
+/* `input.cd-flex-input` (and the .cd-table prefix) is specific enough to beat the
+   generic ".modal-box input" rule above (font-size:18px; letter-spacing:8px;
+   text-align:center) which otherwise blows the Flex TGT value up. Reset those here. */
+.cd-table input.cd-flex-input{width:100%;max-width:108px;box-sizing:border-box;margin:0;padding:4px 7px;border:1px solid #cbd2d9;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:normal;text-align:right;color:#1d4ed8;background:#fff;outline:none}
+.cd-table input.cd-flex-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
+/* Trim the number-spinner so a short width still shows the value cleanly. */
+.cd-flex-input::-webkit-outer-spin-button,.cd-flex-input::-webkit-inner-spin-button{margin-left:2px}
+.cd-table tr.cd-total input.cd-flex-input{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.45)}
+.cd-table tr.cd-total input.cd-flex-input::placeholder{color:rgba(255,255,255,.6)}
+.cd-dent{font-weight:800}
+.cd-dent.cd-dent-pos{color:#16a34a}   /* flex below target → target reduced (saving) */
+.cd-dent.cd-dent-neg{color:var(--red)} /* flex above target → over the target */
+.cd-table tr.cd-total .cd-dent.cd-dent-pos{color:#7ef0b0}
+.cd-table tr.cd-total .cd-dent.cd-dent-neg{color:#ffb4b4}
 /* Done-L / Order-in-Hand cells drill to the underlying documents */
 #cdBody td.cd-doc-cell:not(.cd-doc-empty){cursor:pointer;color:#1d4ed8}
 #cdBody td.cd-doc-cell:not(.cd-doc-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
@@ -375,6 +396,15 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-drillrow.com-l1{background:rgba(37,99,235,.04)}
 .sc2-drillrow.com-l2{background:rgba(37,99,235,.08)}
 .sc2-drillrow.com-l1 .sc2-drillname,.sc2-drillrow.com-l2 .sc2-drillname{font-weight:600}
+/* Flexible View columns (slide-2 drill + commodity grids): editable Flex TGT input
+   and computed Dent (Target − Flex). Shown only when VIEW = Flexible. Scratch values. */
+.sc2-drillrow .sc2-flex-input{width:100%;max-width:94px;box-sizing:border-box;margin:0;padding:3px 6px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:700;letter-spacing:normal;text-align:right;color:#1d4ed8;background:#fff;outline:none}
+.sc2-drillrow .sc2-flex-input:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}
+.sc2-drillval.cdent.sc2-dent-pos{color:#16a34a}
+.sc2-drillval.cdent.sc2-dent-neg{color:#dc2626}
+.sc2-drillrow.sc2-state-total .sc2-flex-input{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
+.sc2-drillrow.sc2-state-total .cdent.sc2-dent-pos{color:#7ef0b0}
+.sc2-drillrow.sc2-state-total .cdent.sc2-dent-neg{color:#ffb4b4}
 .com-drill{display:flex;align-items:center;gap:10px}
 .com-drill-box{position:relative}
 .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:190px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:var(--blue,#2563eb);font-weight:700;font-size:12px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit}
@@ -595,6 +625,11 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <button type="button" class="sc2-today-btn" id="sc2TodayBtn" onclick="openTodaySales()" title="Today's Premium &amp; Commodity sales (litres)">
           <span class="material-icons">today</span>Today's Sales
         </button>
+        <label for="cdView">View</label>
+        <select id="cdView" onchange="onCdViewChange()" title="Channel card view — Flexible adds editable Flex TGT / Dent columns">
+          <option value="fixed">Fixed View</option>
+          <option value="flex">Flexible View</option>
+        </select>
       </div>
       <div class="sc2-kpis" id="channelKpis">
         <div class="sc2-kpi">
@@ -1136,7 +1171,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="cd-table">
         <thead><tr>
           <th id="cdFirstCol">State</th>
-          <th>Target L</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>OIH Realise</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
+          <th>Target L</th><th class="cd-flexcol">Flex TGT</th><th class="cd-flexcol">Dent</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>OIH Realise</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
         </tr></thead>
         <tbody id="cdBody"></tbody>
       </table>
@@ -2878,12 +2913,44 @@ function buildSlideTwoDrillRows(rows,dimension,groupFilter,targetNodes,oihRows){
   list.sort(function(a,b){return b.done-a.done||a.name.localeCompare(b.name);});
   return list;
 }
-function drillCells(c){
-  var bal=(c.target||0)-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+// ── Flexible View (slide-2 grid tables) ───────────────────────────────────────
+// The toolbar VIEW selector (#cdView, shared with the channel-detail modal) drives
+// cdViewMode. In 'flex' mode the person/state drill and the Commodity view gain two
+// extra grid columns — an editable Flex TGT and a computed Dent (Target − Flex) — just
+// like the modal. Values are scratch, kept per row-path in sc2FlexStore.
+var sc2FlexStore={};
+function sc2FlexOn(){return cdViewMode==='flex';}
+function sc2FlexHeadCols(){return sc2FlexOn()?'<div class="sc2-tt-col">Flex TGT</div><div class="sc2-tt-col">Dent</div>':'';}
+function sc2DynGcols(){return sc2FlexOn()
+  ?'grid-template-columns:1.6fr .8fr .7fr .7fr .8fr .8fr .8fr .9fr .9fr'
+  :'grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr .9fr';}
+function comGcols(){return sc2FlexOn()
+  ?'grid-template-columns:1.5fr .76fr .7fr .7fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr'
+  :'grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr';}
+// Two grid cells: the Flex TGT input + the Dent. editable===false (e.g. commodity rows
+// with no product-level target) renders an em-dash pair so the grid stays aligned. The
+// input carries the row's Done/OIH/rate/revenue so the handler can recompute Bal live.
+function sc2FlexCells(key,row,editable){
+  if(editable===false)return '<div class="sc2-drillval sc2-flexcol">&mdash;</div><div class="sc2-drillval sc2-flexcol cdent">&mdash;</div>';
+  var tgt=Number(row.target)||0,has=sc2FlexStore.hasOwnProperty(key),fv=has?sc2FlexStore[key]:null;
+  var dent=has?(tgt-fv):NaN,dCls=isFinite(dent)?(dent>0?'sc2-dent-pos':(dent<0?'sc2-dent-neg':'')):'';
+  return '<div class="sc2-drillval sc2-flexcol">'
+      +'<input type="number" class="sc2-flex-input" step="any" inputmode="decimal"'
+      +' data-flexkey="'+esc(key)+'" data-tgt="'+tgt+'" data-done="'+(Number(row.done)||0)+'" data-oih="'+(Number(row.oih)||0)+'"'
+      +' data-tr="'+(Number(row.targetRealise)||0)+'" data-lt="'+(Number(row.lineTotal)||0)+'"'
+      +' placeholder="'+fN(tgt)+'" value="'+(has?String(fv):'')+'"></div>'
+    +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(isFinite(dent)?fN(dent):'&mdash;')+'</div>';
+}
+function drillCells(c,flexKey){
+  // Effective target = flexible override (if entered for this row) else the real target;
+  // Bal tracks it so editing Flex TGT moves Bal.
+  var eff=(flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(c.target||0);
+  var bal=eff-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
   return '<div class="sc2-drillval">'+fN(c.target||0)+'</div>'
+    +(sc2FlexOn()&&flexKey?sc2FlexCells(flexKey,c):'')
     +'<div class="sc2-drillval">'+fN(c.done||0)+'</div>'
     +'<div class="sc2-drillval">'+fN(c.oih||0)+'</div>'
-    +'<div class="sc2-drillval '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.targetRealise||0,2)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.actualRealise||0,2)+'</div>';
 }
@@ -3010,27 +3077,30 @@ function comTotal(products){
   t.targetRealise=t.trW>0?t.trWsum/t.trW:0;
   return t;
 }
-function comCells(node,isProduct){
-  // Bal = Target − (Done + OIH) on product rows, matching the channel cards.
-  var bal=isProduct?((node.target||0)-((node.done||0)+(node.oih||0))):null;
+function comCells(node,isProduct,flexKey){
+  // Effective target = flexible override (if entered) else the product target; Bal and
+  // Bal Realise track it. Bal exists on product rows only (targets are per product).
+  var eff=(flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(node.target||0);
+  var bal=isProduct?(eff-((node.done||0)+(node.oih||0))):null;
   var balClass=bal===null?'':(bal>=0?'sc2-bal-good':'sc2-bal-bad');
   var act=node.done>0?node.lineTotal/node.done:0;
   var doneCls='sc2-drillval com-done'+((node.done||0)!==0?' com-click':'');
   var oihCls='sc2-drillval com-oih'+((node.oih||0)>0?' com-click':'');
   // Bal Realise = (target revenue − actual revenue) / balance litres; product rows with a target only.
-  var balRlz=(isProduct&&(node.target||0)>0&&bal!==0)?(((node.target||0)*(node.targetRealise||0))-(node.lineTotal||0))/bal:NaN;
+  var balRlz=(isProduct&&eff>0&&bal!==0)?((eff*(node.targetRealise||0))-(node.lineTotal||0))/bal:NaN;
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
   var oihRlz=(node.oih||0)>0?((node.oihLineTotal||0)/node.oih):NaN;   // ₹/L of open orders
   var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
   return '<div class="sc2-drillval">'+(isProduct?fN(node.target||0):'&mdash;')+'</div>'
+    +(sc2FlexOn()&&flexKey?sc2FlexCells(flexKey,node,!!isProduct):'')
     +'<div class="sc2-drillval">'+(isProduct&&(node.targetRealise||0)>0?fNp(node.targetRealise,2):'&mdash;')+'</div>'
     +'<div class="'+doneCls+'">'+fN(node.done||0)+'</div>'
     +'<div class="sc2-drillval">'+fN(node.lastDone||0)+'</div>'
     +'<div class="sc2-drillval">'+(node.done>0?fNp(act,2):'&mdash;')+'</div>'
     +'<div class="'+oihCls+'">'+fN(node.oih||0)+'</div>'
     +'<div class="sc2-drillval">'+oihRlzStr+'</div>'
-    +'<div class="sc2-drillval '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
-    +'<div class="sc2-drillval">'+balRlzStr+'</div>';
+    +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+(bal===null?'&mdash;':fN(bal))+'</div>'
+    +'<div class="sc2-drillval sc2-balrlz-cell">'+balRlzStr+'</div>';
 }
 // Map a commodity drill dim to the document-API filter key (main_group -> group).
 var COM_TO_API={product:'product',main_group:'group',state:'state',item:'item',customer:'customer'};
@@ -3047,14 +3117,14 @@ function comRow(node,level,path,gs,filt){
     : '<span class="sc2-com-twirl-empty"></span>';
   var html='<div class="sc2-drillrow sc2-wide com-l'+Math.min(level,2)+'" data-compath="'+esc(path)+'"'+gs+'>'
     +'<div class="sc2-drillname" style="padding-left:'+indent+'px">'+twirl+esc(node.name)+'</div>'
-    +comCells(node,isProduct)+'</div>';
+    +comCells(node,isProduct,path)+'</div>';
   if(hasKids&&isOpen){
     for(var i=0;i<node.kids.length;i++){var k=node.kids[i];html+=comRow(k,level+1,path+'>'+k.dim+':'+k.name,gs,nodeFilt);}
   }
   return html;
 }
 function renderCommodityTable(tree,tot){
-  var gs=' style="grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr"';
+  var gs=' style="'+comGcols()+'"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
   comNodeByPath={};
   comNodeByPath['__comtotal__']={filters:{},label:'TOTAL — Commodity'};
@@ -3062,7 +3132,7 @@ function renderCommodityTable(tree,tot){
     +'<div class="sc2-drillcard sc2-drillfull sc2-comcard">'
     +'<div class="sc2-thead sc2-wide"'+gs+'>'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
-      +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Tgt Rlz</div>'
+      +'<div class="sc2-tt-col">Tgt L</div>'+sc2FlexHeadCols()+'<div class="sc2-tt-col">Tgt Rlz</div>'
       +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Act Rlz</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">OIH Rlz</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div>'
     +'</div><div class="sc2-drillbody">';
@@ -3070,7 +3140,7 @@ function renderCommodityTable(tree,tot){
     html+='<div class="sc2-state-empty">No commodity data in the current selection.</div>';
   }else{
     for(var i=0;i<tree.length;i++)html+=comRow(tree[i],0,tree[i].dim+':'+tree[i].name,gs,{});
-    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" data-compath="__comtotal__"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCells(tot,true)+'</div>';
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" data-compath="__comtotal__"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCells(tot,true,'__comtotal__')+'</div>';
   }
   return html+'</div></div>';
 }
@@ -3463,6 +3533,13 @@ async function openChannelDetail(name){
   detailOrder=(name==='REST')?['group']:['state'];
   detailChosen=detailOrder.slice();
   cdExpanded={};
+  // Flex TGT entries are scratch — cleared per channel. The Fixed/Flexible choice lives
+  // on the toolbar (beside Today's Sales) and is picked before opening the card.
+  cdFlex={};
+  var cdViewSel=document.getElementById('cdView');
+  cdViewMode=(cdViewSel&&cdViewSel.value==='flex')?'flex':'fixed';
+  var cdTbl=document.querySelector('#channelDetailModal .cd-table');
+  if(cdTbl)cdTbl.classList.toggle('cd-flex-on',cdViewMode==='flex');
   // Seed the modal's own Premium/Commodity selector from the slide-2 toolbar segment.
   detailSeg=sc2Seg();
   var cdType=document.getElementById('cdType');if(cdType)cdType.value=detailSeg;
@@ -3487,6 +3564,21 @@ async function onCdTypeChange(){
   try{ detailTargetNodes=await fetchTargetNodes(period.month,period.year,detailSeg)||[]; }
   catch(e){ detailTargetNodes=detailTargetNodes||[]; }
   if(document.getElementById('channelDetailModal').classList.contains('show'))renderChannelDetail();
+}
+// Fixed View (default) vs Flexible View. Flexible reveals the Flex TGT / Dent columns
+// (pure CSS toggle on the table); we re-render so the empty-state colspan stays correct.
+function onCdViewChange(){
+  var sel=document.getElementById('cdView');
+  cdViewMode=(sel&&sel.value==='flex')?'flex':'fixed';
+  var tbl=document.querySelector('#channelDetailModal .cd-table');
+  if(tbl)tbl.classList.toggle('cd-flex-on',cdViewMode==='flex');
+  // Toolbar control: the card may be closed when this changes — only re-render if open.
+  if(document.getElementById('channelDetailModal').classList.contains('show'))renderChannelDetail();
+  // Re-render the live slide-2 table so its Flex TGT / Dent columns appear or hide.
+  if(typeof sc2Fetched!=='undefined'&&sc2Fetched){
+    if(sc2Seg()==='COMMODITY')renderSlideTwoCommodity();
+    else if(getSlideTwoDrillBy()!=='main_group')sc2DynRerender();
+  }
 }
 function detailStateLabel(channel,stateName){
   if(CHANNEL_STATE_WHITELIST[channel])return channelStateLabel(channel,stateName);
@@ -3572,6 +3664,10 @@ function aggList(list){
 function groupLeavesBy(leaves,dim){var m={};leaves.forEach(function(l){var k=l[dim];(m[k]=m[k]||[]).push(l);});return m;}
 // Collapsible tree: parent rows carry a twirl and toggle their children.
 var cdExpanded={}, cdTree=[], cdNodeByPath={};
+// Flexible View: 'fixed' (default) or 'flex'. cdFlex maps a row's drill path to a
+// temporary user-entered target (litres); Dent = Target L − Flex TGT. Scratch only —
+// reset every time the modal opens, never sent to the server.
+var cdViewMode='fixed', cdFlex={};
 function buildDetailTree(leaves,dims,depth,prefix,filt){
   filt=filt||{};
   var d=dims[depth],m=groupLeavesBy(leaves,d),nodes=[];
@@ -3589,25 +3685,44 @@ function buildDetailTree(leaves,dims,depth,prefix,filt){
   return nodes;
 }
 function cdBal(a){return a.target-(a.done+a.oih);}  // Bal = Target − (Done + Order in Hand)
-function cdMetricCells(a){
-  var bal=cdBal(a),balCls=bal>=0?'cd-good':'cd-bad';
+// Flexible View columns for one row: an editable Flex TGT input (pre-filled from the
+// temporary cdFlex store) and the computed Dent (Target L − Flex TGT). Always emitted;
+// CSS hides them unless the table carries .cd-flex-on (View = Flexible).
+function cdFlexCells(path,a){
+  var tgt=Number(a.target)||0, has=cdFlex.hasOwnProperty(path), fv=has?cdFlex[path]:null;
+  var dent=has?(tgt-fv):NaN;
+  var dCls=isFinite(dent)?(dent>0?'cd-dent-pos':(dent<0?'cd-dent-neg':'')):'';
+  // data-* carry the row's Done/OIH/rate/revenue so the input handler can recompute
+  // Bal (and Bal Realise) live on the flexible target without a full re-render.
+  return '<td class="cd-flexcol cd-flexin">'
+      +'<input type="number" class="cd-flex-input" step="any" inputmode="decimal"'
+      +' data-tgt="'+tgt+'" data-done="'+(Number(a.done)||0)+'" data-oih="'+(Number(a.oih)||0)+'"'
+      +' data-tr="'+(Number(a.targetRealise)||0)+'" data-lt="'+(Number(a.lineTotal)||0)+'"'
+      +' placeholder="'+fN(tgt)+'" value="'+(has?String(fv):'')+'"></td>'
+    +'<td class="cd-flexcol cd-dent '+dCls+'">'+(isFinite(dent)?fN(dent):'&mdash;')+'</td>';
+}
+function cdMetricCells(a,path){
+  // Effective target = the flexible override (if one is entered for this row) else the
+  // real target. Bal and Bal Realise are computed on it so they track Flex TGT.
+  var eff=cdFlex.hasOwnProperty(path)?cdFlex[path]:(a.target||0);
+  var bal=eff-((a.done||0)+(a.oih||0)),balCls=bal>=0?'cd-good':'cd-bad';
   // Done & Order-in-Hand cells drill to the underlying documents (see docDetailModal).
   var doneCls='cd-doc-cell'+((a.done||0)>0?'':' cd-doc-empty');
   var oihCls='cd-doc-cell'+((a.oih||0)>0?'':' cd-doc-empty');
-  // Bal Realise = (target revenue − actual revenue) / balance litres. Revenue
-  // (a.lineTotal) stays in the data for this and Act Realise; it's just no longer
-  // shown as its own column. Columns are paired: Target+Tgt Rlz, Bal+Bal Rlz.
-  var balRlz=((a.target||0)>0&&bal!==0)?(((a.target||0)*(a.targetRealise||0))-(a.lineTotal||0))/bal:NaN;
+  // Bal Realise = (target revenue − actual revenue) / balance litres, target taken as
+  // the effective (flexible) target so it stays consistent with Bal.
+  var balRlz=(eff>0&&bal!==0)?((eff*(a.targetRealise||0))-(a.lineTotal||0))/bal:NaN;
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
   var oihRlz=(a.oih||0)>0?((a.oihLineTotal||0)/a.oih):NaN;   // ₹/L of open orders
   var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
   return '<td>'+fN(a.target)+'</td>'
+    +cdFlexCells(path,a)
     +'<td>'+fNp(a.targetRealise||0,2)+'</td>'
     +'<td class="'+doneCls+'" data-metric="done">'+fN(a.done)+'</td>'
     +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
     +'<td>'+oihRlzStr+'</td>'
-    +'<td class="'+balCls+'">'+fN(bal)+'</td>'
-    +'<td>'+balRlzStr+'</td>'
+    +'<td class="cd-bal-cell '+balCls+'">'+fN(bal)+'</td>'
+    +'<td class="cd-balrlz-cell">'+balRlzStr+'</td>'
     +'<td>'+fNp(a.actualRealise||0,2)+'</td>';
 }
 function cdNodeRow(node,depth){
@@ -3615,11 +3730,11 @@ function cdNodeRow(node,depth){
   var tagHtml=meta.tag?'<span class="cd-tag '+meta.cls+'">'+esc(meta.tag)+'</span>':'';
   return '<tr class="'+(node.leaf?'cd-child':'cd-parent')+'"'+(node.leaf?'':' data-toggle="1" style="cursor:pointer"')+' data-path="'+esc(node.path)+'">'
     +'<td style="padding-left:'+(14+depth*20)+'px">'+twirl+tagHtml+esc(node.label)+'</td>'
-    +cdMetricCells(node.agg)+'</tr>';
+    +cdMetricCells(node.agg,node.path)+'</tr>';
 }
 function cdTotalRow(leaves){
   cdNodeByPath['__cdtotal__']={filters:{},label:'TOTAL — '+(detailChannel||'')};
-  return '<tr class="cd-total" data-path="__cdtotal__"><td>TOTAL</td>'+cdMetricCells(aggList(leaves))+'</tr>';
+  return '<tr class="cd-total" data-path="__cdtotal__"><td>TOTAL</td>'+cdMetricCells(aggList(leaves),'__cdtotal__')+'</tr>';
 }
 function cdTreeRows(nodes,depth){
   var out='';
@@ -3676,9 +3791,34 @@ document.addEventListener('click',function(){var p=document.getElementById('cdDr
 document.addEventListener('click',function(e){
   if(!e.target||!e.target.closest)return;
   if(e.target.closest('#cdBody td.cd-doc-cell:not(.cd-doc-empty)'))return; // doc drill, not expand
+  if(e.target.closest('#cdBody td.cd-flexcol'))return;                     // editing Flex TGT, not expand
   var tr=e.target.closest('#cdBody tr[data-toggle]');if(!tr)return;
   var p=tr.getAttribute('data-path');cdExpanded[p]=!cdExpanded[p];
   document.getElementById('cdBody').innerHTML=cdTreeRows(cdTree,0)+cdTotalRow(buildChannelDetailLeaves());
+});
+// Flexible View: live-update a row's Dent as its Flex TGT is typed. Done in-place (no
+// full re-render) so the input keeps focus; the value is stashed in cdFlex by row path.
+document.getElementById('cdBody').addEventListener('input',function(e){
+  var inp=e.target&&e.target.closest?e.target.closest('input.cd-flex-input'):null;if(!inp)return;
+  var rowEl=inp.closest('tr');if(!rowEl)return;
+  var path=rowEl.getAttribute('data-path'),raw=String(inp.value).trim();
+  var tgt=Number(inp.getAttribute('data-tgt'))||0;
+  var done=Number(inp.getAttribute('data-done'))||0,oih=Number(inp.getAttribute('data-oih'))||0;
+  var trate=Number(inp.getAttribute('data-tr'))||0,lt=Number(inp.getAttribute('data-lt'))||0;
+  var cleared=(raw===''||isNaN(Number(raw))),fv=cleared?null:Number(raw);
+  if(cleared)delete cdFlex[path]; else cdFlex[path]=fv;
+  // Dent = Target − Flex TGT.
+  var dent=rowEl.querySelector('.cd-dent');
+  if(dent){
+    if(cleared){dent.innerHTML='&mdash;';dent.className='cd-flexcol cd-dent';}
+    else{var diff=tgt-fv;dent.innerHTML=fN(diff);dent.className='cd-flexcol cd-dent '+(diff>0?'cd-dent-pos':(diff<0?'cd-dent-neg':''));}
+  }
+  // Bal (and Bal Realise) recomputed on the effective target — flex if set, else original.
+  var eff=cleared?tgt:fv, bal=eff-(done+oih);
+  var balCell=rowEl.querySelector('.cd-bal-cell');
+  if(balCell){balCell.innerHTML=fN(bal);balCell.className='cd-bal-cell '+(bal>=0?'cd-good':'cd-bad');}
+  var brCell=rowEl.querySelector('.cd-balrlz-cell');
+  if(brCell){var balRlz=(eff>0&&bal!==0)?((eff*trate)-lt)/bal:NaN;brCell.innerHTML=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';}
 });
 // Click a Done-L / Order-in-Hand cell -> list the underlying invoices / open SOs.
 document.addEventListener('click',function(e){
@@ -4108,15 +4248,16 @@ else mbInitDrillPanel();
 function renderChannelDetail(){
   var dims=detailOrder.slice();
   var body=document.getElementById('cdBody');
-  if(!dims.length){document.getElementById('cdFirstCol').textContent='—';body.innerHTML='<tr><td colspan="9" class="cd-empty">Select at least one drill dimension.</td></tr>';return;}
+  var cc=(cdViewMode==='flex')?11:9;   // +2 visible columns (Flex TGT, Dent) in Flexible View
+  if(!dims.length){document.getElementById('cdFirstCol').textContent='—';body.innerHTML='<tr><td colspan="'+cc+'" class="cd-empty">Select at least one drill dimension.</td></tr>';return;}
   document.getElementById('cdFirstCol').textContent=dims.map(function(d){return dimMeta(d).label;}).join(' › ');
   try{
     var leaves=buildChannelDetailLeaves();
-    if(!leaves.length){cdTree=[];body.innerHTML='<tr><td colspan="9" class="cd-empty">No data for this channel in the current selection.</td></tr>';return;}
+    if(!leaves.length){cdTree=[];body.innerHTML='<tr><td colspan="'+cc+'" class="cd-empty">No data for this channel in the current selection.</td></tr>';return;}
     cdNodeByPath={};
     cdTree=buildDetailTree(leaves,dims,0,'');
     body.innerHTML=cdTreeRows(cdTree,0)+cdTotalRow(leaves);
-  }catch(err){body.innerHTML='<tr><td colspan="9" class="cd-empty">Could not render: '+esc(String((err&&err.message)||err))+'</td></tr>';}
+  }catch(err){body.innerHTML='<tr><td colspan="'+cc+'" class="cd-empty">Could not render: '+esc(String((err&&err.message)||err))+'</td></tr>';}
 }
 
 async function renderSlideTwo(){
@@ -4317,9 +4458,9 @@ function sc2DynNodeRow(node,depth){
   var twirl=node.leaf?'<span class="cd-twirl cd-leaf"></span>':'<span class="cd-twirl'+(sc2DynExpanded[node.path]?' open':'')+'">&#9654;</span>';
   var tag=meta.tag?'<span class="cd-tag '+meta.cls+'">'+esc(meta.tag)+'</span>':'';
   var name='<div class="sc2-drillname" style="padding-left:'+(depth*18)+'px">'+twirl+tag+esc(sc2DynLabel(node.label))+'</div>';
-  var rowStyle=SC2_DYN_GCOLS+(node.leaf?'':';cursor:pointer');
+  var rowStyle=sc2DynGcols()+(node.leaf?'':';cursor:pointer');
   return '<div class="sc2-drillrow sc2-wide" style="'+rowStyle+'" data-dynpath="'+esc(node.path)+'"'
-    +(node.leaf?'':' data-dyntoggle="1"')+'>'+name+drillCells(node.agg)+'</div>';
+    +(node.leaf?'':' data-dyntoggle="1"')+'>'+name+drillCells(node.agg,node.path)+'</div>';
 }
 function sc2DynTreeRows(nodes,depth){
   var out='';
@@ -4335,9 +4476,9 @@ function renderSc2DynTree(leaves){
   sc2DynTree=dims.length?sc2DynBuildTree(leaves,dims,0,'',{}):[];
   var title=dims.length?dims.map(function(d){return dimMeta(d).label;}).join(' › '):'—';
   var html='<div class="sc2-drillcard sc2-drillfull">'
-    +'<div class="sc2-thead sc2-wide" style="'+SC2_DYN_GCOLS+'">'
+    +'<div class="sc2-thead sc2-wide" style="'+sc2DynGcols()+'">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
-      +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Done L</div>'
+      +'<div class="sc2-tt-col">Tgt L</div>'+sc2FlexHeadCols()+'<div class="sc2-tt-col">Done L</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
       +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
     +'</div><div class="sc2-drillbody">';
@@ -4348,7 +4489,7 @@ function renderSc2DynTree(leaves){
   }else{
     html+=sc2DynTreeRows(sc2DynTree,0);
     var tot=aggList(leaves);
-    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" style="'+SC2_DYN_GCOLS+'"><div class="sc2-drillname">TOTAL</div>'+drillCells(tot)+'</div>';
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" style="'+sc2DynGcols()+'"><div class="sc2-drillname">TOTAL</div>'+drillCells(tot,'__dyntotal__')+'</div>';
   }
   html+='</div></div>';
   return html;
@@ -4433,11 +4574,36 @@ else sc2DynInitPanel();
 // Expand / collapse dynamic-tree parent rows (delegated; survives re-renders).
 document.addEventListener('click',function(e){
   if(!e.target||!e.target.closest)return;
+  if(e.target.closest('.sc2-flexcol'))return;   // editing Flex TGT, not expand
   var row=e.target.closest('#channelGrid .sc2-drillrow[data-dyntoggle]');
   if(!row)return;
   var p=row.getAttribute('data-dynpath');
   sc2DynExpanded[p]=!sc2DynExpanded[p];
   sc2DynRerender();
+});
+// Flexible View (slide-2 grids): live Dent update as Flex TGT is typed. In-place (no
+// re-render) so the input keeps focus; value stored per row-path in sc2FlexStore.
+document.getElementById('channelGrid').addEventListener('input',function(e){
+  var inp=e.target&&e.target.closest?e.target.closest('input.sc2-flex-input'):null;if(!inp)return;
+  var row=inp.closest('.sc2-drillrow');if(!row)return;
+  var key=inp.getAttribute('data-flexkey'),raw=String(inp.value).trim();
+  var tgt=Number(inp.getAttribute('data-tgt'))||0;
+  var done=Number(inp.getAttribute('data-done'))||0,oih=Number(inp.getAttribute('data-oih'))||0;
+  var trate=Number(inp.getAttribute('data-tr'))||0,lt=Number(inp.getAttribute('data-lt'))||0;
+  var cleared=(raw===''||isNaN(Number(raw))),fv=cleared?null:Number(raw);
+  if(cleared)delete sc2FlexStore[key]; else sc2FlexStore[key]=fv;
+  // Dent = Target − Flex TGT.
+  var dent=row.querySelector('.cdent');
+  if(dent){
+    if(cleared){dent.innerHTML='&mdash;';dent.className='sc2-drillval sc2-flexcol cdent';}
+    else{var diff=tgt-fv;dent.innerHTML=fN(diff);dent.className='sc2-drillval sc2-flexcol cdent '+(diff>0?'sc2-dent-pos':(diff<0?'sc2-dent-neg':''));}
+  }
+  // Bal (and commodity's Bal Realise) recomputed on the effective target — flex if set, else original.
+  var eff=cleared?tgt:fv, bal=eff-(done+oih);
+  var balCell=row.querySelector('.sc2-bal-cell');
+  if(balCell){balCell.innerHTML=fN(bal);balCell.className='sc2-drillval sc2-bal-cell '+(bal>=0?'sc2-bal-good':'sc2-bal-bad');}
+  var brCell=row.querySelector('.sc2-balrlz-cell');
+  if(brCell){var balRlz=(eff>0&&bal!==0)?((eff*trate)-lt)/bal:NaN;brCell.innerHTML=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';}
 });
 
 /* ===== CHANNEL DASHBOARD (slide 2) PLAIN-CSV EXPORT ===== */
