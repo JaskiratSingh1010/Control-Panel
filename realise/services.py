@@ -22,6 +22,12 @@ ALLOWED_SUB_GROUPS = {
     'GHEE', 'GROUNDNUT', 'OLIVE', 'SESAME', 'YELLOW MUSTARD',
 }
 
+# Reserved sub_group for a state-level aggregate Premium/Commodity target entered
+# directly on the state card (not split into products). It rolls up into the
+# (channel, state, segment) TargetNode like any product, but is kept OUT of the
+# per-product MonthlyTarget so it never appears as a phantom product.
+AGG_SUBGROUP = '__ALL__'
+
 RECLASSIFY_RULES = [
     ('YELLOW MUSTARD',       'PREMIUM',   'YELLOW MUSTARD'),
     ('EXTRA VIRGIN COCONUT', 'PREMIUM',   'COCONUT'),
@@ -1896,8 +1902,11 @@ def _rebuild_target_rollups(month, year):
         seg = r.product_type
         a = cell_seg.setdefault((_normalize_name(r.channel), _normalize_name(r.state_name), seg), [0.0, 0.0])
         a[0] += l; a[1] += l * rate
-        b = prod.setdefault((r.product_type, _normalize_name(r.sub_group)), [0.0, 0.0])
-        b[0] += l; b[1] += l * rate
+        # Aggregate (state-card) targets count toward the channel/state segment total
+        # above, but must NOT become a phantom per-product MonthlyTarget row.
+        if _normalize_name(r.sub_group) != AGG_SUBGROUP:
+            b = prod.setdefault((r.product_type, _normalize_name(r.sub_group)), [0.0, 0.0])
+            b[0] += l; b[1] += l * rate
 
     # TargetNode: rebuild this period's per-(channel,state,segment) rollup rows from
     # scratch (the per-product UI is their source of truth). PRESERVE channel-level

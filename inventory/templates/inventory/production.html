@@ -97,6 +97,8 @@
   .pf-codewrap{display:flex;gap:8px;align-items:stretch}
   .pf-browse{flex:0 0 auto;padding:0 14px;border:1.5px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#4338ca;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;white-space:nowrap}
   .pf-browse:hover{background:#e0e7ff}
+  .pf-skufilter{flex:0 0 auto;max-width:200px;padding:0 10px;border:1.5px solid #e2e8f0;border-radius:10px;background:#fff;color:#475569;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+  .pf-skufilter:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
   .pf-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
   .pf-modal{background:#fff;border-radius:18px;width:100%;max-width:680px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.32);overflow:hidden}
   .pf-modal-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e8f0}
@@ -160,6 +162,7 @@
       <div class="pf-field" style="flex:1;min-width:240px"><label>FG Item Code</label>
         <div class="pf-codewrap">
           <input id="pfCode" placeholder="Type code, or click Browse →" autocomplete="off" style="flex:1">
+          <select id="pfSkuFilter" class="pf-skufilter" title="Pick a SKU to filter Browse"><option value="">SKU: All</option></select>
           <button type="button" class="pf-browse" onclick="pfOpenPicker()">📂 Browse</button>
         </div>
       </div>
@@ -290,31 +293,57 @@
   document.getElementById('pfQty').addEventListener('keydown',function(e){ if(e.key==='Enter')pfCalc(); });
 
   /* ===== FG drill-down picker (Type → Sub-group → Variety → SKU → item) ===== */
-  var pfFgAll=null, pfLoaded=false, pfTypeFilter='', pfSel={sub:'',vry:'',sku:''}, pfPickTarget=null;
+  var pfFgAll=null, pfLoaded=false, pfLoading=false, pfLoadCbs=[], pfTypeFilter='', pfSkuLock='', pfSel={sub:'',vry:'',sku:''}, pfPickTarget=null;
+  function pfEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // Load the FG list once (shared by picker, plan rows and the SKU filter); queues callers while in-flight.
+  function pfEnsureFgList(cb){
+    if(pfLoaded){ if(cb)cb(); return; }
+    if(cb)pfLoadCbs.push(cb);
+    if(pfLoading)return;
+    pfLoading=true;
+    fetch('/inventory/production/api/fg-list/').then(function(r){return r.json();}).then(function(p){
+      pfFgAll=(p&&p.data)||[]; pfLoaded=true; pfLoading=false; pfFillSkuFilter();
+      var cbs=pfLoadCbs; pfLoadCbs=[]; cbs.forEach(function(f){f();});
+    }).catch(function(){
+      pfLoading=false; pfFgAll=pfFgAll||[];
+      var l=document.getElementById('pfList'); if(l)l.innerHTML='<div class="pf-empty">Could not load products.</div>';
+      var cbs=pfLoadCbs; pfLoadCbs=[]; cbs.forEach(function(f){f();});
+    });
+  }
+  // Fill the SKU dropdown (single-item mode) with the distinct SKUs found in the FG list.
+  function pfFillSkuFilter(){
+    var sel=document.getElementById('pfSkuFilter'); if(!sel)return;
+    var cnt={}; (pfFgAll||[]).forEach(function(it){ if(it.sku)cnt[it.sku]=(cnt[it.sku]||0)+1; });
+    var keys=Object.keys(cnt).sort(), cur=sel.value;
+    sel.innerHTML='<option value="">SKU: All</option>'+keys.map(function(k){ return '<option value="'+pfEsc(k)+'">'+pfEsc(k)+' ('+cnt[k]+')</option>'; }).join('');
+    if(cur)sel.value=cur;
+  }
 
   function pfOpenPicker(target){
     pfPickTarget = target || document.getElementById('pfCode');
     document.getElementById('pfPicker').style.display='flex';
     document.getElementById('pfSearch').value='';
-    if(!pfLoaded){
-      fetch('/inventory/production/api/fg-list/').then(function(r){return r.json();}).then(function(p){
-        pfFgAll=(p&&p.data)||[]; pfLoaded=true;
-        pfTypeFilter=''; pfSel={sub:'',vry:'',sku:''};
-        pfRenderTypes(); pfRenderPicker();
-      }).catch(function(){ document.getElementById('pfList').innerHTML='<div class="pf-empty">Could not load products.</div>'; });
-    } else { pfRenderTypes(); pfRenderPicker(); setTimeout(function(){document.getElementById('pfSearch').focus();},50); }
+    // Lock the picker to the chosen SKU for the main single-item Browse (plan rows pass a target).
+    var lock = target ? '' : ((document.getElementById('pfSkuFilter')||{}).value||'');
+    pfEnsureFgList(function(){
+      pfSkuLock=lock; pfTypeFilter=''; pfSel={sub:'',vry:'',sku:''};
+      pfRenderTypes(); pfRenderPicker();
+      setTimeout(function(){ var s=document.getElementById('pfSearch'); if(s)s.focus(); },50);
+    });
   }
   function pfClosePicker(){ document.getElementById('pfPicker').style.display='none'; }
 
-  function pfMatch(it){ return (!pfTypeFilter||it.type===pfTypeFilter)
+  function pfMatch(it){ return (!pfTypeFilter||it.type===pfTypeFilter)&&(!pfSkuLock||it.sku===pfSkuLock)
       &&(!pfSel.sub||it.sub_group===pfSel.sub)&&(!pfSel.vry||it.variety===pfSel.vry)&&(!pfSel.sku||it.sku===pfSel.sku); }
 
   function pfRenderTypes(){
     var box=document.getElementById('pfTypes'); box.innerHTML='';
-    var cnt={}; (pfFgAll||[]).forEach(function(it){ cnt[it.type]=(cnt[it.type]||0)+1; });
+    var src=pfSkuLock?(pfFgAll||[]).filter(function(it){return it.sku===pfSkuLock;}):(pfFgAll||[]);
+    var cnt={}; src.forEach(function(it){ cnt[it.type]=(cnt[it.type]||0)+1; });
     function mk(val,label){ var b=document.createElement('button'); b.className='pf-type'+(pfTypeFilter===val?' on':''); b.textContent=label;
       b.onclick=function(){ pfTypeFilter=val; pfSel={sub:'',vry:'',sku:''}; document.getElementById('pfSearch').value=''; pfRenderTypes(); pfRenderPicker(); }; box.appendChild(b); }
-    mk('','All ('+(pfFgAll||[]).length+')');
+    mk('','All ('+src.length+')');
     ['PREMIUM','COMMODITY','OTHERS'].forEach(function(t){ if(cnt[t]) mk(t, t.charAt(0)+t.slice(1).toLowerCase()+' ('+cnt[t]+')'); });
   }
 
@@ -356,16 +385,17 @@
     var list=document.getElementById('pfList'); list.innerHTML='';
     var q=(document.getElementById('pfSearch').value||'').trim().toUpperCase();
     if(q){
-      var hits=(pfFgAll||[]).filter(function(it){ return (!pfTypeFilter||it.type===pfTypeFilter) && (it.code.toUpperCase().indexOf(q)>=0||it.name.toUpperCase().indexOf(q)>=0); });
+      var hits=(pfFgAll||[]).filter(function(it){ return (!pfTypeFilter||it.type===pfTypeFilter)&&(!pfSkuLock||it.sku===pfSkuLock) && (it.code.toUpperCase().indexOf(q)>=0||it.name.toUpperCase().indexOf(q)>=0); });
       if(!hits.length){ list.innerHTML='<div class="pf-empty">No product matches “'+q+'”.</div>'; return; }
       hits.slice(0,300).forEach(function(it){ list.appendChild(pfItemRow(it)); });
       return;
     }
+    // When a SKU is locked from the dropdown, skip the SKU drill-down level (sub-group → variety → item).
     var f=(pfFgAll||[]).filter(pfMatch);
     if(!pfSel.sub) pfLevelRows(list,f,'sub_group',function(v){pfSel.sub=v;});
     else if(!pfSel.vry) pfLevelRows(list,f,'variety',function(v){pfSel.vry=v;});
-    else if(!pfSel.sku) pfLevelRows(list,f,'sku',function(v){pfSel.sku=v;});
-    else { f.forEach(function(it){ list.appendChild(pfItemRow(it)); }); }
+    else if(!pfSkuLock&&!pfSel.sku) pfLevelRows(list,f,'sku',function(v){pfSel.sku=v;});
+    else { if(!f.length){ list.innerHTML='<div class="pf-empty">No products here.</div>'; } else { f.forEach(function(it){ list.appendChild(pfItemRow(it)); }); } }
   }
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.getElementById('pfPicker').style.display==='flex') pfClosePicker(); });
 
@@ -381,7 +411,7 @@
     pfMsg('');
     if(!single){
       if(!document.querySelectorAll('#pfPlanRows .pf-planrow').length){ pfAddRow(); pfAddRow(); }
-      if(!pfLoaded){ fetch('/inventory/production/api/fg-list/').then(function(r){return r.json();}).then(function(p){ pfFgAll=(p&&p.data)||[]; pfLoaded=true; }).catch(function(){}); }
+      pfEnsureFgList();
     }
   }
   function pfRowName(ci){ var nm=ci._name; if(!nm)return; var code=(ci.value||'').trim().toUpperCase(); var hit=(pfFgAll||[]).find(function(x){return x.code===code;}); nm.textContent=hit?hit.name:''; }
@@ -508,5 +538,6 @@
 
   document.addEventListener('click',function(){ var p=document.getElementById('pfWhPanel'); if(p)p.style.display='none'; });
   pfWhLabel();
+  pfEnsureFgList();  // populate the SKU filter dropdown up front
 </script>
 {% endblock %}

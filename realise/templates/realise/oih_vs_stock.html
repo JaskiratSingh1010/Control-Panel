@@ -8,8 +8,14 @@
   .ois-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
   .ois-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
   .ois-psub{margin:6px 0 0;font-size:13px;color:#94a3b8;max-width:640px}
-  .ois-drill{display:flex;align-items:center;gap:10px;padding-top:6px}
+  .ois-drill{display:flex;align-items:center;gap:10px;padding-top:6px;flex-wrap:wrap}
   .ois-drill-lbl{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  /* Premium / Commodity filter — segmented control beside the Group-by driller. */
+  .ois-typef{display:inline-flex;border:1px solid #d9e5ee;border-radius:10px;overflow:hidden;background:#fff}
+  .ois-tf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;cursor:pointer}
+  .ois-tf:first-child{border-left:0}
+  .ois-tf:hover:not(.on){background:#f4f7fb}
+  .ois-tf.on{background:#2563eb;color:#fff}
 
   /* Dynamic driller — same look as the Realise dashboard's Group-by control. */
   .com-drill-box{position:relative}
@@ -67,6 +73,11 @@
       <p class="ois-psub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
     </div>
     <div class="ois-drill">
+      <div class="ois-typef" id="oisTypeF">
+        <button type="button" class="ois-tf on" data-type="all">All</button>
+        <button type="button" class="ois-tf" data-type="premium">Premium</button>
+        <button type="button" class="ois-tf" data-type="commodity">Commodity</button>
+      </div>
       <span class="ois-drill-lbl">Group by</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="oisDrillBtn"><span id="oisDrillLabel">U_Sub_Group</span><span class="com-caret">&#9662;</span></button>
@@ -112,19 +123,25 @@
   var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer'};
   var order=['sub_group'], chosen=['sub_group'];
   var rows=[], itemStock={}, err=null, expanded={}, loaded=false;
+  var typeFilter='all';   // 'all' | 'premium' | 'commodity' (premium/commodity are mutually exclusive per item)
+
+  // OIH litres a row contributes under the current Premium/Commodity filter.
+  function rowOih(r){var p=Number(r.premium)||0,c=Number(r.commodity)||0; return typeFilter==='premium'?p:(typeFilter==='commodity'?c:p+c);}
+  // Whether a row belongs to the current filter (so its item's stock is counted too).
+  function rowIn(r){ if(typeFilter==='premium')return (Number(r.premium)||0)>0; if(typeFilter==='commodity')return (Number(r.commodity)||0)>0; return true; }
 
   // Total on-hand litres for an item (sum across the three warehouses).
   function itemStockTotal(name){var a=itemStock[name]; if(!a)return 0; var t=0; for(var i=0;i<a.length;i++)t+=Number(a[i])||0; return t;}
 
-  // Nest OIH rows by the chosen product order. OIH sums premium+commodity; Stock sums each
-  // UNIQUE item once (an item shows in many rows across customers/states), so it never
-  // multi-counts. Required = OIH − Stock.
+  // Nest OIH rows by the chosen product order. OIH sums each row's filtered contribution
+  // (rowOih); Stock sums each UNIQUE item once (an item shows in many rows across
+  // customers/states), so it never multi-counts. Required = Stock − OIH.
   function buildTree(subset,level){
     if(level>=order.length)return [];
     var dim=order[level],map={};
     for(var i=0;i<subset.length;i++){var r=subset[i],v=r[dim]||'—';
       var n=map[v]; if(!n){n=map[v]={name:v,dim:dim,oih:0,_rows:[],_items:{}};}
-      n.oih+=(Number(r.premium)||0)+(Number(r.commodity)||0);
+      n.oih+=rowOih(r);
       if(r.item)n._items[r.item]=1;
       n._rows.push(r);
     }
@@ -132,7 +149,13 @@
       var st=0; for(var it in n._items)st+=itemStockTotal(it);
       n.stock=Math.round(st*100)/100; n.oih=Math.round(n.oih*100)/100; n.req=Math.round((n.stock-n.oih)*100)/100;
       n.kids=buildTree(n._rows,level+1); delete n._rows; delete n._items; return n;
-    }).sort(function(a,b){return b.oih-a.oih||String(a.name).localeCompare(String(b.name));});
+    }).sort(function(a,b){
+      // Shortfalls (Required < 0) first, biggest shortfall on top; then surpluses, biggest on top.
+      var an=a.req<0, bn=b.req<0;
+      if(an!==bn)return an?-1:1;
+      var d=an?(a.req-b.req):(b.req-a.req);
+      return d||String(a.name).localeCompare(String(b.name));
+    });
   }
 
   // Required = Stock − OIH: negative = shortfall (red), positive = surplus (green).
@@ -155,9 +178,10 @@
     document.getElementById('oisDrillLabel').textContent=label;
     document.getElementById('oisColProduct').textContent=label;
     var body=document.getElementById('oisBody');
-    // Order-independent totals.
-    var tOih=0; for(var i=0;i<rows.length;i++)tOih+=(Number(rows[i].premium)||0)+(Number(rows[i].commodity)||0);
-    var allItems={}; for(var j=0;j<rows.length;j++){if(rows[j].item)allItems[rows[j].item]=1;}
+    // Order-independent totals, scoped to the current Premium/Commodity filter.
+    var fr=rows.filter(rowIn);
+    var tOih=0; for(var i=0;i<fr.length;i++)tOih+=rowOih(fr[i]);
+    var allItems={}; for(var j=0;j<fr.length;j++){if(fr[j].item)allItems[fr[j].item]=1;}
     var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
     tOih=Math.round(tOih*100)/100; tStock=Math.round(tStock*100)/100; var tReq=Math.round((tStock-tOih)*100)/100;
     document.getElementById('oisKpiOih').textContent=num(tOih);
@@ -168,7 +192,8 @@
     if(!loaded){body.innerHTML='<tr><td colspan="4" class="ois-empty">Loading…</td></tr>';return;}
     if(!order.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">Select at least one dimension.</td></tr>';return;}
     if(!rows.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">No open orders.</td></tr>';return;}
-    var html=treeRows(buildTree(rows,0),0,'');
+    if(!fr.length){body.innerHTML='<tr><td colspan="4" class="ois-empty">No '+typeFilter+' open orders.</td></tr>';return;}
+    var html=treeRows(buildTree(fr,0),0,'');
     html+='<tr class="ois-total"><td>TOTAL</td><td class="num">'+num(tOih)+'</td><td class="num">'+num(tStock)+'</td>'+reqCell(tReq)+'</tr>';
     body.innerHTML=html;
   }
@@ -226,6 +251,15 @@
   document.getElementById('oisApply').addEventListener('click',function(){
     if(!chosen.length)return;
     order=chosen.slice(); expanded={}; panel.classList.remove('open'); render();
+  });
+
+  // Premium / Commodity filter.
+  var tf=document.getElementById('oisTypeF');
+  tf.addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.ois-tf'):null; if(!b)return;
+    typeFilter=b.getAttribute('data-type'); expanded={};
+    Array.prototype.forEach.call(tf.querySelectorAll('.ois-tf'),function(x){x.classList.toggle('on',x===b);});
+    render();
   });
 
   render(); load();

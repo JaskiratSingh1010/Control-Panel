@@ -73,6 +73,7 @@ const DISTRICTS = {
 const keyOf = (channel, state) => `${channel}||${state}`;
 const fmt = n => '₹' + new Intl.NumberFormat('en-IN').format(Math.round(n || 0));
 const pid = (type, name) => type + '#' + name; // product id, e.g. P#CANOLA
+const AGG_SUB = '__ALL__'; // reserved sub for a state-card aggregate (whole Premium/Commodity, not per-product)
 const _pl = x => x && typeof x === 'object' ? +x.l || 0 : +x || 0; // tgt litres of a product entry (legacy number = litres)
 const _pr = x => x && typeof x === 'object' ? +x.r || 0 : 0; // tgt realise of a product entry
 const tProdL = (v, id) => v && typeof v === 'object' ? _pl(v[id]) : 0; // target litres for one product
@@ -768,6 +769,7 @@ function DrillCards({
   channels,
   targets,
   setTarget,
+  setAggTarget,
   clearCell,
   totalsByChannel,
   chRows,
@@ -1353,31 +1355,44 @@ function DrillCards({
         style: {
           display: 'flex',
           flexDirection: 'column',
-          gap: 6
+          gap: 8
         }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 12.5
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 700,
-          color: '#0d9488'
-        }
-      }, "Premium"), /*#__PURE__*/React.createElement("b", null, fmtL(tByType(tv, 'P')))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 12.5
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 700,
-          color: '#d97706'
-        }
-      }, "Commodity"), /*#__PURE__*/React.createElement("b", null, fmtL(tByType(tv, 'C')))), /*#__PURE__*/React.createElement("div", {
+      }, [['Premium', '#0d9488', 'P'], ['Commodity', '#d97706', 'C']].map(function (seg) {
+        var lbl = seg[0],
+          col = seg[1],
+          ty = seg[2],
+          aggId = ty + '#' + AGG_SUB;
+        return /*#__PURE__*/React.createElement("div", {
+          key: ty
+        }, /*#__PURE__*/React.createElement("div", {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 3 }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: { fontWeight: 700, color: col }
+        }, lbl), /*#__PURE__*/React.createElement("b", null, fmtL(tByType(tv, ty)))), /*#__PURE__*/React.createElement("div", {
+          style: { display: 'flex', gap: 6 }
+        }, /*#__PURE__*/React.createElement("input", {
+          className: "prod-input",
+          type: "number",
+          min: "0",
+          disabled: !admin,
+          placeholder: "TGT L",
+          title: "Target litres (whole " + lbl + ")",
+          style: { flex: 1, minWidth: 0 },
+          value: tProdL(tv, aggId) || '',
+          onChange: e => setAggTarget(r.channel, r.state, ty, 'l', e.target.value)
+        }), /*#__PURE__*/React.createElement("input", {
+          className: "prod-input",
+          type: "number",
+          min: "0",
+          step: "0.01",
+          disabled: !admin,
+          placeholder: "₹/L",
+          title: "Target realise ₹/L",
+          style: { flex: 1, minWidth: 0 },
+          value: tProdR(tv, aggId) || '',
+          onChange: e => setAggTarget(r.channel, r.state, ty, 'r', e.target.value)
+        })));
+      }),/*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           justifyContent: 'space-between',
@@ -3149,6 +3164,9 @@ function App() {
       const next = {
         ...cur
       };
+      // Editing a real product replaces the whole-type aggregate set on the state card.
+      const aggSame = productId[0] + '#' + AGG_SUB;
+      if (productId !== aggSame) delete next[aggSame];
       if (!+np.l && !+np.r) delete next[productId];else next[productId] = np;
       if (Object.keys(next).length === 0) {
         const x = {
@@ -3161,6 +3179,26 @@ function App() {
         ...t,
         [k]: next
       };
+    });
+    setDirtyT(true);
+  }, []);
+  // Set a state-level aggregate target for a whole type (P/C) directly on the state card.
+  // It REPLACES that type's per-product breakdown for the cell (so totals never double-count)
+  // and is stored under the reserved AGG_SUB bucket, which the backend keeps un-split.
+  const setAggTarget = useCallback((channel, state, type, field, val) => {
+    setTargets(t => {
+      const k = keyOf(channel, state);
+      const legacy = t[k] && typeof t[k] === 'object' && ('p' in t[k] || 'c' in t[k]);
+      const cur = t[k] && typeof t[k] === 'object' && !legacy ? { ...t[k] } : {};
+      // Drop any per-product entries of this type — the aggregate is the single source now.
+      for (const key in cur) { if (key[0] === type && key[1] === '#' && key !== type + '#' + AGG_SUB) delete cur[key]; }
+      const aggId = type + '#' + AGG_SUB;
+      const cp0 = cur[aggId] && typeof cur[aggId] === 'object' ? cur[aggId] : { l: 0, r: 0 };
+      const np = { ...cp0, [field]: val === '' ? 0 : Number(val) };
+      if (!+np.l && !+np.r) delete cur[aggId];else cur[aggId] = np;
+      const next = { ...t };
+      if (Object.keys(cur).length === 0) delete next[k];else next[k] = cur;
+      return next;
     });
     setDirtyT(true);
   }, []);
@@ -3431,6 +3469,7 @@ function App() {
     channels,
     targets,
     setTarget,
+    setAggTarget,
     clearCell,
     totalsByChannel,
     chRows,
