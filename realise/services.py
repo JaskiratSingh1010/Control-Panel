@@ -9,7 +9,7 @@ from django.utils import timezone
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
-                     CityOwner)
+                     CityOwner, ClosingRemark)
 
 logger = logging.getLogger(__name__)
 
@@ -2041,6 +2041,291 @@ def get_order_in_hand_rows():
     return rows
 
 
+# ── Required Credit Limit report (Order-in-Hand by ASM → party) ─────────────
+def _required_credit_open_rows():
+    """Open sales-order lines grouped by (SO number, party, main group, ship-to state,
+    segment) with the open litres AND open value (₹). Litres = OpenQty × SalPackUn
+    (matches Done / OIH). Value pro-rates the line total by the still-open fraction,
+    so a partially-delivered order contributes only its undelivered amount."""
+    sql = f'''
+        SELECT H."DocNum"                            AS "DOCNUM",
+               COALESCE(TRIM(C."U_Main_Group"), '')  AS "GRP",
+               {_SHIPTO_STATE}                       AS "ST",
+               {_SHIPTO_CITY}                        AS "CITY",
+               COALESCE(TRIM(H."CardCode"), '')      AS "CCODE",
+               COALESCE(TRIM(C."CardName"), '')      AS "CUST",
+               COALESCE(C."Balance", 0)              AS "BAL",
+               COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
+               COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY",
+               SUM(CASE WHEN L."Quantity" <> 0
+                        THEN L."OpenQty" / L."Quantity" * L."LineTotal"
+                        ELSE 0 END)                  AS "OPEN_VAL"
+        FROM "{SAP_SCHEMA}"."ORDR" H
+        JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
+        JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
+        LEFT JOIN "{SAP_SCHEMA}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        {_SHIPTO_JOIN.format(S=SAP_SCHEMA)}
+        WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
+        GROUP BY H."DocNum", COALESCE(TRIM(C."U_Main_Group"), ''),
+                 {_SHIPTO_STATE}, {_SHIPTO_CITY},
+                 COALESCE(TRIM(H."CardCode"), ''), COALESCE(TRIM(C."CardName"), ''),
+                 COALESCE(C."Balance", 0),
+                 COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."U_Sub_Group"), '')
+    '''
+    try:
+        return sap_connector.execute_query(sql)
+    except Exception as exc:
+        logger.error('[REQCREDIT] open-order fetch failed: %s', exc)
+        return []
+
+
+# Premium sub-groups that roll up to the Canola / Olive category columns; everything
+# else premium falls into "Other Premium" (derived as total − canola − olive − commodity).
+_OLIVE_TOKENS = ('OLIVE', 'POMACE')
+
+
+def _blank_bucket():
+    return {'litres': {'premium': 0.0, 'commodity': 0.0, 'canola': 0.0, 'olive': 0.0, 'total': 0.0},
+            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0}}
+
+
+def _round_bucket(b):
+    for metric in ('litres', 'value'):
+        for key in b[metric]:
+            b[metric][key] = round(b[metric][key], 2)
+    return b
+
+
+def get_required_credit_rows():
+    """Required Credit Limit report data: live Order-in-Hand grouped by ASM (territory
+    owner) → party. Each party row carries open litres (total + the Canola / Olive /
+    Premium / Commodity splits) and open value (₹), a 'type' tag (P / C / P+C / —) for the
+    Type filter, the list of open SO numbers, and its saved (editable) delivery remark.
+    Returns ASM groups (each with a subtotal) plus a grand total."""
+    # Display state as its short CODE (DL/HR/UP…), but keep the full NAME for ASM
+    # resolution (the territory map is keyed by state name). Reverse the code→name map.
+    name_to_code = {v: k for k, v in STATE_CODE_NAMES.items()}
+    agg = {}
+    card_balance = {}      # card_code -> SAP ledger balance (+receivable / -payable), once per card
+    for d in _required_credit_open_rows():
+        group = _normalize_name(d.get('GRP'))
+        state_name = _delhi_gt_state(d.get('CCODE'), _state_name(d))
+        state_code = name_to_code.get(state_name, state_name)
+        card_code = _normalize_name(d.get('CCODE'))
+        utype = _normalize_name(d.get('UTYPE'))
+        subg = _normalize_name(d.get('SUBG'))
+        qty = float(d.get('OPEN_QTY') or 0)
+        val = float(d.get('OPEN_VAL') or 0)
+        docnum = str(d.get('DOCNUM') or '').strip()
+        key = (card_code, state_name, group)
+        bucket = agg.get(key)
+        if bucket is None:
+            bucket = agg[key] = {
+                'card_code': card_code,
+                'party': _normalize_name(d.get('CUST')),
+                'main_group': group,
+                'state': state_code,
+                'asm': person_for_group_state(group, state_name, _normalize_name(d.get('CITY'))) or '',
+                '_so': set(),
+                **_blank_bucket(),
+            }
+        card_balance.setdefault(card_code, float(d.get('BAL') or 0))
+        if docnum:
+            bucket['_so'].add(docnum)
+        # total counts every open line; premium / commodity are STRICT (a line whose type is
+        # neither only lands in total). Canola / Olive are premium sub-group splits for the
+        # export's category columns.
+        bucket['litres']['total'] += qty
+        bucket['value']['total'] += val
+        if utype == 'PREMIUM':
+            bucket['litres']['premium'] += qty
+            if 'CANOLA' in subg:
+                bucket['litres']['canola'] += qty
+            elif any(tok in subg for tok in _OLIVE_TOKENS):
+                bucket['litres']['olive'] += qty
+        elif utype == 'COMMODITY':
+            bucket['litres']['commodity'] += qty
+
+    # Ledger balance is per CUSTOMER but a customer can span several (state/ASM) rows. Split
+    # it across those rows in proportion to open-order value so the column still totals to the
+    # real balance (single-row customers get the full amount). Outstanding = open value + ledger.
+    card_buckets = {}
+    for bucket in agg.values():
+        card_buckets.setdefault(bucket['card_code'], []).append(bucket)
+    for cc, buckets in card_buckets.items():
+        ledger = card_balance.get(cc, 0.0)
+        total_pi = sum(b['value']['total'] for b in buckets)
+        for i, b in enumerate(buckets):
+            if total_pi > 0:
+                b['value']['ledger'] = ledger * (b['value']['total'] / total_pi)
+            else:
+                b['value']['ledger'] = ledger if i == 0 else 0.0   # no open value → first row
+            b['value']['outstanding'] = b['value']['total'] + b['value']['ledger']
+
+    try:
+        remarks = {r.card_code: r.remark for r in ClosingRemark.objects.all()}
+    except Exception:
+        remarks = {}
+
+    by_asm = {}
+    for bucket in agg.values():
+        _round_bucket(bucket)
+        prem, comm = bucket['litres']['premium'], bucket['litres']['commodity']
+        bucket['type'] = 'P+C' if (prem > 0 and comm > 0) else ('P' if prem > 0 else ('C' if comm > 0 else '—'))
+        bucket['so_nos'] = ', '.join(sorted(bucket.pop('_so')))
+        bucket['remark'] = remarks.get(bucket['card_code'], '')
+        by_asm.setdefault(bucket['asm'] or 'UNASSIGNED', []).append(bucket)
+
+    asms = []
+    grand = _blank_bucket()
+    for asm in sorted(by_asm):
+        rows = sorted(by_asm[asm], key=lambda r: -r['litres']['total'])
+        sub = _blank_bucket()
+        for r in rows:
+            for metric in ('litres', 'value'):
+                for key in sub[metric]:
+                    sub[metric][key] += r[metric][key]
+                    grand[metric][key] += r[metric][key]
+        asms.append({'asm': asm, 'rows': rows, 'subtotal': _round_bucket(sub)})
+
+    return {'asms': asms, 'total': _round_bucket(grand)}
+
+
+def build_closing_sheet_xlsx(payload, type_filter=''):
+    """Render the Required Credit Limit data into an .xlsx in the CLOSING SHEET layout:
+    'Sum of TOTAL LTR' in row 1, a bold header row, each ASM's parties, a bold '<ASM> Total'
+    subtotal, and a final bold 'Grand Total'. Columns: SO NAME (ASM), PARTY NAME, TYPE
+    (P/C/P+C), MAIN GROUP, STATE, DELIVERY REMARK, the category litres (CANOLA / COMMODITY /
+    OLIVE / OTHER PREMIUM), Grand Total, C+O+O (= Canola+Olive+Other Premium), SO NO, PI AMT
+    (OIH revenue), LEDGER AMT (SAP balance, +receivable / -payable) and TOTAL OUTSTANDING
+    (= PI AMT + LEDGER AMT); Required Limit…Outstanding stay blank. type_filter
+    ('' | P | C | P+C) restricts to parties of that type."""
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    if type_filter not in ('', 'P', 'C', 'P+C'):
+        type_filter = ''
+
+    def _cats(d):
+        """(canola, commodity, olive, other_premium) — other_premium = the catch-all so the
+        four category columns always sum to the Grand Total (total litres)."""
+        total = float(d.get('total', 0) or 0)
+        canola = float(d.get('canola', 0) or 0)
+        olive = float(d.get('olive', 0) or 0)
+        commodity = float(d.get('commodity', 0) or 0)
+        other = total - canola - olive - commodity
+        return canola, commodity, olive, other
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'CLOSING SHEET'
+
+    # A SO NAME, B PARTY NAME, C TYPE, D MAIN GROUP, E STATE, F DELIVERY REMARK,
+    # G CANOLA, H COMMODITY, I OLIVE, J OTHER PREMIUM, K Grand Total, L C+O+O, M SO NO,
+    # N PI AMT, O–S deferred financial columns.
+    widths = {'A': 26.7, 'B': 46.6, 'C': 8.0, 'D': 14.4, 'E': 9.0, 'F': 28.0, 'G': 10.3,
+              'H': 12.3, 'I': 8.5, 'J': 16.0, 'K': 12.0, 'L': 12.0, 'M': 22.0, 'N': 13.0,
+              'O': 12.3, 'P': 20.6, 'Q': 14.1, 'R': 15.6, 'S': 14.4}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+
+    bold = Font(bold=True)
+    INT = '#,##0'
+
+    ws['A1'] = 'Sum of TOTAL LTR'
+
+    headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
+               'CANOLA', 'COMMODITY', 'OLIVE', 'OTHER PREMIUM', 'Grand Total', 'C+O+O',
+               'SO NO', 'PI AMT',
+               'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING']
+    for i, h in enumerate(headers, start=1):
+        ws.cell(row=2, column=i, value=h).font = bold
+
+    def _num(row_idx, col_idx, value, is_bold=False, blank_zero=True):
+        if blank_zero and not round(value or 0):
+            return None
+        c = ws.cell(row=row_idx, column=col_idx, value=int(round(value or 0)))
+        c.number_format = INT
+        if is_bold:
+            c.font = bold
+        return c
+
+    r = 3
+    g_can = g_com = g_oli = g_oth = g_tot = g_val = g_led = g_out = 0.0
+    for g in payload.get('asms', []):
+        rows = g.get('rows', [])
+        if type_filter:
+            rows = [x for x in rows if x.get('type') == type_filter]
+        if not rows:
+            continue
+        first = True
+        s_can = s_com = s_oli = s_oth = s_tot = s_val = s_led = s_out = 0.0
+        for row in rows:
+            canola, commodity, olive, other = _cats(row['litres'])
+            total = float(row['litres'].get('total', 0) or 0)
+            coo = canola + olive + other            # C+O+O = Canola + Olive + Other Premium
+            val = float(row['value'].get('total', 0) or 0)
+            ledger = float(row['value'].get('ledger', 0) or 0)
+            outstanding = float(row['value'].get('outstanding', 0) or 0)
+            if first:
+                ws.cell(row=r, column=1, value=g['asm'])               # A SO NAME (ASM)
+            ws.cell(row=r, column=2, value=row['party'])               # B PARTY NAME
+            ws.cell(row=r, column=3, value=row.get('type') or None)    # C TYPE
+            ws.cell(row=r, column=4, value=row.get('main_group') or None)  # D MAIN GROUP
+            ws.cell(row=r, column=5, value=row.get('state') or None)       # E STATE
+            if row.get('remark'):
+                ws.cell(row=r, column=6, value=row['remark'])          # F DELIVERY REMARK
+            _num(r, 7, canola)                                         # G CANOLA
+            _num(r, 8, commodity)                                      # H COMMODITY
+            _num(r, 9, olive)                                          # I OLIVE
+            _num(r, 10, other)                                         # J OTHER PREMIUM
+            _num(r, 11, total, is_bold=True)                           # K Grand Total
+            _num(r, 12, coo)                                           # L C+O+O
+            if row.get('so_nos'):
+                ws.cell(row=r, column=13, value=row['so_nos'])         # M SO NO
+            _num(r, 14, val)                                           # N PI AMT (OIH revenue)
+            _num(r, 15, ledger)                                        # O LEDGER AMT (+rec / -pay)
+            _num(r, 16, outstanding)                                   # P TOTAL OUTSTANDING
+            s_can += canola; s_com += commodity; s_oli += olive; s_oth += other
+            s_tot += total; s_val += val; s_led += ledger; s_out += outstanding
+            first = False
+            r += 1
+        ws.cell(row=r, column=1, value=f"{g['asm']} Total").font = bold
+        _num(r, 7, s_can, is_bold=True); _num(r, 8, s_com, is_bold=True)
+        _num(r, 9, s_oli, is_bold=True); _num(r, 10, s_oth, is_bold=True)
+        _num(r, 11, s_tot, is_bold=True); _num(r, 12, s_can + s_oli + s_oth, is_bold=True)
+        _num(r, 14, s_val, is_bold=True); _num(r, 15, s_led, is_bold=True); _num(r, 16, s_out, is_bold=True)
+        g_can += s_can; g_com += s_com; g_oli += s_oli; g_oth += s_oth
+        g_tot += s_tot; g_val += s_val; g_led += s_led; g_out += s_out
+        r += 1
+
+    ws.cell(row=r, column=1, value='Grand Total').font = bold
+    _num(r, 7, g_can, is_bold=True); _num(r, 8, g_com, is_bold=True)
+    _num(r, 9, g_oli, is_bold=True); _num(r, 10, g_oth, is_bold=True)
+    _num(r, 11, g_tot, is_bold=True); _num(r, 12, g_can + g_oli + g_oth, is_bold=True)
+    _num(r, 14, g_val, is_bold=True); _num(r, 15, g_led, is_bold=True); _num(r, 16, g_out, is_bold=True)
+
+    ws.freeze_panes = 'A3'
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def save_closing_remark(card_code, remark, user=None):
+    """Upsert the editable delivery remark for one party (by SAP CardCode)."""
+    card_code = _normalize_name(card_code)
+    if not card_code:
+        return False
+    ClosingRemark.objects.update_or_create(
+        card_code=card_code,
+        defaults={'remark': (remark or '').strip()[:255],
+                  'updated_by': user if (user and user.is_authenticated) else None},
+    )
+    return True
+
+
 # ── Channel-detail drill-to-document (invoice / sales-order lists) ──────────
 # Members per slide-2 channel block (mirror of the JS CHANNEL_BLOCKS). REST rolls
 # up HORECA + the REST source groups; GT/ROI/MT are each a single main group.
@@ -2615,3 +2900,297 @@ def get_hier_rows(order_key, month, year, master_rows, filters=None, segment='')
 
     recurse(0, {'main_group': '', 'state': '', 'sales_person': ''}, filtered_rows)
     return rows
+
+
+# ───────────────────────── Customer Aging (AR) ─────────────────────────
+# Customer-receivables aging computed LIVE from SAP, replicating SAP B1's own
+# Customer Receivables Aging report. B1 ages the BP journal lines (JDT1) by
+# reversing internal reconciliations (ITR1/OITR) dated after the aging date —
+# NOT open invoices — so the result ties to OCRD.Balance to the rupee. We
+# translate B1's system-query logic (stored as T-SQL) to HANA SQL, bucket by
+# posting date (JDT1.RefDate — matches the SAP report's actual export, which ages
+# by document/posting date, not due date), group by FORMAT (OCRD.U_Main_Group) →
+# customers, and cache per aging date. The Customer-Aging.xlsx reader below is legacy,
+# retained for reference / manual fallback but no longer used by default.
+import os
+from django.conf import settings
+
+AGING_XLSX_PATH = os.path.join(settings.BASE_DIR, 'Customer-Aging.xlsx')
+
+# Bucket columns in the DATA sheet, in display order, with the palette used by the
+# Customer Aging tab (current=green → escalating to 121+=red).
+AGING_BUCKETS = [
+    {'key': 'b0_30',   'label': '0 - 30',   'color': '#16a34a'},
+    {'key': 'b31_60',  'label': '31 - 60',  'color': '#0d9488'},
+    {'key': 'b61_90',  'label': '61 - 90',  'color': '#d97706'},
+    {'key': 'b91_120', 'label': '91 - 120', 'color': '#ea580c'},
+    {'key': 'b121',    'label': '121+',     'color': '#dc2626'},
+]
+_BUCKET_KEYS = [b['key'] for b in AGING_BUCKETS]
+
+_aging_cache = {}        # aging-date ISO string → (expires_at, payload)
+_AGING_TTL = 90          # seconds, same window as the sales proc cache
+
+
+def _aging_num(v):
+    try:
+        return round(float(v), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _empty_buckets():
+    return {k: 0.0 for k in ['original', 'balance_due'] + _BUCKET_KEYS}
+
+
+_XL_NS = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+_XL_RNS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
+
+
+def _xl_col_index(ref):
+    """'C5' / 'AB12' → 0-based column index from the cell reference letters."""
+    idx = 0
+    for ch in ref:
+        if ch.isalpha():
+            idx = idx * 26 + (ord(ch.upper()) - 64)
+        else:
+            break
+    return idx - 1
+
+
+def _read_xlsx_sheet(path, sheet_name):
+    """Read one worksheet from an .xlsx into a list of rows (each a list of cell values,
+    None for gaps). Stdlib-only (zipfile + ElementTree) so we don't pull in openpyxl —
+    the project already hand-rolls xlsx writing in core.simple_xlsx for the same reason."""
+    import zipfile
+    import xml.etree.ElementTree as ET
+
+    with zipfile.ZipFile(path) as z:
+        # name → r:id (workbook.xml) → target path (workbook.xml.rels)
+        wb = ET.fromstring(z.read('xl/workbook.xml'))
+        rid = None
+        for s in wb.iter(_XL_NS + 'sheet'):
+            if s.get('name') == sheet_name:
+                rid = s.get(_XL_RNS + 'id')
+                break
+        target = None
+        if rid:
+            rels = ET.fromstring(z.read('xl/_rels/workbook.xml.rels'))
+            for rel in rels:
+                if rel.get('Id') == rid:
+                    target = rel.get('Target')
+                    break
+        sheet_path = 'xl/' + target.lstrip('/') if target else 'xl/worksheets/sheet1.xml'
+
+        # shared string table (string cells store an index into this)
+        shared = []
+        if 'xl/sharedStrings.xml' in z.namelist():
+            sst = ET.fromstring(z.read('xl/sharedStrings.xml'))
+            for si in sst.iter(_XL_NS + 'si'):
+                shared.append(''.join(t.text or '' for t in si.iter(_XL_NS + 't')))
+
+        ws = ET.fromstring(z.read(sheet_path))
+        rows = []
+        for row in ws.iter(_XL_NS + 'row'):
+            cells = {}
+            width = 0
+            for c in row.findall(_XL_NS + 'c'):
+                ci = _xl_col_index(c.get('r', 'A'))
+                ctype = c.get('t')
+                if ctype == 'inlineStr':
+                    is_el = c.find(_XL_NS + 'is')
+                    val = ''.join(t.text or '' for t in is_el.iter(_XL_NS + 't')) if is_el is not None else None
+                else:
+                    v = c.find(_XL_NS + 'v')
+                    raw = v.text if v is not None else None
+                    if raw is None:
+                        val = None
+                    elif ctype == 's':
+                        try:
+                            val = shared[int(raw)]
+                        except (ValueError, IndexError):
+                            val = raw
+                    elif ctype in ('str', 'e'):
+                        val = raw
+                    else:
+                        try:
+                            val = float(raw)
+                        except ValueError:
+                            val = raw
+                cells[ci] = val
+                width = max(width, ci + 1)
+            rows.append([cells.get(i) for i in range(width)])
+        return rows
+
+
+def _load_aging_rows():
+    """Parse the DATA sheet into one dict per customer. Header is row 2, totals row 1,
+    data from row 3 down (cols: code, name, FORMAT, original, balance, 5 buckets)."""
+    sheet = _read_xlsx_sheet(AGING_XLSX_PATH, 'DATA')
+    out = []
+    for i, row in enumerate(sheet):
+        if i < 2:                       # skip the totals row + header row
+            continue
+        code = (row[0] or '') if len(row) > 0 else ''
+        name = (row[1] or '') if len(row) > 1 else ''
+        fmt = (str(row[2]).strip() if len(row) > 2 and row[2] else '') or 'Unclassified'
+        if not str(code).strip() and not str(name).strip():
+            continue
+        out.append({
+            'code': str(code).strip(),
+            'name': str(name).strip() or str(code).strip(),
+            'format': fmt,
+            'original': _aging_num(row[3] if len(row) > 3 else 0),
+            'balance_due': _aging_num(row[4] if len(row) > 4 else 0),
+            'b0_30':   _aging_num(row[5] if len(row) > 5 else 0),
+            'b31_60':  _aging_num(row[6] if len(row) > 6 else 0),
+            'b61_90':  _aging_num(row[7] if len(row) > 7 else 0),
+            'b91_120': _aging_num(row[8] if len(row) > 8 else 0),
+            'b121':    _aging_num(row[9] if len(row) > 9 else 0),
+        })
+    return out
+
+
+# Live SAP source ─────────────────────────────────────────────────────────
+def _aging_date_literal(aging_date):
+    """A validated HANA TO_DATE() literal — aging_date is an internal date object, so
+    formatting it (never user text) into the SQL is injection-safe."""
+    return "TO_DATE('%s')" % aging_date.strftime('%Y-%m-%d')
+
+
+def _load_aging_rows_sap(aging_date):
+    """Customer receivables aging as of aging_date via SAP B1's reconciliation logic
+    (JDT1 / ITR1 / OITR), translated from B1's own system query to HANA SQL. Returns one
+    dict per customer in the same shape as the workbook loader, with Balance Due (ties to
+    OCRD.Balance), Original Amount = Σ original posted (Debit − Credit) of the open lines,
+    and the five posting-date (RefDate) buckets — matching SAP's report, which ages by
+    document/posting date. Parts 1/2 reverse reconciliations dated after the aging
+    date to reconstruct the historical open balance; part 3 is the never-reconciled-yet
+    open lines."""
+    ag, S = _aging_date_literal(aging_date), SAP_SCHEMA
+    sql = f'''WITH aged AS (
+      SELECT T0."ShortName" AS card, MAX(T0."RefDate") AS bdate,
+             -MAX(T0."BalDueCred")-SUM(T1."ReconSum") AS bal, -MAX(T0."Credit") AS orig
+      FROM "{S}"."JDT1" T0
+        JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
+        JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
+        JOIN "{S}"."OCRD" T4 ON T4."CardCode"=T0."ShortName"
+      WHERE T0."RefDate"<={ag} AND T4."CardType"='C' AND T2."ReconDate">{ag} AND T1."IsCredit"='C'
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+      HAVING MAX(T0."BalFcCred")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueCred")<>-SUM(T1."ReconSum")
+      UNION ALL
+      SELECT T0."ShortName", MAX(T0."RefDate"),
+             MAX(T0."BalDueDeb")+SUM(T1."ReconSum"), MAX(T0."Debit")
+      FROM "{S}"."JDT1" T0
+        JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
+        JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
+        JOIN "{S}"."OCRD" T4 ON T4."CardCode"=T0."ShortName"
+      WHERE T0."RefDate"<={ag} AND T4."CardType"='C' AND T2."ReconDate">{ag} AND T1."IsCredit"='D'
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+      HAVING MAX(T0."BalFcDeb")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueDeb")<>-SUM(T1."ReconSum")
+      UNION ALL
+      SELECT T0."ShortName", MAX(T0."RefDate"),
+             MAX(T0."BalDueDeb")-MAX(T0."BalDueCred"), MAX(T0."Debit")-MAX(T0."Credit")
+      FROM "{S}"."JDT1" T0
+        JOIN "{S}"."OCRD" T2 ON T2."CardCode"=T0."ShortName"
+      WHERE T0."RefDate"<={ag} AND T2."CardType"='C'
+        AND (T0."BalDueCred"<>T0."BalDueDeb" OR T0."BalFcCred"<>T0."BalFcDeb")
+        AND NOT EXISTS (SELECT 1 FROM "{S}"."ITR1" U0 JOIN "{S}"."OITR" U1 ON U1."ReconNum"=U0."ReconNum"
+          WHERE U0."TransId"=T0."TransId" AND U0."TransRowId"=T0."Line_ID" AND U1."ReconDate">{ag})
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+    )
+    SELECT C."CardCode" AS "code", C."CardName" AS "name", C."U_Main_Group" AS "format",
+           SUM(a.orig) AS "original", SUM(a.bal) AS "balance_due",
+           SUM(CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END) AS "b0_30",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 31 AND 60 THEN a.bal ELSE 0 END) AS "b31_60",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 61 AND 90 THEN a.bal ELSE 0 END) AS "b61_90",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END) AS "b91_120",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag})>120 THEN a.bal ELSE 0 END) AS "b121"
+    FROM aged a JOIN "{S}"."OCRD" C ON C."CardCode"=a.card
+    GROUP BY C."CardCode", C."CardName", C."U_Main_Group"
+    HAVING SUM(a.bal)<>0
+    ORDER BY SUM(a.bal) DESC'''
+    out = []
+    for r in sap_connector.execute_query(sql):
+        code = str(r.get('code') or '').strip()
+        fmt = (str(r.get('format')).strip() if r.get('format') else '') or 'Unclassified'
+        out.append({
+            'code': code,
+            'name': str(r.get('name') or '').strip() or code,
+            'format': fmt,
+            'original':    _aging_num(r.get('original')),
+            'balance_due': _aging_num(r.get('balance_due')),
+            'b0_30':   _aging_num(r.get('b0_30')),
+            'b31_60':  _aging_num(r.get('b31_60')),
+            'b61_90':  _aging_num(r.get('b61_90')),
+            'b91_120': _aging_num(r.get('b91_120')),
+            'b121':    _aging_num(r.get('b121')),
+        })
+    return out
+
+
+def _build_aging_payload(rows):
+    groups = {}
+    total = _empty_buckets()
+    for r in rows:
+        g = groups.get(r['format'])
+        if g is None:
+            g = groups[r['format']] = {'format': r['format'], 'customers': [], **_empty_buckets()}
+        g['customers'].append(r)
+        for k in ['original', 'balance_due'] + _BUCKET_KEYS:
+            g[k] = round(g[k] + r[k], 2)
+            total[k] = round(total[k] + r[k], 2)
+
+    group_list = sorted(groups.values(), key=lambda g: g['balance_due'], reverse=True)
+    for g in group_list:
+        g['customers'].sort(key=lambda c: c['balance_due'], reverse=True)
+        g['count'] = len(g['customers'])
+
+    # Top single customer exposure across the book (largest outstanding balance).
+    top_customer = max(rows, key=lambda r: r['balance_due']) if rows else None
+    overdue_90 = round(total['b91_120'] + total['b121'], 2)
+    bal = total['balance_due'] or 1.0
+
+    kpis = {
+        'total_outstanding': total['balance_due'],
+        'current': total['b0_30'],
+        'current_pct': round(total['b0_30'] / bal * 100, 1),
+        'overdue_90': overdue_90,
+        'overdue_90_pct': round(overdue_90 / bal * 100, 1),
+        'customer_count': len(rows),
+        'format_count': len(group_list),
+        'top_customer_name': top_customer['name'] if top_customer else '—',
+        'top_customer_value': top_customer['balance_due'] if top_customer else 0,
+        'top_customer_pct': round((top_customer['balance_due'] / bal * 100), 1) if top_customer else 0,
+    }
+
+    return {
+        'buckets': AGING_BUCKETS,
+        'groups': group_list,
+        'total': total,
+        'kpis': kpis,
+    }
+
+
+def get_customer_aging(aging_date=None):
+    """Customer-receivables aging pivot as of aging_date (a date; default today),
+    computed live from SAP. Cached per aging date for _AGING_TTL seconds (same window as
+    the sales proc). On SAP failure returns an error payload — never stale numbers."""
+    if aging_date is None:
+        aging_date = date.today()
+    key = aging_date.isoformat()
+    now = time.time()
+    hit = _aging_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    try:
+        payload = _build_aging_payload(_load_aging_rows_sap(aging_date))
+    except Exception as e:
+        logger.exception('[aging] failed to build customer aging payload')
+        return {'buckets': AGING_BUCKETS, 'groups': [], 'total': _empty_buckets(),
+                'kpis': {}, 'aging_date': key, 'error': str(e)}
+
+    payload['aging_date'] = key
+    _aging_cache[key] = (now + _AGING_TTL, payload)
+    return payload

@@ -59,6 +59,9 @@
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav:first-of-type { margin-top: 56px; }  /* clear the floating menu button */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item { justify-content: center; gap: 0; padding: 11px 0; font-size: 0; }
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item .material-icons { font-size: 22px; }
+    /* On the slim rail, collapse the group to just its icon (no chevron, no sub-items). */
+    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-sub,
+    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-group-chev { display: none; }
     /* The floating "pin" button shows on the slim rail; it hides while peeking (the
        in-rail close/pin button takes over once the rail is expanded). */
     body.cp-sidebar-collapsed .cp-sidebar-open { top: 14px; left: 14px; }
@@ -83,6 +86,17 @@
     .cp-nav-item.active { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 6px 18px rgba(79,70,229,0.5); }
     .cp-nav-item.active .material-icons { color: #fff; font-variation-settings: 'FILL' 1, 'wght' 400; }
     .cp-nav-item .material-icons { font-size: 20px; }
+
+    /* ── Collapsible nav group (e.g. Analytical Reports) ── */
+    .cp-nav-group { display: flex; flex-direction: column; }
+    .cp-nav-group-btn { width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; justify-content: space-between; }
+    .cp-nav-group-lead { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .cp-nav-group-chev { font-size: 18px !important; color: #94a3b8; transition: transform .18s ease; }
+    .cp-nav-group.open > .cp-nav-group-btn { color: #1e293b; }
+    .cp-nav-group.open > .cp-nav-group-btn .cp-nav-group-chev { transform: rotate(180deg); }
+    .cp-nav-sub { display: none; flex-direction: column; gap: 3px; margin: 3px 0 2px 17px; padding-left: 12px; border-left: 2px solid #e2e8f0; }
+    .cp-nav-group.open > .cp-nav-sub { display: flex; }
+    .cp-nav-sub .cp-nav-item { font-size: 12.5px; padding: 8px 11px; }
 
     /* ── Period block ── */
     .cp-period-block { margin-top: auto; padding-top: 18px; }
@@ -157,7 +171,7 @@
           {% endif %}
         </nav>
 
-        {% if can_inventory or can_stock_available or can_production or can_oih_vs_stock or can_compare_sales or can_expenses or can_salaries or can_realise %}
+        {% if can_inventory or can_stock_available or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_expenses or can_salaries or can_realise %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
           {% if can_inventory %}
@@ -165,25 +179,45 @@
             <span class="material-icons">inventory_2</span>Inventory
           </a>
           {% endif %}
-          {% if can_stock_available %}
-          <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
-            <span class="material-icons">warehouse</span>Stock Available
-          </a>
-          {% endif %}
-          {% if can_production %}
-          <a class="cp-nav-item {% if sidebar_active == 'production' %}active{% endif %}" href="{% url 'inventory:production' %}" title="Production Plan">
-            <span class="material-icons">precision_manufacturing</span>Production Plan
-          </a>
-          {% endif %}
-          {% if can_oih_vs_stock %}
-          <a class="cp-nav-item {% if sidebar_active == 'oih_vs_stock' %}active{% endif %}" href="{% url 'realise:oih_vs_stock' %}" title="OIH vs Stock">
-            <span class="material-icons">compare_arrows</span>OIH vs Stock
-          </a>
-          {% endif %}
-          {% if can_compare_sales %}
-          <a class="cp-nav-item {% if sidebar_active == 'compare_sales' %}active{% endif %}" href="{% url 'realise:compare_sales' %}" title="Compare Sales">
-            <span class="material-icons">bar_chart</span>Compare Sales
-          </a>
+          {% if can_stock_available or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit %}
+          <div class="cp-nav-group{% if sidebar_active == 'stock_available' or sidebar_active == 'production' or sidebar_active == 'oih_vs_stock' or sidebar_active == 'compare_sales' or sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' %} open{% endif %}" data-group="analytics">
+            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Analytical Reports" aria-label="Toggle Analytical Reports">
+              <span class="cp-nav-group-lead"><span class="material-icons">analytics</span>Analytical Reports</span>
+              <span class="material-icons cp-nav-group-chev">expand_more</span>
+            </button>
+            <div class="cp-nav-sub">
+              {% if can_stock_available %}
+              <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
+                <span class="material-icons">warehouse</span>Stock Available
+              </a>
+              {% endif %}
+              {% if can_production %}
+              <a class="cp-nav-item {% if sidebar_active == 'production' %}active{% endif %}" href="{% url 'inventory:production' %}" title="Production Plan">
+                <span class="material-icons">precision_manufacturing</span>Production Plan
+              </a>
+              {% endif %}
+              {% if can_oih_vs_stock %}
+              <a class="cp-nav-item {% if sidebar_active == 'oih_vs_stock' %}active{% endif %}" href="{% url 'realise:oih_vs_stock' %}" title="OIH vs Stock">
+                <span class="material-icons">compare_arrows</span>OIH vs Stock
+              </a>
+              {% endif %}
+              {% if can_compare_sales %}
+              <a class="cp-nav-item {% if sidebar_active == 'compare_sales' %}active{% endif %}" href="{% url 'realise:compare_sales' %}" title="Compare Sales">
+                <span class="material-icons">bar_chart</span>Compare Sales
+              </a>
+              {% endif %}
+              {% if can_customer_aging %}
+              <a class="cp-nav-item {% if sidebar_active == 'customer_aging' %}active{% endif %}" href="{% url 'realise:customer_aging' %}" title="Customer Aging">
+                <span class="material-icons">account_balance_wallet</span>Customer Aging
+              </a>
+              {% endif %}
+              {% if can_required_credit_limit %}
+              <a class="cp-nav-item {% if sidebar_active == 'required_credit_limit' %}active{% endif %}" href="{% url 'realise:required_credit_limit' %}" title="Required Credit Limit">
+                <span class="material-icons">credit_score</span>Required Credit Limit
+              </a>
+              {% endif %}
+            </div>
+          </div>
           {% endif %}
           {% if can_expenses %}
           <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}" title="Expenses">
@@ -246,6 +280,21 @@
     function toggleControlPanelSidebar() {
       setControlPanelSidebar(document.body.classList.contains('cp-sidebar-collapsed'));
     }
+
+    // Expand/collapse a sidebar nav group (e.g. Analytical Reports); remember the choice.
+    function toggleNavGroup(btn) {
+      var g = btn.closest('.cp-nav-group');
+      if (!g) return;
+      var open = g.classList.toggle('open');
+      try { localStorage.setItem('cpNavGroup_' + (g.dataset.group || 'g'), open ? '1' : '0'); } catch (err) {}
+    }
+    // Restore each group's last state — unless the server already opened it (active child).
+    (function () {
+      document.querySelectorAll('.cp-nav-group').forEach(function (g) {
+        if (g.classList.contains('open')) return;
+        try { if (localStorage.getItem('cpNavGroup_' + (g.dataset.group || 'g')) === '1') g.classList.add('open'); } catch (err) {}
+      });
+    })();
 
     (function () {
       try {

@@ -230,3 +230,18 @@ class TargetNode(models.Model):
     def __str__(self):
         combo = '+'.join([p for p in (self.main_group, self.state, self.sales_person) if p]) or 'ALL'
         return f"{combo} {self.month}/{self.year}"
+
+
+class ClosingRemark(models.Model):
+    """Free-text 'delivery remark' for a party (customer) on the Required Credit Limit
+    report — the one frontend-editable column. Keyed by SAP CardCode so the note follows
+    the party across refreshes. Everything else on that report is read live from SAP."""
+
+    card_code = models.CharField(max_length=50, unique=True)
+    remark = models.CharField(max_length=255, blank=True, default='')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.card_code}: {self.remark[:40]}"

@@ -80,6 +80,81 @@ def compare_sales(request):
     })
 
 
+@permission_flag_required('can_customer_aging')
+def customer_aging(request):
+    """Standalone tab: customer-receivables aging pivot (FORMAT → customers) with the five
+    aging buckets, computed live from SAP (B1 reconciliation logic) as of a selectable
+    date (?as_of=YYYY-MM-DD, default today)."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:                  # no aging into the future
+        aging_date = today
+    return render(request, 'realise/customer_aging.html', {
+        'sidebar_active': 'customer_aging',
+        # raw dict — the template's |json_script does the JSON serialization (passing a
+        # pre-dumped string here would double-encode and JSON.parse would yield a string).
+        'aging_payload': services.get_customer_aging(aging_date),
+        'aging_date': aging_date.isoformat(),
+        'aging_today': today.isoformat(),
+    })
+
+
+@permission_flag_required('can_required_credit_limit')
+def required_credit_limit(request):
+    """Standalone tab: Required Credit Limit — live Order-in-Hand grouped by ASM
+    (territory owner) → party, in the closing-sheet layout. Each party row shows open
+    litres + open value (₹), a Premium/Commodity filter at the top, and a frontend-
+    editable delivery remark (the only writable column; persisted to ClosingRemark)."""
+    return render(request, 'realise/required_credit_limit.html', {
+        'sidebar_active': 'required_credit_limit',
+        # raw dict — the template's |json_script does the JSON serialization.
+        'credit_payload': services.get_required_credit_rows(),
+    })
+
+
+@permission_flag_required('can_required_credit_limit', json_response=True)
+@require_http_methods(['POST'])
+def api_save_closing_remark(request):
+    """Save the editable delivery remark for one party on the Required Credit Limit tab."""
+    body = _parse_body(request)
+    card_code = body.get('card_code', '')
+    if not card_code:
+        return JsonResponse({'status': 'error', 'error': 'card_code required'}, status=400)
+    services.save_closing_remark(card_code, body.get('remark', ''), request.user)
+    return JsonResponse({'status': 'ok'})
+
+
+@permission_flag_required('can_required_credit_limit')
+@require_http_methods(['GET'])
+def export_required_credit(request):
+    """Download the Required Credit Limit data as an .xlsx in the CLOSING SHEET layout.
+    ?type=P|C|P+C scopes to the on-screen Type filter; ?asm=<name> to one ASM."""
+    type_filter = (request.GET.get('type', '') or '').strip()
+    if type_filter not in ('', 'P', 'C', 'P+C'):
+        type_filter = ''
+    asms = [a.strip() for a in request.GET.getlist('asm') if a.strip()]
+    payload = services.get_required_credit_rows()
+    if asms:                     # scope the export to the on-screen ASM selection
+        chosen = set(asms)
+        payload = {'asms': [g for g in payload.get('asms', []) if g.get('asm') in chosen],
+                   'total': payload.get('total', {})}
+    content = services.build_closing_sheet_xlsx(payload, type_filter)
+    parts = []
+    if asms:
+        parts.append(asms[0] if len(asms) == 1 else f'{len(asms)} ASMs')
+    parts.append({'': 'All', 'P': 'Premium', 'C': 'Commodity', 'P+C': 'Prem+Comm'}[type_filter])
+    response = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="CLOSING SHEET ({" - ".join(parts)}).xlsx"'
+    return response
+
+
 def _aggregate_channel_rows(raw_rows):
     """Collapse raw SAP transaction rows to distinct
     (type, sub_group, main_group, state, sales_person, card_name, item_name) buckets

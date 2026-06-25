@@ -52,6 +52,8 @@ def build_user_permissions(user):
             'can_production': False,
             'can_oih_vs_stock': False,
             'can_compare_sales': False,
+            'can_customer_aging': False,
+            'can_required_credit_limit': False,
             'can_sales': False,
             'can_expenses': False,
             'can_salaries': False,
@@ -68,6 +70,8 @@ def build_user_permissions(user):
             'can_production': True,
             'can_oih_vs_stock': True,
             'can_compare_sales': True,
+            'can_customer_aging': True,
+            'can_required_credit_limit': True,
             'can_sales': True,
             'can_expenses': True,
             'can_salaries': True,
@@ -122,6 +126,16 @@ def build_user_permissions(user):
         ),
         'can_compare_sales': bool(
             'compare_sales_viewer' in user_groups
+            or user_groups & REALISE_GROUPS
+            or has_app_permission('realise')
+        ),
+        'can_customer_aging': bool(
+            'customer_aging_viewer' in user_groups
+            or user_groups & REALISE_GROUPS
+            or has_app_permission('realise')
+        ),
+        'can_required_credit_limit': bool(
+            'required_credit_viewer' in user_groups
             or user_groups & REALISE_GROUPS
             or has_app_permission('realise')
         ),

@@ -1,0 +1,350 @@
+{% extends "core/base.html" %}
+{% block title %}Customer Aging — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f4f6fb !important}
+  .ag-wrap{max-width:1240px;margin:0 auto}
+
+  /* ── Header band ── */
+  .ag-hero{position:relative;overflow:hidden;border-radius:20px;padding:24px 28px;margin-bottom:20px;
+    background:linear-gradient(120deg,#4f46e5 0%,#6366f1 45%,#7c3aed 100%);
+    box-shadow:0 18px 40px rgba(79,70,229,.32)}
+  .ag-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%)}
+  .ag-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
+  .ag-h1{font-size:28px;font-weight:900;color:#fff;margin:0;letter-spacing:-.5px;display:flex;align-items:center;gap:11px}
+  .ag-h1 .material-icons{font-size:30px;opacity:.92}
+  .ag-sub{margin:8px 0 0;font-size:13px;color:#e0e7ff;max-width:680px;line-height:1.5}
+  .ag-srcpill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);color:#fff;
+    border:1px solid rgba(255,255,255,.28);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .ag-srcpill .material-icons{font-size:15px}
+
+  /* ── KPI cards ── */
+  .ag-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  @media(max-width:920px){.ag-kpis{grid-template-columns:repeat(2,1fr)}}
+  .ag-kpi{position:relative;overflow:hidden;border-radius:16px;padding:16px 18px;color:#fff;
+    box-shadow:0 10px 26px rgba(15,23,42,.14)}
+  .ag-kpi.k-total{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+  .ag-kpi.k-cur{background:linear-gradient(135deg,#059669,#16a34a)}
+  .ag-kpi.k-over{background:linear-gradient(135deg,#e11d48,#dc2626)}
+  .ag-kpi.k-top{background:linear-gradient(135deg,#d97706,#f59e0b)}
+  .ag-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.92;
+    display:flex;align-items:center;gap:6px}
+  .ag-kpi-l .material-icons{font-size:15px}
+  .ag-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;font-variant-numeric:tabular-nums}
+  .ag-kpi-m{font-size:11.5px;font-weight:600;opacity:.9;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ag-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;opacity:.16}
+
+  /* ── Toolbar ── */
+  .ag-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .ag-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ag-search:focus-within{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .ag-search .material-icons{font-size:19px;color:#94a3b8}
+  .ag-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
+  .ag-asof{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-radius:11px;
+    padding:8px 12px;font-size:12px;font-weight:700;color:#475569;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ag-asof:focus-within{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .ag-asof .material-icons{font-size:17px;color:#6366f1}
+  .ag-asof input{border:0;outline:0;font-family:inherit;font-size:12.5px;font-weight:700;color:#0f172a;background:transparent;cursor:pointer}
+  .ag-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#4338ca;
+    font-family:inherit;font-size:12px;font-weight:700;padding:9px 14px;border-radius:11px;cursor:pointer;
+    transition:background .15s,border-color .15s,color .15s}
+  .ag-btn:hover{background:#eef2ff;border-color:#c7d2fe}
+  .ag-btn .material-icons{font-size:17px}
+  .ag-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto}
+  .ag-lg{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#475569}
+  .ag-lg .dot{width:11px;height:11px;border-radius:3px}
+
+  /* ── Table ── */
+  .ag-card{background:#fff;border:1px solid #e8edf6;border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.09)}
+  .ag-tw{overflow:auto;max-height:72vh}
+  table.ag-tb{width:100%;border-collapse:collapse;font-size:13px}
+  table.ag-tb thead th{position:sticky;top:0;z-index:3;background:#0f172a;color:#fff;text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:13px 15px;white-space:nowrap}
+  table.ag-tb thead th.lbl{text-align:left}
+  table.ag-tb thead th .bk{display:inline-block;border-bottom:3px solid currentColor;padding-bottom:2px}
+  th.b0{color:#34d399}th.b1{color:#2dd4bf}th.b2{color:#fbbf24}th.b3{color:#fb923c}th.b4{color:#f87171}
+
+  table.ag-tb td{padding:0;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
+  table.ag-tb td .cellpad{padding:11px 15px}
+  table.ag-tb td.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  /* group row */
+  tr.ag-grp{cursor:pointer;background:linear-gradient(90deg,#f8faff,#fefcff)}
+  tr.ag-grp:hover{background:linear-gradient(90deg,#eef2ff,#f5f0ff)}
+  tr.ag-grp td{border-bottom:1px solid #e6ebf5;font-weight:800;color:#0f172a}
+  .ag-gname{display:flex;align-items:center;gap:10px}
+  .ag-tw-i{font-size:9px;color:#64748b;transition:transform .14s;width:10px;text-align:center}
+  .ag-grp.open .ag-tw-i{transform:rotate(90deg)}
+  .ag-chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;color:#fff;padding:3px 11px;border-radius:999px;letter-spacing:.2px}
+  .ag-cnt{font-size:11px;font-weight:700;color:#94a3b8}
+
+  /* customer row */
+  tr.ag-cust{display:none}
+  tr.ag-cust.show{display:table-row}
+  tr.ag-cust td{color:#475569}
+  tr.ag-cust:hover td{background:#f8fafc}
+  .ag-cust .cname{padding-left:34px;font-weight:600;color:#1f2937;max-width:340px;overflow:hidden;text-overflow:ellipsis}
+  .ag-code{font-size:10.5px;color:#a3aab8;font-weight:600;margin-left:7px}
+
+  /* bucket cell tints */
+  td.bk0{background:#f0fdf4}td.bk1{background:#f0fdfa}td.bk2{background:#fffbeb}td.bk3{background:#fff7ed}td.bk4{background:#fef2f2}
+  tr.ag-grp td.bk0{background:#e7fbee}tr.ag-grp td.bk1{background:#e6fbf6}tr.ag-grp td.bk2{background:#fef6da}tr.ag-grp td.bk3{background:#feefdd}tr.ag-grp td.bk4{background:#fde7e7}
+  .v0{color:#cbd5e1}                   /* zero / empty */
+  .neg{color:#e11d48;font-weight:700}  /* credit / negative */
+  .bal{font-weight:800;color:#0f172a}
+
+  /* distribution bar */
+  .ag-bar{display:flex;height:9px;width:120px;border-radius:5px;overflow:hidden;background:#eef2f7}
+  .ag-bar span{height:100%}
+
+  /* total row */
+  tr.ag-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:2}
+  tr.ag-tot td.num{font-variant-numeric:tabular-nums}
+  tr.ag-tot .v0{color:#64748b}
+  tr.ag-tot .neg{color:#fda4af}
+
+  .ag-empty{padding:40px;text-align:center;color:#7b8794}
+  .ag-foot{font-size:11.5px;color:#94a3b8;margin:12px 2px 0;display:flex;gap:6px;align-items:center}
+  .ag-foot .material-icons{font-size:15px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ag-wrap">
+
+  <div class="ag-hero">
+    <div class="ag-hero-row">
+      <div>
+        <h1 class="ag-h1"><span class="material-icons">account_balance_wallet</span>Customer Aging</h1>
+      </div>
+      <span class="ag-srcpill"><span class="material-icons">bolt</span>Live &middot; SAP B1 &middot; as of {{ aging_date }}</span>
+    </div>
+  </div>
+
+  <div class="ag-kpis" id="agKpis"></div>
+
+  <div class="ag-tools">
+    <label class="ag-asof" title="Aging date — balances as of this date">
+      <span class="material-icons">event</span>
+      <span>As of</span>
+      <input type="date" id="agAsOf" value="{{ aging_date }}" max="{{ aging_today }}">
+    </label>
+    <label class="ag-search">
+      <span class="material-icons">search</span>
+      <input type="text" id="agSearch" placeholder="Search customer or format…" autocomplete="off">
+    </label>
+    <button type="button" class="ag-btn" id="agExpand"><span class="material-icons">unfold_more</span>Expand all</button>
+    <button type="button" class="ag-btn" id="agCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
+    <div class="ag-legend" id="agLegend"></div>
+  </div>
+
+  <div class="ag-card">
+    <div class="ag-tw">
+      <table class="ag-tb">
+        <thead><tr id="agHead"></tr></thead>
+        <tbody id="agBody"><tr><td class="ag-empty" colspan="8">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ag-foot">
+    <span class="material-icons">info</span>
+    <span>Computed live from SAP using B1's reconciliation aging (ties to customer balances). Pick an
+      <b>As of</b> date to age to any point in time. Distribution bar shows each row's composition across
+      positive aging buckets.</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ aging_payload|json_script:"aging-data" }}
+<script>
+(function(){
+  var DATA = JSON.parse(document.getElementById('aging-data').textContent || '{}');
+  var BUCKETS = DATA.buckets || [];
+  var GROUPS  = DATA.groups || [];
+  var TOTAL   = DATA.total || {};
+  var KPI     = DATA.kpis || {};
+  var COLORS  = BUCKETS.map(function(b){return b.color;});
+  var NCOL    = 3 + BUCKETS.length + 1;   // label + original + balance + buckets + distribution
+
+  // Per-format accent palette (cycled) — keeps the pivot colourful & scannable.
+  var FMT_PALETTE = ['#4f46e5','#0891b2','#0d9488','#db2777','#d97706','#7c3aed','#059669','#dc2626','#2563eb','#9333ea','#c026d3','#65a30d'];
+  function fmtColor(i){return FMT_PALETTE[i % FMT_PALETTE.length];}
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+  // Full Indian-grouped rupee amount (negatives in parentheses); '—' for ~0.
+  function money(n){
+    n = Number(n)||0;
+    if(Math.abs(n) < 0.5) return '<span class="v0">—</span>';
+    var neg = n < 0;
+    var s = '₹' + Math.round(Math.abs(n)).toLocaleString('en-IN');
+    return neg ? '<span class="neg">('+s+')</span>' : s;
+  }
+  // Abbreviated ₹ Cr / L / K for KPI tiles.
+  function abbr(n){
+    n = Number(n)||0; var a=Math.abs(n), sign=n<0?'-':'';
+    if(a>=1e7)  return sign+'₹'+(a/1e7).toFixed(2)+' Cr';
+    if(a>=1e5)  return sign+'₹'+(a/1e5).toFixed(2)+' L';
+    if(a>=1e3)  return sign+'₹'+(a/1e3).toFixed(1)+' K';
+    return sign+'₹'+Math.round(a);
+  }
+
+  // ── KPIs ──
+  function renderKpis(){
+    var el = document.getElementById('agKpis');
+    var cards = [
+      {c:'k-total',ic:'account_balance',l:'Total Outstanding',v:abbr(KPI.total_outstanding),
+        m:(KPI.customer_count||0)+' customers · '+(KPI.format_count||0)+' formats'},
+      {c:'k-cur',ic:'check_circle',l:'Current (0–30 d)',v:abbr(KPI.current),
+        m:(KPI.current_pct||0)+'% of book'},
+      {c:'k-over',ic:'warning',l:'Overdue 90+ days',v:abbr(KPI.overdue_90),
+        m:(KPI.overdue_90_pct||0)+'% of book at risk'},
+      {c:'k-top',ic:'leaderboard',l:'Top Exposure',v:abbr(KPI.top_customer_value),
+        m:esc(KPI.top_customer_name||'—')+' · '+(KPI.top_customer_pct||0)+'%'}
+    ];
+    el.innerHTML = cards.map(function(k){
+      return '<div class="ag-kpi '+k.c+'">'+
+        '<div class="ag-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
+        '<div class="ag-kpi-v">'+k.v+'</div>'+
+        '<div class="ag-kpi-m">'+k.m+'</div>'+
+        '<span class="material-icons ag-kpi-ic">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  // ── Header + legend ──
+  function renderHead(){
+    var th = '<th class="lbl">Format / Customer</th><th>Original</th><th>Balance Due</th>';
+    BUCKETS.forEach(function(b,i){ th += '<th class="b'+i+'"><span class="bk">'+esc(b.label)+'</span></th>'; });
+    th += '<th class="lbl" style="text-align:right">Distribution</th>';
+    document.getElementById('agHead').innerHTML = th;
+
+    document.getElementById('agLegend').innerHTML = BUCKETS.map(function(b){
+      return '<span class="ag-lg"><span class="dot" style="background:'+b.color+'"></span>'+esc(b.label)+'</span>';
+    }).join('');
+  }
+
+  // Stacked distribution bar from positive bucket parts (credits clamped to 0).
+  function bar(row){
+    var parts = BUCKETS.map(function(b){return Math.max(0, Number(row[b.key])||0);});
+    var sum = parts.reduce(function(a,b){return a+b;},0);
+    if(sum<=0) return '<div class="ag-bar"></div>';
+    var segs = parts.map(function(p,i){
+      var w = (p/sum*100);
+      return w>0 ? '<span style="width:'+w.toFixed(2)+'%;background:'+COLORS[i]+'" title="'+esc(BUCKETS[i].label)+': '+abbr(parts[i])+'"></span>' : '';
+    }).join('');
+    return '<div class="ag-bar">'+segs+'</div>';
+  }
+
+  function bucketCells(row,isGrp){
+    return BUCKETS.map(function(b,i){
+      return '<td class="num bk'+i+'"><div class="cellpad">'+money(row[b.key])+'</div></td>';
+    }).join('');
+  }
+
+  // ── Body ──
+  function renderBody(){
+    var body = document.getElementById('agBody');
+    if(DATA.error){ body.innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Could not load aging data ('+esc(DATA.error)+').</td></tr>'; return; }
+    if(!GROUPS.length){ body.innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">No outstanding balances.</td></tr>'; return; }
+
+    var html = '';
+    GROUPS.forEach(function(g,gi){
+      var color = fmtColor(gi);
+      html += '<tr class="ag-grp" data-gi="'+gi+'">'+
+        '<td><div class="cellpad ag-gname">'+
+          '<span class="ag-tw-i">▶</span>'+
+          '<span class="ag-chip" style="background:'+color+'">'+esc(g.format)+'</span>'+
+          '<span class="ag-cnt">'+g.count+'</span>'+
+        '</div></td>'+
+        '<td class="num"><div class="cellpad">'+money(g.original)+'</div></td>'+
+        '<td class="num"><div class="cellpad bal">'+money(g.balance_due)+'</div></td>'+
+        bucketCells(g,true)+
+        '<td class="num"><div class="cellpad" style="display:flex;justify-content:flex-end">'+bar(g)+'</div></td>'+
+      '</tr>';
+
+      g.customers.forEach(function(c){
+        html += '<tr class="ag-cust" data-gi="'+gi+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'">'+
+          '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
+          '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
+          '<td class="num"><div class="cellpad bal">'+money(c.balance_due)+'</div></td>'+
+          bucketCells(c,false)+
+          '<td class="num"><div class="cellpad" style="display:flex;justify-content:flex-end">'+bar(c)+'</div></td>'+
+        '</tr>';
+      });
+    });
+
+    // grand total
+    html += '<tr class="ag-tot">'+
+      '<td><div class="cellpad">GRAND TOTAL</div></td>'+
+      '<td class="num"><div class="cellpad">'+money(TOTAL.original)+'</div></td>'+
+      '<td class="num"><div class="cellpad">'+money(TOTAL.balance_due)+'</div></td>'+
+      BUCKETS.map(function(b){return '<td class="num"><div class="cellpad">'+money(TOTAL[b.key])+'</div></td>';}).join('')+
+      '<td class="num"><div class="cellpad" style="display:flex;justify-content:flex-end">'+bar(TOTAL)+'</div></td>'+
+    '</tr>';
+
+    body.innerHTML = html;
+  }
+
+  // ── Interactions ──
+  function setGroup(gi,open){
+    var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
+    if(grp) grp.classList.toggle('open',open);
+    document.querySelectorAll('.ag-cust[data-gi="'+gi+'"]').forEach(function(r){ r.classList.toggle('show',open); });
+  }
+  function setAll(open){
+    GROUPS.forEach(function(_,gi){ setGroup(gi,open); });
+  }
+
+  function wire(){
+    // Aging date picker → reload the page aged to the chosen date (server recomputes).
+    var asof = document.getElementById('agAsOf');
+    if(asof) asof.addEventListener('change',function(){
+      var u = new URL(window.location.href);
+      if(this.value) u.searchParams.set('as_of', this.value); else u.searchParams.delete('as_of');
+      window.location.href = u.toString();
+    });
+
+    document.getElementById('agBody').addEventListener('click',function(e){
+      var grp = e.target.closest && e.target.closest('.ag-grp'); if(!grp) return;
+      var gi = grp.getAttribute('data-gi');
+      setGroup(gi, !grp.classList.contains('open'));
+    });
+    document.getElementById('agExpand').addEventListener('click',function(){ setAll(true); });
+    document.getElementById('agCollapse').addEventListener('click',function(){ setAll(false); });
+
+    var search = document.getElementById('agSearch');
+    search.addEventListener('input',function(){
+      var q = this.value.trim().toLowerCase();
+      if(!q){ // restore normal pivot (collapsed)
+        document.querySelectorAll('.ag-cust').forEach(function(r){r.classList.remove('show');r.style.display='';});
+        document.querySelectorAll('.ag-grp').forEach(function(r){r.classList.remove('open');r.style.display='';});
+        return;
+      }
+      var hits = {};
+      document.querySelectorAll('.ag-cust').forEach(function(r){
+        var match = r.getAttribute('data-name').indexOf(q) !== -1;
+        r.style.display = match ? 'table-row' : 'none';
+        r.classList.toggle('show',match);
+        if(match) hits[r.getAttribute('data-gi')] = true;
+      });
+      document.querySelectorAll('.ag-grp').forEach(function(r){
+        var gi = r.getAttribute('data-gi');
+        var on = !!hits[gi];
+        r.style.display = on ? 'table-row' : 'none';
+        r.classList.toggle('open',on);
+      });
+    });
+  }
+
+  renderKpis();
+  renderHead();
+  renderBody();
+  wire();
+})();
+</script>
+{% endblock %}

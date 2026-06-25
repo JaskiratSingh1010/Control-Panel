@@ -1,0 +1,593 @@
+{% extends "core/base.html" %}
+{% block title %}Required Credit Limit — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f4f6fb !important}
+  .rc-wrap{max-width:1480px;margin:0 auto}
+
+  /* ── Header band ── */
+  .rc-hero{position:relative;overflow:hidden;border-radius:20px;padding:24px 28px;margin-bottom:20px;
+    background:linear-gradient(120deg,#0f766e 0%,#0d9488 45%,#0891b2 100%);
+    box-shadow:0 18px 40px rgba(13,148,136,.32)}
+  .rc-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%)}
+  .rc-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
+  .rc-h1{font-size:28px;font-weight:900;color:#fff;margin:0;letter-spacing:-.5px;display:flex;align-items:center;gap:11px}
+  .rc-h1 .material-icons{font-size:30px;opacity:.92}
+  .rc-srcpill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);color:#fff;
+    border:1px solid rgba(255,255,255,.28);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .rc-srcpill .material-icons{font-size:15px}
+
+  /* ── KPI cards ── */
+  .rc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  @media(max-width:920px){.rc-kpis{grid-template-columns:repeat(2,1fr)}}
+  .rc-kpi{position:relative;overflow:hidden;border-radius:16px;padding:16px 18px;color:#fff;
+    box-shadow:0 10px 26px rgba(15,23,42,.14)}
+  .rc-kpi.k-ltr{background:linear-gradient(135deg,#0d9488,#0891b2)}
+  .rc-kpi.k-rev{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+  .rc-kpi.k-asm{background:linear-gradient(135deg,#d97706,#f59e0b)}
+  .rc-kpi.k-prt{background:linear-gradient(135deg,#0891b2,#2563eb)}
+  .rc-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.92;
+    display:flex;align-items:center;gap:6px}
+  .rc-kpi-l .material-icons{font-size:15px}
+  .rc-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;font-variant-numeric:tabular-nums}
+  .rc-kpi-m{font-size:11.5px;font-weight:600;opacity:.9;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;opacity:.16}
+
+  /* ── Toolbar ── */
+  .rc-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .rc-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .rc-search:focus-within{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .rc-search .material-icons{font-size:19px;color:#94a3b8}
+  .rc-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
+  .rc-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#0f766e;
+    font-family:inherit;font-size:12px;font-weight:700;padding:9px 14px;border-radius:11px;cursor:pointer;
+    transition:background .15s,border-color .15s,color .15s}
+  .rc-btn:hover{background:#ecfeff;border-color:#99f6e4}
+  .rc-btn .material-icons{font-size:17px}
+
+  /* segmented Prem/Comm filter */
+  .rc-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:3px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .rc-seg button{border:0;background:none;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;
+    padding:7px 15px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}
+  .rc-seg button.on{background:linear-gradient(135deg,#0d9488,#0891b2);color:#fff;box-shadow:0 3px 8px rgba(13,148,136,.32)}
+
+  /* ASM multi-select dropdown */
+  .rc-ms{position:relative}
+  .rc-ms-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;border-radius:11px;
+    padding:9px 13px;font-family:inherit;font-size:12px;font-weight:700;color:#0f766e;cursor:pointer;outline:0;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:240px}
+  .rc-ms-btn:hover{border-color:#99f6e4}
+  .rc-ms.open .rc-ms-btn{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .rc-ms-btn .material-icons{font-size:17px}
+  .rc-ms-btn #rcAsmLabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc-ms-chev{margin-left:auto;color:#94a3b8;transition:transform .16s}
+  .rc-ms.open .rc-ms-chev{transform:rotate(180deg)}
+  .rc-ms-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);left:0;min-width:240px;max-width:300px;
+    background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.18);overflow:hidden}
+  .rc-ms.open .rc-ms-pop{display:block}
+  .rc-ms-head{display:flex;gap:8px;padding:9px 12px;border-bottom:1px solid #eef2f7;background:#f8fafc}
+  .rc-ms-head button{flex:1;border:1px solid #e2e8f0;background:#fff;border-radius:8px;padding:5px 8px;font-family:inherit;
+    font-size:11px;font-weight:700;color:#0f766e;cursor:pointer}
+  .rc-ms-head button:hover{background:#ecfeff;border-color:#99f6e4}
+  .rc-ms-list{max-height:300px;overflow:auto;padding:5px}
+  .rc-ms-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;
+    font-weight:600;color:#1f2937}
+  .rc-ms-item:hover{background:#f0fdfa}
+  .rc-ms-item input{accent-color:#0d9488;width:15px;height:15px;cursor:pointer}
+  .rc-ms-item .rc-ms-cnt{margin-left:auto;font-size:11px;font-weight:700;color:#94a3b8}
+
+  /* ── Table ── */
+  .rc-card{background:#fff;border:1px solid #e8edf6;border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.09)}
+  .rc-tw{overflow:auto;max-height:74vh}
+  table.rc-tb{width:100%;border-collapse:collapse;font-size:13px}
+  table.rc-tb thead th{position:sticky;top:0;z-index:3;background:#0f172a;color:#fff;text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 13px;white-space:nowrap}
+  table.rc-tb thead th.lbl{text-align:left}
+  table.rc-tb thead th.hot{color:#5eead4}
+
+  table.rc-tb td{padding:10px 13px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
+  table.rc-tb td.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ASM group row */
+  tr.rc-grp{cursor:pointer;background:linear-gradient(90deg,#f0fdfa,#f8fafc)}
+  tr.rc-grp:hover{background:linear-gradient(90deg,#ccfbf1,#eef2ff)}
+  tr.rc-grp td{border-bottom:1px solid #d9f2ed;font-weight:800;color:#0f172a}
+  .rc-gname{display:flex;align-items:center;gap:10px}
+  .rc-tw-i{font-size:9px;color:#0d9488;transition:transform .14s;width:10px;text-align:center}
+  .rc-grp.open .rc-tw-i{transform:rotate(90deg)}
+  .rc-chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;color:#fff;padding:3px 11px;border-radius:999px;letter-spacing:.2px}
+  .rc-cnt{font-size:11px;font-weight:700;color:#94a3b8}
+
+  /* party row */
+  tr.rc-row{display:none}
+  tr.rc-row.show{display:table-row}
+  tr.rc-row:hover td{background:#f8fafc}
+  .rc-party{padding-left:30px;font-weight:600;color:#1f2937;max-width:300px;overflow:hidden;text-overflow:ellipsis}
+  .rc-code{font-size:10.5px;color:#a3aab8;font-weight:600;margin-left:7px}
+  .rc-tag{display:inline-block;font-size:10px;font-weight:700;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;
+    border-radius:6px;padding:2px 7px}
+  /* Type badge (P / C / P+C) */
+  .rc-type{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:2px 9px;letter-spacing:.3px}
+  .rc-type.t-P{color:#0f766e;background:#ccfbf1}
+  .rc-type.t-C{color:#b45309;background:#fef3c7}
+  .rc-type.tPC{color:#fff;background:linear-gradient(135deg,#0d9488,#7c3aed)}
+  .rc-type.t-x{color:#94a3b8;background:#f1f5f9}
+  /* SO No cell */
+  .rc-so-one{font-weight:700;color:#334155;font-variant-numeric:tabular-nums}
+  .rc-so-link{font-weight:700;color:#0d9488;text-decoration:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-variant-numeric:tabular-nums}
+  .rc-so-link:hover{text-decoration:underline}
+  .rc-so-more{font-size:10px;font-weight:800;color:#fff;background:#0d9488;border-radius:999px;padding:1px 7px;letter-spacing:.2px}
+
+  /* SO list modal */
+  .rc-modal{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+  .rc-modal.show{display:flex}
+  .rc-modal-box{background:#fff;border-radius:16px;width:min(420px,92vw);max-height:80vh;display:flex;flex-direction:column;
+    box-shadow:0 24px 60px rgba(15,23,42,.35);overflow:hidden}
+  .rc-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 20px;
+    background:linear-gradient(120deg,#0f766e,#0891b2);color:#fff}
+  .rc-modal-head span{font-size:14px;font-weight:800}
+  .rc-modal-x{border:0;background:rgba(255,255,255,.18);color:#fff;width:30px;height:30px;border-radius:8px;
+    font-size:20px;line-height:1;cursor:pointer}
+  .rc-modal-x:hover{background:rgba(255,255,255,.32)}
+  .rc-modal-body{padding:10px 16px;overflow:auto}
+  .rc-so-item{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid #eef2f7;
+    font-size:13px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
+  .rc-so-item:last-child{border-bottom:0}
+  .rc-so-n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;
+    background:#ccfbf1;color:#0f766e;font-size:11px;font-weight:800}
+
+  /* editable remark */
+  .rc-remark{width:160px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:12px;
+    color:#0f172a;background:#fff;outline:0;transition:border-color .15s,box-shadow .15s}
+  .rc-remark:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .rc-remark.saved{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.16)}
+
+  .v0{color:#cbd5e1}
+  .bal{font-weight:800;color:#0f172a}
+  .neg{color:#e11d48;font-weight:700}   /* payable / negative ledger or outstanding */
+
+  /* grand total row */
+  tr.rc-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:2}
+  tr.rc-tot td.num{font-variant-numeric:tabular-nums}
+  tr.rc-tot .v0{color:#64748b}
+
+  .rc-empty{padding:40px;text-align:center;color:#7b8794}
+  .rc-foot{font-size:11.5px;color:#94a3b8;margin:12px 2px 0;display:flex;gap:6px;align-items:flex-start}
+  .rc-foot .material-icons{font-size:15px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rc-wrap">
+
+  <div class="rc-hero">
+    <div class="rc-hero-row">
+      <div>
+        <h1 class="rc-h1"><span class="material-icons">credit_score</span>Required Credit Limit</h1>
+      </div>
+      <span class="rc-srcpill"><span class="material-icons">bolt</span>Live &middot; SAP B1 &middot; Order-in-Hand</span>
+    </div>
+  </div>
+
+  <div class="rc-kpis" id="rcKpis"></div>
+
+  <div class="rc-tools">
+    <div class="rc-seg" id="rcType" title="Filter by Type">
+      <button type="button" data-type="" class="on">All</button>
+      <button type="button" data-type="P">P</button>
+      <button type="button" data-type="C">C</button>
+      <button type="button" data-type="P+C">P+C</button>
+    </div>
+    <div class="rc-ms" id="rcAsm" title="Filter by ASM (select one or more)">
+      <button type="button" class="rc-ms-btn" id="rcAsmBtn">
+        <span class="material-icons">badge</span>
+        <span id="rcAsmLabel">All ASMs</span>
+        <span class="material-icons rc-ms-chev">expand_more</span>
+      </button>
+      <div class="rc-ms-pop" id="rcAsmPop">
+        <div class="rc-ms-head">
+          <button type="button" data-act="all">Select all</button>
+          <button type="button" data-act="clear">Clear</button>
+        </div>
+        <div class="rc-ms-list" id="rcAsmList"></div>
+      </div>
+    </div>
+    <label class="rc-search">
+      <span class="material-icons">search</span>
+      <input type="text" id="rcSearch" placeholder="Search party, ASM, state…" autocomplete="off">
+    </label>
+    <button type="button" class="rc-btn" id="rcExpand"><span class="material-icons">unfold_more</span>Expand all</button>
+    <button type="button" class="rc-btn" id="rcCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
+    <button type="button" class="rc-btn rc-xl" id="rcExport"><span class="material-icons">download</span>Export Excel</button>
+  </div>
+
+  <div class="rc-card">
+    <div class="rc-tw">
+      <table class="rc-tb">
+        <thead>
+          <tr>
+            <th class="lbl">ASM / Party</th>
+            <th class="lbl">Type</th>
+            <th class="lbl">Main Group</th>
+            <th class="lbl">State</th>
+            <th class="lbl">Delivery Remark</th>
+            <th class="hot">OIH Litres</th>
+            <th class="lbl">SO No</th>
+            <th class="hot">OIH Revenue ₹</th>
+            <th>Ledger Amt ₹</th>
+            <th class="hot">Total Outstanding ₹</th>
+          </tr>
+        </thead>
+        <tbody id="rcBody"><tr><td class="rc-empty" colspan="10">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="rc-foot">
+    <span class="material-icons">info</span>
+    <span>Computed live from SAP open sales orders (ORDR/RDR1, status Open). OIH Litres = open qty × pack size;
+      OIH revenue pro-rates the line total by the still-open fraction. The <b>Type</b> column tags each
+      party <b>P</b> (premium only), <b>C</b> (commodity only) or <b>P+C</b> (both); filter on it with the
+      Type buttons and on the owner with the ASM selector. <b>Ledger Amt</b> is the customer's SAP balance
+      (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>. A customer spanning several
+      states/ASMs has its ledger split across those rows in proportion to open-order value. Export
+      (CLOSING SHEET layout, with the Canola / Commodity / Olive / Other Premium split) respects both filters.</span>
+  </div>
+</div>
+
+<div class="rc-modal" id="rcModal">
+  <div class="rc-modal-box">
+    <div class="rc-modal-head">
+      <span id="rcModalTitle">SO Numbers</span>
+      <button type="button" class="rc-modal-x" id="rcModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="rc-modal-body" id="rcModalBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ credit_payload|json_script:"credit-data" }}
+<script>
+(function(){
+  var DATA  = JSON.parse(document.getElementById('credit-data').textContent || '{}');
+  var ASMS  = DATA.asms || [];
+  var TOTAL = DATA.total || {litres:{},value:{}};
+  var TYPE_FILTER = '';  // '' = all, else 'P' | 'C' | 'P+C' (filters on the Type column)
+  var ASM_FILTER = [];   // [] = all ASMs, else the selected ASM names
+  var CSRF  = "{{ csrf_token }}";
+  var SAVE_URL = "{% url 'realise:api_save_closing_remark' %}";
+  var EXPORT_URL = "{% url 'realise:export_required_credit' %}";
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function attr(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
+
+  // Plain litres with Indian grouping; '—' for ~0.
+  function ltr(n){
+    n = Number(n)||0;
+    if(Math.abs(n) < 0.5) return '<span class="v0">—</span>';
+    return Math.round(n).toLocaleString('en-IN');
+  }
+  // Full ₹ amount; '—' for ~0; negatives (payables) shown in red.
+  function money(n){
+    n = Number(n)||0;
+    if(Math.abs(n) < 0.5) return '<span class="v0">—</span>';
+    var s = '₹' + Math.round(Math.abs(n)).toLocaleString('en-IN');
+    return n < 0 ? '<span class="neg">-'+s+'</span>' : s;
+  }
+  // Abbreviated ₹ Cr / L / K for KPI tiles.
+  function abbr(n){
+    n = Number(n)||0; var a=Math.abs(n), sign=n<0?'-':'';
+    if(a>=1e7)  return sign+'₹'+(a/1e7).toFixed(2)+' Cr';
+    if(a>=1e5)  return sign+'₹'+(a/1e5).toFixed(2)+' L';
+    if(a>=1e3)  return sign+'₹'+(a/1e3).toFixed(1)+' K';
+    return sign+'₹'+Math.round(a);
+  }
+
+  // Litres / value shown are always the party's full Order-in-Hand total; the Type column
+  // (P / C / P+C) classifies the basket and the Type filter decides which rows show.
+  function litresOf(o){ return (o && o.litres) ? (Number(o.litres.total)||0) : 0; }
+  function valueOf(o){ return (o && o.value)  ? (Number(o.value.total) ||0) : 0; }
+  function ledgerOf(o){ return (o && o.value) ? (Number(o.value.ledger)||0) : 0; }
+  function outOf(o){ return (o && o.value) ? (Number(o.value.outstanding)||0) : 0; }
+  function typeLabel(){
+    return {'':'All types', 'P':'Premium only (P)', 'C':'Commodity only (C)',
+            'P+C':'Premium + Commodity (P+C)'}[TYPE_FILTER] || 'All types';
+  }
+  function asmSelected(name){ return ASM_FILTER.indexOf(name) !== -1; }
+  function asmGroups(){ return ASM_FILTER.length ? ASMS.filter(function(g){return asmSelected(g.asm);}) : ASMS; }
+
+  // Type filter: P = premium-only, C = commodity-only, P+C = both. '' = every row.
+  function rowVisible(r){ return TYPE_FILTER ? (r.type === TYPE_FILTER) : true; }
+
+  // A group's visible rows + their summed litres / value / ledger / outstanding.
+  function groupView(g){
+    var rows = g.rows.filter(rowVisible);
+    var lit = 0, val = 0, led = 0, out = 0;
+    rows.forEach(function(r){ lit += litresOf(r); val += valueOf(r); led += ledgerOf(r); out += outOf(r); });
+    return {rows: rows, lit: lit, val: val, led: led, out: out};
+  }
+
+  // Type badge for the Type column.
+  function typeBadge(t){
+    if(t === 'P')   return '<span class="rc-type t-P">P</span>';
+    if(t === 'C')   return '<span class="rc-type t-C">C</span>';
+    if(t === 'P+C') return '<span class="rc-type tPC">P+C</span>';
+    return '<span class="rc-type t-x">—</span>';
+  }
+
+  var PALETTE = ['#0d9488','#4f46e5','#0891b2','#db2777','#d97706','#7c3aed','#059669','#dc2626','#2563eb','#9333ea','#c026d3','#65a30d'];
+  function asmColor(i){return PALETTE[i % PALETTE.length];}
+
+  // ── KPIs (respect the ASM + Type filters) ──
+  function renderKpis(){
+    var parties = 0, lit = 0, val = 0, asmCount = 0;
+    asmGroups().forEach(function(g){
+      var gv = groupView(g);
+      if(!gv.rows.length) return;
+      asmCount++; parties += gv.rows.length; lit += gv.lit; val += gv.val;
+    });
+    var cards = [
+      {c:'k-ltr',ic:'water_drop',l:'Order-in-Hand Litres',v:Math.round(lit).toLocaleString('en-IN')+' L',
+        m:typeLabel()},
+      {c:'k-rev',ic:'payments',l:'Order-in-Hand Value',v:abbr(val),
+        m:'Open order value (₹)'},
+      {c:'k-asm',ic:'badge',l:'ASMs',v:asmCount,
+        m:ASM_FILTER.length ? ('Filtered to '+ASM_FILTER.length+' ASM'+(ASM_FILTER.length>1?'s':'')) : 'Territory owners with open orders'},
+      {c:'k-prt',ic:'storefront',l:'Parties',v:parties,
+        m:(TYPE_FILTER?'Parties of type '+TYPE_FILTER:'Customers with open orders')}
+    ];
+    document.getElementById('rcKpis').innerHTML = cards.map(function(k){
+      return '<div class="rc-kpi '+k.c+'">'+
+        '<div class="rc-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
+        '<div class="rc-kpi-v">'+k.v+'</div>'+
+        '<div class="rc-kpi-m">'+esc(k.m)+'</div>'+
+        '<span class="material-icons rc-kpi-ic">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  // SO No cell: bold; clickable to list all when a party has more than one SO.
+  function soCell(r){
+    var sos = (r.so_nos||'').split(', ').filter(Boolean);
+    if(sos.length > 1){
+      return '<td><a href="#" class="rc-so-link" data-sos="'+attr(r.so_nos)+'" data-party="'+attr(r.party)+'">'+
+        esc(sos[0])+'<span class="rc-so-more">+'+(sos.length-1)+'</span></a></td>';
+    }
+    if(sos.length === 1){ return '<td><span class="rc-so-one">'+esc(sos[0])+'</span></td>'; }
+    return '<td><span class="v0">—</span></td>';
+  }
+
+  function openSoModal(sosStr, party){
+    var sos = (sosStr||'').split(', ').filter(Boolean);
+    document.getElementById('rcModalTitle').textContent = (party||'') + ' — ' + sos.length + ' SO' + (sos.length===1?'':'s');
+    document.getElementById('rcModalBody').innerHTML = sos.map(function(s,i){
+      return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span>'+esc(s)+'</div>';
+    }).join('');
+    document.getElementById('rcModal').classList.add('show');
+  }
+  function closeSoModal(){ document.getElementById('rcModal').classList.remove('show'); }
+
+  // ── Body ──
+  function renderBody(){
+    var body = document.getElementById('rcBody');
+    if(DATA.error){ body.innerHTML='<tr><td class="rc-empty" colspan="10">Could not load data ('+esc(DATA.error)+').</td></tr>'; return; }
+    if(!ASMS.length){ body.innerHTML='<tr><td class="rc-empty" colspan="10">No open sales orders.</td></tr>'; return; }
+
+    var html = '';
+    var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0;
+    ASMS.forEach(function(g,gi){
+      if(ASM_FILTER.length && !asmSelected(g.asm)) return;   // hide non-selected ASMs (gi stays original)
+      var gv = groupView(g);
+      if(!gv.rows.length) return;                       // no rows for this Type filter
+      grandL += gv.lit; grandV += gv.val; grandLed += gv.led; grandOut += gv.out;
+      var color = asmColor(gi);
+      html += '<tr class="rc-grp" data-gi="'+gi+'">'+
+        '<td><div class="rc-gname">'+
+          '<span class="rc-tw-i">▶</span>'+
+          '<span class="rc-chip" style="background:'+color+'">'+esc(g.asm)+'</span>'+
+          '<span class="rc-cnt">'+gv.rows.length+'</span>'+
+        '</div></td>'+
+        '<td></td><td></td><td></td><td></td>'+
+        '<td class="num bal">'+ltr(gv.lit)+'</td>'+
+        '<td></td>'+
+        '<td class="num bal">'+money(gv.val)+'</td>'+
+        '<td class="num bal">'+money(gv.led)+'</td>'+
+        '<td class="num bal">'+money(gv.out)+'</td>'+
+      '</tr>';
+
+      gv.rows.forEach(function(r){
+        var hay = (r.party+' '+g.asm+' '+r.state+' '+r.main_group+' '+(r.type||'')).toLowerCase();
+        html += '<tr class="rc-row" data-gi="'+gi+'" data-name="'+attr(hay)+'">'+
+          '<td><div class="rc-party" title="'+attr(r.party)+'">'+esc(r.party)+'<span class="rc-code">'+esc(r.card_code)+'</span></div></td>'+
+          '<td>'+typeBadge(r.type)+'</td>'+
+          '<td><span class="rc-tag">'+esc(r.main_group||'—')+'</span></td>'+
+          '<td>'+esc(r.state||'—')+'</td>'+
+          '<td><input class="rc-remark" type="text" value="'+attr(r.remark)+'" data-card="'+attr(r.card_code)+'" placeholder="Add remark…"></td>'+
+          '<td class="num bal" data-cell="ltr">'+ltr(litresOf(r))+'</td>'+
+          soCell(r)+
+          '<td class="num bal" data-cell="rev">'+money(valueOf(r))+'</td>'+
+          '<td class="num" data-cell="led">'+money(ledgerOf(r))+'</td>'+
+          '<td class="num bal" data-cell="out">'+money(outOf(r))+'</td>'+
+        '</tr>';
+      });
+    });
+
+    if(!html){
+      body.innerHTML = '<tr><td class="rc-empty" colspan="10">No parties match the current filter.</td></tr>';
+      return;
+    }
+
+    html += '<tr class="rc-tot">'+
+      '<td>'+(ASM_FILTER.length===1 ? esc(ASM_FILTER[0])+' TOTAL' : (ASM_FILTER.length>1 ? 'SELECTED TOTAL' : 'GRAND TOTAL'))+'</td><td></td><td></td><td></td><td></td>'+
+      '<td class="num">'+ltr(grandL)+'</td>'+
+      '<td></td>'+
+      '<td class="num">'+money(grandV)+'</td>'+
+      '<td class="num">'+money(grandLed)+'</td>'+
+      '<td class="num">'+money(grandOut)+'</td>'+
+    '</tr>';
+
+    body.innerHTML = html;
+    seedRemarks();
+  }
+
+  // ── Interactions ──
+  function setGroup(gi,open){
+    var grp = document.querySelector('.rc-grp[data-gi="'+gi+'"]');
+    if(grp) grp.classList.toggle('open',open);
+    document.querySelectorAll('.rc-row[data-gi="'+gi+'"]').forEach(function(r){ r.classList.toggle('show',open); });
+  }
+  function setAll(open){ ASMS.forEach(function(_,gi){ setGroup(gi,open); }); }
+
+  // Re-render keeping currently-open groups expanded.
+  function rerenderKeepOpen(){
+    var open = {};
+    document.querySelectorAll('.rc-grp.open').forEach(function(g){ open[g.getAttribute('data-gi')]=true; });
+    renderKpis(); renderBody();
+    Object.keys(open).forEach(function(gi){ setGroup(gi,true); });
+  }
+
+  // Build the ASM multi-select checkbox list.
+  function populateAsmSelect(){
+    var list = document.getElementById('rcAsmList');
+    list.innerHTML = ASMS.map(function(g){
+      return '<label class="rc-ms-item"><input type="checkbox" value="'+attr(g.asm)+'">'+
+        '<span>'+esc(g.asm)+'</span><span class="rc-ms-cnt">'+g.rows.length+'</span></label>';
+    }).join('');
+  }
+  function syncAsmLabel(){
+    var el = document.getElementById('rcAsmLabel');
+    if(!ASM_FILTER.length) el.textContent = 'All ASMs';
+    else if(ASM_FILTER.length === 1) el.textContent = ASM_FILTER[0];
+    else el.textContent = ASM_FILTER.length + ' ASMs selected';
+  }
+  // Read checked boxes → ASM_FILTER, then re-render. Auto-expand a lone selection.
+  function applyAsmFilter(){
+    ASM_FILTER = Array.prototype.slice.call(
+      document.querySelectorAll('#rcAsmList input:checked')).map(function(i){ return i.value; });
+    syncAsmLabel();
+    document.getElementById('rcSearch').value = '';
+    renderKpis(); renderBody();
+    if(ASM_FILTER.length === 1){
+      var idx = -1;
+      ASMS.forEach(function(g,i){ if(g.asm===ASM_FILTER[0]) idx=i; });
+      if(idx>=0) setGroup(idx, true);
+    }
+  }
+
+  function wire(){
+    // Type filter (All / P / C / P+C) — filters rows on the Type column.
+    document.getElementById('rcType').addEventListener('click',function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      TYPE_FILTER = b.getAttribute('data-type');
+      this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+      rerenderKeepOpen();
+    });
+
+    // ASM multi-select: open/close the dropdown, toggle checkboxes, select-all / clear.
+    var ms = document.getElementById('rcAsm');
+    document.getElementById('rcAsmBtn').addEventListener('click',function(e){
+      e.stopPropagation(); ms.classList.toggle('open');
+    });
+    document.addEventListener('click',function(e){
+      if(!ms.contains(e.target)) ms.classList.remove('open');
+    });
+    document.getElementById('rcAsmList').addEventListener('change',function(e){
+      if(e.target && e.target.matches('input[type="checkbox"]')) applyAsmFilter();
+    });
+    ms.querySelector('.rc-ms-head').addEventListener('click',function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      var on = b.getAttribute('data-act') === 'all';
+      document.querySelectorAll('#rcAsmList input').forEach(function(i){ i.checked = on; });
+      applyAsmFilter();
+    });
+
+    document.getElementById('rcBody').addEventListener('click',function(e){
+      if(e.target.closest('.rc-remark')) return;          // don't toggle when editing
+      var soLink = e.target.closest('.rc-so-link');
+      if(soLink){ e.preventDefault(); openSoModal(soLink.getAttribute('data-sos'), soLink.getAttribute('data-party')); return; }
+      var grp = e.target.closest && e.target.closest('.rc-grp'); if(!grp) return;
+      var gi = grp.getAttribute('data-gi');
+      setGroup(gi, !grp.classList.contains('open'));
+    });
+    document.getElementById('rcModalClose').addEventListener('click', closeSoModal);
+    document.getElementById('rcModal').addEventListener('click', function(e){ if(e.target===this) closeSoModal(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSoModal(); });
+    document.getElementById('rcExpand').addEventListener('click',function(){ setAll(true); });
+    document.getElementById('rcCollapse').addEventListener('click',function(){ setAll(false); });
+    // Export the current view (respects the Type + ASM filter) as the CLOSING SHEET xlsx.
+    document.getElementById('rcExport').addEventListener('click',function(){
+      var url = EXPORT_URL + '?type=' + encodeURIComponent(TYPE_FILTER);
+      ASM_FILTER.forEach(function(a){ url += '&asm=' + encodeURIComponent(a); });
+      window.location.href = url;
+    });
+
+    // save remark on blur / Enter
+    document.getElementById('rcBody').addEventListener('blur',function(e){
+      var inp = e.target.closest && e.target.closest('.rc-remark'); if(!inp) return;
+      saveRemark(inp);
+    }, true);
+    document.getElementById('rcBody').addEventListener('keydown',function(e){
+      if(e.key !== 'Enter') return;
+      var inp = e.target.closest && e.target.closest('.rc-remark'); if(!inp) return;
+      e.preventDefault(); inp.blur();
+    });
+
+    var search = document.getElementById('rcSearch');
+    search.addEventListener('input',function(){
+      var q = this.value.trim().toLowerCase();
+      if(!q){
+        document.querySelectorAll('.rc-row').forEach(function(r){r.classList.remove('show');r.style.display='';});
+        document.querySelectorAll('.rc-grp').forEach(function(r){r.classList.remove('open');r.style.display='';});
+        return;
+      }
+      var hits = {};
+      document.querySelectorAll('.rc-row').forEach(function(r){
+        var match = r.getAttribute('data-name').indexOf(q) !== -1;
+        r.style.display = match ? 'table-row' : 'none';
+        r.classList.toggle('show',match);
+        if(match) hits[r.getAttribute('data-gi')] = true;
+      });
+      document.querySelectorAll('.rc-grp').forEach(function(r){
+        var gi = r.getAttribute('data-gi');
+        var on = !!hits[gi];
+        r.style.display = on ? 'table-row' : 'none';
+        r.classList.toggle('open',on);
+      });
+    });
+  }
+
+  var saveTimers = {};
+  function saveRemark(inp){
+    var card = inp.getAttribute('data-card');
+    var val = inp.value;
+    if(inp.getAttribute('data-last') === val) return;     // unchanged
+    inp.setAttribute('data-last', val);
+    fetch(SAVE_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({card_code:card, remark:val})
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if(j && j.status==='ok'){
+        inp.classList.add('saved');
+        clearTimeout(saveTimers[card]);
+        saveTimers[card] = setTimeout(function(){ inp.classList.remove('saved'); }, 1200);
+      }
+    }).catch(function(){});
+  }
+
+  // seed data-last so we don't POST untouched fields
+  function seedRemarks(){
+    document.querySelectorAll('.rc-remark').forEach(function(i){ i.setAttribute('data-last', i.value); });
+  }
+
+  populateAsmSelect();
+  renderKpis();
+  renderBody();
+  wire();
+})();
+</script>
+{% endblock %}
