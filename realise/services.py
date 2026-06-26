@@ -2201,12 +2201,18 @@ def _xlsx_col_letter(idx):
     return name
 
 
-def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_rows=0):
+# Style ids — must match the cellXfs order in _render_single_sheet_xlsx's styles.xml.
+_ST_TITLE, _ST_HEAD, _ST_TEXT, _ST_NUM, _ST_BTEXT, _ST_BNUM = 0, 1, 2, 3, 4, 5
+
+
+def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_rows=0, grid_from_row=2):
     """Minimal pure-Python .xlsx writer (no third-party deps, mirrors core.simple_xlsx so it
-    works on servers without openpyxl). `cells` maps (row, col)→(kind, value, bold) where kind
-    is 't' (text) or 'n' (integer number). Supports per-column widths (1-based col→width),
-    bold, an integer number format (#,##0) and freezing the top `freeze_rows` rows.
-    Style ids: 0 text, 1 bold text, 2 number, 3 bold number."""
+    works on servers without openpyxl). `cells` maps (row, col)→(style, kind, value) where kind
+    is 't' (text) or 'n' (integer number). Supports per-column widths (1-based col→width), an
+    integer format (#,##0), bold, a gray bold-black header, thin black borders, and freezing the
+    top `freeze_rows` rows. Every cell from `grid_from_row` down is bordered (blanks included) so
+    the body reads as a gridded table. Style ids match cellXfs: 0 title, 1 header, 2 text,
+    3 number, 4 bold text, 5 bold number."""
     import zipfile
     from io import BytesIO
     from xml.sax.saxutils import escape
@@ -2215,16 +2221,17 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
     for r in range(1, max_row + 1):
         cell_xml = []
         for c in range(1, max_col + 1):
-            cell = cells.get((r, c))
-            if cell is None:
-                continue
-            kind, value, bold = cell
+            spec = cells.get((r, c))
             ref = '%s%d' % (_xlsx_col_letter(c), r)
-            if kind == 'n':
-                cell_xml.append('<c r="%s" s="%d"><v>%d</v></c>' % (ref, 3 if bold else 2, int(value)))
-            else:
-                cell_xml.append('<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>'
-                                % (ref, 1 if bold else 0, escape(str(value))))
+            if spec is not None:
+                style, kind, value = spec
+                if kind == 'n':
+                    cell_xml.append('<c r="%s" s="%d"><v>%d</v></c>' % (ref, style, int(value)))
+                else:
+                    cell_xml.append('<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>'
+                                    % (ref, style, escape(str(value))))
+            elif r >= grid_from_row:
+                cell_xml.append('<c r="%s" s="%d"/>' % (ref, _ST_TEXT))   # bordered blank → full grid
         if cell_xml:
             rows_xml.append('<row r="%d">%s</row>' % (r, ''.join(cell_xml)))
 
@@ -2243,21 +2250,36 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
         f'<sheetData>{"".join(rows_xml)}</sheetData></worksheet>'
     )
 
+    _thin = ('<border><left style="thin"><color rgb="FF000000"/></left>'
+             '<right style="thin"><color rgb="FF000000"/></right>'
+             '<top style="thin"><color rgb="FF000000"/></top>'
+             '<bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border>')
     styles = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>'
         '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
-        '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
-        '<fill><patternFill patternType="gray125"/></fill></fills>'
-        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font></fonts>'
+        '<fills count="3"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/></patternFill></fill></fills>'
+        '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
+        + _thin +
+        '</borders>'
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        '<cellXfs count="4">'
+        '<cellXfs count="6">'
+        # 0 title (plain, no border)
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-        '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
-        '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
-        '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>'
+        # 1 header — bold black on gray, bordered, centered
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+        # 2 text (bordered)
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>'
+        # 3 number (bordered, #,##0)
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+        # 4 bold text (bordered)
+        '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
+        # 5 bold number (bordered, #,##0)
+        '<xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>'
         '</cellXfs></styleSheet>'
     )
     content_types = (
@@ -2301,59 +2323,46 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
 
 
 def build_closing_sheet_xlsx(payload, type_filter=''):
-    """Render the Required Credit Limit data into an .xlsx in the CLOSING SHEET layout:
-    'Sum of TOTAL LTR' in row 1, a bold header row, each ASM's parties, a bold '<ASM> Total'
-    subtotal, and a final bold 'Grand Total'. Columns: SO NAME (ASM), PARTY NAME, TYPE
-    (P/C/P+C), MAIN GROUP, STATE, DELIVERY REMARK, the category litres (CANOLA / COMMODITY /
-    OLIVE / OTHER PREMIUM), Grand Total, C+O+O (= Canola+Olive+Other Premium), SO NO, PI AMT
-    (OIH revenue), LEDGER AMT (SAP balance, +receivable / -payable), TOTAL OUTSTANDING
-    (= PI AMT + LEDGER AMT) and REQUIRED LIMIT (= Total Outstanding + 2%); Payment Done /
-    Outstanding stay blank. type_filter ('' | P | C | P+C) restricts to parties of that type.
-    Pure-Python writer (no openpyxl)."""
+    """Render the Required Credit Limit data into a formatted .xlsx in the CLOSING SHEET
+    layout: 'Sum of TOTAL LTR' in row 1, a gray bold-black header row, each ASM's parties,
+    a bold '<ASM> Total' subtotal, and a final bold 'Grand Total'; the whole body is bordered.
+    Columns: SO NAME (ASM), PARTY NAME, TYPE (P/C/P+C), MAIN GROUP, STATE, DELIVERY REMARK,
+    PREMIUM, COMMODITY (the type litres split), Grand Total, SO NO, PI AMT (OIH revenue),
+    LEDGER AMT (SAP balance, +receivable / -payable), TOTAL OUTSTANDING (= PI AMT + LEDGER AMT)
+    and REQUIRED LIMIT (= Total Outstanding + 2%); Payment Done / Outstanding stay blank.
+    type_filter ('' | P | C | P+C) restricts to parties of that type. Pure-Python writer."""
     if type_filter not in ('', 'P', 'C', 'P+C'):
         type_filter = ''
 
-    def _cats(d):
-        """(canola, commodity, olive, other_premium) — other_premium = the catch-all so the
-        four category columns always sum to the Grand Total (total litres)."""
-        total = float(d.get('total', 0) or 0)
-        canola = float(d.get('canola', 0) or 0)
-        olive = float(d.get('olive', 0) or 0)
-        commodity = float(d.get('commodity', 0) or 0)
-        other = total - canola - olive - commodity
-        return canola, commodity, olive, other
-
     # 1-based column widths: A SO NAME, B PARTY NAME, C TYPE, D MAIN GROUP, E STATE,
-    # F DELIVERY REMARK, G CANOLA, H COMMODITY, I OLIVE, J OTHER PREMIUM, K Grand Total,
-    # L C+O+O, M SO NO, N PI AMT, O–S deferred financial columns.
-    widths = {1: 26.7, 2: 46.6, 3: 8.0, 4: 14.4, 5: 9.0, 6: 28.0, 7: 10.3, 8: 12.3, 9: 8.5,
-              10: 16.0, 11: 12.0, 12: 12.0, 13: 22.0, 14: 13.0, 15: 12.3, 16: 20.6, 17: 14.1,
-              18: 15.6, 19: 14.4}
-    MAX_COL = 19
+    # F DELIVERY REMARK, G PREMIUM, H COMMODITY, I Grand Total, J SO NO, K PI AMT,
+    # L LEDGER AMT, M TOTAL OUTSTANDING, N REQUIRED LIMIT, O–P deferred financial columns.
+    widths = {1: 26.7, 2: 46.6, 3: 7.0, 4: 14.4, 5: 9.0, 6: 28.0, 7: 12.3, 8: 12.3, 9: 12.0,
+              10: 22.0, 11: 14.0, 12: 14.0, 13: 18.0, 14: 14.0, 15: 14.0, 16: 14.0}
+    MAX_COL = 16
 
     cells = {}
 
-    def put_text(rr, cc, value, bold=False):
+    def put_text(rr, cc, value, style=_ST_TEXT):
         if value in (None, ''):
             return
-        cells[(rr, cc)] = ('t', value, bold)
+        cells[(rr, cc)] = (style, 't', value)
 
-    def put_num(rr, cc, value, bold=False, blank_zero=True):
+    def put_num(rr, cc, value, style=_ST_NUM, blank_zero=True):
         v = int(round(value or 0))
         if blank_zero and v == 0:
             return
-        cells[(rr, cc)] = ('n', v, bold)
+        cells[(rr, cc)] = (style, 'n', v)
 
-    put_text(1, 1, 'Sum of TOTAL LTR')
+    put_text(1, 1, 'Sum of TOTAL LTR', style=_ST_TITLE)
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
-               'CANOLA', 'COMMODITY', 'OLIVE', 'OTHER PREMIUM', 'Grand Total', 'C+O+O',
-               'SO NO', 'PI AMT',
+               'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT',
                'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING']
     for i, h in enumerate(headers, start=1):
-        put_text(2, i, h, bold=True)
+        put_text(2, i, h, style=_ST_HEAD)
 
     r = 3
-    g_can = g_com = g_oli = g_oth = g_tot = g_val = g_led = g_out = g_req = 0.0
+    g_prem = g_com = g_tot = g_val = g_led = g_out = g_req = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
         if type_filter:
@@ -2361,11 +2370,11 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
-        s_can = s_com = s_oli = s_oth = s_tot = s_val = s_led = s_out = s_req = 0.0
+        s_prem = s_com = s_tot = s_val = s_led = s_out = s_req = 0.0
         for row in rows:
-            canola, commodity, olive, other = _cats(row['litres'])
+            prem = float(row['litres'].get('premium', 0) or 0)
+            commodity = float(row['litres'].get('commodity', 0) or 0)
             total = float(row['litres'].get('total', 0) or 0)
-            coo = canola + olive + other            # C+O+O = Canola + Olive + Other Premium
             val = float(row['value'].get('total', 0) or 0)
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
@@ -2377,37 +2386,32 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_text(r, 4, row.get('main_group'))         # D MAIN GROUP
             put_text(r, 5, row.get('state'))              # E STATE
             put_text(r, 6, row.get('remark'))             # F DELIVERY REMARK
-            put_num(r, 7, canola)                         # G CANOLA
+            put_num(r, 7, prem)                           # G PREMIUM
             put_num(r, 8, commodity)                      # H COMMODITY
-            put_num(r, 9, olive)                          # I OLIVE
-            put_num(r, 10, other)                         # J OTHER PREMIUM
-            put_num(r, 11, total, bold=True)              # K Grand Total
-            put_num(r, 12, coo)                           # L C+O+O
-            put_text(r, 13, row.get('so_nos'))            # M SO NO
-            put_num(r, 14, val)                           # N PI AMT (OIH revenue)
-            put_num(r, 15, ledger)                        # O LEDGER AMT (+rec / -pay)
-            put_num(r, 16, outstanding)                   # P TOTAL OUTSTANDING
-            put_num(r, 17, required)                      # Q Required Limit (outstanding + 2%)
-            s_can += canola; s_com += commodity; s_oli += olive; s_oth += other
-            s_tot += total; s_val += val; s_led += ledger; s_out += outstanding; s_req += required
+            put_num(r, 9, total, style=_ST_BNUM)          # I Grand Total
+            put_text(r, 10, row.get('so_nos'))            # J SO NO
+            put_num(r, 11, val)                           # K PI AMT (OIH revenue)
+            put_num(r, 12, ledger)                        # L LEDGER AMT (+rec / -pay)
+            put_num(r, 13, outstanding)                   # M TOTAL OUTSTANDING
+            put_num(r, 14, required)                      # N Required Limit (outstanding + 2%)
+            s_prem += prem; s_com += commodity; s_tot += total
+            s_val += val; s_led += ledger; s_out += outstanding; s_req += required
             first = False
             r += 1
-        put_text(r, 1, f"{g['asm']} Total", bold=True)
-        put_num(r, 7, s_can, bold=True); put_num(r, 8, s_com, bold=True)
-        put_num(r, 9, s_oli, bold=True); put_num(r, 10, s_oth, bold=True)
-        put_num(r, 11, s_tot, bold=True); put_num(r, 12, s_can + s_oli + s_oth, bold=True)
-        put_num(r, 14, s_val, bold=True); put_num(r, 15, s_led, bold=True); put_num(r, 16, s_out, bold=True)
-        put_num(r, 17, s_req, bold=True)
-        g_can += s_can; g_com += s_com; g_oli += s_oli; g_oth += s_oth
-        g_tot += s_tot; g_val += s_val; g_led += s_led; g_out += s_out; g_req += s_req
+        put_text(r, 1, f"{g['asm']} Total", style=_ST_BTEXT)
+        put_num(r, 7, s_prem, style=_ST_BNUM); put_num(r, 8, s_com, style=_ST_BNUM)
+        put_num(r, 9, s_tot, style=_ST_BNUM); put_num(r, 11, s_val, style=_ST_BNUM)
+        put_num(r, 12, s_led, style=_ST_BNUM); put_num(r, 13, s_out, style=_ST_BNUM)
+        put_num(r, 14, s_req, style=_ST_BNUM)
+        g_prem += s_prem; g_com += s_com; g_tot += s_tot
+        g_val += s_val; g_led += s_led; g_out += s_out; g_req += s_req
         r += 1
 
-    put_text(r, 1, 'Grand Total', bold=True)
-    put_num(r, 7, g_can, bold=True); put_num(r, 8, g_com, bold=True)
-    put_num(r, 9, g_oli, bold=True); put_num(r, 10, g_oth, bold=True)
-    put_num(r, 11, g_tot, bold=True); put_num(r, 12, g_can + g_oli + g_oth, bold=True)
-    put_num(r, 14, g_val, bold=True); put_num(r, 15, g_led, bold=True); put_num(r, 16, g_out, bold=True)
-    put_num(r, 17, g_req, bold=True)
+    put_text(r, 1, 'Grand Total', style=_ST_BTEXT)
+    put_num(r, 7, g_prem, style=_ST_BNUM); put_num(r, 8, g_com, style=_ST_BNUM)
+    put_num(r, 9, g_tot, style=_ST_BNUM); put_num(r, 11, g_val, style=_ST_BNUM)
+    put_num(r, 12, g_led, style=_ST_BNUM); put_num(r, 13, g_out, style=_ST_BNUM)
+    put_num(r, 14, g_req, style=_ST_BNUM)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 
@@ -2604,6 +2608,9 @@ _SHIPTO_JOIN = ('LEFT JOIN "{S}"."CRD1" A ON A."CardCode" = H."CardCode" '
                 'AND A."Address" = H."ShipToCode" AND A."AdresType" = \'S\'')
 
 
+# The U_ARNO filter mirrors REPORT_SALES_COGS (the proc behind the dashboard's Done): the
+# SAP team marks invoices to hide with OINV/ORIN."U_ARNO" = 'H' (and 'T'); the proc excludes
+# them, so the Done popup must too or it over-counts hidden parties vs the channel cell.
 _DONE_LINE_SQL = '''
     SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
@@ -2623,6 +2630,7 @@ _DONE_LINE_SQL = '''
     LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
     ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
+      AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
 '''
 
 
