@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class MonthlyTarget(models.Model):
@@ -245,3 +246,40 @@ class ClosingRemark(models.Model):
 
     def __str__(self):
         return f"{self.card_code}: {self.remark[:40]}"
+
+
+class CreditLock(models.Model):
+    """A global freeze of the Required Credit Limit report's Total Outstanding and
+    Required Limit columns. While active (and not past lock_until), those two columns
+    render from the per-party snapshot captured at lock time instead of live SAP; the
+    Payment Done column is the customer's SAP receipts since locked_at and Outstanding =
+    snapshot Total Outstanding − Payment Done. At most one lock is active at a time."""
+
+    locked_at = models.DateTimeField(default=timezone.now)
+    lock_until = models.DateField()                 # inclusive last day the freeze holds
+    days = models.PositiveIntegerField(default=30)  # the duration the user chose
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL)
+
+    def __str__(self):
+        state = 'active' if self.active else 'cleared'
+        return f"CreditLock {self.locked_at:%Y-%m-%d} → {self.lock_until} ({state})"
+
+
+class CreditLockSnapshot(models.Model):
+    """Frozen Total Outstanding / Required Limit for one party row, captured when a
+    CreditLock is created. row_key = card_code|state|main_group (the report's row
+    identity), so multi-row parties (a customer spanning states/groups) freeze per row."""
+
+    lock = models.ForeignKey(CreditLock, related_name='snapshots', on_delete=models.CASCADE)
+    row_key = models.CharField(max_length=160)
+    card_code = models.CharField(max_length=50)
+    outstanding = models.FloatField(default=0.0)
+    required_limit = models.FloatField(default=0.0)
+
+    class Meta:
+        indexes = [models.Index(fields=['lock', 'row_key'])]
+
+    def __str__(self):
+        return f"{self.row_key}: {self.outstanding:.0f}"

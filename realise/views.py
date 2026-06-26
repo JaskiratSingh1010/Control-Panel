@@ -128,6 +128,24 @@ def api_save_closing_remark(request):
     return JsonResponse({'status': 'ok'})
 
 
+@permission_flag_required('can_required_credit_limit', json_response=True)
+@require_http_methods(['POST'])
+def api_credit_lock(request):
+    """Freeze Total Outstanding + Required Limit at their current values for the chosen
+    number of days. Snapshots every party row; returns the new lock state."""
+    body = _parse_body(request)
+    lock = services.create_credit_lock(body.get('days', 30), request.user)
+    return JsonResponse({'status': 'ok', 'lock': lock})
+
+
+@permission_flag_required('can_required_credit_limit', json_response=True)
+@require_http_methods(['POST'])
+def api_credit_unlock(request):
+    """Lift the active lock early — the columns revert to live SAP immediately."""
+    services.clear_credit_lock()
+    return JsonResponse({'status': 'ok', 'lock': None})
+
+
 @permission_flag_required('can_required_credit_limit')
 @require_http_methods(['GET'])
 def export_required_credit(request):

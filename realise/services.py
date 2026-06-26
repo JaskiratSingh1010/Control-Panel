@@ -9,7 +9,7 @@ from django.utils import timezone
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
-                     CityOwner, ClosingRemark)
+                     CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot)
 
 logger = logging.getLogger(__name__)
 
@@ -2087,7 +2087,8 @@ _OLIVE_TOKENS = ('OLIVE', 'POMACE')
 
 def _blank_bucket():
     return {'litres': {'premium': 0.0, 'commodity': 0.0, 'canola': 0.0, 'olive': 0.0, 'total': 0.0},
-            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0, 'required_limit': 0.0}}
+            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0, 'required_limit': 0.0,
+                       'payment_done': 0.0, 'remaining': 0.0}}
 
 
 def _round_bucket(b):
@@ -2097,7 +2098,114 @@ def _round_bucket(b):
     return b
 
 
-def get_required_credit_rows():
+def _row_key(card_code, state, main_group):
+    """Stable identity for a report row. A customer can span several (state, main group)
+    rows, so the lock snapshot and the payment split are keyed on all three parts."""
+    return '%s|%s|%s' % (card_code or '', state or '', main_group or '')
+
+
+def _credit_payments_since(since_date):
+    """Total incoming customer receipts per CardCode booked on/after `since_date`, read
+    live from SAP B1 (ORCT, DocType 'C' = customer payment). Powers the Payment Done
+    column while a credit lock is in force. Returns {card_code: amount_paid}; {} on any
+    SAP error so the report still renders (Payment Done just stays blank)."""
+    sql = f'''
+        SELECT COALESCE(TRIM("CardCode"), '') AS "CCODE",
+               SUM(COALESCE("DocTotal", 0))    AS "PAID"
+        FROM "{SAP_SCHEMA}"."ORCT"
+        WHERE "DocType" = 'C' AND "Canceled" = 'N' AND "DocDate" >= ?
+        GROUP BY COALESCE(TRIM("CardCode"), '')
+    '''
+    try:
+        rows = sap_connector.execute_query(sql, (since_date,))
+        return {_normalize_name(r.get('CCODE')): float(r.get('PAID') or 0) for r in rows}
+    except Exception as exc:
+        logger.error('[REQCREDIT] receipts fetch failed: %s', exc)
+        return {}
+
+
+def get_active_credit_lock():
+    """The current active CreditLock, or None. A lock past its lock_until date auto-clears
+    (the freeze lapses and the columns revert to live SAP on the next read)."""
+    today = timezone.localdate()
+    lock = CreditLock.objects.filter(active=True).order_by('-locked_at').first()
+    if lock and lock.lock_until < today:
+        CreditLock.objects.filter(active=True).update(active=False)
+        return None
+    return lock
+
+
+def _lock_info(lock):
+    """Serializable lock state for the template / API, or None when nothing is frozen."""
+    if not lock:
+        return None
+    today = timezone.localdate()
+    return {
+        'active': True,
+        'locked_at': timezone.localtime(lock.locked_at).isoformat(),
+        'lock_until': lock.lock_until.isoformat(),
+        'days': lock.days,
+        'days_left': max((lock.lock_until - today).days, 0),
+    }
+
+
+def create_credit_lock(days, user=None):
+    """Snapshot every party row's current (live) Total Outstanding and Required Limit and
+    freeze them for `days` days. Replaces any existing active lock. Returns _lock_info."""
+    try:
+        days = max(1, min(int(days), 3650))
+    except (TypeError, ValueError):
+        days = 30
+    payload = get_required_credit_rows(_apply_lock=False)        # capture live values
+    CreditLock.objects.filter(active=True).update(active=False)
+    lock = CreditLock.objects.create(
+        lock_until=timezone.localdate() + timedelta(days=days), days=days, active=True,
+        created_by=user if (user and getattr(user, 'is_authenticated', False)) else None)
+    snaps = []
+    for g in payload.get('asms', []):
+        for r in g.get('rows', []):
+            snaps.append(CreditLockSnapshot(
+                lock=lock,
+                row_key=_row_key(r['card_code'], r['state'], r['main_group']),
+                card_code=r['card_code'],
+                outstanding=float(r['value'].get('outstanding') or 0),
+                required_limit=float(r['value'].get('required_limit') or 0)))
+    if snaps:
+        CreditLockSnapshot.objects.bulk_create(snaps)
+    return _lock_info(lock)
+
+
+def clear_credit_lock():
+    """Lift any active lock early — the columns revert to live SAP immediately."""
+    CreditLock.objects.filter(active=True).update(active=False)
+
+
+def _overlay_credit_lock(buckets, lock):
+    """Mutate the per-row buckets in place for an active lock: Total Outstanding and
+    Required Limit come from the frozen snapshot; Payment Done is the card's SAP receipts
+    since the lock date, split across the card's rows in proportion to their snapshot
+    outstanding; Outstanding (remaining) = snapshot outstanding − Payment Done. Rows with
+    no snapshot (parties that appeared after the lock) are left on live SAP."""
+    snaps = {s.row_key: s for s in lock.snapshots.all()}
+    paid_by_card = _credit_payments_since(timezone.localtime(lock.locked_at).date())
+    rows_by_card = {}
+    for b in buckets:
+        s = snaps.get(_row_key(b['card_code'], b['state'], b['main_group']))
+        if not s:
+            continue
+        b['value']['outstanding'] = s.outstanding
+        b['value']['required_limit'] = s.required_limit
+        rows_by_card.setdefault(b['card_code'], []).append((b, s))
+    for card, pairs in rows_by_card.items():
+        paid = paid_by_card.get(card, 0.0)
+        tot = sum(s.outstanding for _, s in pairs)
+        for i, (b, s) in enumerate(pairs):
+            pay = (paid * s.outstanding / tot) if tot > 0 else (paid if i == 0 else 0.0)
+            b['value']['payment_done'] = pay
+            b['value']['remaining'] = s.outstanding - pay
+
+
+def get_required_credit_rows(_apply_lock=True):
     """Required Credit Limit report data: live Order-in-Hand grouped by ASM (territory
     owner) → party. Each party row carries open litres (total + the Canola / Olive /
     Premium / Commodity splits) and open value (₹), a 'type' tag (P / C / P+C / —) for the
@@ -2178,6 +2286,12 @@ def get_required_credit_rows():
         bucket['remark'] = remarks.get(bucket['card_code'], '')
         by_asm.setdefault(bucket['asm'] or 'UNASSIGNED', []).append(bucket)
 
+    # If a lock is active, freeze Total Outstanding / Required Limit to the snapshot and
+    # fill Payment Done / Outstanding from SAP receipts — BEFORE subtotals so they sum too.
+    lock = get_active_credit_lock() if _apply_lock else None
+    if lock:
+        _overlay_credit_lock(list(agg.values()), lock)
+
     asms = []
     grand = _blank_bucket()
     for asm in sorted(by_asm):
@@ -2190,7 +2304,7 @@ def get_required_credit_rows():
                     grand[metric][key] += r[metric][key]
         asms.append({'asm': asm, 'rows': rows, 'subtotal': _round_bucket(sub)})
 
-    return {'asms': asms, 'total': _round_bucket(grand)}
+    return {'asms': asms, 'total': _round_bucket(grand), 'lock': _lock_info(lock)}
 
 
 def _xlsx_col_letter(idx):
@@ -2365,7 +2479,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         put_text(2, i, h, style=_ST_HEAD)
 
     r = 3
-    g_prem = g_com = g_tot = g_val = g_led = g_out = g_req = 0.0
+    g_prem = g_com = g_tot = g_val = g_led = g_out = g_req = g_pay = g_rem = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
         if types:
@@ -2373,7 +2487,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
-        s_prem = s_com = s_tot = s_val = s_led = s_out = s_req = 0.0
+        s_prem = s_com = s_tot = s_val = s_led = s_out = s_req = s_pay = s_rem = 0.0
         for row in rows:
             prem = float(row['litres'].get('premium', 0) or 0)
             commodity = float(row['litres'].get('commodity', 0) or 0)
@@ -2382,6 +2496,8 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
             required = float(row['value'].get('required_limit', 0) or 0)
+            payment = float(row['value'].get('payment_done', 0) or 0)   # 0 unless a lock is on
+            remaining = float(row['value'].get('remaining', 0) or 0)
             if first:
                 put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
             put_text(r, 2, row['party'])                  # B PARTY NAME
@@ -2397,8 +2513,11 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 12, ledger)                        # L LEDGER AMT (+rec / -pay)
             put_num(r, 13, outstanding)                   # M TOTAL OUTSTANDING
             put_num(r, 14, required)                      # N Required Limit (outstanding + 2%)
+            put_num(r, 15, payment)                       # O PAYMENT DONE (SAP receipts, locked)
+            put_num(r, 16, remaining)                     # P OUTSTANDING (= Total Outstanding − Payment)
             s_prem += prem; s_com += commodity; s_tot += total
             s_val += val; s_led += ledger; s_out += outstanding; s_req += required
+            s_pay += payment; s_rem += remaining
             first = False
             r += 1
         put_text(r, 1, f"{g['asm']} Total", style=_ST_BTEXT)
@@ -2406,8 +2525,10 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         put_num(r, 9, s_tot, style=_ST_BNUM); put_num(r, 11, s_val, style=_ST_BNUM)
         put_num(r, 12, s_led, style=_ST_BNUM); put_num(r, 13, s_out, style=_ST_BNUM)
         put_num(r, 14, s_req, style=_ST_BNUM)
+        put_num(r, 15, s_pay, style=_ST_BNUM); put_num(r, 16, s_rem, style=_ST_BNUM)
         g_prem += s_prem; g_com += s_com; g_tot += s_tot
         g_val += s_val; g_led += s_led; g_out += s_out; g_req += s_req
+        g_pay += s_pay; g_rem += s_rem
         r += 1
 
     put_text(r, 1, 'Grand Total', style=_ST_BTEXT)
@@ -2415,6 +2536,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     put_num(r, 9, g_tot, style=_ST_BNUM); put_num(r, 11, g_val, style=_ST_BNUM)
     put_num(r, 12, g_led, style=_ST_BNUM); put_num(r, 13, g_out, style=_ST_BNUM)
     put_num(r, 14, g_req, style=_ST_BNUM)
+    put_num(r, 15, g_pay, style=_ST_BNUM); put_num(r, 16, g_rem, style=_ST_BNUM)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 

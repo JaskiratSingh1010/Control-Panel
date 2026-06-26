@@ -55,6 +55,25 @@
     padding:7px 15px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}
   .rc-seg button.on{background:linear-gradient(135deg,#0d9488,#0891b2);color:#fff;box-shadow:0 3px 8px rgba(13,148,136,.32)}
 
+  /* lock control + active-lock status pill */
+  .rc-lock{position:relative}
+  .rc-lock-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);right:0;min-width:230px;
+    background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.18);padding:12px}
+  .rc-lock.open .rc-lock-pop{display:block}
+  .rc-lock-row{font-size:12px;font-weight:700;color:#334155;display:flex;align-items:center;gap:7px;margin-bottom:10px}
+  .rc-lock-row input{width:66px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-family:inherit;
+    font-size:13px;font-weight:700;color:#0f172a;text-align:right;outline:none}
+  .rc-lock-row input:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .rc-lock-hint{font-size:10.5px;color:#94a3b8;font-weight:600;margin-bottom:10px;line-height:1.4}
+  .rc-lock-go{width:100%;justify-content:center;background:#0f766e;color:#fff;border-color:#0f766e}
+  .rc-lock-go:hover{background:#0d9488;border-color:#0d9488;color:#fff}
+  .rc-lockpill{display:inline-flex;align-items:center;gap:8px;background:#ecfdf5;border:1px solid #a7f3d0;
+    color:#065f46;font-size:12px;font-weight:800;padding:6px 7px 6px 12px;border-radius:11px}
+  .rc-lockpill .material-icons{font-size:16px}
+  .rc-unlock{border:0;background:#0f766e;color:#fff;font-family:inherit;font-size:11px;font-weight:800;
+    padding:5px 11px;border-radius:8px;cursor:pointer}
+  .rc-unlock:hover{background:#0d9488}
+
   /* ASM multi-select dropdown */
   .rc-ms{position:relative}
   .rc-ms-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;border-radius:11px;
@@ -202,6 +221,24 @@
     </label>
     <button type="button" class="rc-btn" id="rcExpand"><span class="material-icons">unfold_more</span>Expand all</button>
     <button type="button" class="rc-btn" id="rcCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
+
+    <!-- Lock control (shown when nothing is frozen) -->
+    <div class="rc-lock" id="rcLock" title="Freeze Total Outstanding &amp; Required Limit at their current values">
+      <button type="button" class="rc-btn" id="rcLockBtn"><span class="material-icons">lock</span>Lock columns</button>
+      <div class="rc-lock-pop" id="rcLockPop">
+        <div class="rc-lock-row">Freeze for
+          <input type="number" id="rcLockDays" min="1" max="3650" value="30"> days</div>
+        <div class="rc-lock-hint">Total Outstanding &amp; Required Limit hold their current values; Payment
+          Done &amp; Outstanding then track SAP receipts until the lock lapses.</div>
+        <button type="button" class="rc-btn rc-lock-go" id="rcLockGo"><span class="material-icons">lock</span>Lock now</button>
+      </div>
+    </div>
+    <!-- Active-lock status pill (shown when frozen) -->
+    <span class="rc-lockpill" id="rcLockPill" style="display:none">
+      <span class="material-icons">lock</span><span id="rcLockPillTxt"></span>
+      <button type="button" class="rc-unlock" id="rcUnlockBtn">Unlock</button>
+    </span>
+
     <button type="button" class="rc-btn rc-xl" id="rcExport"><span class="material-icons">download</span>Export Excel</button>
   </div>
 
@@ -221,9 +258,11 @@
             <th>Ledger Amt ₹</th>
             <th class="hot">Total Outstanding ₹</th>
             <th class="hot">Required Limit ₹</th>
+            <th class="hot" title="SAP receipts received since the lock date">Payment Done ₹</th>
+            <th class="hot" title="Total Outstanding − Payment Done (while locked)">Outstanding ₹</th>
           </tr>
         </thead>
-        <tbody id="rcBody"><tr><td class="rc-empty" colspan="11">Loading…</td></tr></tbody>
+        <tbody id="rcBody"><tr><td class="rc-empty" colspan="13">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -236,8 +275,11 @@
       Type buttons and on the owner with the ASM selector. <b>Ledger Amt</b> is the customer's SAP balance
       (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>; <b>Required Limit =
       Total Outstanding + 2%</b>. A customer spanning several states/ASMs has its ledger split across those
-      rows in proportion to open-order value. Export
-      (CLOSING SHEET layout, with the Premium / Commodity split) respects both filters.</span>
+      rows in proportion to open-order value. <b>Lock columns</b> freezes Total Outstanding &amp;
+      Required Limit at their current values for the days you choose; while locked, <b>Payment Done</b>
+      shows the customer's SAP receipts since the lock date and <b>Outstanding = Total Outstanding −
+      Payment Done</b>. The freeze lapses automatically when the period ends (or Unlock to lift it early).
+      Export (CLOSING SHEET layout, with the Premium / Commodity split) respects both filters.</span>
   </div>
 </div>
 
@@ -259,11 +301,14 @@
   var DATA  = JSON.parse(document.getElementById('credit-data').textContent || '{}');
   var ASMS  = DATA.asms || [];
   var TOTAL = DATA.total || {litres:{},value:{}};
+  var LOCK  = DATA.lock || null;   // active freeze: {locked_at, lock_until, days, days_left} or null
   var TYPE_FILTER = [];   // [] = all, else a subset of ['P','C','P+C'] (filters on the Type column)
   var ASM_FILTER = [];   // [] = all ASMs, else the selected ASM names
   var CSRF  = "{{ csrf_token }}";
   var SAVE_URL = "{% url 'realise:api_save_closing_remark' %}";
   var EXPORT_URL = "{% url 'realise:export_required_credit' %}";
+  var LOCK_URL = "{% url 'realise:api_credit_lock' %}";
+  var UNLOCK_URL = "{% url 'realise:api_credit_unlock' %}";
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function attr(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
@@ -297,6 +342,9 @@
   function ledgerOf(o){ return (o && o.value) ? (Number(o.value.ledger)||0) : 0; }
   function outOf(o){ return (o && o.value) ? (Number(o.value.outstanding)||0) : 0; }
   function reqOf(o){ return (o && o.value) ? (Number(o.value.required_limit)||0) : 0; }
+  // Payment Done / Outstanding (remaining) — populated by the backend only while locked.
+  function payOf(o){ return (o && o.value) ? (Number(o.value.payment_done)||0) : 0; }
+  function remOf(o){ return (o && o.value) ? (Number(o.value.remaining)||0) : 0; }
   function typeLabel(){
     if(!TYPE_FILTER.length) return 'All types';
     var names = {'P':'Premium only (P)', 'C':'Commodity only (C)', 'P+C':'Premium + Commodity (P+C)'};
@@ -313,9 +361,12 @@
   // A group's visible rows + their summed litres / value / ledger / outstanding.
   function groupView(g){
     var rows = g.rows.filter(rowVisible);
-    var lit = 0, val = 0, led = 0, out = 0, req = 0;
-    rows.forEach(function(r){ lit += litresOf(r); val += valueOf(r); led += ledgerOf(r); out += outOf(r); req += reqOf(r); });
-    return {rows: rows, lit: lit, val: val, led: led, out: out, req: req};
+    var lit = 0, val = 0, led = 0, out = 0, req = 0, pay = 0, rem = 0;
+    rows.forEach(function(r){
+      lit += litresOf(r); val += valueOf(r); led += ledgerOf(r); out += outOf(r); req += reqOf(r);
+      pay += payOf(r); rem += remOf(r);
+    });
+    return {rows: rows, lit: lit, val: val, led: led, out: out, req: req, pay: pay, rem: rem};
   }
 
   // Type badge for the Type column.
@@ -380,16 +431,17 @@
   // ── Body ──
   function renderBody(){
     var body = document.getElementById('rcBody');
-    if(DATA.error){ body.innerHTML='<tr><td class="rc-empty" colspan="11">Could not load data ('+esc(DATA.error)+').</td></tr>'; return; }
-    if(!ASMS.length){ body.innerHTML='<tr><td class="rc-empty" colspan="11">No open sales orders.</td></tr>'; return; }
+    if(DATA.error){ body.innerHTML='<tr><td class="rc-empty" colspan="13">Could not load data ('+esc(DATA.error)+').</td></tr>'; return; }
+    if(!ASMS.length){ body.innerHTML='<tr><td class="rc-empty" colspan="13">No open sales orders.</td></tr>'; return; }
 
     var html = '';
-    var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0, grandReq = 0;
+    var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0, grandReq = 0, grandPay = 0, grandRem = 0;
     ASMS.forEach(function(g,gi){
       if(ASM_FILTER.length && !asmSelected(g.asm)) return;   // hide non-selected ASMs (gi stays original)
       var gv = groupView(g);
       if(!gv.rows.length) return;                       // no rows for this Type filter
       grandL += gv.lit; grandV += gv.val; grandLed += gv.led; grandOut += gv.out; grandReq += gv.req;
+      grandPay += gv.pay; grandRem += gv.rem;
       var color = asmColor(gi);
       html += '<tr class="rc-grp" data-gi="'+gi+'">'+
         '<td><div class="rc-gname">'+
@@ -404,6 +456,8 @@
         '<td class="num bal">'+money(gv.led)+'</td>'+
         '<td class="num bal">'+money(gv.out)+'</td>'+
         '<td class="num bal">'+money(gv.req)+'</td>'+
+        '<td class="num bal">'+money(gv.pay)+'</td>'+
+        '<td class="num bal">'+money(gv.rem)+'</td>'+
       '</tr>';
 
       gv.rows.forEach(function(r){
@@ -420,12 +474,14 @@
           '<td class="num" data-cell="led">'+money(ledgerOf(r))+'</td>'+
           '<td class="num bal" data-cell="out">'+money(outOf(r))+'</td>'+
           '<td class="num bal" data-cell="req">'+money(reqOf(r))+'</td>'+
+          '<td class="num" data-cell="pay">'+money(payOf(r))+'</td>'+
+          '<td class="num bal" data-cell="rem">'+money(remOf(r))+'</td>'+
         '</tr>';
       });
     });
 
     if(!html){
-      body.innerHTML = '<tr><td class="rc-empty" colspan="11">No parties match the current filter.</td></tr>';
+      body.innerHTML = '<tr><td class="rc-empty" colspan="13">No parties match the current filter.</td></tr>';
       return;
     }
 
@@ -437,6 +493,8 @@
       '<td class="num">'+money(grandLed)+'</td>'+
       '<td class="num">'+money(grandOut)+'</td>'+
       '<td class="num">'+money(grandReq)+'</td>'+
+      '<td class="num">'+money(grandPay)+'</td>'+
+      '<td class="num">'+money(grandRem)+'</td>'+
     '</tr>';
 
     body.innerHTML = html;
@@ -485,6 +543,38 @@
       ASMS.forEach(function(g,i){ if(g.asm===ASM_FILTER[0]) idx=i; });
       if(idx>=0) setGroup(idx, true);
     }
+  }
+
+  // ── Lock control ──
+  function fmtDate(iso){
+    var p = String(iso||'').slice(0,10).split('-');
+    if(p.length < 3) return iso || '';
+    var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(p[1])-1] || '';
+    return Number(p[2]) + ' ' + mon;
+  }
+  // Show the "Lock columns" control when free, or the status pill (+ Unlock) when frozen.
+  function renderLock(){
+    var ctl = document.getElementById('rcLock'), pill = document.getElementById('rcLockPill');
+    if(LOCK && LOCK.active){
+      var d = LOCK.days_left;
+      document.getElementById('rcLockPillTxt').textContent =
+        'Locked · ' + d + (d === 1 ? ' day left' : ' days left') + ' · until ' + fmtDate(LOCK.lock_until);
+      ctl.style.display = 'none'; pill.style.display = '';
+    } else {
+      ctl.style.display = ''; pill.style.display = 'none';
+    }
+  }
+  // POST to lock/unlock; on success reload so the server re-renders with frozen/live values.
+  function postLock(url, payload, btn){
+    if(btn) btn.disabled = true;
+    fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+                body:JSON.stringify(payload || {})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j && j.status === 'ok'){ window.location.reload(); }
+        else { if(btn) btn.disabled = false; alert('Could not update the lock. Please try again.'); }
+      })
+      .catch(function(){ if(btn) btn.disabled = false; alert('Could not update the lock. Please try again.'); });
   }
 
   // Reflect TYPE_FILTER on the segmented buttons (several may be 'on'; "All" lights when none).
@@ -549,6 +639,21 @@
       window.location.href = EXPORT_URL + (params.length ? '?' + params.join('&') : '');
     });
 
+    // Lock control: open the days popover, lock now, unlock.
+    var lockCtl = document.getElementById('rcLock');
+    document.getElementById('rcLockBtn').addEventListener('click',function(e){
+      e.stopPropagation(); lockCtl.classList.toggle('open');
+    });
+    document.addEventListener('click',function(e){ if(!lockCtl.contains(e.target)) lockCtl.classList.remove('open'); });
+    document.getElementById('rcLockGo').addEventListener('click',function(){
+      var days = parseInt(document.getElementById('rcLockDays').value, 10) || 30;
+      postLock(LOCK_URL, {days: days}, this);
+    });
+    document.getElementById('rcUnlockBtn').addEventListener('click',function(){
+      if(!confirm('Unlock now? Total Outstanding & Required Limit revert to live SAP values.')) return;
+      postLock(UNLOCK_URL, {}, this);
+    });
+
     // save remark on blur / Enter
     document.getElementById('rcBody').addEventListener('blur',function(e){
       var inp = e.target.closest && e.target.closest('.rc-remark'); if(!inp) return;
@@ -609,6 +714,7 @@
   }
 
   populateAsmSelect();
+  renderLock();
   renderKpis();
   renderBody();
   wire();
