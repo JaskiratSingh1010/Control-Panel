@@ -2330,9 +2330,12 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     PREMIUM, COMMODITY (the type litres split), Grand Total, SO NO, PI AMT (OIH revenue),
     LEDGER AMT (SAP balance, +receivable / -payable), TOTAL OUTSTANDING (= PI AMT + LEDGER AMT)
     and REQUIRED LIMIT (= Total Outstanding + 2%); Payment Done / Outstanding stay blank.
-    type_filter ('' | P | C | P+C) restricts to parties of that type. Pure-Python writer."""
-    if type_filter not in ('', 'P', 'C', 'P+C'):
-        type_filter = ''
+    type_filter restricts to parties of the given type(s): accepts a single 'P'|'C'|'P+C' string
+    or a list/set of them; '' or an empty collection = all types. Pure-Python writer."""
+    # Normalize to a set of valid types; empty set = no filter (every party shown).
+    if isinstance(type_filter, str):
+        type_filter = [type_filter] if type_filter else []
+    types = {t for t in type_filter if t in ('P', 'C', 'P+C')}
 
     # 1-based column widths: A SO NAME, B PARTY NAME, C TYPE, D MAIN GROUP, E STATE,
     # F DELIVERY REMARK, G PREMIUM, H COMMODITY, I Grand Total, J SO NO, K PI AMT,
@@ -2365,8 +2368,8 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     g_prem = g_com = g_tot = g_val = g_led = g_out = g_req = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
-        if type_filter:
-            rows = [x for x in rows if x.get('type') == type_filter]
+        if types:
+            rows = [x for x in rows if x.get('type') in types]
         if not rows:
             continue
         first = True

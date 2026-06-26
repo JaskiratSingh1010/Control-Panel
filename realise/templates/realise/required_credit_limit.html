@@ -176,7 +176,7 @@
   <div class="rc-kpis" id="rcKpis"></div>
 
   <div class="rc-tools">
-    <div class="rc-seg" id="rcType" title="Filter by Type">
+    <div class="rc-seg" id="rcType" title="Filter by Type (select one or more)">
       <button type="button" data-type="" class="on">All</button>
       <button type="button" data-type="P">P</button>
       <button type="button" data-type="C">C</button>
@@ -237,7 +237,7 @@
       (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>; <b>Required Limit =
       Total Outstanding + 2%</b>. A customer spanning several states/ASMs has its ledger split across those
       rows in proportion to open-order value. Export
-      (CLOSING SHEET layout, with the Canola / Commodity / Olive / Other Premium split) respects both filters.</span>
+      (CLOSING SHEET layout, with the Premium / Commodity split) respects both filters.</span>
   </div>
 </div>
 
@@ -259,7 +259,7 @@
   var DATA  = JSON.parse(document.getElementById('credit-data').textContent || '{}');
   var ASMS  = DATA.asms || [];
   var TOTAL = DATA.total || {litres:{},value:{}};
-  var TYPE_FILTER = '';  // '' = all, else 'P' | 'C' | 'P+C' (filters on the Type column)
+  var TYPE_FILTER = [];   // [] = all, else a subset of ['P','C','P+C'] (filters on the Type column)
   var ASM_FILTER = [];   // [] = all ASMs, else the selected ASM names
   var CSRF  = "{{ csrf_token }}";
   var SAVE_URL = "{% url 'realise:api_save_closing_remark' %}";
@@ -298,14 +298,17 @@
   function outOf(o){ return (o && o.value) ? (Number(o.value.outstanding)||0) : 0; }
   function reqOf(o){ return (o && o.value) ? (Number(o.value.required_limit)||0) : 0; }
   function typeLabel(){
-    return {'':'All types', 'P':'Premium only (P)', 'C':'Commodity only (C)',
-            'P+C':'Premium + Commodity (P+C)'}[TYPE_FILTER] || 'All types';
+    if(!TYPE_FILTER.length) return 'All types';
+    var names = {'P':'Premium only (P)', 'C':'Commodity only (C)', 'P+C':'Premium + Commodity (P+C)'};
+    return TYPE_FILTER.length === 1 ? (names[TYPE_FILTER[0]] || 'All types')
+                                    : ('Types: ' + TYPE_FILTER.join(', '));
   }
   function asmSelected(name){ return ASM_FILTER.indexOf(name) !== -1; }
   function asmGroups(){ return ASM_FILTER.length ? ASMS.filter(function(g){return asmSelected(g.asm);}) : ASMS; }
 
-  // Type filter: P = premium-only, C = commodity-only, P+C = both. '' = every row.
-  function rowVisible(r){ return TYPE_FILTER ? (r.type === TYPE_FILTER) : true; }
+  // Type filter: P = premium-only, C = commodity-only, P+C = both. Empty selection = every row;
+  // a row shows when its type is among the selected types (multi-select).
+  function rowVisible(r){ return TYPE_FILTER.length ? (TYPE_FILTER.indexOf(r.type) !== -1) : true; }
 
   // A group's visible rows + their summed litres / value / ledger / outstanding.
   function groupView(g){
@@ -342,7 +345,7 @@
       {c:'k-asm',ic:'badge',l:'ASMs',v:asmCount,
         m:ASM_FILTER.length ? ('Filtered to '+ASM_FILTER.length+' ASM'+(ASM_FILTER.length>1?'s':'')) : 'Territory owners with open orders'},
       {c:'k-prt',ic:'storefront',l:'Parties',v:parties,
-        m:(TYPE_FILTER?'Parties of type '+TYPE_FILTER:'Customers with open orders')}
+        m:(TYPE_FILTER.length?'Parties of type '+TYPE_FILTER.join(', '):'Customers with open orders')}
     ];
     document.getElementById('rcKpis').innerHTML = cards.map(function(k){
       return '<div class="rc-kpi '+k.c+'">'+
@@ -484,12 +487,26 @@
     }
   }
 
+  // Reflect TYPE_FILTER on the segmented buttons (several may be 'on'; "All" lights when none).
+  function syncTypeButtons(){
+    document.querySelectorAll('#rcType button').forEach(function(x){
+      var t = x.getAttribute('data-type');
+      x.classList.toggle('on', t ? TYPE_FILTER.indexOf(t) !== -1 : TYPE_FILTER.length === 0);
+    });
+  }
+
   function wire(){
-    // Type filter (All / P / C / P+C) — filters rows on the Type column.
+    // Type filter (All / P / C / P+C) — multi-select; filters rows on the Type column.
+    // "All" clears the selection; P / C / P+C toggle independently and combine.
     document.getElementById('rcType').addEventListener('click',function(e){
       var b = e.target.closest('button'); if(!b) return;
-      TYPE_FILTER = b.getAttribute('data-type');
-      this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+      var t = b.getAttribute('data-type');
+      if(!t){ TYPE_FILTER = []; }                           // "All" → clear the selection
+      else {
+        var i = TYPE_FILTER.indexOf(t);
+        if(i === -1) TYPE_FILTER.push(t); else TYPE_FILTER.splice(i, 1);
+      }
+      syncTypeButtons();
       rerenderKeepOpen();
     });
 
@@ -525,10 +542,11 @@
     document.getElementById('rcExpand').addEventListener('click',function(){ setAll(true); });
     document.getElementById('rcCollapse').addEventListener('click',function(){ setAll(false); });
     // Export the current view (respects the Type + ASM filter) as the CLOSING SHEET xlsx.
+    // Each selected type / ASM goes out as its own repeated query param.
     document.getElementById('rcExport').addEventListener('click',function(){
-      var url = EXPORT_URL + '?type=' + encodeURIComponent(TYPE_FILTER);
-      ASM_FILTER.forEach(function(a){ url += '&asm=' + encodeURIComponent(a); });
-      window.location.href = url;
+      var params = TYPE_FILTER.map(function(t){ return 'type=' + encodeURIComponent(t); })
+        .concat(ASM_FILTER.map(function(a){ return 'asm=' + encodeURIComponent(a); }));
+      window.location.href = EXPORT_URL + (params.length ? '?' + params.join('&') : '');
     });
 
     // save remark on blur / Enter

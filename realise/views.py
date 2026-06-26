@@ -132,21 +132,20 @@ def api_save_closing_remark(request):
 @require_http_methods(['GET'])
 def export_required_credit(request):
     """Download the Required Credit Limit data as an .xlsx in the CLOSING SHEET layout.
-    ?type=P|C|P+C scopes to the on-screen Type filter; ?asm=<name> to one ASM."""
-    type_filter = (request.GET.get('type', '') or '').strip()
-    if type_filter not in ('', 'P', 'C', 'P+C'):
-        type_filter = ''
+    ?type=P|C|P+C (repeatable) scopes to the on-screen Type filter; ?asm=<name> to one ASM."""
+    type_filters = [t.strip() for t in request.GET.getlist('type') if t.strip() in ('P', 'C', 'P+C')]
     asms = [a.strip() for a in request.GET.getlist('asm') if a.strip()]
     payload = services.get_required_credit_rows()
     if asms:                     # scope the export to the on-screen ASM selection
         chosen = set(asms)
         payload = {'asms': [g for g in payload.get('asms', []) if g.get('asm') in chosen],
                    'total': payload.get('total', {})}
-    content = services.build_closing_sheet_xlsx(payload, type_filter)
+    content = services.build_closing_sheet_xlsx(payload, type_filters)
     parts = []
     if asms:
         parts.append(asms[0] if len(asms) == 1 else f'{len(asms)} ASMs')
-    parts.append({'': 'All', 'P': 'Premium', 'C': 'Commodity', 'P+C': 'Prem+Comm'}[type_filter])
+    type_names = {'P': 'Premium', 'C': 'Commodity', 'P+C': 'Prem+Comm'}
+    parts.append('+'.join(type_names[t] for t in type_filters) if type_filters else 'All')
     response = HttpResponse(
         content,
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
