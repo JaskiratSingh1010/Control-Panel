@@ -2192,6 +2192,113 @@ def get_required_credit_rows():
     return {'asms': asms, 'total': _round_bucket(grand)}
 
 
+def _xlsx_col_letter(idx):
+    name = ''
+    while idx:
+        idx, rem = divmod(idx - 1, 26)
+        name = chr(65 + rem) + name
+    return name
+
+
+def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_rows=0):
+    """Minimal pure-Python .xlsx writer (no third-party deps, mirrors core.simple_xlsx so it
+    works on servers without openpyxl). `cells` maps (row, col)→(kind, value, bold) where kind
+    is 't' (text) or 'n' (integer number). Supports per-column widths (1-based col→width),
+    bold, an integer number format (#,##0) and freezing the top `freeze_rows` rows.
+    Style ids: 0 text, 1 bold text, 2 number, 3 bold number."""
+    import zipfile
+    from io import BytesIO
+    from xml.sax.saxutils import escape
+
+    rows_xml = []
+    for r in range(1, max_row + 1):
+        cell_xml = []
+        for c in range(1, max_col + 1):
+            cell = cells.get((r, c))
+            if cell is None:
+                continue
+            kind, value, bold = cell
+            ref = '%s%d' % (_xlsx_col_letter(c), r)
+            if kind == 'n':
+                cell_xml.append('<c r="%s" s="%d"><v>%d</v></c>' % (ref, 3 if bold else 2, int(value)))
+            else:
+                cell_xml.append('<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>'
+                                % (ref, 1 if bold else 0, escape(str(value))))
+        if cell_xml:
+            rows_xml.append('<row r="%d">%s</row>' % (r, ''.join(cell_xml)))
+
+    cols_xml = ''.join('<col min="%d" max="%d" width="%s" customWidth="1"/>' % (c, c, widths.get(c, 12))
+                       for c in range(1, max_col + 1))
+    pane_xml = ''
+    if freeze_rows:
+        pane_xml = ('<sheetViews><sheetView workbookViewId="0">'
+                    '<pane ySplit="%d" topLeftCell="A%d" activePane="bottomLeft" state="frozen"/>'
+                    '<selection pane="bottomLeft"/></sheetView></sheetViews>') % (freeze_rows, freeze_rows + 1)
+    dim = 'A1:%s%d' % (_xlsx_col_letter(max_col), max(max_row, 1))
+    sheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<dimension ref="{dim}"/>{pane_xml}<cols>{cols_xml}</cols>'
+        f'<sheetData>{"".join(rows_xml)}</sheetData></worksheet>'
+    )
+
+    styles = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>'
+        '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+        '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="4">'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>'
+        '</cellXfs></styleSheet>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '</Types>'
+    )
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        '</Relationships>'
+    )
+    workbook = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheets><sheet name="{escape(title[:31])}" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    workbook_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        '</Relationships>'
+    )
+    out = BytesIO()
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('[Content_Types].xml', content_types)
+        zf.writestr('_rels/.rels', root_rels)
+        zf.writestr('xl/workbook.xml', workbook)
+        zf.writestr('xl/_rels/workbook.xml.rels', workbook_rels)
+        zf.writestr('xl/styles.xml', styles)
+        zf.writestr('xl/worksheets/sheet1.xml', sheet_xml)
+    return out.getvalue()
+
+
 def build_closing_sheet_xlsx(payload, type_filter=''):
     """Render the Required Credit Limit data into an .xlsx in the CLOSING SHEET layout:
     'Sum of TOTAL LTR' in row 1, a bold header row, each ASM's parties, a bold '<ASM> Total'
@@ -2200,11 +2307,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     OLIVE / OTHER PREMIUM), Grand Total, C+O+O (= Canola+Olive+Other Premium), SO NO, PI AMT
     (OIH revenue), LEDGER AMT (SAP balance, +receivable / -payable) and TOTAL OUTSTANDING
     (= PI AMT + LEDGER AMT); Required Limit…Outstanding stay blank. type_filter
-    ('' | P | C | P+C) restricts to parties of that type."""
-    from io import BytesIO
-    from openpyxl import Workbook
-    from openpyxl.styles import Font
-
+    ('' | P | C | P+C) restricts to parties of that type. Pure-Python writer (no openpyxl)."""
     if type_filter not in ('', 'P', 'C', 'P+C'):
         type_filter = ''
 
@@ -2218,39 +2321,34 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         other = total - canola - olive - commodity
         return canola, commodity, olive, other
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = 'CLOSING SHEET'
+    # 1-based column widths: A SO NAME, B PARTY NAME, C TYPE, D MAIN GROUP, E STATE,
+    # F DELIVERY REMARK, G CANOLA, H COMMODITY, I OLIVE, J OTHER PREMIUM, K Grand Total,
+    # L C+O+O, M SO NO, N PI AMT, O–S deferred financial columns.
+    widths = {1: 26.7, 2: 46.6, 3: 8.0, 4: 14.4, 5: 9.0, 6: 28.0, 7: 10.3, 8: 12.3, 9: 8.5,
+              10: 16.0, 11: 12.0, 12: 12.0, 13: 22.0, 14: 13.0, 15: 12.3, 16: 20.6, 17: 14.1,
+              18: 15.6, 19: 14.4}
+    MAX_COL = 19
 
-    # A SO NAME, B PARTY NAME, C TYPE, D MAIN GROUP, E STATE, F DELIVERY REMARK,
-    # G CANOLA, H COMMODITY, I OLIVE, J OTHER PREMIUM, K Grand Total, L C+O+O, M SO NO,
-    # N PI AMT, O–S deferred financial columns.
-    widths = {'A': 26.7, 'B': 46.6, 'C': 8.0, 'D': 14.4, 'E': 9.0, 'F': 28.0, 'G': 10.3,
-              'H': 12.3, 'I': 8.5, 'J': 16.0, 'K': 12.0, 'L': 12.0, 'M': 22.0, 'N': 13.0,
-              'O': 12.3, 'P': 20.6, 'Q': 14.1, 'R': 15.6, 'S': 14.4}
-    for col, w in widths.items():
-        ws.column_dimensions[col].width = w
+    cells = {}
 
-    bold = Font(bold=True)
-    INT = '#,##0'
+    def put_text(rr, cc, value, bold=False):
+        if value in (None, ''):
+            return
+        cells[(rr, cc)] = ('t', value, bold)
 
-    ws['A1'] = 'Sum of TOTAL LTR'
+    def put_num(rr, cc, value, bold=False, blank_zero=True):
+        v = int(round(value or 0))
+        if blank_zero and v == 0:
+            return
+        cells[(rr, cc)] = ('n', v, bold)
 
+    put_text(1, 1, 'Sum of TOTAL LTR')
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
                'CANOLA', 'COMMODITY', 'OLIVE', 'OTHER PREMIUM', 'Grand Total', 'C+O+O',
                'SO NO', 'PI AMT',
                'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING']
     for i, h in enumerate(headers, start=1):
-        ws.cell(row=2, column=i, value=h).font = bold
-
-    def _num(row_idx, col_idx, value, is_bold=False, blank_zero=True):
-        if blank_zero and not round(value or 0):
-            return None
-        c = ws.cell(row=row_idx, column=col_idx, value=int(round(value or 0)))
-        c.number_format = INT
-        if is_bold:
-            c.font = bold
-        return c
+        put_text(2, i, h, bold=True)
 
     r = 3
     g_can = g_com = g_oli = g_oth = g_tot = g_val = g_led = g_out = 0.0
@@ -2270,47 +2368,42 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
             if first:
-                ws.cell(row=r, column=1, value=g['asm'])               # A SO NAME (ASM)
-            ws.cell(row=r, column=2, value=row['party'])               # B PARTY NAME
-            ws.cell(row=r, column=3, value=row.get('type') or None)    # C TYPE
-            ws.cell(row=r, column=4, value=row.get('main_group') or None)  # D MAIN GROUP
-            ws.cell(row=r, column=5, value=row.get('state') or None)       # E STATE
-            if row.get('remark'):
-                ws.cell(row=r, column=6, value=row['remark'])          # F DELIVERY REMARK
-            _num(r, 7, canola)                                         # G CANOLA
-            _num(r, 8, commodity)                                      # H COMMODITY
-            _num(r, 9, olive)                                          # I OLIVE
-            _num(r, 10, other)                                         # J OTHER PREMIUM
-            _num(r, 11, total, is_bold=True)                           # K Grand Total
-            _num(r, 12, coo)                                           # L C+O+O
-            if row.get('so_nos'):
-                ws.cell(row=r, column=13, value=row['so_nos'])         # M SO NO
-            _num(r, 14, val)                                           # N PI AMT (OIH revenue)
-            _num(r, 15, ledger)                                        # O LEDGER AMT (+rec / -pay)
-            _num(r, 16, outstanding)                                   # P TOTAL OUTSTANDING
+                put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
+            put_text(r, 2, row['party'])                  # B PARTY NAME
+            put_text(r, 3, row.get('type'))               # C TYPE
+            put_text(r, 4, row.get('main_group'))         # D MAIN GROUP
+            put_text(r, 5, row.get('state'))              # E STATE
+            put_text(r, 6, row.get('remark'))             # F DELIVERY REMARK
+            put_num(r, 7, canola)                         # G CANOLA
+            put_num(r, 8, commodity)                      # H COMMODITY
+            put_num(r, 9, olive)                          # I OLIVE
+            put_num(r, 10, other)                         # J OTHER PREMIUM
+            put_num(r, 11, total, bold=True)              # K Grand Total
+            put_num(r, 12, coo)                           # L C+O+O
+            put_text(r, 13, row.get('so_nos'))            # M SO NO
+            put_num(r, 14, val)                           # N PI AMT (OIH revenue)
+            put_num(r, 15, ledger)                        # O LEDGER AMT (+rec / -pay)
+            put_num(r, 16, outstanding)                   # P TOTAL OUTSTANDING
             s_can += canola; s_com += commodity; s_oli += olive; s_oth += other
             s_tot += total; s_val += val; s_led += ledger; s_out += outstanding
             first = False
             r += 1
-        ws.cell(row=r, column=1, value=f"{g['asm']} Total").font = bold
-        _num(r, 7, s_can, is_bold=True); _num(r, 8, s_com, is_bold=True)
-        _num(r, 9, s_oli, is_bold=True); _num(r, 10, s_oth, is_bold=True)
-        _num(r, 11, s_tot, is_bold=True); _num(r, 12, s_can + s_oli + s_oth, is_bold=True)
-        _num(r, 14, s_val, is_bold=True); _num(r, 15, s_led, is_bold=True); _num(r, 16, s_out, is_bold=True)
+        put_text(r, 1, f"{g['asm']} Total", bold=True)
+        put_num(r, 7, s_can, bold=True); put_num(r, 8, s_com, bold=True)
+        put_num(r, 9, s_oli, bold=True); put_num(r, 10, s_oth, bold=True)
+        put_num(r, 11, s_tot, bold=True); put_num(r, 12, s_can + s_oli + s_oth, bold=True)
+        put_num(r, 14, s_val, bold=True); put_num(r, 15, s_led, bold=True); put_num(r, 16, s_out, bold=True)
         g_can += s_can; g_com += s_com; g_oli += s_oli; g_oth += s_oth
         g_tot += s_tot; g_val += s_val; g_led += s_led; g_out += s_out
         r += 1
 
-    ws.cell(row=r, column=1, value='Grand Total').font = bold
-    _num(r, 7, g_can, is_bold=True); _num(r, 8, g_com, is_bold=True)
-    _num(r, 9, g_oli, is_bold=True); _num(r, 10, g_oth, is_bold=True)
-    _num(r, 11, g_tot, is_bold=True); _num(r, 12, g_can + g_oli + g_oth, is_bold=True)
-    _num(r, 14, g_val, is_bold=True); _num(r, 15, g_led, is_bold=True); _num(r, 16, g_out, is_bold=True)
+    put_text(r, 1, 'Grand Total', bold=True)
+    put_num(r, 7, g_can, bold=True); put_num(r, 8, g_com, bold=True)
+    put_num(r, 9, g_oli, bold=True); put_num(r, 10, g_oth, bold=True)
+    put_num(r, 11, g_tot, bold=True); put_num(r, 12, g_can + g_oli + g_oth, bold=True)
+    put_num(r, 14, g_val, bold=True); put_num(r, 15, g_led, bold=True); put_num(r, 16, g_out, bold=True)
 
-    ws.freeze_panes = 'A3'
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 
 
 def save_closing_remark(card_code, remark, user=None):
