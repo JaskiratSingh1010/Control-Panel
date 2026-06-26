@@ -2087,7 +2087,7 @@ _OLIVE_TOKENS = ('OLIVE', 'POMACE')
 
 def _blank_bucket():
     return {'litres': {'premium': 0.0, 'commodity': 0.0, 'canola': 0.0, 'olive': 0.0, 'total': 0.0},
-            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0}}
+            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0, 'required_limit': 0.0}}
 
 
 def _round_bucket(b):
@@ -2162,6 +2162,7 @@ def get_required_credit_rows():
             else:
                 b['value']['ledger'] = ledger if i == 0 else 0.0   # no open value → first row
             b['value']['outstanding'] = b['value']['total'] + b['value']['ledger']
+            b['value']['required_limit'] = b['value']['outstanding'] * 1.02   # outstanding + 2%
 
     try:
         remarks = {r.card_code: r.remark for r in ClosingRemark.objects.all()}
@@ -2305,9 +2306,10 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     subtotal, and a final bold 'Grand Total'. Columns: SO NAME (ASM), PARTY NAME, TYPE
     (P/C/P+C), MAIN GROUP, STATE, DELIVERY REMARK, the category litres (CANOLA / COMMODITY /
     OLIVE / OTHER PREMIUM), Grand Total, C+O+O (= Canola+Olive+Other Premium), SO NO, PI AMT
-    (OIH revenue), LEDGER AMT (SAP balance, +receivable / -payable) and TOTAL OUTSTANDING
-    (= PI AMT + LEDGER AMT); Required Limit…Outstanding stay blank. type_filter
-    ('' | P | C | P+C) restricts to parties of that type. Pure-Python writer (no openpyxl)."""
+    (OIH revenue), LEDGER AMT (SAP balance, +receivable / -payable), TOTAL OUTSTANDING
+    (= PI AMT + LEDGER AMT) and REQUIRED LIMIT (= Total Outstanding + 2%); Payment Done /
+    Outstanding stay blank. type_filter ('' | P | C | P+C) restricts to parties of that type.
+    Pure-Python writer (no openpyxl)."""
     if type_filter not in ('', 'P', 'C', 'P+C'):
         type_filter = ''
 
@@ -2351,7 +2353,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         put_text(2, i, h, bold=True)
 
     r = 3
-    g_can = g_com = g_oli = g_oth = g_tot = g_val = g_led = g_out = 0.0
+    g_can = g_com = g_oli = g_oth = g_tot = g_val = g_led = g_out = g_req = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
         if type_filter:
@@ -2359,7 +2361,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
-        s_can = s_com = s_oli = s_oth = s_tot = s_val = s_led = s_out = 0.0
+        s_can = s_com = s_oli = s_oth = s_tot = s_val = s_led = s_out = s_req = 0.0
         for row in rows:
             canola, commodity, olive, other = _cats(row['litres'])
             total = float(row['litres'].get('total', 0) or 0)
@@ -2367,6 +2369,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             val = float(row['value'].get('total', 0) or 0)
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
+            required = float(row['value'].get('required_limit', 0) or 0)
             if first:
                 put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
             put_text(r, 2, row['party'])                  # B PARTY NAME
@@ -2384,8 +2387,9 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 14, val)                           # N PI AMT (OIH revenue)
             put_num(r, 15, ledger)                        # O LEDGER AMT (+rec / -pay)
             put_num(r, 16, outstanding)                   # P TOTAL OUTSTANDING
+            put_num(r, 17, required)                      # Q Required Limit (outstanding + 2%)
             s_can += canola; s_com += commodity; s_oli += olive; s_oth += other
-            s_tot += total; s_val += val; s_led += ledger; s_out += outstanding
+            s_tot += total; s_val += val; s_led += ledger; s_out += outstanding; s_req += required
             first = False
             r += 1
         put_text(r, 1, f"{g['asm']} Total", bold=True)
@@ -2393,8 +2397,9 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         put_num(r, 9, s_oli, bold=True); put_num(r, 10, s_oth, bold=True)
         put_num(r, 11, s_tot, bold=True); put_num(r, 12, s_can + s_oli + s_oth, bold=True)
         put_num(r, 14, s_val, bold=True); put_num(r, 15, s_led, bold=True); put_num(r, 16, s_out, bold=True)
+        put_num(r, 17, s_req, bold=True)
         g_can += s_can; g_com += s_com; g_oli += s_oli; g_oth += s_oth
-        g_tot += s_tot; g_val += s_val; g_led += s_led; g_out += s_out
+        g_tot += s_tot; g_val += s_val; g_led += s_led; g_out += s_out; g_req += s_req
         r += 1
 
     put_text(r, 1, 'Grand Total', bold=True)
@@ -2402,6 +2407,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     put_num(r, 9, g_oli, bold=True); put_num(r, 10, g_oth, bold=True)
     put_num(r, 11, g_tot, bold=True); put_num(r, 12, g_can + g_oli + g_oth, bold=True)
     put_num(r, 14, g_val, bold=True); put_num(r, 15, g_led, bold=True); put_num(r, 16, g_out, bold=True)
+    put_num(r, 17, g_req, bold=True)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 

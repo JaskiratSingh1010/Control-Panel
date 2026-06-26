@@ -220,9 +220,10 @@
             <th class="hot">OIH Revenue ₹</th>
             <th>Ledger Amt ₹</th>
             <th class="hot">Total Outstanding ₹</th>
+            <th class="hot">Required Limit ₹</th>
           </tr>
         </thead>
-        <tbody id="rcBody"><tr><td class="rc-empty" colspan="10">Loading…</td></tr></tbody>
+        <tbody id="rcBody"><tr><td class="rc-empty" colspan="11">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -233,8 +234,9 @@
       OIH revenue pro-rates the line total by the still-open fraction. The <b>Type</b> column tags each
       party <b>P</b> (premium only), <b>C</b> (commodity only) or <b>P+C</b> (both); filter on it with the
       Type buttons and on the owner with the ASM selector. <b>Ledger Amt</b> is the customer's SAP balance
-      (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>. A customer spanning several
-      states/ASMs has its ledger split across those rows in proportion to open-order value. Export
+      (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>; <b>Required Limit =
+      Total Outstanding + 2%</b>. A customer spanning several states/ASMs has its ledger split across those
+      rows in proportion to open-order value. Export
       (CLOSING SHEET layout, with the Canola / Commodity / Olive / Other Premium split) respects both filters.</span>
   </div>
 </div>
@@ -294,6 +296,7 @@
   function valueOf(o){ return (o && o.value)  ? (Number(o.value.total) ||0) : 0; }
   function ledgerOf(o){ return (o && o.value) ? (Number(o.value.ledger)||0) : 0; }
   function outOf(o){ return (o && o.value) ? (Number(o.value.outstanding)||0) : 0; }
+  function reqOf(o){ return (o && o.value) ? (Number(o.value.required_limit)||0) : 0; }
   function typeLabel(){
     return {'':'All types', 'P':'Premium only (P)', 'C':'Commodity only (C)',
             'P+C':'Premium + Commodity (P+C)'}[TYPE_FILTER] || 'All types';
@@ -307,9 +310,9 @@
   // A group's visible rows + their summed litres / value / ledger / outstanding.
   function groupView(g){
     var rows = g.rows.filter(rowVisible);
-    var lit = 0, val = 0, led = 0, out = 0;
-    rows.forEach(function(r){ lit += litresOf(r); val += valueOf(r); led += ledgerOf(r); out += outOf(r); });
-    return {rows: rows, lit: lit, val: val, led: led, out: out};
+    var lit = 0, val = 0, led = 0, out = 0, req = 0;
+    rows.forEach(function(r){ lit += litresOf(r); val += valueOf(r); led += ledgerOf(r); out += outOf(r); req += reqOf(r); });
+    return {rows: rows, lit: lit, val: val, led: led, out: out, req: req};
   }
 
   // Type badge for the Type column.
@@ -374,16 +377,16 @@
   // ── Body ──
   function renderBody(){
     var body = document.getElementById('rcBody');
-    if(DATA.error){ body.innerHTML='<tr><td class="rc-empty" colspan="10">Could not load data ('+esc(DATA.error)+').</td></tr>'; return; }
-    if(!ASMS.length){ body.innerHTML='<tr><td class="rc-empty" colspan="10">No open sales orders.</td></tr>'; return; }
+    if(DATA.error){ body.innerHTML='<tr><td class="rc-empty" colspan="11">Could not load data ('+esc(DATA.error)+').</td></tr>'; return; }
+    if(!ASMS.length){ body.innerHTML='<tr><td class="rc-empty" colspan="11">No open sales orders.</td></tr>'; return; }
 
     var html = '';
-    var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0;
+    var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0, grandReq = 0;
     ASMS.forEach(function(g,gi){
       if(ASM_FILTER.length && !asmSelected(g.asm)) return;   // hide non-selected ASMs (gi stays original)
       var gv = groupView(g);
       if(!gv.rows.length) return;                       // no rows for this Type filter
-      grandL += gv.lit; grandV += gv.val; grandLed += gv.led; grandOut += gv.out;
+      grandL += gv.lit; grandV += gv.val; grandLed += gv.led; grandOut += gv.out; grandReq += gv.req;
       var color = asmColor(gi);
       html += '<tr class="rc-grp" data-gi="'+gi+'">'+
         '<td><div class="rc-gname">'+
@@ -397,6 +400,7 @@
         '<td class="num bal">'+money(gv.val)+'</td>'+
         '<td class="num bal">'+money(gv.led)+'</td>'+
         '<td class="num bal">'+money(gv.out)+'</td>'+
+        '<td class="num bal">'+money(gv.req)+'</td>'+
       '</tr>';
 
       gv.rows.forEach(function(r){
@@ -412,12 +416,13 @@
           '<td class="num bal" data-cell="rev">'+money(valueOf(r))+'</td>'+
           '<td class="num" data-cell="led">'+money(ledgerOf(r))+'</td>'+
           '<td class="num bal" data-cell="out">'+money(outOf(r))+'</td>'+
+          '<td class="num bal" data-cell="req">'+money(reqOf(r))+'</td>'+
         '</tr>';
       });
     });
 
     if(!html){
-      body.innerHTML = '<tr><td class="rc-empty" colspan="10">No parties match the current filter.</td></tr>';
+      body.innerHTML = '<tr><td class="rc-empty" colspan="11">No parties match the current filter.</td></tr>';
       return;
     }
 
@@ -428,6 +433,7 @@
       '<td class="num">'+money(grandV)+'</td>'+
       '<td class="num">'+money(grandLed)+'</td>'+
       '<td class="num">'+money(grandOut)+'</td>'+
+      '<td class="num">'+money(grandReq)+'</td>'+
     '</tr>';
 
     body.innerHTML = html;
