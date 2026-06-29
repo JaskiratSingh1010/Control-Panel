@@ -317,6 +317,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-kpi-body{min-width:0;flex:1}
 .sc2-kpi.sc2-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .15s}
 .sc2-kpi.sc2-kpi-click:hover{box-shadow:0 10px 26px rgba(37,99,235,.18);transform:translateY(-1px);border-color:#9bc0f5}
+.sc2-kpi-dl{flex-shrink:0;width:30px;height:30px;border:1px solid #d9e5ee;border-radius:9px;background:#fff;color:#0f766e;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
+.sc2-kpi-dl:hover{background:#ecfdf5;border-color:#99f6e4}
+.sc2-kpi-dl .material-icons{font-size:17px}
 .oih-kpi-summary{display:flex;gap:12px;margin:14px 0 8px}
 .oih-kpi-box{flex:1;background:#f1f5fb;border:1px solid #dbe3ec;border-radius:10px;padding:10px 14px}
 .oih-kpi-box span{display:block;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b;margin-bottom:4px}
@@ -339,6 +342,11 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-titletext strong{font-size:19px;font-weight:900;letter-spacing:.45px;text-transform:uppercase;color:#111827}
 .sc2-titletext span{display:none}
 .sc2-card-rest{height:var(--sc2-main-card-height)}
+/* Per-card search box (filters the area rows within one channel card). */
+.sc2-cardsearch{display:flex;align-items:center;gap:7px;padding:7px 14px;background:#f8fbff;border-bottom:1px solid #e5edf5;cursor:default}
+.sc2-cardsearch .material-icons{font-size:16px;color:#94a3b8}
+.sc2-cardsearch input{flex:1;min-width:0;border:1px solid #d9e5ee;border-radius:8px;padding:5px 9px;font-family:inherit;font-size:12px;color:#0f172a;background:#fff;outline:none}
+.sc2-cardsearch input:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.16)}
 /* Compact channel panel — colored header (channel + TARGET/DONE/BAL) + scrollable area rows */
 .sc2-thead{display:grid;grid-template-columns:1.05fr .76fr .76fr .76fr .76fr .92fr;align-items:center;padding:10px 16px;background:var(--accent-strong,#1f3a5f);border-bottom:1px solid rgba(15,23,42,.08)}
 .sc2-tt-name{font-size:17px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:#0f172a}
@@ -639,10 +647,12 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('done')" title="Open Done breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">local_shipping</span></div>
           <div class="sc2-kpi-body"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
+          <button type="button" class="sc2-kpi-dl" title="Export raw Done rows (Excel/CSV)" onclick="exportDoneRaw(event)"><span class="material-icons">download</span></button>
         </div>
         <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openOihWindow()" title="Open OIH breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">warehouse</span></div>
           <div class="sc2-kpi-body"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
+          <button type="button" class="sc2-kpi-dl" title="Export raw OIH rows (Excel/CSV)" onclick="exportOihRaw(event)"><span class="material-icons">download</span></button>
         </div>
         <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
@@ -3508,6 +3518,18 @@ function cardCells(c,isTotal){
     +'<div class="sc2-state-val '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-state-val">'+balRlzStr+'</div>';
 }
+// Per-card search: filter a channel card's area rows by the first column (state/area or main
+// group). Scoped to the card so each card searches independently; the TOTAL row sits outside
+// .sc2-state-scroll so it always stays visible.
+function filterChannelCard(input){
+  var card=input.closest('.sc2-card'); if(!card)return;
+  var q=String(input.value||'').trim().toLowerCase();
+  var rows=card.querySelectorAll('.sc2-state-scroll .sc2-state-row');
+  for(var i=0;i<rows.length;i++){
+    var name=rows[i].getAttribute('data-name')||'';
+    rows[i].style.display=(!q||name.indexOf(q)!==-1)?'':'none';
+  }
+}
 function themedChannelCardHtml(item){
   var accent=CHANNEL_COLORS[item.name]||{band:'#dbeafe',ring:'#60a5fa'};
   // In "All", hide zero-activity rows so cards aren't padded with empty states; when a
@@ -3521,7 +3543,7 @@ function themedChannelCardHtml(item){
   if(!data.length){
     rows='<div class="sc2-state-empty">No area data in the current selection.</div>';
   }else{
-    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row sc2-oih">'+cardCells(data[i],false)+'</div>';
+    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row sc2-oih" data-name="'+esc(String(data[i].name||'').toLowerCase())+'">'+cardCells(data[i],false)+'</div>';
   }
   var totRow='<div class="sc2-state-row sc2-state-total sc2-oih">'+cardCells(item,true)+'</div>';
   var shortCode=item.name.length>3?item.name.slice(0,2):item.name;
@@ -3531,6 +3553,10 @@ function themedChannelCardHtml(item){
     +'<div class="sc2-titlebar">'
       +'<div class="sc2-icon">'+esc(shortCode)+'</div>'
       +'<div class="sc2-titletext"><strong>'+esc(item.name)+' - '+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
+    +'</div>'
+    +'<div class="sc2-cardsearch" onclick="event.stopPropagation()">'
+      +'<span class="material-icons">search</span>'
+      +'<input type="text" placeholder="Search '+esc(firstColLabel.toLowerCase())+'…" oninput="filterChannelCard(this)" onclick="event.stopPropagation()">'
     +'</div>'
     +'<div class="sc2-thead sc2-oih">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(firstColLabel)+'</div>'
@@ -4787,6 +4813,42 @@ function buildDrillCsvRows(drillRows,total,mode,groupFilter){
   return out;
 }
 function csvEscapeCell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
+// Raw row export (CSV, opens in Excel) for a KPI card — dumps the underlying SAP rows as-is.
+// Header = the union of keys across the rows so nothing is dropped if rows differ slightly.
+function exportRawRowsCSV(rows,filename){
+  if(!rows||!rows.length){showToast('Nothing to export — fetch first','info');return;}
+  var cols=[],seen={};
+  for(var i=0;i<rows.length;i++){for(var k in rows[i]){if(!seen[k]){seen[k]=1;cols.push(k);}}}
+  var lines=[cols.map(csvEscapeCell).join(',')];
+  for(var r=0;r<rows.length;r++){
+    lines.push(cols.map(function(c){return csvEscapeCell(rows[r][c]);}).join(','));
+  }
+  var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  showToast('Raw CSV exported','ok');
+}
+function sc2RangeSuffix(){
+  var f=document.getElementById('sc2From'),t=document.getElementById('sc2To');
+  return (f&&f.value?f.value:'')+'_'+(t&&t.value?t.value:'');
+}
+// Done card: the raw sales/invoice rows (honours the slide-2 segment filter).
+function exportDoneRaw(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
+  exportRawRowsCSV(getFilteredChannelRows(),'Done_raw_'+sc2RangeSuffix()+'.csv');
+}
+// OIH card: the raw open sales-order rows (honours the slide-2 segment filter).
+async function exportOihRaw(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
+  var rows=[];
+  try{ rows=await fetchOrderInHandRows(); }catch(_){ rows=[]; }
+  var seg=sc2Seg();
+  if(seg)rows=rows.filter(function(x){return String(x.u_type||'').toUpperCase()===seg;});
+  exportRawRowsCSV(rows,'OIH_raw.csv');
+}
 function exportChannelCSV(){
   if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
   if(!sc2CsvRows||!sc2CsvRows.length){showToast('Nothing to export','info');return;}

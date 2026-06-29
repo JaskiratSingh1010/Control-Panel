@@ -2228,17 +2228,25 @@ def _apply_payment_done(buckets, receipts_on):
     across whichever rows the customer currently has, in proportion to each row's Total
     Outstanding. Matching at the customer level means the payment still lands even when the
     party's rows change (new open orders, different states/main groups, more SO numbers).
-    Outstanding (remaining) = the row's Total Outstanding − its share of Payment Done."""
+
+    Outstanding (remaining) and the payment split are computed on the LIVE outstanding
+    (OIH Revenue + the date-based Ledger), NOT the lock-frozen Total Outstanding. The frozen
+    snapshot can already reflect a receipt (it is captured from a post-payment ledger), so
+    subtracting Payment Done from it would double-count the payment — which is what made the
+    locked Outstanding go wildly negative."""
+    def live_out(b):
+        return (b['value'].get('total') or 0.0) + (b['value'].get('ledger') or 0.0)
     rows_by_card = {}
     for b in buckets:
         rows_by_card.setdefault(b['card_code'], []).append(b)
     for card, rows in rows_by_card.items():
         paid = receipts_on.get(card, 0.0)
-        tot = sum(b['value']['outstanding'] for b in rows)
+        tot = sum(live_out(b) for b in rows)
         for i, b in enumerate(rows):
-            pay = (paid * b['value']['outstanding'] / tot) if tot > 0 else (paid if i == 0 else 0.0)
+            lo = live_out(b)
+            pay = (paid * lo / tot) if tot > 0 else (paid if i == 0 else 0.0)
             b['value']['payment_done'] = pay
-            b['value']['remaining'] = b['value']['outstanding'] - pay
+            b['value']['remaining'] = lo - pay
 
 
 def get_required_credit_rows(_apply_lock=True, as_of_date=None):
