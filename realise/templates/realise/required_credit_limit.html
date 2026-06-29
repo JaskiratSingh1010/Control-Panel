@@ -42,6 +42,12 @@
   .rc-search:focus-within{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
   .rc-search .material-icons{font-size:19px;color:#94a3b8}
   .rc-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
+  .rc-date{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:8px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .rc-date:focus-within{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .rc-date .material-icons{font-size:19px;color:#94a3b8}
+  .rc-date .rc-date-lbl{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.3px}
+  .rc-date input{border:0;outline:0;font-family:inherit;font-size:13px;font-weight:700;color:#0f172a;background:transparent;cursor:pointer}
   .rc-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#0f766e;
     font-family:inherit;font-size:12px;font-weight:700;padding:9px 14px;border-radius:11px;cursor:pointer;
     transition:background .15s,border-color .15s,color .15s}
@@ -175,8 +181,6 @@
   tr.rc-tot .v0{color:#64748b}
 
   .rc-empty{padding:40px;text-align:center;color:#7b8794}
-  .rc-foot{font-size:11.5px;color:#94a3b8;margin:12px 2px 0;display:flex;gap:6px;align-items:flex-start}
-  .rc-foot .material-icons{font-size:15px}
 </style>
 {% endblock %}
 
@@ -219,6 +223,11 @@
       <span class="material-icons">search</span>
       <input type="text" id="rcSearch" placeholder="Search party, ASM, state…" autocomplete="off">
     </label>
+    <label class="rc-date" title="Ledger Amt = balance just before this date; Payment Done = receipts dated on this date">
+      <span class="material-icons">event</span>
+      <span class="rc-date-lbl">As of</span>
+      <input type="date" id="rcAsOf">
+    </label>
     <button type="button" class="rc-btn" id="rcExpand"><span class="material-icons">unfold_more</span>Expand all</button>
     <button type="button" class="rc-btn" id="rcCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
 
@@ -228,8 +237,8 @@
       <div class="rc-lock-pop" id="rcLockPop">
         <div class="rc-lock-row">Freeze for
           <input type="number" id="rcLockDays" min="1" max="3650" value="30"> days</div>
-        <div class="rc-lock-hint">Total Outstanding &amp; Required Limit hold their current values; Payment
-          Done &amp; Outstanding then track SAP receipts until the lock lapses.</div>
+        <div class="rc-lock-hint">Total Outstanding &amp; Required Limit hold their current values until the
+          lock lapses. Ledger Amt, Payment Done &amp; Outstanding always follow the selected "As of" date.</div>
         <button type="button" class="rc-btn rc-lock-go" id="rcLockGo"><span class="material-icons">lock</span>Lock now</button>
       </div>
     </div>
@@ -255,31 +264,16 @@
             <th class="hot">OIH Litres</th>
             <th class="lbl">SO No</th>
             <th class="hot">OIH Revenue ₹</th>
-            <th>Ledger Amt ₹</th>
+            <th title="Customer balance just before the selected 'As of' date">Ledger Amt ₹</th>
             <th class="hot">Total Outstanding ₹</th>
             <th class="hot">Required Limit ₹</th>
-            <th class="hot" title="SAP receipts received since the lock date">Payment Done ₹</th>
-            <th class="hot" title="Total Outstanding − Payment Done (while locked)">Outstanding ₹</th>
+            <th class="hot" title="Bank-transfer receipts (SAP ORCT) dated on the selected 'As of' date">Payment Done ₹</th>
+            <th class="hot" title="Total Outstanding − Payment Done">Outstanding ₹</th>
           </tr>
         </thead>
         <tbody id="rcBody"><tr><td class="rc-empty" colspan="13">Loading…</td></tr></tbody>
       </table>
     </div>
-  </div>
-
-  <div class="rc-foot">
-    <span class="material-icons">info</span>
-    <span>Computed live from SAP open sales orders (ORDR/RDR1, status Open). OIH Litres = open qty × pack size;
-      OIH revenue pro-rates the line total by the still-open fraction. The <b>Type</b> column tags each
-      party <b>P</b> (premium only), <b>C</b> (commodity only) or <b>P+C</b> (both); filter on it with the
-      Type buttons and on the owner with the ASM selector. <b>Ledger Amt</b> is the customer's SAP balance
-      (+ receivable, − payable); <b>Total Outstanding = OIH Revenue + Ledger</b>; <b>Required Limit =
-      Total Outstanding + 2%</b>. A customer spanning several states/ASMs has its ledger split across those
-      rows in proportion to open-order value. <b>Lock columns</b> freezes Total Outstanding &amp;
-      Required Limit at their current values for the days you choose; while locked, <b>Payment Done</b>
-      shows the customer's SAP receipts since the lock date and <b>Outstanding = Total Outstanding −
-      Payment Done</b>. The freeze lapses automatically when the period ends (or Unlock to lift it early).
-      Export (CLOSING SHEET layout, with the Premium / Commodity split) respects both filters.</span>
   </div>
 </div>
 
@@ -302,6 +296,7 @@
   var ASMS  = DATA.asms || [];
   var TOTAL = DATA.total || {litres:{},value:{}};
   var LOCK  = DATA.lock || null;   // active freeze: {locked_at, lock_until, days, days_left} or null
+  var AS_OF = DATA.as_of || '';    // selected date (YYYY-MM-DD) driving Ledger Amt / Payment Done
   var TYPE_FILTER = [];   // [] = all, else a subset of ['P','C','P+C'] (filters on the Type column)
   var ASM_FILTER = [];   // [] = all ASMs, else the selected ASM names
   var CSRF  = "{{ csrf_token }}";
@@ -342,7 +337,8 @@
   function ledgerOf(o){ return (o && o.value) ? (Number(o.value.ledger)||0) : 0; }
   function outOf(o){ return (o && o.value) ? (Number(o.value.outstanding)||0) : 0; }
   function reqOf(o){ return (o && o.value) ? (Number(o.value.required_limit)||0) : 0; }
-  // Payment Done / Outstanding (remaining) — populated by the backend only while locked.
+  // Payment Done = SAP receipts dated on the selected "As of" date; Outstanding (remaining) =
+  // Total Outstanding − Payment Done. Both always populated by the backend.
   function payOf(o){ return (o && o.value) ? (Number(o.value.payment_done)||0) : 0; }
   function remOf(o){ return (o && o.value) ? (Number(o.value.remaining)||0) : 0; }
   function typeLabel(){
@@ -636,8 +632,20 @@
     document.getElementById('rcExport').addEventListener('click',function(){
       var params = TYPE_FILTER.map(function(t){ return 'type=' + encodeURIComponent(t); })
         .concat(ASM_FILTER.map(function(a){ return 'asm=' + encodeURIComponent(a); }));
+      if(AS_OF) params.push('as_of=' + encodeURIComponent(AS_OF));
       window.location.href = EXPORT_URL + (params.length ? '?' + params.join('&') : '');
     });
+
+    // "As of" date: Ledger Amt = balance just before it, Payment Done = receipts on it.
+    // Server-side computed, so changing it reloads the page with the new date.
+    var asOfInp = document.getElementById('rcAsOf');
+    if(asOfInp){
+      asOfInp.value = AS_OF;
+      asOfInp.addEventListener('change',function(){
+        var d = this.value;
+        window.location.href = window.location.pathname + (d ? ('?as_of=' + encodeURIComponent(d)) : '');
+      });
+    }
 
     // Lock control: open the days popover, lock now, unlock.
     var lockCtl = document.getElementById('rcLock');

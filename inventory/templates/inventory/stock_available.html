@@ -12,6 +12,10 @@
   .sa-psub{margin:5px 0 0;font-size:13px;color:#94a3b8}
 
   .sa-toggles{display:flex;flex-direction:column;gap:11px;align-items:flex-end;padding-top:4px}
+  .sa-export{display:inline-flex;align-items:center;gap:8px;background:#15803d;color:#fff;border:0;border-radius:22px;
+             padding:9px 18px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 6px 16px rgba(21,128,61,.32);transition:.15s}
+  .sa-export:hover{background:#166534;box-shadow:0 8px 20px rgba(21,128,61,.4)}
+  .sa-export svg{flex-shrink:0}
   .sa-seg{display:inline-flex;background:#fff;border:1px solid #e6eaf1;border-radius:26px;padding:4px;box-shadow:0 6px 16px rgba(15,23,42,.07)}
   .sa-seg button{padding:9px 24px;border-radius:22px;font-weight:700;font-size:13px;color:#64748b;border:0;background:transparent;cursor:pointer;font-family:inherit;transition:.15s}
   .sa-seg button:hover{color:#475569}
@@ -69,6 +73,10 @@
       <p class="sa-psub">Finished-goods stock by product &amp; warehouse — live (In − Out across GP-FG / BH-FG / BH-PF / BH-EC / BH-FU)</p>
     </div>
     <div class="sa-toggles">
+      <button type="button" class="sa-export" id="saExport" title="Download the Inventory Audit Report (View pivot) for the current company">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export Excel
+      </button>
       <div class="sa-seg db" id="saDb">
         <button data-db="jivo_oil" class="active">Jivo Oil</button>
         <button data-db="jivo_mart">Jivo Mart</button>
@@ -301,6 +309,9 @@
     renderCards();
   });
   window.addEventListener('resize',function(){ if(!selected)return; clearTimeout(resizeTimer); resizeTimer=setTimeout(openTable,150); });
+  document.getElementById('saExport').addEventListener('click',function(){
+    window.location.href='/inventory/stock-available/export/?schema='+encodeURIComponent(db);
+  });
 
   load();
 })();

@@ -2,7 +2,9 @@ import inspect
 import json
 import logging
 
-from django.http import JsonResponse
+from datetime import date
+
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
@@ -52,6 +54,26 @@ def stock_available_data(request):
         logger.exception('[inventory] stock-available fetch failed')
         data = {'warehouses': [], 'products': [], 'items': []}
     return JsonResponse({'data': data})
+
+
+@permission_flag_required('can_stock_available')
+@require_http_methods(['GET'])
+def stock_available_export(request):
+    """Download the current Stock Available data as the Inventory Audit Report 'View' pivot
+    (.xlsx), matching the SAP report's layout exactly."""
+    from .services.stock_audit import build_view_xlsx
+    schema = request.GET.get('schema', 'jivo_oil')
+    try:
+        content = build_view_xlsx(schema=schema)
+    except Exception:
+        logger.exception('[inventory] stock-available export failed')
+        return HttpResponse('Could not build the export.', status=500)
+    resp = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    fname = 'Inventory Audit Report %s.xlsx' % date.today().strftime('%d.%m.%Y')
+    resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    return resp
 
 
 @permission_flag_required('can_production')

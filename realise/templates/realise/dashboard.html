@@ -3123,7 +3123,63 @@ function comRow(node,level,path,gs,filt){
   }
   return html;
 }
+// Tree / total stashed for live footer refresh when a product's Flex TGT is edited.
+var comTreeRef=null, comTotRef=null;
+// Flex TGT total for the commodity footer. Flex applies to product nodes only, which can
+// sit at any depth depending on drill order, so walk the whole tree and accumulate each
+// overridden product's dent. Total flex = total target − Σ dents (matches the column).
+function comFlexTotal(tree,totTarget){
+  var dent=0;
+  (function walk(nodes,prefix){
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i], path=prefix+n.dim+':'+n.name;
+      if(n.dim==='product'&&sc2FlexStore.hasOwnProperty(path))
+        dent+=(Number(n.target)||0)-(Number(sc2FlexStore[path])||0);
+      if(n.kids&&n.kids.length)walk(n.kids,path+'>');
+    }
+  })(tree,'');
+  return totTarget-dent;
+}
+// TOTAL-row cells for the commodity grid: like comCells but the Flex TGT is a read-only
+// computed sum, with Dent / Bal / Bal Rlz tracking it. Column order mirrors comCells.
+function comCellsTotal(tot,tree){
+  var tgt=Number(tot.target)||0, flexSum=sc2FlexOn()?comFlexTotal(tree,tgt):tgt;
+  var dent=tgt-flexSum, dCls=dent>0?'sc2-dent-pos':(dent<0?'sc2-dent-neg':'');
+  var bal=flexSum-((tot.done||0)+(tot.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  var act=tot.done>0?tot.lineTotal/tot.done:0;
+  var balRlz=(flexSum>0&&bal!==0)?((flexSum*(tot.targetRealise||0))-(tot.lineTotal||0))/bal:NaN;
+  var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var oihRlz=(tot.oih||0)>0?((tot.oihLineTotal||0)/tot.oih):NaN;
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  return '<div class="sc2-drillval">'+fN(tgt)+'</div>'
+    +(sc2FlexOn()?'<div class="sc2-drillval sc2-flexcol sc2-flextot">'+fN(flexSum)+'</div>'
+        +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(dent!==0?fN(dent):'&mdash;')+'</div>':'')
+    +'<div class="sc2-drillval">'+((tot.targetRealise||0)>0?fNp(tot.targetRealise,2):'&mdash;')+'</div>'
+    +'<div class="sc2-drillval com-done'+((tot.done||0)!==0?' com-click':'')+'">'+fN(tot.done||0)+'</div>'
+    +'<div class="sc2-drillval">'+fN(tot.lastDone||0)+'</div>'
+    +'<div class="sc2-drillval">'+(tot.done>0?fNp(act,2):'&mdash;')+'</div>'
+    +'<div class="sc2-drillval com-oih'+((tot.oih||0)>0?' com-click':'')+'">'+fN(tot.oih||0)+'</div>'
+    +'<div class="sc2-drillval">'+oihRlzStr+'</div>'
+    +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-drillval sc2-balrlz-cell">'+balRlzStr+'</div>';
+}
+// Refresh just the commodity footer's Flex/Dent/Bal/Bal-Rlz after a per-row edit.
+function comRefreshTotal(){
+  if(!comTotRef||!comTreeRef)return;
+  var totRow=document.querySelector('#channelGrid .sc2-drillrow.sc2-state-total');
+  if(!totRow)return;
+  var tgt=Number(comTotRef.target)||0, flexSum=comFlexTotal(comTreeRef,tgt);
+  var bal=flexSum-((comTotRef.done||0)+(comTotRef.oih||0));
+  var ft=totRow.querySelector('.sc2-flextot'); if(ft)ft.innerHTML=fN(flexSum);
+  var dc=totRow.querySelector('.cdent');
+  if(dc){var d=tgt-flexSum;dc.innerHTML=(d!==0?fN(d):'&mdash;');dc.className='sc2-drillval sc2-flexcol cdent '+(d>0?'sc2-dent-pos':(d<0?'sc2-dent-neg':''));}
+  var bc=totRow.querySelector('.sc2-bal-cell');
+  if(bc){bc.innerHTML=fN(bal);bc.className='sc2-drillval sc2-bal-cell '+(bal>=0?'sc2-bal-good':'sc2-bal-bad');}
+  var br=totRow.querySelector('.sc2-balrlz-cell');
+  if(br){var rlz=(flexSum>0&&bal!==0)?((flexSum*(comTotRef.targetRealise||0))-(comTotRef.lineTotal||0))/bal:NaN;br.innerHTML=isFinite(rlz)?'₹'+fNp(rlz,2):'&mdash;';}
+}
 function renderCommodityTable(tree,tot){
+  comTreeRef=tree; comTotRef=tot;
   var gs=' style="'+comGcols()+'"';
   var firstCol=comOrder.length?COM_DIM_NAME[comOrder[0]]:'Product';
   comNodeByPath={};
@@ -3140,7 +3196,7 @@ function renderCommodityTable(tree,tot){
     html+='<div class="sc2-state-empty">No commodity data in the current selection.</div>';
   }else{
     for(var i=0;i<tree.length;i++)html+=comRow(tree[i],0,tree[i].dim+':'+tree[i].name,gs,{});
-    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" data-compath="__comtotal__"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCells(tot,true,'__comtotal__')+'</div>';
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" data-compath="__comtotal__"'+gs+'><div class="sc2-drillname">TOTAL</div>'+comCellsTotal(tot,tree)+'</div>';
   }
   return html+'</div></div>';
 }
@@ -3663,7 +3719,7 @@ function aggList(list){
 }
 function groupLeavesBy(leaves,dim){var m={};leaves.forEach(function(l){var k=l[dim];(m[k]=m[k]||[]).push(l);});return m;}
 // Collapsible tree: parent rows carry a twirl and toggle their children.
-var cdExpanded={}, cdTree=[], cdNodeByPath={};
+var cdExpanded={}, cdTree=[], cdNodeByPath={}, cdTotalAgg=null;
 // Flexible View: 'fixed' (default) or 'flex'. cdFlex maps a row's drill path to a
 // temporary user-entered target (litres); Dent = Target L − Flex TGT. Scratch only —
 // reset every time the modal opens, never sent to the server.
@@ -3732,9 +3788,58 @@ function cdNodeRow(node,depth){
     +'<td style="padding-left:'+(14+depth*20)+'px">'+twirl+tagHtml+esc(node.label)+'</td>'
     +cdMetricCells(node.agg,node.path)+'</tr>';
 }
+// Flex TGT total over the visible top-level rows: total target − Σ(target − flex) of
+// overridden top-level rows (the hidden '—' product/item bucket keeps its target).
+function cdFlexTotal(totTarget){
+  var dent=0;
+  for(var i=0;i<cdTree.length;i++){
+    var n=cdTree[i];
+    if(cdFlex.hasOwnProperty(n.path))dent+=(Number(n.agg.target)||0)-(Number(cdFlex[n.path])||0);
+  }
+  return totTarget-dent;
+}
+// TOTAL-row cells: like cdMetricCells but the Flex TGT is a read-only computed sum, with
+// Dent / Bal / Bal Rlz tracking it so the footer matches the column.
+function cdMetricCellsTotal(a){
+  var tgt=Number(a.target)||0, flexSum=cdFlexTotal(tgt);
+  var dent=tgt-flexSum, dCls=dent>0?'cd-dent-pos':(dent<0?'cd-dent-neg':'');
+  var bal=flexSum-((a.done||0)+(a.oih||0)), balCls=bal>=0?'cd-good':'cd-bad';
+  var balRlz=(flexSum>0&&bal!==0)?((flexSum*(a.targetRealise||0))-(a.lineTotal||0))/bal:NaN;
+  var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var doneCls='cd-doc-cell'+((a.done||0)>0?'':' cd-doc-empty');
+  var oihCls='cd-doc-cell'+((a.oih||0)>0?'':' cd-doc-empty');
+  var oihRlz=(a.oih||0)>0?((a.oihLineTotal||0)/a.oih):NaN;
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  return '<td>'+fN(a.target)+'</td>'
+    +'<td class="cd-flexcol cd-flexin cd-flextot">'+fN(flexSum)+'</td>'
+    +'<td class="cd-flexcol cd-dent '+dCls+'">'+(dent!==0?fN(dent):'&mdash;')+'</td>'
+    +'<td>'+fNp(a.targetRealise||0,2)+'</td>'
+    +'<td class="'+doneCls+'" data-metric="done">'+fN(a.done)+'</td>'
+    +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
+    +'<td>'+oihRlzStr+'</td>'
+    +'<td class="cd-bal-cell '+balCls+'">'+fN(bal)+'</td>'
+    +'<td class="cd-balrlz-cell">'+balRlzStr+'</td>'
+    +'<td>'+fNp(a.actualRealise||0,2)+'</td>';
+}
+// Refresh just the modal footer's Flex/Dent/Bal/Bal-Rlz after a per-row Flex TGT edit.
+function cdRefreshTotal(){
+  if(!cdTotalAgg)return;
+  var totRow=document.querySelector('#cdBody tr.cd-total');
+  if(!totRow)return;
+  var tgt=Number(cdTotalAgg.target)||0, flexSum=cdFlexTotal(tgt);
+  var bal=flexSum-((cdTotalAgg.done||0)+(cdTotalAgg.oih||0));
+  var ft=totRow.querySelector('.cd-flextot'); if(ft)ft.innerHTML=fN(flexSum);
+  var dc=totRow.querySelector('.cd-dent');
+  if(dc){var d=tgt-flexSum;dc.innerHTML=(d!==0?fN(d):'&mdash;');dc.className='cd-flexcol cd-dent '+(d>0?'cd-dent-pos':(d<0?'cd-dent-neg':''));}
+  var bc=totRow.querySelector('.cd-bal-cell');
+  if(bc){bc.innerHTML=fN(bal);bc.className='cd-bal-cell '+(bal>=0?'cd-good':'cd-bad');}
+  var br=totRow.querySelector('.cd-balrlz-cell');
+  if(br){var rlz=(flexSum>0&&bal!==0)?((flexSum*(cdTotalAgg.targetRealise||0))-(cdTotalAgg.lineTotal||0))/bal:NaN;br.innerHTML=isFinite(rlz)?'₹'+fNp(rlz,2):'&mdash;';}
+}
 function cdTotalRow(leaves){
   cdNodeByPath['__cdtotal__']={filters:{},label:'TOTAL — '+(detailChannel||'')};
-  return '<tr class="cd-total" data-path="__cdtotal__"><td>TOTAL</td>'+cdMetricCells(aggList(leaves),'__cdtotal__')+'</tr>';
+  cdTotalAgg=aggList(leaves);
+  return '<tr class="cd-total" data-path="__cdtotal__"><td>TOTAL</td>'+cdMetricCellsTotal(cdTotalAgg)+'</tr>';
 }
 function cdTreeRows(nodes,depth){
   var out='';
@@ -3819,6 +3924,7 @@ document.getElementById('cdBody').addEventListener('input',function(e){
   if(balCell){balCell.innerHTML=fN(bal);balCell.className='cd-bal-cell '+(bal>=0?'cd-good':'cd-bad');}
   var brCell=rowEl.querySelector('.cd-balrlz-cell');
   if(brCell){var balRlz=(eff>0&&bal!==0)?((eff*trate)-lt)/bal:NaN;brCell.innerHTML=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';}
+  cdRefreshTotal();   // keep the footer Flex / Dent / Bal in step with the edited row
 });
 // Click a Done-L / Order-in-Hand cell -> list the underlying invoices / open SOs.
 document.addEventListener('click',function(e){
@@ -4386,7 +4492,7 @@ function cardRowsTotal(list){
 var SC2_DYN_DIMS=DETAIL_DIMS;
 var sc2DynOrder=['state'], sc2DynChosen=['state'];
 var sc2DynUserSet=false;   // true once the user applies a custom order (don't reseed from Drill By)
-var sc2DynExpanded={}, sc2DynNodeByPath={}, sc2DynTree=[], sc2DynLastLeaves=null;
+var sc2DynExpanded={}, sc2DynNodeByPath={}, sc2DynTree=[], sc2DynLastLeaves=null, sc2DynTotalAgg=null;
 var SC2_DYN_GCOLS='grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr .9fr';
 // Rows that can't be attributed to a real person / customer / product / item land
 // in the '—' bucket; show that as "Other" (UNKNOWN states keep their own label).
@@ -4470,6 +4576,45 @@ function sc2DynTreeRows(nodes,depth){
   });
   return out;
 }
+// Flex TGT total for the footer. Each visible top-level row shows its entered flex (if
+// any) else its target; the hidden '—' bucket (product/item drills) and untouched rows
+// keep their target. So total flex = total target − Σ(target − flex) over overridden
+// top-level rows, and the total Dent = that Σ. Bal then tracks the flex total.
+function sc2DynFlexTotal(totTarget){
+  var dent=0;
+  for(var i=0;i<sc2DynTree.length;i++){
+    var n=sc2DynTree[i];
+    if(sc2FlexStore.hasOwnProperty(n.path))dent+=(Number(n.agg.target)||0)-(Number(sc2FlexStore[n.path])||0);
+  }
+  return totTarget-dent;
+}
+// TOTAL-row cells: like drillCells but the Flex TGT is a read-only computed sum (not an
+// editable scratch input), and Dent / Bal track it so the footer matches the column.
+function drillCellsTotal(tot){
+  var tgt=Number(tot.target)||0, flexSum=sc2DynFlexTotal(tgt);
+  var dent=tgt-flexSum, dCls=dent>0?'sc2-dent-pos':(dent<0?'sc2-dent-neg':'');
+  var bal=flexSum-((tot.done||0)+(tot.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  return '<div class="sc2-drillval">'+fN(tgt)+'</div>'
+    +(sc2FlexOn()?'<div class="sc2-drillval sc2-flexcol sc2-flextot">'+fN(flexSum)+'</div>'
+        +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(dent!==0?fN(dent):'&mdash;')+'</div>':'')
+    +'<div class="sc2-drillval">'+fN(tot.done||0)+'</div>'
+    +'<div class="sc2-drillval">'+fN(tot.oih||0)+'</div>'
+    +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-drillval">'+fNp(tot.targetRealise||0,2)+'</div>'
+    +'<div class="sc2-drillval">'+fNp(tot.actualRealise||0,2)+'</div>';
+}
+// Refresh just the footer's Flex/Dent/Bal in place after a per-row Flex TGT edit.
+function sc2DynRefreshTotal(){
+  if(!sc2DynTotalAgg)return;
+  var totRow=document.querySelector('#channelGrid .sc2-drillrow.sc2-state-total');
+  if(!totRow)return;
+  var tgt=Number(sc2DynTotalAgg.target)||0, flexSum=sc2DynFlexTotal(tgt);
+  var ft=totRow.querySelector('.sc2-flextot'); if(ft)ft.innerHTML=fN(flexSum);
+  var dc=totRow.querySelector('.cdent');
+  if(dc){var d=tgt-flexSum;dc.innerHTML=(d!==0?fN(d):'&mdash;');dc.className='sc2-drillval sc2-flexcol cdent '+(d>0?'sc2-dent-pos':(d<0?'sc2-dent-neg':''));}
+  var bc=totRow.querySelector('.sc2-bal-cell');
+  if(bc){var b=flexSum-((sc2DynTotalAgg.done||0)+(sc2DynTotalAgg.oih||0));bc.innerHTML=fN(b);bc.className='sc2-drillval sc2-bal-cell '+(b>=0?'sc2-bal-good':'sc2-bal-bad');}
+}
 function renderSc2DynTree(leaves){
   var dims=sc2DynOrder.slice();
   sc2DynNodeByPath={};
@@ -4488,8 +4633,8 @@ function renderSc2DynTree(leaves){
     html+='<div class="sc2-state-empty">No rows available in the current selection.</div>';
   }else{
     html+=sc2DynTreeRows(sc2DynTree,0);
-    var tot=aggList(leaves);
-    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" style="'+sc2DynGcols()+'"><div class="sc2-drillname">TOTAL</div>'+drillCells(tot,'__dyntotal__')+'</div>';
+    var tot=aggList(leaves); sc2DynTotalAgg=tot;
+    html+='<div class="sc2-drillrow sc2-wide sc2-state-total" style="'+sc2DynGcols()+'"><div class="sc2-drillname">TOTAL</div>'+drillCellsTotal(tot)+'</div>';
   }
   html+='</div></div>';
   return html;
@@ -4604,6 +4749,9 @@ document.getElementById('channelGrid').addEventListener('input',function(e){
   if(balCell){balCell.innerHTML=fN(bal);balCell.className='sc2-drillval sc2-bal-cell '+(bal>=0?'sc2-bal-good':'sc2-bal-bad');}
   var brCell=row.querySelector('.sc2-balrlz-cell');
   if(brCell){var balRlz=(eff>0&&bal!==0)?((eff*trate)-lt)/bal:NaN;brCell.innerHTML=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';}
+  // Keep the TOTAL row's Flex / Dent / Bal in step with the edited row.
+  if(row.hasAttribute('data-dynpath'))sc2DynRefreshTotal();
+  else if(row.hasAttribute('data-compath'))comRefreshTotal();
 });
 
 /* ===== CHANNEL DASHBOARD (slide 2) PLAIN-CSV EXPORT ===== */

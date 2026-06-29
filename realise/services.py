@@ -2104,23 +2104,52 @@ def _row_key(card_code, state, main_group):
     return '%s|%s|%s' % (card_code or '', state or '', main_group or '')
 
 
-def _credit_payments_since(since_date):
-    """Total incoming customer receipts per CardCode booked on/after `since_date`, read
-    live from SAP B1 (ORCT, DocType 'C' = customer payment). Powers the Payment Done
-    column while a credit lock is in force. Returns {card_code: amount_paid}; {} on any
-    SAP error so the report still renders (Payment Done just stays blank)."""
+def _credit_receipts_on(as_of_date):
+    """Per-CardCode incoming bank-transfer receipts (SAP ORCT, DocType 'C', amount = TrsfrSum)
+    dated ON as_of_date. Returns {card_code: amount}; {} on any SAP error. Powers the Payment
+    Done column. The half-open [as_of, as_of+1) range is correct whether DocDate is stored as a
+    date or a timestamp."""
+    next_day = as_of_date + timedelta(days=1)
     sql = f'''
         SELECT COALESCE(TRIM("CardCode"), '') AS "CCODE",
-               SUM(COALESCE("DocTotal", 0))    AS "PAID"
+               SUM(COALESCE("TrsfrSum", 0)) AS "PAID"
         FROM "{SAP_SCHEMA}"."ORCT"
-        WHERE "DocType" = 'C' AND "Canceled" = 'N' AND "DocDate" >= ?
+        WHERE "DocType" = 'C' AND "Canceled" = 'N'
+          AND "DocDate" >= ? AND "DocDate" < ?
         GROUP BY COALESCE(TRIM("CardCode"), '')
     '''
     try:
-        rows = sap_connector.execute_query(sql, (since_date,))
+        rows = sap_connector.execute_query(sql, (as_of_date, next_day))
         return {_normalize_name(r.get('CCODE')): float(r.get('PAID') or 0) for r in rows}
     except Exception as exc:
         logger.error('[REQCREDIT] receipts fetch failed: %s', exc)
+        return {}
+
+
+# Per-date {card_code: account balance as of that date}, cached like the aging report.
+_credit_ledger_cache = {}
+
+
+def _credit_ledger_asof(as_of_date):
+    """{card_code: customer account balance as of the END of as_of_date}, computed via SAP B1's
+    reconciliation engine (the same query that powers Customer Aging; its balance_due ties to
+    OCRD.Balance to the rupee). It reverses BOTH invoices and payments dated after the date, so
+    it is the true historical ledger — unlike a payments-only roll-back. Cached per date for
+    _AGING_TTL seconds. {} on any SAP error (the caller then falls back to the live balance)."""
+    key = as_of_date.isoformat()
+    now = time.time()
+    hit = _credit_ledger_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    try:
+        m = {}
+        for r in _load_aging_rows_sap(as_of_date):
+            cc = _normalize_name(r.get('code'))
+            m[cc] = m.get(cc, 0.0) + float(r.get('balance_due') or 0)
+        _credit_ledger_cache[key] = (now + _AGING_TTL, m)
+        return m
+    except Exception as exc:
+        logger.error('[REQCREDIT] ledger-as-of fetch failed: %s', exc)
         return {}
 
 
@@ -2180,37 +2209,52 @@ def clear_credit_lock():
     CreditLock.objects.filter(active=True).update(active=False)
 
 
-def _overlay_credit_lock(buckets, lock):
-    """Mutate the per-row buckets in place for an active lock: Total Outstanding and
-    Required Limit come from the frozen snapshot; Payment Done is the card's SAP receipts
-    since the lock date, split across the card's rows in proportion to their snapshot
-    outstanding; Outstanding (remaining) = snapshot outstanding − Payment Done. Rows with
-    no snapshot (parties that appeared after the lock) are left on live SAP."""
+def _freeze_credit_lock(buckets, lock):
+    """Freeze Total Outstanding and Required Limit to the lock's snapshot (per row, where a
+    snapshot exists). Rows with no snapshot — parties that appeared after the lock — stay on
+    live SAP values. Payment Done is handled separately: it is independent of the lock."""
     snaps = {s.row_key: s for s in lock.snapshots.all()}
-    paid_by_card = _credit_payments_since(timezone.localtime(lock.locked_at).date())
-    rows_by_card = {}
     for b in buckets:
         s = snaps.get(_row_key(b['card_code'], b['state'], b['main_group']))
-        if not s:
-            continue
-        b['value']['outstanding'] = s.outstanding
-        b['value']['required_limit'] = s.required_limit
-        rows_by_card.setdefault(b['card_code'], []).append((b, s))
-    for card, pairs in rows_by_card.items():
-        paid = paid_by_card.get(card, 0.0)
-        tot = sum(s.outstanding for _, s in pairs)
-        for i, (b, s) in enumerate(pairs):
-            pay = (paid * s.outstanding / tot) if tot > 0 else (paid if i == 0 else 0.0)
+        if s:
+            b['value']['outstanding'] = s.outstanding
+            b['value']['required_limit'] = s.required_limit
+
+
+def _apply_payment_done(buckets, receipts_on):
+    """Fill Payment Done and Outstanding (remaining) on every row — always, independent of
+    any credit lock. Payment Done is the customer's ORCT receipts (TrsfrSum) dated ON the
+    selected date (receipts_on[card]), matched by CardCode (NOT by SO number) and spread
+    across whichever rows the customer currently has, in proportion to each row's Total
+    Outstanding. Matching at the customer level means the payment still lands even when the
+    party's rows change (new open orders, different states/main groups, more SO numbers).
+    Outstanding (remaining) = the row's Total Outstanding − its share of Payment Done."""
+    rows_by_card = {}
+    for b in buckets:
+        rows_by_card.setdefault(b['card_code'], []).append(b)
+    for card, rows in rows_by_card.items():
+        paid = receipts_on.get(card, 0.0)
+        tot = sum(b['value']['outstanding'] for b in rows)
+        for i, b in enumerate(rows):
+            pay = (paid * b['value']['outstanding'] / tot) if tot > 0 else (paid if i == 0 else 0.0)
             b['value']['payment_done'] = pay
-            b['value']['remaining'] = s.outstanding - pay
+            b['value']['remaining'] = b['value']['outstanding'] - pay
 
 
-def get_required_credit_rows(_apply_lock=True):
+def get_required_credit_rows(_apply_lock=True, as_of_date=None):
     """Required Credit Limit report data: live Order-in-Hand grouped by ASM (territory
     owner) → party. Each party row carries open litres (total + the Canola / Olive /
     Premium / Commodity splits) and open value (₹), a 'type' tag (P / C / P+C / —) for the
     Type filter, the list of open SO numbers, and its saved (editable) delivery remark.
-    Returns ASM groups (each with a subtotal) plus a grand total."""
+    Returns ASM groups (each with a subtotal) plus a grand total.
+
+    `as_of_date` (default today) drives the date-aware columns: Ledger Amt shows the balance
+    just before that date and Payment Done shows the receipts dated on that date."""
+    if as_of_date is None:
+        as_of_date = timezone.localdate()
+    receipts_on = _credit_receipts_on(as_of_date)                      # Payment Done = receipts that day
+    ledger_map = _credit_ledger_asof(as_of_date - timedelta(days=1))   # Ledger = balance just before the date
+    use_aging = bool(ledger_map)                                       # fall back to live balance if SAP failed
     # Display state as its short CODE (DL/HR/UP…), but keep the full NAME for ASM
     # resolution (the territory map is keyed by state name). Reverse the code→name map.
     name_to_code = {v: k for k, v in STATE_CODE_NAMES.items()}
@@ -2262,7 +2306,10 @@ def get_required_credit_rows(_apply_lock=True):
     for bucket in agg.values():
         card_buckets.setdefault(bucket['card_code'], []).append(bucket)
     for cc, buckets in card_buckets.items():
-        ledger = card_balance.get(cc, 0.0)
+        # Ledger Amt = the party's true account balance just before the selected date (SAP
+        # reconciliation engine, reverses invoices + payments after the date). Falls back to
+        # the live OCRD.Balance only if that historical query was unavailable.
+        ledger = ledger_map.get(cc, 0.0) if use_aging else card_balance.get(cc, 0.0)
         total_pi = sum(b['value']['total'] for b in buckets)
         for i, b in enumerate(buckets):
             if total_pi > 0:
@@ -2286,11 +2333,14 @@ def get_required_credit_rows(_apply_lock=True):
         bucket['remark'] = remarks.get(bucket['card_code'], '')
         by_asm.setdefault(bucket['asm'] or 'UNASSIGNED', []).append(bucket)
 
-    # If a lock is active, freeze Total Outstanding / Required Limit to the snapshot and
-    # fill Payment Done / Outstanding from SAP receipts — BEFORE subtotals so they sum too.
+    # The lock (when active) freezes ONLY Total Outstanding / Required Limit to the snapshot.
     lock = get_active_credit_lock() if _apply_lock else None
     if lock:
-        _overlay_credit_lock(list(agg.values()), lock)
+        _freeze_credit_lock(list(agg.values()), lock)
+    # Payment Done is independent of the lock: each party's receipts dated ON the selected
+    # date. Outstanding = Total Outstanding − Payment Done. Applied before subtotals so both
+    # columns roll into the ASM subtotal and grand total.
+    _apply_payment_done(list(agg.values()), receipts_on)
 
     asms = []
     grand = _blank_bucket()
@@ -2304,7 +2354,8 @@ def get_required_credit_rows(_apply_lock=True):
                     grand[metric][key] += r[metric][key]
         asms.append({'asm': asm, 'rows': rows, 'subtotal': _round_bucket(sub)})
 
-    return {'asms': asms, 'total': _round_bucket(grand), 'lock': _lock_info(lock)}
+    return {'asms': asms, 'total': _round_bucket(grand), 'lock': _lock_info(lock),
+            'as_of': as_of_date.isoformat()}
 
 
 def _xlsx_col_letter(idx):
@@ -2496,7 +2547,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
             required = float(row['value'].get('required_limit', 0) or 0)
-            payment = float(row['value'].get('payment_done', 0) or 0)   # 0 unless a lock is on
+            payment = float(row['value'].get('payment_done', 0) or 0)   # receipts on the selected date
             remaining = float(row['value'].get('remaining', 0) or 0)
             if first:
                 put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
@@ -2513,7 +2564,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 12, ledger)                        # L LEDGER AMT (+rec / -pay)
             put_num(r, 13, outstanding)                   # M TOTAL OUTSTANDING
             put_num(r, 14, required)                      # N Required Limit (outstanding + 2%)
-            put_num(r, 15, payment)                       # O PAYMENT DONE (SAP receipts, locked)
+            put_num(r, 15, payment)                       # O PAYMENT DONE (receipts on the selected date)
             put_num(r, 16, remaining)                     # P OUTSTANDING (= Total Outstanding − Payment)
             s_prem += prem; s_com += commodity; s_tot += total
             s_val += val; s_led += ledger; s_out += outstanding; s_req += required

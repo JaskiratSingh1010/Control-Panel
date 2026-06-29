@@ -57,18 +57,22 @@ def get_stock_available(schema="jivo_oil"):
                 "item_code": code, "item_name": name,
                 "sku": str(r.get("U_SKU") or "").strip(),
                 "wh": {w: 0.0 for w in STOCK_WAREHOUSES},
+                "wh_litres": {w: 0.0 for w in STOCK_WAREHOUSES},
                 "grand_total": 0.0, "litres": 0.0,
             }
         wcode = str(r.get("Warehouse") or "").strip().upper()
         qty = float(r.get("Qty") or 0)
+        lit = float(r.get("Litres") or 0)
         if wcode in it["wh"]:
             it["wh"][wcode] += qty
+            it["wh_litres"][wcode] += lit
         it["grand_total"] += qty
-        it["litres"] += float(r.get("Litres") or 0)
+        it["litres"] += lit
 
     item_list = list(items.values())
     for it in item_list:
         it["wh"] = {w: round(v, 2) for w, v in it["wh"].items()}
+        it["wh_litres"] = {w: round(v, 2) for w, v in it["wh_litres"].items()}
         it["grand_total"] = round(it["grand_total"], 2)
         it["litres"] = round(it["litres"], 2)
 

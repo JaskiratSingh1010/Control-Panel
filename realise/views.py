@@ -103,16 +103,25 @@ def customer_aging(request):
     })
 
 
+def _parse_as_of(s):
+    """Parse a ?as_of=YYYY-MM-DD query param into a date, or None (→ today) if absent/bad."""
+    try:
+        return datetime.strptime((s or '').strip(), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
 @permission_flag_required('can_required_credit_limit')
 def required_credit_limit(request):
     """Standalone tab: Required Credit Limit — live Order-in-Hand grouped by ASM
     (territory owner) → party, in the closing-sheet layout. Each party row shows open
     litres + open value (₹), a Premium/Commodity filter at the top, and a frontend-
-    editable delivery remark (the only writable column; persisted to ClosingRemark)."""
+    editable delivery remark (the only writable column; persisted to ClosingRemark).
+    ?as_of=YYYY-MM-DD (default today) drives the Ledger Amt / Payment Done date view."""
     return render(request, 'realise/required_credit_limit.html', {
         'sidebar_active': 'required_credit_limit',
         # raw dict — the template's |json_script does the JSON serialization.
-        'credit_payload': services.get_required_credit_rows(),
+        'credit_payload': services.get_required_credit_rows(as_of_date=_parse_as_of(request.GET.get('as_of'))),
     })
 
 
@@ -153,7 +162,7 @@ def export_required_credit(request):
     ?type=P|C|P+C (repeatable) scopes to the on-screen Type filter; ?asm=<name> to one ASM."""
     type_filters = [t.strip() for t in request.GET.getlist('type') if t.strip() in ('P', 'C', 'P+C')]
     asms = [a.strip() for a in request.GET.getlist('asm') if a.strip()]
-    payload = services.get_required_credit_rows()
+    payload = services.get_required_credit_rows(as_of_date=_parse_as_of(request.GET.get('as_of')))
     if asms:                     # scope the export to the on-screen ASM selection
         chosen = set(asms)
         payload = {'asms': [g for g in payload.get('asms', []) if g.get('asm') in chosen],
