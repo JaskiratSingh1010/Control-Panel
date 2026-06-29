@@ -10,8 +10,19 @@
   .sa-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
   .sa-h1{font-size:33px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.6px}
   .sa-psub{margin:5px 0 0;font-size:13px;color:#94a3b8}
+  .sa-unit{font-size:.55em;font-weight:700;opacity:.85}
 
-  .sa-toggles{display:flex;flex-direction:column;gap:11px;align-items:flex-end;padding-top:4px}
+  /* Summary KPI cards: Total / Premium / Commodity litres. */
+  .sa-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:18px 0 4px}
+  .sa-kpi{border-radius:16px;padding:16px 18px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.14)}
+  .sa-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.92}
+  .sa-kpi-v{margin-top:7px;font-size:27px;font-weight:900;line-height:1.05;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .sak-tot{background:linear-gradient(135deg,#26466b,#0f1f33)}
+  .sak-prem{background:linear-gradient(135deg,#0c7a6b,#3aa05a)}
+  .sak-comm{background:linear-gradient(135deg,#7c52e6,#a78bfa)}
+  @media(max-width:720px){.sa-kpis{grid-template-columns:1fr}}
+
+  .sa-toggles{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding-top:4px}
   .sa-export{display:inline-flex;align-items:center;gap:8px;background:#15803d;color:#fff;border:0;border-radius:22px;
              padding:9px 18px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 6px 16px rgba(21,128,61,.32);transition:.15s}
   .sa-export:hover{background:#166534;box-shadow:0 8px 20px rgba(21,128,61,.4)}
@@ -88,6 +99,8 @@
       </div>
     </div>
   </div>
+
+  <div class="sa-kpis" id="saKpis"></div>
 
   <div class="sa-grid" id="saGrid"><div class="sa-empty" style="grid-column:1/-1">Loading…</div></div>
 
@@ -207,7 +220,7 @@
     grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Loading…</div>';
     fetch('/inventory/stock-available/api/data/?schema='+encodeURIComponent(db),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{data:{}};})
-      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; renderCards(); })
+      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; renderSaKpis(); renderCards(); })
       .catch(function(){grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Could not load stock.</div>';});
   }
 
@@ -223,11 +236,30 @@
         +'<div class="sa-motif">'+motifFor(p)+'</div>'
         +'<span class="sa-badge">'+esc(p.type)+'</span>'
         +'<h3>'+esc(p.sub_group)+'</h3>'
-        +'<div class="sa-qty">'+num(p.qty)+'</div>'
-        +'<div class="sa-sub">'+num(p.litres)+' L · '+(p.sku_count||0)+' SKUs</div>'
+        +'<div class="sa-qty">'+num(p.litres)+'<span class="sa-unit"> L</span></div>'
+        +'<div class="sa-sub">'+num(p.qty)+' qty · '+(p.sku_count||0)+' SKUs</div>'
         +'</div>';
     }).join('');
     if(selected)openTable();
+  }
+
+  // Three summary KPIs: Total / Premium / Commodity litres (computed from all products).
+  function renderSaKpis(){
+    var box=document.getElementById('saKpis'); if(!box)return;
+    var tot=0,prem=0,comm=0;
+    (DATA.products||[]).forEach(function(p){
+      var l=Number(p.litres)||0; tot+=l;
+      if(p.type==='PREMIUM')prem+=l; else if(p.type==='COMMODITY')comm+=l;
+    });
+    var cards=[
+      {l:'Total Litres',v:tot,c:'sak-tot'},
+      {l:'Premium Litres',v:prem,c:'sak-prem'},
+      {l:'Commodity Litres',v:comm,c:'sak-comm'}
+    ];
+    box.innerHTML=cards.map(function(k){
+      return '<div class="sa-kpi '+k.c+'"><div class="sa-kpi-l">'+k.l+'</div>'
+        +'<div class="sa-kpi-v">'+num(k.v)+'<span class="sa-unit"> L</span></div></div>';
+    }).join('');
   }
 
   // Drop the table panel into the grid right after the LAST card of the clicked row.

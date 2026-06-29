@@ -156,6 +156,13 @@ td.ccell{font-weight:500}
 .cd-header h3{margin:0;font-size:16px;color:#fff}
 .cd-header p{margin:2px 0 0;font-size:11px;color:rgba(255,255,255,.85)}
 .cd-controls{display:flex;align-items:center;gap:12px}
+.cd-search{display:flex;align-items:center;gap:7px;width:200px;max-width:38%;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:5px 10px}
+.cd-search .material-icons{font-size:15px;color:#94a3b8}
+.cd-search input{flex:1;min-width:0;border:0;background:transparent;color:#0f172a;font-family:inherit;font-size:12px;outline:none}
+.cd-search input::placeholder{color:#94a3b8}
+.cd-export-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#1d4ed8;border:none;border-radius:8px;padding:8px 13px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
+.cd-export-btn:hover{background:#eff6ff}
+.cd-export-btn .material-icons{font-size:16px}
 .cd-view-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:rgba(255,255,255,.9)}
 .cd-type-sel{background:#fff;border:none;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;color:#1d4ed8;font-family:inherit;cursor:pointer;outline:none}
 .cd-controls .btn-cancel{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -304,6 +311,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-nav .slide-indicator{min-width:auto;font-size:12px}
 .sc2-pill{padding:8px 14px;border-radius:999px;border:1px solid #d8e0ea;background:#fff;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.55px;box-shadow:0 4px 12px rgba(15,23,42,.04)}
 .sc2-drillbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sc2-period-bar{flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px}
 .sc2-drillbar label{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b}
 .sc2-drillbar select{min-width:0;width:auto;background:#fff;border:1px solid #d9e5ee;color:#1f2937;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:700;font-family:inherit;outline:none}
 .sc2-drillbar select:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
@@ -317,9 +325,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-kpi-body{min-width:0;flex:1}
 .sc2-kpi.sc2-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .15s}
 .sc2-kpi.sc2-kpi-click:hover{box-shadow:0 10px 26px rgba(37,99,235,.18);transform:translateY(-1px);border-color:#9bc0f5}
-.sc2-kpi-dl{flex-shrink:0;width:30px;height:30px;border:1px solid #d9e5ee;border-radius:9px;background:#fff;color:#0f766e;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
-.sc2-kpi-dl:hover{background:#ecfdf5;border-color:#99f6e4}
-.sc2-kpi-dl .material-icons{font-size:17px}
 .oih-kpi-summary{display:flex;gap:12px;margin:14px 0 8px}
 .oih-kpi-box{flex:1;background:#f1f5fb;border:1px solid #dbe3ec;border-radius:10px;padding:10px 14px}
 .oih-kpi-box span{display:block;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b;margin-bottom:4px}
@@ -342,11 +347,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-titletext strong{font-size:19px;font-weight:900;letter-spacing:.45px;text-transform:uppercase;color:#111827}
 .sc2-titletext span{display:none}
 .sc2-card-rest{height:var(--sc2-main-card-height)}
-/* Per-card search box (filters the area rows within one channel card). */
-.sc2-cardsearch{display:flex;align-items:center;gap:7px;padding:7px 14px;background:#f8fbff;border-bottom:1px solid #e5edf5;cursor:default}
-.sc2-cardsearch .material-icons{font-size:16px;color:#94a3b8}
-.sc2-cardsearch input{flex:1;min-width:0;border:1px solid #d9e5ee;border-radius:8px;padding:5px 9px;font-family:inherit;font-size:12px;color:#0f172a;background:#fff;outline:none}
-.sc2-cardsearch input:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.16)}
 /* Compact channel panel — colored header (channel + TARGET/DONE/BAL) + scrollable area rows */
 .sc2-thead{display:grid;grid-template-columns:1.05fr .76fr .76fr .76fr .76fr .92fr;align-items:center;padding:10px 16px;background:var(--accent-strong,#1f3a5f);border-bottom:1px solid rgba(15,23,42,.08)}
 .sc2-tt-name{font-size:17px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:#0f172a}
@@ -638,6 +638,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <option value="fixed">Fixed View</option>
           <option value="flex">Flexible View</option>
         </select>
+        <button type="button" class="sc2-today-btn" id="sc2RawExportBtn" onclick="exportMainRawCSV()" title="Export the raw data behind this view (Excel/CSV)">
+          <span class="material-icons">download</span>Export Excel
+        </button>
       </div>
       <div class="sc2-kpis" id="channelKpis">
         <div class="sc2-kpi">
@@ -647,12 +650,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('done')" title="Open Done breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">local_shipping</span></div>
           <div class="sc2-kpi-body"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
-          <button type="button" class="sc2-kpi-dl" title="Export raw Done rows (Excel/CSV)" onclick="exportDoneRaw(event)"><span class="material-icons">download</span></button>
         </div>
         <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openOihWindow()" title="Open OIH breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">warehouse</span></div>
           <div class="sc2-kpi-body"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
-          <button type="button" class="sc2-kpi-dl" title="Export raw OIH rows (Excel/CSV)" onclick="exportOihRaw(event)"><span class="material-icons">download</span></button>
         </div>
         <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
           <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
@@ -1156,6 +1157,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <h3 id="cdTitle">Channel</h3>
         <p id="cdSub">Target, Done, Order in Hand (open SO) &amp; Balance — litres</p>
       </div>
+      <div class="cd-search">
+        <span class="material-icons">search</span>
+        <input type="text" id="cdSearch" placeholder="Search…" oninput="cdFilterRows(this)" autocomplete="off">
+      </div>
       <div class="cd-controls">
         <span class="cd-view-label">Type</span>
         <select id="cdType" class="cd-type-sel" onchange="onCdTypeChange()">
@@ -1225,6 +1230,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <p>Open sales-order litres — Premium &amp; Commodity</p>
       </div>
       <div class="cd-controls">
+        <button type="button" class="cd-export-btn" onclick="exportOihKpiCSV()"><span class="material-icons">download</span>Export Excel</button>
         <span class="cd-view-label">Group by</span>
         <div class="com-drill-box">
           <button type="button" class="com-drill-btn" id="oihDrillBtn">
@@ -1258,6 +1264,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <p id="mbSubtitle">Premium &amp; Commodity litres</p>
       </div>
       <div class="cd-controls">
+        <button type="button" class="cd-export-btn" onclick="exportMetricCSV()"><span class="material-icons">download</span>Export Excel</button>
         <span class="cd-view-label">Group by</span>
         <div class="com-drill-box">
           <button type="button" class="com-drill-btn" id="mbDrillBtn">
@@ -3518,18 +3525,6 @@ function cardCells(c,isTotal){
     +'<div class="sc2-state-val '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-state-val">'+balRlzStr+'</div>';
 }
-// Per-card search: filter a channel card's area rows by the first column (state/area or main
-// group). Scoped to the card so each card searches independently; the TOTAL row sits outside
-// .sc2-state-scroll so it always stays visible.
-function filterChannelCard(input){
-  var card=input.closest('.sc2-card'); if(!card)return;
-  var q=String(input.value||'').trim().toLowerCase();
-  var rows=card.querySelectorAll('.sc2-state-scroll .sc2-state-row');
-  for(var i=0;i<rows.length;i++){
-    var name=rows[i].getAttribute('data-name')||'';
-    rows[i].style.display=(!q||name.indexOf(q)!==-1)?'':'none';
-  }
-}
 function themedChannelCardHtml(item){
   var accent=CHANNEL_COLORS[item.name]||{band:'#dbeafe',ring:'#60a5fa'};
   // In "All", hide zero-activity rows so cards aren't padded with empty states; when a
@@ -3543,7 +3538,7 @@ function themedChannelCardHtml(item){
   if(!data.length){
     rows='<div class="sc2-state-empty">No area data in the current selection.</div>';
   }else{
-    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row sc2-oih" data-name="'+esc(String(data[i].name||'').toLowerCase())+'">'+cardCells(data[i],false)+'</div>';
+    for(var i=0;i<data.length;i++)rows+='<div class="sc2-state-row sc2-oih">'+cardCells(data[i],false)+'</div>';
   }
   var totRow='<div class="sc2-state-row sc2-state-total sc2-oih">'+cardCells(item,true)+'</div>';
   var shortCode=item.name.length>3?item.name.slice(0,2):item.name;
@@ -3553,10 +3548,6 @@ function themedChannelCardHtml(item){
     +'<div class="sc2-titlebar">'
       +'<div class="sc2-icon">'+esc(shortCode)+'</div>'
       +'<div class="sc2-titletext"><strong>'+esc(item.name)+' - '+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
-    +'</div>'
-    +'<div class="sc2-cardsearch" onclick="event.stopPropagation()">'
-      +'<span class="material-icons">search</span>'
-      +'<input type="text" placeholder="Search '+esc(firstColLabel.toLowerCase())+'…" oninput="filterChannelCard(this)" onclick="event.stopPropagation()">'
     +'</div>'
     +'<div class="sc2-thead sc2-oih">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(firstColLabel)+'</div>'
@@ -3810,9 +3801,21 @@ function cdMetricCells(a,path){
 function cdNodeRow(node,depth){
   var meta=dimMeta(node.dim),twirl=node.leaf?'<span class="cd-twirl cd-leaf"></span>':'<span class="cd-twirl'+(cdExpanded[node.path]?' open':'')+'">&#9654;</span>';
   var tagHtml=meta.tag?'<span class="cd-tag '+meta.cls+'">'+esc(meta.tag)+'</span>':'';
-  return '<tr class="'+(node.leaf?'cd-child':'cd-parent')+'"'+(node.leaf?'':' data-toggle="1" style="cursor:pointer"')+' data-path="'+esc(node.path)+'">'
+  return '<tr class="'+(node.leaf?'cd-child':'cd-parent')+'"'+(node.leaf?'':' data-toggle="1" style="cursor:pointer"')+' data-path="'+esc(node.path)+'" data-name="'+esc(String(node.label||'').toLowerCase())+'">'
     +'<td style="padding-left:'+(14+depth*20)+'px">'+twirl+tagHtml+esc(node.label)+'</td>'
     +cdMetricCells(node.agg,node.path)+'</tr>';
+}
+// Channel-detail modal header search: filter rows by the first column (state/drill value).
+// The TOTAL row always stays visible.
+function cdFilterRows(input){
+  var q=String(input.value||'').trim().toLowerCase();
+  var rows=document.querySelectorAll('#cdBody tr');
+  for(var i=0;i<rows.length;i++){
+    var tr=rows[i];
+    if(tr.classList.contains('cd-total')){tr.style.display='';continue;}
+    var name=tr.getAttribute('data-name')||'';
+    tr.style.display=(!q||name.indexOf(q)!==-1)?'':'none';
+  }
 }
 // Flex TGT total over the visible top-level rows: total target − Σ(target − flex) of
 // overridden top-level rows (the hidden '—' product/item bucket keeps its target).
@@ -4181,6 +4184,30 @@ function renderOihBreakdown(){
   rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+oihColCells(tot,seg)+oihWhsCells(null,showWhs)+'</tr>';
   body.innerHTML=rowsHtml;
 }
+// Export the OIH breakdown (current Group By) as CSV (opens in Excel).
+function exportOihKpiCSV(){
+  if(!oihGranular||!oihGranular.length){showToast('Nothing to export','info');return;}
+  var seg=oihKpiSeg, label=oihOrder.map(oihDimLabel).join(' > ')||'Dimension';
+  var head=[label];
+  if(seg==='PREMIUM')head.push('Premium (L)');
+  else if(seg==='COMMODITY')head.push('Commodity (L)');
+  else head.push('Premium (L)','Commodity (L)','Total (L)');
+  var lines=[head.map(csvEscapeCell).join(',')];
+  function cols(n){return seg==='PREMIUM'?[n.premium||0]:(seg==='COMMODITY'?[n.commodity||0]:[n.premium||0,n.commodity||0,n.total||0]);}
+  (function walk(nodes,depth){
+    for(var i=0;i<nodes.length;i++){var n=nodes[i];
+      lines.push([ (depth?new Array(depth+1).join('  '):'')+n.name ].concat(cols(n)).map(csvEscapeCell).join(','));
+      if(n.kids&&n.kids.length)walk(n.kids,depth+1);
+    }
+  })(buildOihTree(oihGranular,oihOrder),0);
+  var tp=0,tc=0;for(var i=0;i<oihGranular.length;i++){tp+=oihGranular[i].premium||0;tc+=oihGranular[i].commodity||0;}
+  lines.push(['TOTAL'].concat(cols({premium:tp,commodity:tc,total:tp+tc})).map(csvEscapeCell).join(','));
+  var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=('Order_in_Hand_'+oihSegLabel(oihKpiSeg)).replace(/\s+/g,'_')+'.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  showToast('CSV exported','ok');
+}
 // Expand/collapse tree nodes
 document.addEventListener('click',function(e){
   var b=e.target&&e.target.closest?e.target.closest('#oihKpiBody .oih-tw'):null;
@@ -4345,6 +4372,30 @@ document.addEventListener('click',function(e){
   if(!b)return;
   var p=b.getAttribute('data-mbpath'); mbExpanded[p]=!mbExpanded[p]; renderMetricBreakdown();
 });
+// Export the metric breakdown (current Group By) as CSV (opens in Excel).
+function exportMetricCSV(){
+  if(!mbGranular||!mbGranular.length){showToast('Nothing to export','info');return;}
+  var seg=mbSeg, label=mbOrder.map(mbDimLabel).join(' > ')||'Dimension';
+  var head=[label];
+  if(seg==='PREMIUM')head.push('Premium (L)');
+  else if(seg==='COMMODITY')head.push('Commodity (L)');
+  else head.push('Premium (L)','Commodity (L)','Total (L)');
+  var lines=[head.map(csvEscapeCell).join(',')];
+  function cols(n){return seg==='PREMIUM'?[n.prem||0]:(seg==='COMMODITY'?[n.comm||0]:[n.prem||0,n.comm||0,n.total||0]);}
+  (function walk(nodes,depth){
+    for(var i=0;i<nodes.length;i++){var n=nodes[i];
+      lines.push([ (depth?new Array(depth+1).join('  '):'')+n.name ].concat(cols(n)).map(csvEscapeCell).join(','));
+      if(n.kids&&n.kids.length)walk(n.kids,depth+1);
+    }
+  })(buildMbTree(mbGranular,mbOrder),0);
+  var tp=0,tc=0,tt=0;for(var i=0;i<mbGranular.length;i++){tp+=mbGranular[i].prem||0;tc+=mbGranular[i].comm||0;tt+=mbGranular[i].total||0;}
+  lines.push(['TOTAL'].concat(cols({prem:tp,comm:tc,total:tt})).map(csvEscapeCell).join(','));
+  var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=(mbMetricLabel()+'_'+mbSegLabel(mbSeg)).replace(/\s+/g,'_')+'.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  showToast('CSV exported','ok');
+}
 function mbRenderDpList(){
   var list=document.getElementById('mbDpList'); if(!list)return; list.innerHTML='';
   MB_DIMS.forEach(function(d){
@@ -4419,6 +4470,7 @@ async function renderSlideTwo(){
     var dt=aggList(leaves);
     var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
     setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih);
+    await loadFlexTargets(period.month,period.year);   // prefill saved Flex TGT (survives refresh)
     grid.innerHTML=renderSc2DynTree(leaves);   // sets sc2DynTree
     sc2CsvRows=sc2DynCsvRows(sc2DynTree,dt);
     sc2DynFitHeight();                         // grow the body to fill the slide
@@ -4752,6 +4804,32 @@ document.addEventListener('click',function(e){
   sc2DynExpanded[p]=!sc2DynExpanded[p];
   sc2DynRerender();
 });
+// ── Persisted Flex TGT ──────────────────────────────────────────────────────
+// Saved per segment + period (month/year) + drill row_key, so a typed value survives a
+// page refresh. Loaded into sc2FlexStore before the drill table renders; auto-saved
+// (debounced) on edit — no lock button.
+async function loadFlexTargets(month,year){
+  try{
+    var seg=sc2Seg();
+    var res=await fetch(API+'/api/flex-targets/?seg='+encodeURIComponent(seg)+'&month='+month+'&year='+year,{headers:{'X-CSRFToken':getCSRF()}});
+    var p=res.ok?await res.json():{};
+    var map=(p&&p.data)||{};
+    for(var k in sc2FlexStore)delete sc2FlexStore[k];     // server is the source of truth
+    for(var rk in map)sc2FlexStore[rk]=Number(map[rk])||0;
+  }catch(e){ /* keep current sc2FlexStore on error */ }
+}
+var _flexSaveTimers={};
+function saveFlexTarget(rowKey,value){
+  var period=getResolvedChannelPeriod(), seg=sc2Seg();
+  clearTimeout(_flexSaveTimers[rowKey]);
+  _flexSaveTimers[rowKey]=setTimeout(function(){
+    fetch(API+'/api/flex-targets/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},
+      body:JSON.stringify({seg:seg,month:period.month,year:period.year,row_key:rowKey,value:value})
+    }).catch(function(){});
+  },450);
+}
 // Flexible View (slide-2 grids): live Dent update as Flex TGT is typed. In-place (no
 // re-render) so the input keeps focus; value stored per row-path in sc2FlexStore.
 document.getElementById('channelGrid').addEventListener('input',function(e){
@@ -4763,6 +4841,7 @@ document.getElementById('channelGrid').addEventListener('input',function(e){
   var trate=Number(inp.getAttribute('data-tr'))||0,lt=Number(inp.getAttribute('data-lt'))||0;
   var cleared=(raw===''||isNaN(Number(raw))),fv=cleared?null:Number(raw);
   if(cleared)delete sc2FlexStore[key]; else sc2FlexStore[key]=fv;
+  if(row.hasAttribute('data-dynpath'))saveFlexTarget(key,cleared?null:fv);   // persist (auto-save, no button)
   // Dent = Target − Flex TGT.
   var dent=row.querySelector('.cdent');
   if(dent){
@@ -4813,41 +4892,22 @@ function buildDrillCsvRows(drillRows,total,mode,groupFilter){
   return out;
 }
 function csvEscapeCell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
-// Raw row export (CSV, opens in Excel) for a KPI card — dumps the underlying SAP rows as-is.
-// Header = the union of keys across the rows so nothing is dropped if rows differ slightly.
-function exportRawRowsCSV(rows,filename){
-  if(!rows||!rows.length){showToast('Nothing to export — fetch first','info');return;}
+// Raw data behind the whole main view — the underlying SAP sales rows (segment-filtered),
+// dumped as-is to CSV (opens in Excel). Header = union of row keys.
+function exportMainRawCSV(){
+  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
+  var rows=getFilteredChannelRows();
+  if(!rows.length){showToast('Nothing to export','info');return;}
   var cols=[],seen={};
-  for(var i=0;i<rows.length;i++){for(var k in rows[i]){if(!seen[k]){seen[k]=1;cols.push(k);}}}
+  for(var i=0;i<rows.length;i++)for(var k in rows[i])if(!seen[k]){seen[k]=1;cols.push(k);}
   var lines=[cols.map(csvEscapeCell).join(',')];
-  for(var r=0;r<rows.length;r++){
-    lines.push(cols.map(function(c){return csvEscapeCell(rows[r][c]);}).join(','));
-  }
+  for(var r=0;r<rows.length;r++)lines.push(cols.map(function(c){return csvEscapeCell(rows[r][c]);}).join(','));
+  var from=document.getElementById('sc2From').value,to=document.getElementById('sc2To').value;
   var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  var a=document.createElement('a');a.href=url;a.download='Sales_Channel_raw_'+from+'_'+to+'.csv';a.click();
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
   showToast('Raw CSV exported','ok');
-}
-function sc2RangeSuffix(){
-  var f=document.getElementById('sc2From'),t=document.getElementById('sc2To');
-  return (f&&f.value?f.value:'')+'_'+(t&&t.value?t.value:'');
-}
-// Done card: the raw sales/invoice rows (honours the slide-2 segment filter).
-function exportDoneRaw(e){
-  if(e&&e.stopPropagation)e.stopPropagation();
-  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
-  exportRawRowsCSV(getFilteredChannelRows(),'Done_raw_'+sc2RangeSuffix()+'.csv');
-}
-// OIH card: the raw open sales-order rows (honours the slide-2 segment filter).
-async function exportOihRaw(e){
-  if(e&&e.stopPropagation)e.stopPropagation();
-  if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}
-  var rows=[];
-  try{ rows=await fetchOrderInHandRows(); }catch(_){ rows=[]; }
-  var seg=sc2Seg();
-  if(seg)rows=rows.filter(function(x){return String(x.u_type||'').toUpperCase()===seg;});
-  exportRawRowsCSV(rows,'OIH_raw.csv');
 }
 function exportChannelCSV(){
   if(!sc2Fetched){showToast('Fetch the channel dashboard first','info');return;}

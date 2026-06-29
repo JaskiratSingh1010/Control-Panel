@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/order-in-hand/',       views.api_order_in_hand,      name='api_order_in_hand'),
     path('api/order-in-hand-rows/',  views.api_order_in_hand_rows, name='api_order_in_hand_rows'),
     path('api/target-nodes/',        views.api_target_nodes,       name='api_target_nodes'),
+    path('api/flex-targets/',        views.api_flex_targets,       name='api_flex_targets'),
     path('api/channel-detail-docs/', views.api_channel_detail_docs, name='api_channel_detail_docs'),
     path('api/commodity-oih-rows/',  views.api_commodity_oih_rows,  name='api_commodity_oih_rows'),
     path('api/oih-breakdown/',       views.api_oih_breakdown,       name='api_oih_breakdown'),

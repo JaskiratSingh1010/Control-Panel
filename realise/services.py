@@ -9,7 +9,7 @@ from django.utils import timezone
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
-                     CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot)
+                     CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot, FlexTarget)
 
 logger = logging.getLogger(__name__)
 
@@ -2610,6 +2610,41 @@ def save_closing_remark(card_code, remark, user=None):
         defaults={'remark': (remark or '').strip()[:255],
                   'updated_by': user if (user and user.is_authenticated) else None},
     )
+    return True
+
+
+# ── Flex TGT overrides (Sales Channel dashboard) ───────────────────────────
+# Persist the editable "Flex TGT" column so a typed value survives a refresh. Keyed by
+# segment + period (month/year) + drill row_key (the drill node path). Auto-saved on edit.
+def get_flex_targets(segment, month, year):
+    """{row_key: value} of saved Flex TGT overrides for the segment + period."""
+    try:
+        month = int(month); year = int(year)
+    except (TypeError, ValueError):
+        return {}
+    rows = FlexTarget.objects.filter(segment=(segment or ''), month=month, year=year)
+    return {r.row_key: float(r.value) for r in rows}
+
+
+def save_flex_target(segment, month, year, row_key, value):
+    """Upsert (or clear) one Flex TGT override. value None/'' deletes the row."""
+    row_key = (row_key or '').strip()[:255]
+    if not row_key:
+        return False
+    try:
+        month = int(month); year = int(year)
+    except (TypeError, ValueError):
+        return False
+    if value is None or value == '':
+        FlexTarget.objects.filter(segment=(segment or ''), month=month, year=year, row_key=row_key).delete()
+        return True
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+    FlexTarget.objects.update_or_create(
+        segment=(segment or ''), month=month, year=year, row_key=row_key,
+        defaults={'value': value})
     return True
 
 

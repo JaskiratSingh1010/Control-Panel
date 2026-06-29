@@ -627,6 +627,26 @@ def api_target_nodes(request):
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET', 'POST'])
+def api_flex_targets(request):
+    """Persisted 'Flex TGT' overrides for the Sales Channel drill table.
+    GET  ?seg=&month=&year=          -> {data: {row_key: value}}
+    POST {seg, month, year, row_key, value}  upserts one override (value null/'' clears it)."""
+    if request.method == 'POST':
+        body = _parse_body(request)
+        ok = services.save_flex_target(body.get('seg', ''), body.get('month'), body.get('year'),
+                                       body.get('row_key', ''), body.get('value'))
+        return JsonResponse({'status': 'ok' if ok else 'error'})
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    return JsonResponse({'status': 'ok', 'month': month, 'year': year,
+                         'data': services.get_flex_targets(request.GET.get('seg', ''), month, year)})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['GET'])
 def api_segment_targets(request):
     try:

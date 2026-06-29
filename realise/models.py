@@ -283,3 +283,24 @@ class CreditLockSnapshot(models.Model):
 
     def __str__(self):
         return f"{self.row_key}: {self.outstanding:.0f}"
+
+
+class FlexTarget(models.Model):
+    """A user's editable 'Flex TGT' override on the Sales Channel dashboard's drill table.
+    It is a what-if alternative to the real target, kept per segment + period + drill row
+    (row_key = the drill node path, e.g. '¦person=SUNNY JI'). Persisted so the entered
+    value survives a page refresh; auto-saved on edit (no lock button)."""
+
+    segment = models.CharField(max_length=20, blank=True, default='')   # '' = all, PREMIUM, COMMODITY
+    year = models.IntegerField()
+    month = models.IntegerField()
+    row_key = models.CharField(max_length=255)
+    value = models.FloatField(default=0.0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('segment', 'year', 'month', 'row_key')
+        indexes = [models.Index(fields=['segment', 'year', 'month'])]
+
+    def __str__(self):
+        return f"{self.row_key} [{self.segment or 'ALL'} {self.month}/{self.year}]: {self.value:.0f}"
