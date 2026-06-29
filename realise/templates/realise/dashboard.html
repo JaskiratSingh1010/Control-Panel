@@ -156,10 +156,10 @@ td.ccell{font-weight:500}
 .cd-header h3{margin:0;font-size:16px;color:#fff}
 .cd-header p{margin:2px 0 0;font-size:11px;color:rgba(255,255,255,.85)}
 .cd-controls{display:flex;align-items:center;gap:12px}
-.cd-search{display:flex;align-items:center;gap:7px;width:200px;max-width:38%;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:5px 10px}
-.cd-search .material-icons{font-size:15px;color:#94a3b8}
-.cd-search input{flex:1;min-width:0;border:0;background:transparent;color:#0f172a;font-family:inherit;font-size:12px;outline:none}
-.cd-search input::placeholder{color:#94a3b8}
+.cd-search{display:flex;align-items:center;gap:7px;width:200px;max-width:38%;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px;box-sizing:border-box}
+.cd-search .material-icons{font-size:16px;color:#94a3b8}
+.cd-search input{flex:1;min-width:0;border:0;background:transparent;color:#0f172a;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:normal;text-align:left;padding:0;margin:0;width:auto;outline:none}
+.cd-search input::placeholder{color:#94a3b8;letter-spacing:normal}
 .cd-export-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#1d4ed8;border:none;border-radius:8px;padding:8px 13px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
 .cd-export-btn:hover{background:#eff6ff}
 .cd-export-btn .material-icons{font-size:16px}
@@ -227,10 +227,10 @@ td.ccell{font-weight:500}
 .cd-table tr.cd-total input.cd-flex-input{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.45)}
 .cd-table tr.cd-total input.cd-flex-input::placeholder{color:rgba(255,255,255,.6)}
 .cd-dent{font-weight:800}
-.cd-dent.cd-dent-pos{color:#16a34a}   /* flex below target → target reduced (saving) */
-.cd-dent.cd-dent-neg{color:var(--red)} /* flex above target → over the target */
-.cd-table tr.cd-total .cd-dent.cd-dent-pos{color:#7ef0b0}
-.cd-table tr.cd-total .cd-dent.cd-dent-neg{color:#ffb4b4}
+.cd-dent.cd-dent-pos{color:#dc2626}   /* dent (target reduced) shown in red */
+.cd-dent.cd-dent-neg{color:#16a34a} /* flex above target → dent green */
+.cd-table tr.cd-total .cd-dent.cd-dent-pos{color:#ffb4b4}
+.cd-table tr.cd-total .cd-dent.cd-dent-neg{color:#7ef0b0}
 /* Done-L / Order-in-Hand cells drill to the underlying documents */
 #cdBody td.cd-doc-cell:not(.cd-doc-empty){cursor:pointer;color:#1d4ed8}
 #cdBody td.cd-doc-cell:not(.cd-doc-empty):hover{background:rgba(37,99,235,.1);text-decoration:underline}
@@ -408,11 +408,11 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
    and computed Dent (Target − Flex). Shown only when VIEW = Flexible. Scratch values. */
 .sc2-drillrow .sc2-flex-input{width:100%;max-width:94px;box-sizing:border-box;margin:0;padding:3px 6px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:700;letter-spacing:normal;text-align:right;color:#1d4ed8;background:#fff;outline:none}
 .sc2-drillrow .sc2-flex-input:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}
-.sc2-drillval.cdent.sc2-dent-pos{color:#16a34a}
-.sc2-drillval.cdent.sc2-dent-neg{color:#dc2626}
+.sc2-drillval.cdent.sc2-dent-pos{color:#dc2626}
+.sc2-drillval.cdent.sc2-dent-neg{color:#16a34a}
 .sc2-drillrow.sc2-state-total .sc2-flex-input{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
-.sc2-drillrow.sc2-state-total .cdent.sc2-dent-pos{color:#7ef0b0}
-.sc2-drillrow.sc2-state-total .cdent.sc2-dent-neg{color:#ffb4b4}
+.sc2-drillrow.sc2-state-total .cdent.sc2-dent-pos{color:#ffb4b4}
+.sc2-drillrow.sc2-state-total .cdent.sc2-dent-neg{color:#7ef0b0}
 .com-drill{display:flex;align-items:center;gap:10px}
 .com-drill-box{position:relative}
 .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:190px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:var(--blue,#2563eb);font-weight:700;font-size:12px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit}
