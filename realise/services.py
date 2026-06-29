@@ -9,7 +9,8 @@ from django.utils import timezone
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
-                     CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot, FlexTarget)
+                     CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot, FlexTarget,
+                     AgingRemark, AgingRemarkLine)
 
 logger = logging.getLogger(__name__)
 
@@ -3439,10 +3440,18 @@ def _load_aging_rows_sap(aging_date):
     out = []
     for r in sap_connector.execute_query(sql):
         code = str(r.get('code') or '').strip()
+        name = str(r.get('name') or '').strip() or code
         fmt = (str(r.get('format')).strip() if r.get('format') else '') or 'Unclassified'
+        # Hide internal / non-receivable rows: JIVO WELLNESS inter-company branches (by name),
+        # and the PURCHASE OIL / EXPORT / TRANSPORT formats. Excluded from rows AND all
+        # totals/KPIs (and therefore from the Excel export too).
+        _fmt_u = fmt.upper()
+        if ('JIVO WELLNESS' in name.upper()
+                or 'PURCHASE OIL' in _fmt_u or 'EXPORT' in _fmt_u or 'TRANSPORT' in _fmt_u):
+            continue
         out.append({
             'code': code,
-            'name': str(r.get('name') or '').strip() or code,
+            'name': name,
             'format': fmt,
             'original':    _aging_num(r.get('original')),
             'balance_due': _aging_num(r.get('balance_due')),
@@ -3520,3 +3529,190 @@ def get_customer_aging(aging_date=None):
     payload['aging_date'] = key
     _aging_cache[key] = (now + _AGING_TTL, payload)
     return payload
+
+
+# ── Customer Aging — per-document DETAIL (drill from a Balance Due) ──────────
+# Same reconciliation engine as the aging pivot, but at journal-line (document) grain for
+# ONE customer, carrying the document fields (No / Type / dates / branch) so we can show the
+# open items behind a customer's balance, with an editable Remarks column and a by-Remarks
+# pivot. Best-effort SAP field mapping (Doc No = JDT1.BaseRef, Type from TransType, Branch
+# from JDT1.BPLId → OBPL); the branch join is retried-without on any error.
+_AGING_TYPE_MAP = {13: 'IN', 14: 'CN', 24: 'RC', 30: 'JE', 15: 'DN', 19: 'DN', 18: 'PU',
+                   20: 'GR', 46: 'PS', 16: 'CN'}
+
+
+def _aging_fmt_date(v):
+    """A SAP date value → 'YYYY-MM-DD' (best effort; '' when missing)."""
+    if v is None:
+        return ''
+    try:
+        return v.strftime('%Y-%m-%d')
+    except Exception:
+        s = str(v).strip()
+        return s[:10] if s else ''
+
+
+def _aging_detail_sql(card_safe, ag, S, with_branch):
+    bsel = 'MAX(T0."BPLId") AS bplid,' if with_branch else ''
+    bcol = 'COALESCE(B."BPLName", \'\') AS "branch",' if with_branch else '\'\' AS "branch",'
+    bjoin = f'LEFT JOIN "{S}"."OBPL" B ON B."BPLId"=a.bplid' if with_branch else ''
+    return f'''WITH aged AS (
+      SELECT T0."ShortName" AS card, T0."TransId" AS trans, T0."Line_ID" AS line,
+             MAX(T0."RefDate") AS bdate, MAX(T0."DueDate") AS duedate,
+             MAX(T0."BaseRef") AS docno, MAX(T0."TransType") AS ttype, {bsel}
+             -MAX(T0."BalDueCred")-SUM(T1."ReconSum") AS bal, -MAX(T0."Credit") AS orig
+      FROM "{S}"."JDT1" T0
+        JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
+        JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
+      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='C'
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+      HAVING MAX(T0."BalFcCred")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueCred")<>-SUM(T1."ReconSum")
+      UNION ALL
+      SELECT T0."ShortName", T0."TransId", T0."Line_ID",
+             MAX(T0."RefDate"), MAX(T0."DueDate"), MAX(T0."BaseRef"), MAX(T0."TransType"), {bsel}
+             MAX(T0."BalDueDeb")+SUM(T1."ReconSum"), MAX(T0."Debit")
+      FROM "{S}"."JDT1" T0
+        JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
+        JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
+      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='D'
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+      HAVING MAX(T0."BalFcDeb")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueDeb")<>-SUM(T1."ReconSum")
+      UNION ALL
+      SELECT T0."ShortName", T0."TransId", T0."Line_ID",
+             MAX(T0."RefDate"), MAX(T0."DueDate"), MAX(T0."BaseRef"), MAX(T0."TransType"), {bsel}
+             MAX(T0."BalDueDeb")-MAX(T0."BalDueCred"), MAX(T0."Debit")-MAX(T0."Credit")
+      FROM "{S}"."JDT1" T0
+      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag}
+        AND (T0."BalDueCred"<>T0."BalDueDeb" OR T0."BalFcCred"<>T0."BalFcDeb")
+        AND NOT EXISTS (SELECT 1 FROM "{S}"."ITR1" U0 JOIN "{S}"."OITR" U1 ON U1."ReconNum"=U0."ReconNum"
+          WHERE U0."TransId"=T0."TransId" AND U0."TransRowId"=T0."Line_ID" AND U1."ReconDate">{ag})
+      GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
+    )
+    SELECT a.trans AS "trans", a.line AS "line", a.docno AS "docno", a.ttype AS "ttype",
+           a.bdate AS "bdate", a.duedate AS "duedate", a.orig AS "original", a.bal AS "balance_due",
+           {bcol}
+           CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END AS "b0_30",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 31 AND 60 THEN a.bal ELSE 0 END AS "b31_60",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 61 AND 90 THEN a.bal ELSE 0 END AS "b61_90",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END AS "b91_120",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag})>120 THEN a.bal ELSE 0 END AS "b121"
+    FROM aged a {bjoin}
+    WHERE ABS(a.bal) > 0.005
+    ORDER BY a.duedate'''
+
+
+def get_customer_aging_detail(card_code, aging_date=None):
+    """Per-document open items for one customer as of aging_date, with saved remarks merged
+    in. row_key ('TransId:Line_ID') ties each row to its stored remark. [] on SAP error."""
+    if aging_date is None:
+        aging_date = date.today()
+    ag = _aging_date_literal(aging_date)
+    card_safe = (card_code or '').strip().replace("'", "''")
+    if not card_safe:
+        return []
+    rows = None
+    for with_branch in (True, False):     # retry without the branch join if it errors
+        try:
+            rows = sap_connector.execute_query(_aging_detail_sql(card_safe, ag, SAP_SCHEMA, with_branch))
+            break
+        except Exception as exc:
+            logger.error('[AGINGDETAIL] fetch failed (branch=%s): %s', with_branch, exc)
+            rows = None
+    if rows is None:
+        return []
+    remarks = get_aging_remarks(card_code)
+    splits = get_aging_remark_lines(card_code)
+    out = []
+    for r in rows:
+        try:
+            ttype = int(r.get('ttype'))
+        except (TypeError, ValueError):
+            ttype = None
+        row_key = '%s:%s' % (str(r.get('trans') or '').strip(), str(r.get('line') or '').strip())
+        out.append({
+            'row_key': row_key,
+            'doc_no': str(r.get('docno') or '').strip(),
+            'type': _AGING_TYPE_MAP.get(ttype, (str(r.get('ttype')).strip() if r.get('ttype') is not None else '')),
+            'posting_date': _aging_fmt_date(r.get('bdate')),
+            'due_date': _aging_fmt_date(r.get('duedate')),
+            'branch': str(r.get('branch') or '').strip(),
+            'original': _aging_num(r.get('original')),
+            'balance_due': _aging_num(r.get('balance_due')),
+            'remark': remarks.get(row_key, ''),
+            'splits': splits.get(row_key, []),
+            'b0_30': _aging_num(r.get('b0_30')),
+            'b31_60': _aging_num(r.get('b31_60')),
+            'b61_90': _aging_num(r.get('b61_90')),
+            'b91_120': _aging_num(r.get('b91_120')),
+            'b121': _aging_num(r.get('b121')),
+        })
+    return out
+
+
+def get_aging_remarks(card_code):
+    """{row_key: remark} of saved per-document remarks for a customer."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return {}
+    return {a.row_key: a.remark for a in AgingRemark.objects.filter(card_code=cc)}
+
+
+def save_aging_remark(card_code, row_key, remark):
+    """Upsert (or clear) one per-document remark."""
+    cc = (card_code or '').strip()
+    rk = (row_key or '').strip()[:80]
+    if not cc or not rk:
+        return False
+    remark = (remark or '').strip()[:255]
+    if remark:
+        AgingRemark.objects.update_or_create(card_code=cc, row_key=rk, defaults={'remark': remark})
+    else:
+        AgingRemark.objects.filter(card_code=cc, row_key=rk).delete()
+    return True
+
+
+def get_aging_remark_lines(card_code):
+    """{row_key: [{'category','amount','remark'}, ...]} of saved per-document splits for a
+    customer (TDS / RTV / Claim / … breakdown behind each open document's balance)."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return {}
+    out = {}
+    for ln in AgingRemarkLine.objects.filter(card_code=cc):
+        out.setdefault(ln.row_key, []).append({
+            'category': ln.category,
+            'amount': float(ln.amount or 0),
+            'remark': ln.remark,
+        })
+    return out
+
+
+def save_aging_remark_lines(card_code, row_key, lines):
+    """Replace the full set of splits for one open document. `lines` is a list of dicts with
+    'category', 'amount', 'remark'. Blank lines (no category, no remark, zero amount) are
+    dropped; an empty/all-blank list clears the row's splits."""
+    cc = (card_code or '').strip()
+    rk = (row_key or '').strip()[:80]
+    if not cc or not rk:
+        return False
+    clean = []
+    for i, ln in enumerate(lines or []):
+        if not isinstance(ln, dict):
+            continue
+        category = str(ln.get('category') or '').strip()[:60]
+        remark = str(ln.get('remark') or '').strip()[:255]
+        raw = ln.get('amount')
+        if isinstance(raw, str):
+            raw = raw.replace('₹', '').replace(',', '').strip()
+        try:
+            amount = round(float(raw or 0), 2)
+        except (TypeError, ValueError):
+            amount = 0.0
+        if not category and not remark and abs(amount) < 0.005:
+            continue                                   # skip fully-empty rows
+        clean.append(AgingRemarkLine(card_code=cc, row_key=rk, category=category,
+                                     amount=amount, remark=remark, position=i))
+    AgingRemarkLine.objects.filter(card_code=cc, row_key=rk).delete()
+    if clean:
+        AgingRemarkLine.objects.bulk_create(clean)
+    return True

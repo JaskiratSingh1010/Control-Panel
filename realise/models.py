@@ -304,3 +304,44 @@ class FlexTarget(models.Model):
 
     def __str__(self):
         return f"{self.row_key} [{self.segment or 'ALL'} {self.month}/{self.year}]: {self.value:.0f}"
+
+
+class AgingRemark(models.Model):
+    """Editable per-document remark on the Customer Aging detail page. Keyed by customer
+    (CardCode) + the journal line identity (row_key = 'TransId:Line_ID'), so a note follows
+    its open document across refreshes. Free text, shared across users."""
+
+    card_code = models.CharField(max_length=50)
+    row_key = models.CharField(max_length=80)          # 'TransId:Line_ID'
+    remark = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('card_code', 'row_key')
+        indexes = [models.Index(fields=['card_code'])]
+
+    def __str__(self):
+        return f"{self.card_code}/{self.row_key}: {self.remark[:40]}"
+
+
+class AgingRemarkLine(models.Model):
+    """A single split behind one open document on the Customer Aging detail page. One
+    invoice's Balance Due can be broken into reason buckets (TDS, RTV, Claim, …), each with
+    its own free-text category, ₹ amount, and note. Keyed by customer (CardCode) + the same
+    journal-line identity (row_key = 'TransId:Line_ID') used by AgingRemark, so a row's
+    splits follow its open document across refreshes. Several lines per (card_code, row_key)."""
+
+    card_code = models.CharField(max_length=50)
+    row_key = models.CharField(max_length=80)          # 'TransId:Line_ID'
+    category = models.CharField(max_length=60, blank=True, default='')   # free text: TDS, RTV, Claim…
+    amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    remark = models.CharField(max_length=255, blank=True, default='')
+    position = models.IntegerField(default=0)          # display order within the row
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        indexes = [models.Index(fields=['card_code', 'row_key'])]
+
+    def __str__(self):
+        return f"{self.card_code}/{self.row_key}: {self.category} {self.amount}"

@@ -353,7 +353,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-tt-col{text-align:center;font-size:11px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;color:rgba(255,255,255,.96)}
 .sc2-state-scroll{flex:1;min-height:0;overflow-y:auto}
 .sc2-state-row{display:grid;grid-template-columns:1.05fr .76fr .76fr .76fr .76fr .92fr;padding:9px 16px;border-bottom:1px solid #eef2f6;font-size:13px;color:#334155;align-items:center}
-.sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1.05fr .76fr .76fr .76fr .85fr .76fr .92fr}
+.sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1.05fr .76fr .76fr .76fr .85fr .76fr .76fr .92fr}
 .sc2-state-row:nth-child(even){background:rgba(248,252,255,.5)}
 .sc2-state-row:last-child{border-bottom:none}
 /* 7-column card layout (adds Target Realise / Revenue / Actual Realise) */
@@ -445,7 +445,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .sc2-card-rest{height:auto}
   .sc2-state-scroll{max-height:240px}
   .sc2-thead,.sc2-state-row{grid-template-columns:1fr .72fr .72fr .72fr .72fr .85fr;font-size:11px}
-  .sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1fr .72fr .72fr .72fr .8fr .72fr .85fr}
+  .sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1fr .72fr .72fr .72fr .8fr .72fr .72fr .85fr}
   .sc2-drillhead,.sc2-drillrow{grid-template-columns:1.4fr .85fr .85fr .85fr;font-size:12px}
 }
 </style>
@@ -2939,8 +2939,8 @@ var sc2FlexStore={};
 function sc2FlexOn(){return cdViewMode==='flex';}
 function sc2FlexHeadCols(){return sc2FlexOn()?'<div class="sc2-tt-col">Flex TGT</div><div class="sc2-tt-col">Dent</div>':'';}
 function sc2DynGcols(){return sc2FlexOn()
-  ?'grid-template-columns:1.6fr .8fr .7fr .7fr .8fr .8fr .8fr .9fr .9fr'
-  :'grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .9fr .9fr';}
+  ?'grid-template-columns:1.6fr .8fr .7fr .7fr .8fr .8fr .8fr .8fr .9fr .9fr'
+  :'grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .8fr .9fr .9fr';}
 function comGcols(){return sc2FlexOn()
   ?'grid-template-columns:1.5fr .76fr .7fr .7fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr'
   :'grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr';}
@@ -2963,11 +2963,13 @@ function drillCells(c,flexKey){
   // Bal tracks it so editing Flex TGT moves Bal.
   var eff=(flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(c.target||0);
   var bal=eff-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  var balWo=eff-(c.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
   return '<div class="sc2-drillval">'+fN(c.target||0)+'</div>'
     +(sc2FlexOn()&&flexKey?sc2FlexCells(flexKey,c):'')
     +'<div class="sc2-drillval">'+fN(c.done||0)+'</div>'
     +'<div class="sc2-drillval">'+fN(c.oih||0)+'</div>'
     +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-drillval sc2-balwo-cell '+balWoClass+'">'+fN(balWo)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.targetRealise||0,2)+'</div>'
     +'<div class="sc2-drillval">'+fNp(c.actualRealise||0,2)+'</div>';
 }
@@ -3510,6 +3512,7 @@ function renderThemedStateBreakdown(states){
 }
 function cardCells(c,isTotal){
   var bal=(c.target||0)-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  var balWo=(c.target||0)-(c.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
   // Bal Realise = (target revenue − actual revenue) / balance litres = the ₹/L still
   // needed on the remaining balance to hit the target revenue.
   // Only meaningful when a target exists (no target ⇒ no target revenue to balance against).
@@ -3523,6 +3526,7 @@ function cardCells(c,isTotal){
     +'<div class="sc2-state-val">'+fN(c.oih||0)+'</div>'
     +'<div class="sc2-state-val">'+oihRlzStr+'</div>'
     +'<div class="sc2-state-val '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-state-val '+balWoClass+'">'+fN(balWo)+'</div>'
     +'<div class="sc2-state-val">'+balRlzStr+'</div>';
 }
 function themedChannelCardHtml(item){
@@ -3556,6 +3560,7 @@ function themedChannelCardHtml(item){
       +'<div class="sc2-tt-col">OIH</div>'
       +'<div class="sc2-tt-col">OIH Rlz</div>'
       +'<div class="sc2-tt-col">Bal</div>'
+      +'<div class="sc2-tt-col">Bal w/o OIH</div>'
       +'<div class="sc2-tt-col">Bal Rlz</div>'
     +'</div>'
     +'<div class="sc2-state-scroll">'+rows+'</div>'
@@ -4672,12 +4677,14 @@ function drillCellsTotal(tot){
   var tgt=Number(tot.target)||0, flexSum=sc2DynFlexTotal(tgt);
   var dent=tgt-flexSum, dCls=dent>0?'sc2-dent-pos':(dent<0?'sc2-dent-neg':'');
   var bal=flexSum-((tot.done||0)+(tot.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  var balWo=flexSum-(tot.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
   return '<div class="sc2-drillval">'+fN(tgt)+'</div>'
     +(sc2FlexOn()?'<div class="sc2-drillval sc2-flexcol sc2-flextot">'+fN(flexSum)+'</div>'
         +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(dent!==0?fN(dent):'&mdash;')+'</div>':'')
     +'<div class="sc2-drillval">'+fN(tot.done||0)+'</div>'
     +'<div class="sc2-drillval">'+fN(tot.oih||0)+'</div>'
     +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
+    +'<div class="sc2-drillval sc2-balwo-cell '+balWoClass+'">'+fN(balWo)+'</div>'
     +'<div class="sc2-drillval">'+fNp(tot.targetRealise||0,2)+'</div>'
     +'<div class="sc2-drillval">'+fNp(tot.actualRealise||0,2)+'</div>';
 }
@@ -4692,6 +4699,8 @@ function sc2DynRefreshTotal(){
   if(dc){var d=tgt-flexSum;dc.innerHTML=(d!==0?fN(d):'&mdash;');dc.className='sc2-drillval sc2-flexcol cdent '+(d>0?'sc2-dent-pos':(d<0?'sc2-dent-neg':''));}
   var bc=totRow.querySelector('.sc2-bal-cell');
   if(bc){var b=flexSum-((sc2DynTotalAgg.done||0)+(sc2DynTotalAgg.oih||0));bc.innerHTML=fN(b);bc.className='sc2-drillval sc2-bal-cell '+(b>=0?'sc2-bal-good':'sc2-bal-bad');}
+  var bwc=totRow.querySelector('.sc2-balwo-cell');
+  if(bwc){var bw=flexSum-(sc2DynTotalAgg.done||0);bwc.innerHTML=fN(bw);bwc.className='sc2-drillval sc2-balwo-cell '+(bw>=0?'sc2-bal-good':'sc2-bal-bad');}
 }
 function renderSc2DynTree(leaves){
   var dims=sc2DynOrder.slice();
@@ -4702,7 +4711,7 @@ function renderSc2DynTree(leaves){
     +'<div class="sc2-thead sc2-wide" style="'+sc2DynGcols()+'">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div>'+sc2FlexHeadCols()+'<div class="sc2-tt-col">Done L</div>'
-      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
+      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal w/o OIH</div>'
       +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
     +'</div><div class="sc2-drillbody">';
   if(!dims.length){
@@ -4852,6 +4861,8 @@ document.getElementById('channelGrid').addEventListener('input',function(e){
   var eff=cleared?tgt:fv, bal=eff-(done+oih);
   var balCell=row.querySelector('.sc2-bal-cell');
   if(balCell){balCell.innerHTML=fN(bal);balCell.className='sc2-drillval sc2-bal-cell '+(bal>=0?'sc2-bal-good':'sc2-bal-bad');}
+  var balwoCell=row.querySelector('.sc2-balwo-cell');
+  if(balwoCell){var bw=eff-done;balwoCell.innerHTML=fN(bw);balwoCell.className='sc2-drillval sc2-balwo-cell '+(bw>=0?'sc2-bal-good':'sc2-bal-bad');}
   var brCell=row.querySelector('.sc2-balrlz-cell');
   if(brCell){var balRlz=(eff>0&&bal!==0)?((eff*trate)-lt)/bal:NaN;brCell.innerHTML=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';}
   // Keep the TOTAL row's Flex / Dent / Bal in step with the edited row.

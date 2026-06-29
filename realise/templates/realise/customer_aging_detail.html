@@ -1,0 +1,366 @@
+{% extends "core/base.html" %}
+{% block title %}{{ detail_payload.name }} — Aging Detail{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f4f6fb !important}
+  .ad-wrap{max-width:1500px;margin:0 auto}
+
+  .ad-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 24px;margin-bottom:16px;
+    background:linear-gradient(120deg,#4f46e5,#6366f1 50%,#7c3aed);box-shadow:0 14px 34px rgba(79,70,229,.3)}
+  .ad-hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;z-index:1}
+  .ad-h1{font-size:23px;font-weight:900;color:#fff;margin:0;display:flex;align-items:center;gap:10px}
+  .ad-h1 .ad-code{font-size:12px;font-weight:700;color:#e0e7ff;background:rgba(255,255,255,.16);padding:3px 10px;border-radius:999px}
+  .ad-sub{margin:6px 0 0;font-size:12.5px;color:#e0e7ff}
+  .ad-back{display:inline-flex;align-items:center;gap:6px;color:#fff;text-decoration:none;background:rgba(255,255,255,.16);
+    border:1px solid rgba(255,255,255,.28);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700}
+  .ad-back:hover{background:rgba(255,255,255,.26)}
+  .ad-back .material-icons{font-size:17px}
+
+  .ad-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
+  .ad-search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ad-search:focus-within{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .ad-search .material-icons{font-size:19px;color:#94a3b8}
+  .ad-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
+  .ad-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#4338ca;
+    font-family:inherit;font-size:13px;font-weight:700;padding:9px 16px;border-radius:11px;cursor:pointer}
+  .ad-btn:hover{background:#eef2ff;border-color:#c7d2fe}
+  .ad-btn.primary{background:#4338ca;color:#fff;border-color:#4338ca}
+  .ad-btn.primary:hover{background:#3730a3}
+  .ad-btn .material-icons{font-size:17px}
+
+  .ad-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
+  .ad-tw{overflow:auto;max-height:74vh}
+  table.ad-tb{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.ad-tb thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 13px;white-space:nowrap}
+  table.ad-tb thead th.lbl{text-align:left}
+  table.ad-tb td{padding:9px 13px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
+  table.ad-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  table.ad-tb tbody tr:hover td{background:#f8fafc}
+  .ad-rmk{width:100%;min-width:150px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
+  .ad-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
+  .ad-rmk.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
+  .neg{color:#e11d48;font-weight:700}
+  .v0{color:#cbd5e1}
+  .bal{font-weight:800;color:#0f172a}
+  tr.ad-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:1}
+  tr.ad-tot .neg{color:#fda4af}
+  td.bk0{background:#f0fdf4}td.bk1{background:#f0fdfa}td.bk2{background:#fffbeb}td.bk3{background:#fff7ed}td.bk4{background:#fef2f2}
+  .ad-empty{padding:40px;text-align:center;color:#7b8794}
+
+  /* ── Expandable split breakdown (TDS / RTV / Claim …) ── */
+  .ad-exp{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:0;background:transparent;cursor:pointer;color:#64748b;border-radius:6px;vertical-align:middle}
+  .ad-exp:hover{background:#eef2ff;color:#4338ca}
+  .ad-exp .material-icons{font-size:18px;transition:transform .15s}
+  .ad-exp.on .material-icons{transform:rotate(90deg);color:#4338ca}
+  .ad-cnt{display:inline-block;min-width:16px;margin-left:3px;padding:0 5px;font-size:10px;font-weight:800;color:#4338ca;background:#e0e7ff;border-radius:999px;vertical-align:middle}
+  td.ad-detcell{background:#f8fafc;padding:0;border-bottom:1px solid #e2e8f0}
+  .sp-wrap{padding:12px 16px 14px}
+  .sp-grid{display:grid;grid-template-columns:1.2fr .8fr 2fr 28px;gap:8px 8px;align-items:center;max-width:780px}
+  .sp-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#94a3b8}
+  .sp-line{display:contents}
+  .sp-cat,.sp-amt,.sp-rmk{border:1px solid #e2e8f0;border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none;background:#fff;width:100%}
+  .sp-amt{text-align:right;font-variant-numeric:tabular-nums}
+  .sp-cat:focus,.sp-amt:focus,.sp-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
+  .sp-del{border:0;background:transparent;color:#cbd5e1;font-size:20px;line-height:1;cursor:pointer;border-radius:6px;width:28px;height:28px}
+  .sp-del:hover{color:#e11d48;background:#fef2f2}
+  .sp-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:780px;margin-top:10px;flex-wrap:wrap}
+  .sp-add{display:inline-flex;align-items:center;gap:4px;border:1px dashed #c7d2fe;background:#fff;color:#4338ca;font-family:inherit;font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .sp-add:hover{background:#eef2ff}
+  .sp-rec{font-size:12px;color:#475569;font-weight:600}
+  .sp-rec b{color:#0f172a}
+  .sp-rec.ok .sp-un{color:#16a34a;font-weight:800}
+  .sp-rec.part .sp-un{color:#d97706;font-weight:800}
+  .sp-rec.over .sp-un{color:#e11d48;font-weight:800}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ad-wrap">
+  <div class="ad-hero">
+    <div class="ad-hero-row">
+      <div>
+        <h1 class="ad-h1" id="adName">Customer <span class="ad-code" id="adCode"></span></h1>
+        <p class="ad-sub">Open documents behind the balance &middot; aging as of <span id="adAsOf"></span></p>
+      </div>
+      <a class="ad-back" href="{% url 'realise:customer_aging' %}?as_of={{ aging_date }}"><span class="material-icons">arrow_back</span>Back to Aging</a>
+    </div>
+  </div>
+
+  <div class="ad-tools">
+    <label class="ad-search">
+      <span class="material-icons">search</span>
+      <input type="text" id="adSearch" placeholder="Search doc no, remark, branch…" autocomplete="off">
+    </label>
+    <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
+    <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
+  </div>
+
+  <div class="ad-card">
+    <div class="ad-tw">
+      <table class="ad-tb">
+        <thead><tr id="adHead"></tr></thead>
+        <tbody id="adBody"><tr><td class="ad-empty" colspan="14">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ detail_payload|json_script:"detail-data" }}
+<script>
+(function(){
+  var DATA = JSON.parse(document.getElementById('detail-data').textContent || '{}');
+  var ROWS = DATA.rows || [];
+  var CODE = DATA.code || '';
+  var BUCKETS = [{key:'b0_30',label:'0 - 30'},{key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
+                 {key:'b91_120',label:'91 - 120'},{key:'b121',label:'121+'}];
+  var pivot = false;
+  var SAVE_URL = "{% url 'realise:api_aging_remark' %}";
+  var SAVE_LINES_URL = "{% url 'realise:api_aging_remark_lines' %}";
+  var CSRF = "{{ csrf_token }}";
+
+  function num(v){ v=String(v==null?'':v).replace(/[₹,\s]/g,''); var n=parseFloat(v); return isFinite(n)?n:0; }
+  function splitCount(sp){ return (sp||[]).filter(function(x){ return (x.category||'').trim() || (x.remark||'').trim() || Math.abs(Number(x.amount)||0)>=0.005; }).length; }
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function attr(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
+  function money(n){
+    n = Number(n)||0;
+    if(Math.abs(n) < 0.5) return '<span class="v0">—</span>';
+    var s = '₹'+Math.round(Math.abs(n)).toLocaleString('en-IN');
+    return n<0 ? '<span class="neg">('+s+')</span>' : s;
+  }
+  document.getElementById('adCode').textContent = CODE;
+  document.getElementById('adName').childNodes[0].nodeValue = (DATA.name||'Customer')+' ';
+  document.getElementById('adAsOf').textContent = DATA.aging_date||'';
+
+  // ── Data view ──
+  function renderDataHead(){
+    var th = '<th class="lbl"></th><th class="lbl">Type</th><th class="lbl">Doc No</th><th class="lbl">Posting Date</th>'+
+      '<th class="lbl">Due Date</th><th>Original</th><th>Balance Due</th><th class="lbl">Remarks</th>';
+    BUCKETS.forEach(function(b){ th += '<th>'+esc(b.label)+'</th>'; });
+    th += '<th class="lbl">Branch</th>';
+    document.getElementById('adHead').innerHTML = th;
+  }
+  function renderData(){
+    renderDataHead();
+    var body = document.getElementById('adBody');
+    if(!ROWS.length){ body.innerHTML='<tr><td class="ad-empty" colspan="14">No open documents for this customer.</td></tr>'; return; }
+    var t={original:0,balance_due:0}; BUCKETS.forEach(function(b){t[b.key]=0;});
+    var html = ROWS.map(function(r,i){
+      t.original+=Number(r.original)||0; t.balance_due+=Number(r.balance_due)||0;
+      BUCKETS.forEach(function(b){ t[b.key]+=Number(r[b.key])||0; });
+      var hay = ((r.doc_no||'')+' '+(r.remark||'')+' '+(r.branch||'')+' '+(r.type||'')).toLowerCase();
+      var n = splitCount(r.splits);
+      return '<tr data-i="'+i+'" data-hay="'+attr(hay)+'">'+
+        '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><span class="material-icons">chevron_right</span></button>'+
+          '<span class="ad-cnt"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></td>'+
+        '<td>'+esc(r.type)+'</td><td>'+esc(r.doc_no)+'</td><td>'+esc(r.posting_date)+'</td><td>'+esc(r.due_date)+'</td>'+
+        '<td class="num">'+money(r.original)+'</td><td class="num bal">'+money(r.balance_due)+'</td>'+
+        '<td><input class="ad-rmk" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" value="'+attr(r.remark)+'" placeholder="Add remark…"></td>'+
+        BUCKETS.map(function(b,bi){return '<td class="num bk'+bi+'">'+money(r[b.key])+'</td>';}).join('')+
+        '<td>'+esc(r.branch)+'</td>'+
+      '</tr>'+
+      '<tr class="ad-det" data-det="'+i+'" style="display:none"><td></td>'+
+        '<td class="ad-detcell" colspan="13"><div class="sp-wrap" data-i="'+i+'"></div></td></tr>';
+    }).join('');
+    html += '<tr class="ad-tot"><td></td><td>TOTAL</td><td></td><td></td><td></td>'+
+      '<td class="num">'+money(t.original)+'</td><td class="num">'+money(t.balance_due)+'</td><td></td>'+
+      BUCKETS.map(function(b){return '<td class="num">'+money(t[b.key])+'</td>';}).join('')+
+      '<td></td></tr>';
+    body.innerHTML = html;
+  }
+
+  // ── Pivot view (group by split Category) ──
+  // Each split's amount inherits its parent invoice's age bucket; any balance not assigned to
+  // a split rolls into '(unallocated)', so the Grand Total still equals total Balance Due.
+  function buildCategoryPivot(){
+    var map={}, order=[], gt={balance_due:0}; BUCKETS.forEach(function(b){gt[b.key]=0;});
+    function add(key, amt, r){
+      if(!map[key]){ map[key]={balance_due:0}; BUCKETS.forEach(function(b){map[key][b.key]=0;}); order.push(key); }
+      map[key].balance_due += amt; gt.balance_due += amt;
+      var bal = Number(r.balance_due)||0;
+      BUCKETS.forEach(function(b){
+        var share = (Math.abs(bal)>0.005) ? amt*((Number(r[b.key])||0)/bal) : 0;
+        map[key][b.key] += share; gt[b.key] += share;
+      });
+    }
+    ROWS.forEach(function(r){
+      var bal = Number(r.balance_due)||0, alloc = 0;
+      (r.splits||[]).forEach(function(s){
+        var amt = Number(s.amount)||0;
+        if(Math.abs(amt) < 0.005) return;                 // note-only split moves no money
+        add((s.category||'').trim() || '(uncategorized)', amt, r); alloc += amt;
+      });
+      var rem = bal - alloc;
+      if(Math.abs(rem) > 0.5) add('(unallocated)', rem, r);
+    });
+    order.sort(function(a,b){ return map[b].balance_due - map[a].balance_due; });
+    return {order:order, map:map, gt:gt};
+  }
+  function renderPivot(){
+    var head = '<th class="lbl">Category (Row Labels)</th><th>Sum of Balance Due</th>';
+    BUCKETS.forEach(function(b){ head += '<th>Sum of '+esc(b.label)+'</th>'; });
+    document.getElementById('adHead').innerHTML = head;
+    var body = document.getElementById('adBody');
+    var P = buildCategoryPivot();
+    if(!P.order.length){ body.innerHTML='<tr><td class="ad-empty" colspan="'+(2+BUCKETS.length)+'">No data to pivot.</td></tr>'; return; }
+    var html = P.order.map(function(k){
+      return '<tr><td class="lbl" style="font-weight:700;color:#1f2937">'+esc(k)+'</td>'+
+        '<td class="num bal">'+money(P.map[k].balance_due)+'</td>'+
+        BUCKETS.map(function(b){return '<td class="num">'+money(P.map[k][b.key])+'</td>';}).join('')+'</tr>';
+    }).join('');
+    html += '<tr class="ad-tot"><td>Grand Total</td><td class="num">'+money(P.gt.balance_due)+'</td>'+
+      BUCKETS.map(function(b){return '<td class="num">'+money(P.gt[b.key])+'</td>';}).join('')+'</tr>';
+    body.innerHTML = html;
+  }
+
+  function render(){ if(pivot) renderPivot(); else renderData(); }
+
+  // ── Expandable split breakdown (TDS / RTV / Claim …) ──
+  function toggleRow(tr){
+    var det = tr.nextElementSibling;
+    if(!det || !det.classList.contains('ad-det')) return;
+    var open = tr.classList.toggle('ad-open');
+    det.style.display = open ? '' : 'none';
+    var chev = tr.querySelector('.ad-exp'); if(chev) chev.classList.toggle('on', open);
+    if(open && det.getAttribute('data-rendered')!=='1'){
+      renderSplits(+tr.getAttribute('data-i'));
+      det.setAttribute('data-rendered','1');
+    }
+  }
+  function renderSplits(i){
+    var wrap = document.querySelector('.sp-wrap[data-i="'+i+'"]'); if(!wrap) return;
+    if(!ROWS[i].splits) ROWS[i].splits = [];
+    if(!ROWS[i].splits.length) ROWS[i].splits.push({category:'',amount:0,remark:''});
+    var lines = ROWS[i].splits.map(function(s,j){
+      var amt = Number(s.amount)||0, av = Math.abs(amt)<0.005 ? '' : amt;
+      return '<div class="sp-line" data-j="'+j+'">'+
+        '<input class="sp-cat" placeholder="e.g. TDS, RTV, Claim" value="'+attr(s.category)+'">'+
+        '<input class="sp-amt" inputmode="decimal" placeholder="0" value="'+attr(av)+'">'+
+        '<input class="sp-rmk" placeholder="Note (optional)" value="'+attr(s.remark)+'">'+
+        '<button type="button" class="sp-del" title="Remove split">&times;</button>'+
+      '</div>';
+    }).join('');
+    wrap.innerHTML =
+      '<div class="sp-grid"><span class="sp-h">Category</span><span class="sp-h">Amount (₹)</span><span class="sp-h">Remark</span><span class="sp-h"></span>'+lines+'</div>'+
+      '<div class="sp-foot"><button type="button" class="sp-add"><span class="material-icons" style="font-size:16px">add</span>Add split</button>'+
+        '<div class="sp-rec"></div></div>';
+    reconcile(i);
+  }
+  function reconcile(i){
+    var wrap = document.querySelector('.sp-wrap[data-i="'+i+'"]'); if(!wrap) return;
+    var sp = ROWS[i].splits||[];
+    var alloc = sp.reduce(function(s,x){return s+(Number(x.amount)||0);},0);
+    var bal = Number(ROWS[i].balance_due)||0, un = bal - alloc;
+    var state = Math.abs(un)<0.5 ? 'ok' : ((bal>=0 ? un<0 : un>0) ? 'over' : 'part');
+    var rec = wrap.querySelector('.sp-rec');
+    rec.className = 'sp-rec '+state;
+    var tail = state==='ok' ? 'Fully allocated'
+             : state==='over' ? 'Over-allocated by '+money(Math.abs(un))
+             : 'Unallocated '+money(un);
+    rec.innerHTML = 'Allocated <b>'+money(alloc)+'</b> of <b>'+money(bal)+'</b> &middot; <span class="sp-un">'+tail+'</span>';
+    var tr = document.querySelector('#adBody tr[data-i="'+i+'"]');
+    if(tr){ var c = tr.querySelector('.ad-cnt'), n = splitCount(sp);
+      if(c){ c.textContent = n||''; c.style.display = n ? '' : 'none'; } }
+  }
+  var spTimers = {};
+  function saveSplits(i){
+    var rk = ROWS[i].row_key;
+    clearTimeout(spTimers[rk]);
+    spTimers[rk] = setTimeout(function(){
+      var lines = (ROWS[i].splits||[]).map(function(s){
+        return {category:s.category||'', amount:Number(s.amount)||0, remark:s.remark||''}; });
+      fetch(SAVE_LINES_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify({code:CODE, row_key:rk, lines:lines})}).catch(function(){});
+    }, 500);
+  }
+
+  // ── Remarks auto-save (debounced); refresh pivot if it's showing ──
+  var timers = {};
+  function saveRemark(inp){
+    var key = inp.getAttribute('data-key'), i = +inp.getAttribute('data-i');
+    var val = inp.value;
+    if(i>=0 && ROWS[i]) ROWS[i].remark = val;       // keep model in sync (pivot uses it)
+    clearTimeout(timers[key]);
+    timers[key] = setTimeout(function(){
+      fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify({code:CODE, row_key:key, remark:val})})
+        .then(function(r){return r.json();})
+        .then(function(j){ if(j&&j.status==='ok'){ inp.classList.add('saved'); setTimeout(function(){inp.classList.remove('saved');},900); } })
+        .catch(function(){});
+    }, 450);
+  }
+
+  function filterData(){
+    if(pivot) return;
+    var q = (document.getElementById('adSearch').value||'').trim().toLowerCase();
+    document.querySelectorAll('#adBody tr[data-hay]').forEach(function(tr){
+      var show = (!q || tr.getAttribute('data-hay').indexOf(q)!==-1);
+      tr.style.display = show ? '' : 'none';
+      var det = tr.nextElementSibling;
+      if(det && det.classList.contains('ad-det'))
+        det.style.display = (show && tr.classList.contains('ad-open')) ? '' : 'none';
+    });
+  }
+
+  // Export current view (data or pivot) to CSV.
+  function exportCSV(){
+    function cell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
+    function rnd(n){return Math.round(Number(n)||0);}
+    var lines=[];
+    if(pivot){
+      lines.push(['Category','Sum of Balance Due'].concat(BUCKETS.map(function(b){return 'Sum of '+b.label;})).map(cell).join(','));
+      var P=buildCategoryPivot();
+      P.order.forEach(function(k){lines.push([k,rnd(P.map[k].balance_due)].concat(BUCKETS.map(function(b){return rnd(P.map[k][b.key]);})).map(cell).join(','));});
+      lines.push(['Grand Total',rnd(P.gt.balance_due)].concat(BUCKETS.map(function(b){return rnd(P.gt[b.key]);})).map(cell).join(','));
+    }else{
+      lines.push(['Type','Doc No','Posting Date','Due Date','Original','Balance Due','Remarks'].concat(BUCKETS.map(function(b){return b.label;})).concat(['Branch']).map(cell).join(','));
+      ROWS.forEach(function(r){lines.push([r.type,r.doc_no,r.posting_date,r.due_date,rnd(r.original),rnd(r.balance_due),r.remark].concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]).map(cell).join(','));});
+    }
+    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;a.download=(DATA.name||CODE||'Aging')+(pivot?'_pivot':'_detail')+'.csv';a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+
+  document.getElementById('adPivotBtn').addEventListener('click',function(){
+    pivot = !pivot;
+    document.getElementById('adPivotLbl').textContent = pivot ? 'Unpivot' : 'Pivot';
+    document.getElementById('adSearch').parentElement.style.visibility = pivot ? 'hidden' : 'visible';
+    render();
+  });
+  document.getElementById('adExport').addEventListener('click', exportCSV);
+  document.getElementById('adSearch').addEventListener('input', filterData);
+  document.getElementById('adBody').addEventListener('input', function(e){
+    var t = e.target;
+    var rmk = t.closest && t.closest('input.ad-rmk'); if(rmk){ saveRemark(rmk); return; }
+    var line = t.closest && t.closest('.sp-line'); if(!line) return;
+    var wrap = t.closest('.sp-wrap'), i = +wrap.getAttribute('data-i'), j = +line.getAttribute('data-j');
+    var sp = (ROWS[i].splits||[])[j]; if(!sp) return;
+    if(t.classList.contains('sp-cat')) sp.category = t.value;
+    else if(t.classList.contains('sp-amt')) sp.amount = num(t.value);
+    else if(t.classList.contains('sp-rmk')) sp.remark = t.value;
+    reconcile(i); saveSplits(i);
+  });
+  document.getElementById('adBody').addEventListener('click', function(e){
+    var exp = e.target.closest && e.target.closest('.ad-exp');
+    if(exp){ toggleRow(exp.closest('tr')); return; }
+    var add = e.target.closest && e.target.closest('.sp-add');
+    if(add){ var ia = +add.closest('.sp-wrap').getAttribute('data-i');
+      ROWS[ia].splits.push({category:'',amount:0,remark:''}); renderSplits(ia);
+      var ins = add.closest('.sp-wrap').querySelector('.sp-line:last-of-type .sp-cat'); if(ins) ins.focus();
+      return; }
+    var del = e.target.closest && e.target.closest('.sp-del');
+    if(del){ var w = del.closest('.sp-wrap'), id = +w.getAttribute('data-i'), jd = +del.closest('.sp-line').getAttribute('data-j');
+      ROWS[id].splits.splice(jd,1); renderSplits(id); saveSplits(id); return; }
+  });
+
+  render();
+})();
+</script>
+{% endblock %}

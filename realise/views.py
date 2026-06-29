@@ -103,6 +103,59 @@ def customer_aging(request):
     })
 
 
+@permission_flag_required('can_customer_aging')
+def customer_aging_detail(request):
+    """Full-page per-document detail behind one customer's Balance Due, with an editable
+    Remarks column and a Pivot/Unpivot toggle. ?code=<CardCode>&name=<CardName>&as_of=YYYY-MM-DD."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:
+        aging_date = today
+    code = (request.GET.get('code') or '').strip()
+    name = (request.GET.get('name') or '').strip() or code
+    return render(request, 'realise/customer_aging_detail.html', {
+        'sidebar_active': 'customer_aging',
+        'detail_payload': {'code': code, 'name': name, 'aging_date': aging_date.isoformat(),
+                           'rows': services.get_customer_aging_detail(code, aging_date) if code else []},
+        'aging_date': aging_date.isoformat(),
+        'aging_today': today.isoformat(),
+    })
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark(request):
+    """Save (or clear) one per-document remark on the Customer Aging detail page."""
+    body = _parse_body(request)
+    code = body.get('code', '')
+    row_key = body.get('row_key', '')
+    if not code or not row_key:
+        return JsonResponse({'status': 'error', 'error': 'code and row_key required'}, status=400)
+    services.save_aging_remark(code, row_key, body.get('remark', ''))
+    return JsonResponse({'status': 'ok'})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_lines(request):
+    """Replace the split breakdown (TDS / RTV / Claim / …) behind one open document on the
+    Customer Aging detail page. Body: {code, row_key, lines:[{category,amount,remark}, ...]}."""
+    body = _parse_body(request)
+    code = body.get('code', '')
+    row_key = body.get('row_key', '')
+    if not code or not row_key:
+        return JsonResponse({'status': 'error', 'error': 'code and row_key required'}, status=400)
+    lines = body.get('lines', [])
+    if not isinstance(lines, list):
+        return JsonResponse({'status': 'error', 'error': 'lines must be a list'}, status=400)
+    services.save_aging_remark_lines(code, row_key, lines)
+    return JsonResponse({'status': 'ok'})
+
+
 def _parse_as_of(s):
     """Parse a ?as_of=YYYY-MM-DD query param into a date, or None (→ today) if absent/bad."""
     try:

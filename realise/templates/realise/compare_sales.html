@@ -12,8 +12,10 @@
   .cs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:16px 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
   .cs-fld{display:flex;flex-direction:column;gap:5px}
   .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
-  .cs-bar input[type=number],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .cs-bar input[type=number],.cs-bar input[type=search],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .cs-bar input[type=number]{width:90px}
+  .cs-bar input[type=search]{min-width:190px}
+  .cs-bar input[type=search]:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
   .cs-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
   .cs-fetch:hover{background:#c2410c}
   /* Compare segmented control */
@@ -84,6 +86,12 @@
         <option value="COMMODITY">Commodity</option>
       </select>
     </div>
+    <div class="cs-fld"><span class="cs-lbl">Customer</span>
+      <input type="search" id="csCustSearch" placeholder="Search customer…" autocomplete="off">
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">Item</span>
+      <input type="search" id="csItemSearch" placeholder="Search item…" autocomplete="off">
+    </div>
     <div class="cs-fld"><span class="cs-lbl">Main Group</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="csMgBtn"><span id="csMgLabel">All groups</span><span class="com-caret">&#9662;</span></button>
@@ -137,6 +145,7 @@
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function fN(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function fRz(n){return '₹'+(Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
 
   var DIMS=[
     {key:'group',label:'Main Group',sub:'GT / MT / ROI / …'},
@@ -150,7 +159,7 @@
 
   var rows=[], loaded=false, err=null, expanded={};
   var order=['group'], chosen=['group'];                 // drill order
-  var typeF='', compareMode='liters';
+  var typeF='', compareMode='liters', custF='', itemF='';
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
 
   function rowVal(r,dim){
@@ -170,6 +179,8 @@
     for(var i=0;i<rows.length;i++){var r=rows[i];
       if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
+      if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
+      if(itemF&&String(r.item_name||'').toLowerCase().indexOf(itemF)===-1)continue;
       if(!r.ym)continue;
       if(!months[r.ym])months[r.ym]={ym:r.ym,label:r.mlabel||r.ym};
       out.push(r);
@@ -313,6 +324,9 @@
   document.getElementById('csFetch').addEventListener('click',load);
   document.getElementById('csMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('csType').addEventListener('change',function(){typeF=this.value;render();});
+  var searchFilter=debounce(render,120);
+  document.getElementById('csCustSearch').addEventListener('input',function(){custF=this.value.trim().toLowerCase();searchFilter();});
+  document.getElementById('csItemSearch').addEventListener('input',function(){itemF=this.value.trim().toLowerCase();searchFilter();});
   document.getElementById('csBody').addEventListener('click',function(e){
     var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
     var p=t.getAttribute('data-cstoggle'); expanded[p]=!expanded[p]; render();
