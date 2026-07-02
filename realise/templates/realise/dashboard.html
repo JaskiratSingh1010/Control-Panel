@@ -311,7 +311,9 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-nav .slide-indicator{min-width:auto;font-size:12px}
 .sc2-pill{padding:8px 14px;border-radius:999px;border:1px solid #d8e0ea;background:#fff;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.55px;box-shadow:0 4px 12px rgba(15,23,42,.04)}
 .sc2-drillbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.sc2-period-bar{flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px}
+/* Wrap instead of scroll: overflow-x:auto here forces overflow-y to clip too, which cut off
+   the Drill-Order dropdown that opens below the bar. Wrapping lets it overflow freely. */
+.sc2-period-bar{flex-wrap:wrap;padding-bottom:3px}
 .sc2-drillbar label{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b}
 .sc2-drillbar select{min-width:0;width:auto;background:#fff;border:1px solid #d9e5ee;color:#1f2937;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:700;font-family:inherit;outline:none}
 .sc2-drillbar select:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
@@ -580,6 +582,12 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
             <button class="slide-btn" onclick="nextSlide()" aria-label="Next slide">&#8250;</button>
             <div class="slide-indicator">Slide 1 / 2</div>
           </div>
+          <div class="ar-ctl" title="Live mode: checks for new data every 30s (a tiny query) and only refreshes when something actually changed — no heavy polling. Off by default; the Fetch button still works as before.">
+            <button type="button" class="ar-toggle" id="arToggle" onclick="toggleAutoRefresh()" aria-pressed="false">
+              <span class="material-icons">autorenew</span><span id="arToggleLbl">Live&nbsp;OFF</span>
+            </button>
+            <span id="arUpdated" class="ar-updated" title="Last data refresh">&mdash;</span>
+          </div>
           <button type="button" class="btn btn-ghost" id="sc2ExportBtn" onclick="exportChannelCSV()">&#11015; Export CSV</button>
           <a class="btn btn-edit" id="sc2TargetsLink" href="{% url 'realise:channel_targets' %}">Update Targets</a>
         </div>
@@ -678,6 +686,23 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .ds-btn{border:0;background:#fff;color:#475569;font-family:inherit;font-weight:800;font-size:12px;letter-spacing:.04em;padding:8px 14px;cursor:pointer;transition:background .15s,color .15s}
   .ds-btn+.ds-btn{border-left:1px solid #e2e8f0}
   .ds-btn.active{background:#4f46e5;color:#fff}
+  /* Optional dashboard auto-refresh (interval value + unit + ON/OFF). Off by default; the
+     normal Fetch button and page-load fetch behave exactly as before. */
+  .ar-ctl{display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;padding:3px 5px}
+  .ar-toggle{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:#eef2f7;color:#475569;font-family:inherit;font-weight:800;font-size:11.5px;letter-spacing:.03em;padding:6px 10px;cursor:pointer;transition:background .15s,color .15s}
+  .ar-toggle .material-icons{font-size:16px}
+  .ar-toggle.on{background:#16a34a;color:#fff}
+  .ar-toggle.on .material-icons{animation:ar-spin 1.6s linear infinite}
+  @keyframes ar-spin{to{transform:rotate(360deg)}}
+  .ar-ctl input[type=number]{width:50px;border:1px solid #d9e5ee;border-radius:6px;padding:6px;font-family:inherit;font-size:12px;font-weight:700;color:#1f2937;outline:none;text-align:right}
+  .ar-ctl select{border:1px solid #d9e5ee;border-radius:6px;padding:6px;font-family:inherit;font-size:12px;font-weight:700;color:#1f2937;background:#fff;outline:none;cursor:pointer}
+  .ar-ctl input:focus,.ar-ctl select:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
+  /* Always-visible freshness label + a flash/glow when a refresh (manual or auto) lands. */
+  .ar-updated{font-size:10.5px;font-weight:800;color:#94a3b8;white-space:nowrap;padding:0 4px 0 2px;letter-spacing:.02em}
+  .ar-updated.flash{animation:ar-txtflash 1.2s ease-out}
+  @keyframes ar-txtflash{0%,28%{color:#16a34a}100%{color:#94a3b8}}
+  .ar-ctl.flash{animation:ar-glow 1s ease-out}
+  @keyframes ar-glow{0%{box-shadow:0 0 0 0 rgba(22,163,74,.55)}100%{box-shadow:0 0 0 7px rgba(22,163,74,0)}}
   .bev-view{flex:1;min-height:0;overflow:auto;padding:16px 20px 24px}
   .bev-head{margin-bottom:12px}
   /* Own class (not .controls) so slide-two-mode doesn't hide the beverages toolbar. */
@@ -1585,6 +1610,7 @@ async function loadBeverages(opts){
     bevPopulateMonths();
     bevCache[bevMode]=bevSnapshot();   // remember this mode's freshly-fetched data
     renderBeverages();
+    arMarkUpdated();        // stamp the freshness indicator (manual or silent auto-refresh)
     showToast((silent?'Auto-refreshed · ':'')+bevRows.length+(silent?' rows':' beverage rows loaded'), silent?'info':'ok');
   }catch(e){ if(!silent){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="4" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; } }
   finally{ bevLoading=false; if(fb&&!silent){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';} if(!silent)document.getElementById('ov').classList.remove('show'); }
@@ -1600,6 +1626,81 @@ function bevStartAutoRefresh(){
   }, BEV_REFRESH_MS);
 }
 bevStartAutoRefresh();
+
+// ── Live mode (heartbeat) ────────────────────────────────────────────────────
+// When ON, every 30s the client polls a TINY "pulse" fingerprint of the data (counts/sums of
+// invoices + open orders — not the heavy proc). Only when that fingerprint CHANGES does it do
+// a real fresh pull; when nothing changed it does nothing, so idle periods cost almost nothing.
+// A heavy pull runs at most once per AR_HEAVY_MS so a billing burst can't hammer SAP. Everything
+// is silent/async — the UI never blocks. Persisted in localStorage; skips while the tab is
+// hidden, a fetch is running, or there are unsaved target edits.
+var AR_KEY='cp:realise:live:v1', arTimer=null, AR_PULSE_MS=30000, AR_HEAVY_MS=60000;
+var arLastPulse=null, arLastHeavy=0, arPulseBusy=false, arLastUpdate=null;
+// ── Freshness indicator: an always-visible "Updated Xs ago" that ticks, so the user can
+// see how current the data is even when a refresh happens silently. Flashes on each refresh.
+function arFmtAgo(ms){ var s=Math.round(ms/1000); if(s<5)return 'just now'; if(s<60)return s+'s ago';
+  var m=Math.floor(s/60); if(m<60)return m+'m ago'; var h=Math.floor(m/60); if(h<24)return h+'h ago'; return Math.floor(h/24)+'d ago'; }
+function arRenderUpdated(){
+  var el=document.getElementById('arUpdated'); if(!el)return;
+  if(!arLastUpdate){ el.textContent='—'; el.title='No refresh yet this session'; return; }
+  el.textContent='Updated '+arFmtAgo(Date.now()-arLastUpdate);
+  el.title='Last refreshed at '+new Date(arLastUpdate).toLocaleTimeString();
+}
+function arMarkUpdated(){   // called on every successful data pull (manual Fetch or live refresh)
+  arLastUpdate=Date.now(); arRenderUpdated();
+  var el=document.getElementById('arUpdated'); if(el){ el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  var ctl=document.querySelector('.ar-ctl'); if(ctl){ ctl.classList.remove('flash'); void ctl.offsetWidth; ctl.classList.add('flash'); }
+}
+function arIsOn(){ var b=document.getElementById('arToggle'); return !!(b&&b.classList.contains('on')); }
+function arSaveCfg(on){ try{ localStorage.setItem(AR_KEY, JSON.stringify({on:!!on})); }catch(e){} }
+function arStop(){ if(arTimer){ clearInterval(arTimer); arTimer=null; } }
+function arStart(){ arStop(); arLastPulse=null; arTimer=setInterval(heartbeatTick, AR_PULSE_MS); }
+function arDates(){ var f=document.getElementById('sc2From'), t=document.getElementById('sc2To');
+  return {start:(f&&f.value)||'', end:(t&&t.value)||''}; }
+// One heartbeat: cheap pulse → refresh only if the fingerprint moved (and the throttle allows).
+async function heartbeatTick(){
+  if(document.hidden || currentSlide!==1) return;         // only the visible Sales dashboard
+  if(sc2Loading || bevLoading || isDirty) return;         // never stack on an in-flight fetch / edits
+  if(arPulseBusy) return; arPulseBusy=true;
+  try{
+    var d=arDates(); if(!d.start||!d.end) return;
+    var res=await fetch(API+'/api/sales-pulse/?dataset='+encodeURIComponent(currentDataset)
+      +'&start='+encodeURIComponent(d.start)+'&end='+encodeURIComponent(d.end),{headers:{'X-CSRFToken':getCSRF()}});
+    if(!res.ok) return;
+    var fp=((await res.json())||{}).pulse||'';
+    if(!fp) return;
+    if(arLastPulse===null){ arLastPulse=fp; return; }      // first sample = baseline only, no refresh
+    if(fp===arLastPulse) return;                           // nothing changed → stay light
+    if(Date.now()-arLastHeavy < AR_HEAVY_MS) return;       // throttle heavy pulls; retry next tick (baseline unchanged)
+    arLastHeavy=Date.now();
+    if(currentDataset==='beverages'){
+      if(bevFetched && !bevLoading){ await loadBeverages({silent:true}); arLastPulse=fp; }
+    }else if(dataFetched && !sc2Loading && !isDirty){
+      detailOihRowsCache=null;                             // force live Order-in-Hand re-fetch too
+      await loadData({source:'slide2', silent:true, force:true});   // bypass the 30-min cache
+      arLastPulse=fp;                                      // advance baseline only after a fresh render
+    }
+  }catch(e){ /* quiet — retry next tick */ }
+  finally{ arPulseBusy=false; }
+}
+function arRender(on){
+  var b=document.getElementById('arToggle'), l=document.getElementById('arToggleLbl'); if(!b)return;
+  b.classList.toggle('on', !!on); b.setAttribute('aria-pressed', on?'true':'false');
+  if(l) l.innerHTML = on ? 'Live&nbsp;ON' : 'Live&nbsp;OFF';
+}
+function toggleAutoRefresh(){
+  var on=!arIsOn(); arRender(on); arSaveCfg(on);
+  if(on){ arStart(); showToast('Live mode ON · checks every 30s, refreshes on change','info'); }
+  else { arStop(); showToast('Live mode OFF','info'); }
+}
+function initAutoRefresh(){
+  var cfg={}; try{ cfg=JSON.parse(localStorage.getItem(AR_KEY)||'{}')||{}; }catch(e){}
+  arRender(!!cfg.on);
+  arRenderUpdated();
+  setInterval(arRenderUpdated, 15000);   // keep the "Xs ago" label current between refreshes
+  if(cfg.on)arStart();
+}
+initAutoRefresh();
 function buildBevTree(rows,order,depth,prefix,pfilters){
   if(depth>=order.length)return [];
   var dim=order[depth], map={};
@@ -2280,22 +2381,23 @@ async function loadData(opts){
   opts=opts||{};
   var src=opts.source==='slide2'?'slide2':'slide1';
   var fromEl=src==='slide2'?'sc2From':'dFrom', toEl=src==='slide2'?'sc2To':'dTo';
+  var silent=!!opts.silent;   // background auto-refresh: no overlay/spinner/toast, keep filters
   var sd=document.getElementById(fromEl).value, ed=document.getElementById(toEl).value;
-  if(!sd||!ed){showToast('Select dates','err');return;}
+  if(!sd||!ed){ if(!silent)showToast('Select dates','err'); return; }
   if(sc2Loading)return; sc2Loading=true;
   // Keep both slides' date pickers in lockstep.
   document.getElementById('dFrom').value=sd;document.getElementById('dTo').value=ed;
   document.getElementById('sc2From').value=sd;document.getElementById('sc2To').value=ed;
-  var fb=document.getElementById('fetchBtn'); if(fb){fb.disabled=true;fb.textContent='Loading...';}
-  var sb=document.getElementById('sc2FetchBtn'); if(sb){sb.disabled=true;sb.innerHTML='Loading…';}
-  document.getElementById('ov').classList.add('show');
+  var fb=document.getElementById('fetchBtn'); if(fb&&!silent){fb.disabled=true;fb.textContent='Loading...';}
+  var sb=document.getElementById('sc2FetchBtn'); if(sb&&!silent){sb.disabled=true;sb.innerHTML='Loading…';}
+  if(!silent)document.getElementById('ov').classList.add('show');
   var grid=document.getElementById('channelGrid');
-  if(grid&&currentSlide===1&&!sc2Rendered)grid.innerHTML='<div class="sc2-empty" style="grid-column:1 / -1">Loading channel data…</div>';
-  drillData={};drillOpen={};drillDim={};rootDrillDim='';allExpanded=false;
-  document.getElementById('expandAllBtn').innerHTML='&#9660; Expand All';
+  if(!silent&&grid&&currentSlide===1&&!sc2Rendered)grid.innerHTML='<div class="sc2-empty" style="grid-column:1 / -1">Loading channel data…</div>';
+  if(!silent){drillData={};drillOpen={};drillDim={};rootDrillDim='';allExpanded=false;
+    document.getElementById('expandAllBtn').innerHTML='&#9660; Expand All';}
   try{
     await loadSavedTargets();
-    var res=await fetch(API+'/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed})});
+    var res=await fetch(API+'/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed,refresh:!!opts.force})});
     if(!res.ok){var e=await res.json();throw new Error(e.detail||e.error||'Server error');}
     var result=await res.json();
     allData=(result.data||[]).filter(function(r){return r.u_type==='COMMODITY'||r.u_type==='PREMIUM';});
@@ -2314,21 +2416,34 @@ async function loadData(opts){
     for(var mi=0;mi<allData.length;mi++){if(allData[mi].month)mSet[allData[mi].month]=1;if(allData[mi].year)ySet[allData[mi].year]=1;}
     var mArr=Object.keys(mSet).sort(function(a,b){return MONTHS.indexOf(a)-MONTHS.indexOf(b);});
     var yArr=Object.keys(ySet).sort();
+    var pType=document.getElementById('fType').value, pMonth=document.getElementById('fMonth').value, pYear=document.getElementById('fYear').value;
     populateFilters(mArr,yArr);
     var cm=currentMonth(),ms=document.getElementById('fMonth'),found=false;
     for(var j=0;j<ms.options.length;j++){if(ms.options[j].value===cm){found=true;break;}}
-    if(found)ms.value=cm;else ms.value='';
-    document.getElementById('fType').value=currentUser&&currentUser.type_filter?currentUser.type_filter:'';document.getElementById('fYear').value='';
+    if(silent){
+      // Background refresh: keep the user's current filter selection rather than snapping back
+      // to the default month/type. Restore each only if its option still exists after reload.
+      var hasM=false;for(var jm=0;jm<ms.options.length;jm++){if(ms.options[jm].value===pMonth){hasM=true;break;}}
+      ms.value=hasM?pMonth:'';
+      document.getElementById('fType').value=pType;
+      var ys=document.getElementById('fYear'),hasY=false;for(var jy=0;jy<ys.options.length;jy++){if(ys.options[jy].value===pYear){hasY=true;break;}}
+      document.getElementById('fYear').value=hasY?pYear:'';
+    }else{
+      if(found)ms.value=cm;else ms.value='';
+      document.getElementById('fType').value=currentUser&&currentUser.type_filter?currentUser.type_filter:'';document.getElementById('fYear').value='';
+    }
     await applyFilters();   // renders slide 1 table + slide 2 cards (via renderSlideTwo)
     saveDashboardCache();
     saveSlideTwoCache();
-    if(opts.toast!==false)showToast(allData.length+' rows loaded — showing '+(found?cm:'All Months'),'ok');
-  }catch(e){showToast('Error: '+e.message,'err');if(grid&&currentSlide===1)grid.innerHTML='<div class="sc2-empty" style="grid-column:1 / -1">Error: '+esc(e.message)+'</div>';}
+    arMarkUpdated();        // stamp the freshness indicator (manual or silent auto-refresh)
+    if(opts.toast!==false){ if(silent)showToast('Auto-refreshed · '+allData.length+' rows','info');
+      else showToast(allData.length+' rows loaded — showing '+(found?cm:'All Months'),'ok'); }
+  }catch(e){ if(!silent){ showToast('Error: '+e.message,'err'); if(grid&&currentSlide===1)grid.innerHTML='<div class="sc2-empty" style="grid-column:1 / -1">Error: '+esc(e.message)+'</div>'; } }
   finally{
     sc2Loading=false;
-    if(fb){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';}
-    if(sb){sb.disabled=false;sb.innerHTML='&#9654; Fetch';}
-    document.getElementById('ov').classList.remove('show');
+    if(fb&&!silent){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';}
+    if(sb&&!silent){sb.disabled=false;sb.innerHTML='&#9654; Fetch';}
+    if(!silent)document.getElementById('ov').classList.remove('show');
   }
 }
 
@@ -2606,8 +2721,11 @@ function getFilteredChannelRows(){
   }
   return rows;
 }
-function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr){
-  var bal=(targetLtr||0)-(doneLtr||0);
+function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr,balLtr){
+  // Bal Ltr mirrors the table's primary "Bal" column = (effective target − Done − OIH). Callers
+  // pass balLtr explicitly when the table uses a flex-adjusted target; otherwise default to
+  // Target − Done − OIH so the KPI strip stays consistent with the per-row / TOTAL "Bal".
+  var bal=(balLtr===undefined||balLtr===null)?((targetLtr||0)-(doneLtr||0)-(oihLtr||0)):balLtr;
   var elTarget=document.getElementById('sc2KpiTarget');
   var elDone=document.getElementById('sc2KpiDone');
   var elOih=document.getElementById('sc2KpiOih');
@@ -2959,9 +3077,10 @@ function sc2FlexCells(key,row,editable){
     +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(isFinite(dent)?fN(dent):'&mdash;')+'</div>';
 }
 function drillCells(c,flexKey){
-  // Effective target = flexible override (if entered for this row) else the real target;
-  // Bal tracks it so editing Flex TGT moves Bal.
-  var eff=(flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(c.target||0);
+  // Effective target = the flexible override ONLY while Flex View is on (its Flex TGT column
+  // is visible then); otherwise the real target, so Bal matches the shown "Tgt L". Saved flex
+  // values live in sc2FlexStore even when Flex is off, so gate on sc2FlexOn() or Bal leaks them.
+  var eff=(sc2FlexOn()&&flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(c.target||0);
   var bal=eff-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
   var balWo=eff-(c.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
   return '<div class="sc2-drillval">'+fN(c.target||0)+'</div>'
@@ -3097,9 +3216,10 @@ function comTotal(products){
   return t;
 }
 function comCells(node,isProduct,flexKey){
-  // Effective target = flexible override (if entered) else the product target; Bal and
-  // Bal Realise track it. Bal exists on product rows only (targets are per product).
-  var eff=(flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(node.target||0);
+  // Effective target = the flexible override ONLY while Flex View is on (its Flex TGT column is
+  // visible then); otherwise the product target, so Bal matches the shown "Tgt L". Saved flex
+  // values persist in sc2FlexStore when Flex is off, so gate on sc2FlexOn() or Bal leaks them.
+  var eff=(sc2FlexOn()&&flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(node.target||0);
   var bal=isProduct?(eff-((node.done||0)+(node.oih||0))):null;
   var balClass=bal===null?'':(bal>=0?'sc2-bal-good':'sc2-bal-bad');
   var act=node.done>0?node.lineTotal/node.done:0;
@@ -3286,8 +3406,10 @@ function renderSlideTwoCommodity(){
   tot.oih=totOih;
   var cl=commodityCleanRows(last), totLast=0; for(var li=0;li<cl.length;li++)totLast+=Number(cl[li].liter)||0;
   tot.lastDone=totLast;
-  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih);
   var tree=buildCommodityTree(rows,oih,last,comOrder);
+  // Bal Ltr KPI = the TOTAL row's "Bal" = flex-adjusted target − Done − OIH (matches comCellsTotal).
+  var comFlex=sc2FlexOn()?comFlexTotal(tree,tot.target||0):(tot.target||0);
+  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih, comFlex-((tot.done||0)+(tot.oih||0)));
   sc2CsvRows=buildCommodityCsvRows(tree,tot);
   grid.innerHTML=renderCommodityTable(tree,tot);
   // First paint has no OIH yet — fetch the live snapshot, then repaint.
@@ -4473,10 +4595,12 @@ async function renderSlideTwo(){
     var leaves=buildSc2DynLeaves(rows,dTargetNodes,dOihRows);
     sc2DynLastLeaves=leaves;
     var dt=aggList(leaves);
+    await loadFlexTargets(period.month,period.year);   // load saved Flex TGT before render + KPI
+    grid.innerHTML=renderSc2DynTree(leaves);           // builds sc2DynTree + sc2DynTotalAgg
     var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
-    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih);
-    await loadFlexTargets(period.month,period.year);   // prefill saved Flex TGT (survives refresh)
-    grid.innerHTML=renderSc2DynTree(leaves);   // sets sc2DynTree
+    // Bal Ltr KPI = the TOTAL row's "Bal" = flex-adjusted target − Done − OIH (so it matches).
+    var dBal=sc2DynFlexTotal(dt.target)-((dt.done||0)+(dt.oih||0));
+    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih,dBal);
     sc2CsvRows=sc2DynCsvRows(sc2DynTree,dt);
     sc2DynFitHeight();                         // grow the body to fill the slide
     return;
@@ -4664,6 +4788,7 @@ function sc2DynTreeRows(nodes,depth){
 // keep their target. So total flex = total target − Σ(target − flex) over overridden
 // top-level rows, and the total Dent = that Σ. Bal then tracks the flex total.
 function sc2DynFlexTotal(totTarget){
+  if(!sc2FlexOn())return totTarget;   // Flex off: Bal uses the real target, not saved flex values
   var dent=0;
   for(var i=0;i<sc2DynTree.length;i++){
     var n=sc2DynTree[i];

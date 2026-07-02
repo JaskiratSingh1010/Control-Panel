@@ -236,7 +236,9 @@
   var signSel = 'both';       // 'both' | 'pos' | 'neg' — Balance Due sign filter
   var cond = {op:'', a:0, b:0};   // numeric Balance Due condition (gte / lte / between)
   var DETAIL_URL = "{% url 'realise:customer_aging_detail' %}";
+  var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
   var ASOF = DATA.aging_date || '';
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
   var COLORS  = BUCKETS.map(function(b){return b.color;});
   var NCOL    = 3 + BUCKETS.length;   // label + original + balance + buckets
 
@@ -394,13 +396,21 @@
   }
 
   // ── Interactions ──
+  function currentQuery(){ return (document.getElementById('agSearch').value||'').trim().toLowerCase(); }
+  function rowFilterActive(){ return !!currentQuery() || signSel!=='both' || !!cond.op; }
+  // Expand/Collapse only flip each group's open state, then let applyView() reconcile
+  // visibility with the active filters — so they work whether or not a filter is on.
   function setGroup(gi,open){
     var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
     if(grp) grp.classList.toggle('open',open);
-    document.querySelectorAll('.ag-cust[data-gi="'+gi+'"]').forEach(function(r){ r.classList.toggle('show',open); });
+    applyView();
   }
   function setAll(open){
-    GROUPS.forEach(function(_,gi){ setGroup(gi,open); });
+    GROUPS.forEach(function(_,gi){
+      var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
+      if(grp) grp.classList.toggle('open',open);
+    });
+    applyView();
   }
 
   // Does a customer row pass the search + Balance-Due sign + numeric condition filters?
@@ -414,35 +424,46 @@
     if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return false;
     return true;
   }
-  // Unified filtering: Format multi-select (whole groups) + search / sign / condition (rows).
-  function applyFilters(){
-    var q = (document.getElementById('agSearch').value||'').trim().toLowerCase();
-    var useFmt = selectedFormats.length>0;
-    var active = !!q || signSel!=='both' || !!cond.op;   // any row-level filter on?
+  // Single source of truth for visibility: Format filter (whole groups) + row filters
+  // (search / sign / condition) + each group's open state. A customer row shows iff it
+  // passes the filters AND its group is open. Inline display and the .show class are always
+  // set together, so Expand/Collapse and the filters never fight over which one wins.
+  function applyView(){
+    var q = currentQuery(), useFmt = selectedFormats.length>0, rowActive = rowFilterActive();
     GROUPS.forEach(function(g,gi){
       var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
       var custs = document.querySelectorAll('.ag-cust[data-gi="'+gi+'"]');
       var fmtOk = !useFmt || selectedFormats.indexOf(g.format)!==-1;
       if(!fmtOk){
         if(grp) grp.style.display='none';
-        custs.forEach(function(r){ r.style.display='none'; });
+        custs.forEach(function(r){ r.style.display='none'; r.classList.remove('show'); });
         return;
       }
-      if(!active){
-        if(grp){ grp.style.display=''; grp.classList.remove('open'); }
-        custs.forEach(function(r){ r.classList.remove('show'); r.style.display=''; });
-        return;
-      }
-      var any=false;
+      var open = !!(grp && grp.classList.contains('open')), anyPass=false;
       custs.forEach(function(r){
-        var pass = custPasses(r,q);
-        r.style.display = pass ? 'table-row' : 'none';
-        r.classList.toggle('show',pass);
-        if(pass) any=true;
+        var pass = custPasses(r,q); if(pass) anyPass=true;
+        var show = pass && open;
+        r.style.display = show ? 'table-row' : 'none';
+        r.classList.toggle('show', show);
       });
-      if(grp){ grp.style.display = any ? 'table-row' : 'none'; grp.classList.toggle('open',any); }
+      // With a row filter on, hide format headers that have no matching rows.
+      if(grp) grp.style.display = (!rowActive || anyPass) ? 'table-row' : 'none';
     });
     renderKpis();   // KPI cards reflect the active filters / conditions
+  }
+  // A row-filter change auto-opens groups with matches (results show at once); clearing all
+  // row filters collapses back to the format-only view. Then applyView() paints it.
+  function applyFilters(){
+    var q = currentQuery(), useFmt = selectedFormats.length>0, rowActive = rowFilterActive();
+    GROUPS.forEach(function(g,gi){
+      var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]'); if(!grp) return;
+      var fmtOk = !useFmt || selectedFormats.indexOf(g.format)!==-1;
+      if(!fmtOk || !rowActive){ grp.classList.remove('open'); return; }
+      var any=false;
+      document.querySelectorAll('.ag-cust[data-gi="'+gi+'"]').forEach(function(r){ if(custPasses(r,q)) any=true; });
+      grp.classList.toggle('open', any);
+    });
+    applyView();
   }
 
   // Build the Format multi-select checkboxes (one per format group).
@@ -485,6 +506,55 @@
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   }
 
+  // Export to a colour-matched .xlsx that mirrors the on-screen table: dark header row,
+  // per-format accent chips, the five bucket-column tints, ₹ amounts with red negatives in
+  // parentheses and "—" for zero, and a dark grand-total row. Falls back to CSV on failure.
+  // (Hidden formats/customers are already excluded server-side, so the full book is exported.)
+  function exportAgingXLSX(){
+    if(!GROUPS.length){ return; }
+    function rnd(n){return Math.round(Number(n)||0);}
+    function hx(c){return String(c||'').replace('#','');}
+    var CUST_T=['f0fdf4','f0fdfa','fffbeb','fff7ed','fef2f2'];   // customer bucket tints (bk0..bk4)
+    var GRP_T =['e7fbee','e6fbf6','fef6da','feefdd','fde7e7'];   // group-row bucket tints
+    var NUM ='"₹"#,##0;[Red]("₹"#,##0);"—"';                     // pos ₹ · neg red (₹) · zero —
+    var NUMW='"₹"#,##0;("₹"#,##0);"—"';                          // grand total: white font, no [Red]
+    function hdr(v,left){return {value:v, fill:'0f172a', color:'ffffff', bold:true, align:left?'left':'right'};}
+    function tot(v,isNum){var c={value:v, fill:'1e293b', color:'ffffff', bold:true, align:isNum?'right':'left'}; if(isNum)c.numfmt=NUMW; return c;}
+
+    var out=[ ['Format / Customer','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
+                .map(function(l,i){return hdr(l, i===0);}) ];
+    GROUPS.forEach(function(g,gi){
+      var acc=hx(fmtColor(gi));
+      var grow=[{value:g.format+' ('+g.count+')', fill:acc, color:'ffffff', bold:true, align:'left'},
+        {value:rnd(g.original), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'},
+        {value:rnd(g.balance_due), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'}];
+      BUCKETS.forEach(function(b,i){ grow.push({value:rnd(g[b.key]), fill:GRP_T[i], bold:true, numfmt:NUM, align:'right'}); });
+      out.push(grow);
+      g.customers.forEach(function(c){
+        var crow=[{value:c.name+(c.code?('   '+c.code):''), align:'left'},
+          {value:rnd(c.original), numfmt:NUM, align:'right'},
+          {value:rnd(c.balance_due), bold:true, numfmt:NUM, align:'right'}];
+        BUCKETS.forEach(function(b,i){ crow.push({value:rnd(c[b.key]), fill:CUST_T[i], numfmt:NUM, align:'right'}); });
+        out.push(crow);
+      });
+    });
+    out.push([tot('GRAND TOTAL',false), tot(rnd(TOTAL.original),true), tot(rnd(TOTAL.balance_due),true)]
+      .concat(BUCKETS.map(function(b){return tot(rnd(TOTAL[b.key]),true);})));
+
+    var fn='Customer_Aging_'+(document.getElementById('agAsOf').value||'')+'.xlsx';
+    var btn=document.getElementById('agExport'); if(btn)btn.disabled=true;
+    fetch(EXPORT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn, sheets:[{name:'Customer Aging', rows:out}]})})
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.blob(); })
+      .then(function(blob){
+        var url=URL.createObjectURL(blob); var a=document.createElement('a');
+        a.href=url; a.download=fn; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},1500);
+      })
+      .catch(function(){ exportAgingCSV(); })       // fallback: plain CSV
+      .then(function(){ if(btn)btn.disabled=false; });
+  }
+
   function wire(){
     // Aging date picker → reload the page aged to the chosen date (server recomputes).
     var asof = document.getElementById('agAsOf');
@@ -501,7 +571,7 @@
     });
     document.getElementById('agExpand').addEventListener('click',function(){ setAll(true); });
     document.getElementById('agCollapse').addEventListener('click',function(){ setAll(false); });
-    document.getElementById('agExport').addEventListener('click', exportAgingCSV);
+    document.getElementById('agExport').addEventListener('click', exportAgingXLSX);
 
     document.getElementById('agSearch').addEventListener('input', applyFilters);
 
@@ -539,7 +609,8 @@
       var a = parseFloat(document.getElementById('agCondA').value);
       var b = parseFloat(document.getElementById('agCondB').value);
       if(!op || isNaN(a) || (op==='between' && isNaN(b))) cond = {op:'',a:0,b:0};
-      else cond = {op:op, a:a, b:(isNaN(b)?0:b)};
+      else if(op==='between') cond = {op:op, a:Math.min(a,b), b:Math.max(a,b)};   // order-independent
+      else cond = {op:op, a:a, b:0};
       document.getElementById('agCondLabel').textContent = cond.op ? 'Conditions •' : 'Conditions';
       condBox.classList.remove('open');
       applyFilters();

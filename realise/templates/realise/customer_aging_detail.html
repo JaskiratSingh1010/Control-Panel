@@ -28,6 +28,8 @@
   .ad-btn:hover{background:#eef2ff;border-color:#c7d2fe}
   .ad-btn.primary{background:#4338ca;color:#fff;border-color:#4338ca}
   .ad-btn.primary:hover{background:#3730a3}
+  .ad-btn.danger{color:#dc2626}
+  .ad-btn.danger:hover{background:#fef2f2;border-color:#fecaca}
   .ad-btn .material-icons{font-size:17px}
 
   .ad-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
@@ -62,6 +64,7 @@
   .sp-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#94a3b8}
   .sp-line{display:contents}
   .sp-cat,.sp-amt,.sp-rmk{border:1px solid #e2e8f0;border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none;background:#fff;width:100%}
+  select.sp-cat{cursor:pointer;height:31px}
   .sp-amt{text-align:right;font-variant-numeric:tabular-nums}
   .sp-cat:focus,.sp-amt:focus,.sp-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .sp-del{border:0;background:transparent;color:#cbd5e1;font-size:20px;line-height:1;cursor:pointer;border-radius:6px;width:28px;height:28px}
@@ -96,6 +99,9 @@
     </label>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
+    <button type="button" class="ad-btn" id="adUpload" title="Upload an edited export to bulk-update Remarks by Doc No"><span class="material-icons">upload</span>Upload Excel</button>
+    <input type="file" id="adUploadFile" accept=".xlsx,.csv" style="display:none">
+    <button type="button" class="ad-btn danger" id="adClear" title="Clear all saved remarks for this customer"><span class="material-icons">backspace</span>Clear Remarks</button>
   </div>
 
   <div class="ad-card">
@@ -116,11 +122,19 @@
   var DATA = JSON.parse(document.getElementById('detail-data').textContent || '{}');
   var ROWS = DATA.rows || [];
   var CODE = DATA.code || '';
+  // Fixed Category vocabulary (server is the source of truth; see AGING_REMARK_CATEGORIES).
+  // The split Category is a dropdown limited to these — no free text is accepted.
+  var CATEGORIES = DATA.categories || ['NOT DUE','RTV DEBIT','RTV PICK UP','SHORTAGE','CLAIM','TDS',
+    'SHORT & EXCESS','OVERDUE','RC','JE','REVERSE WRONG CLAIM','ADVICE PENDING'];
+  var CATEGORY_SET = {}; CATEGORIES.forEach(function(c){ CATEGORY_SET[c.toUpperCase()] = 1; });
   var BUCKETS = [{key:'b0_30',label:'0 - 30'},{key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
                  {key:'b91_120',label:'91 - 120'},{key:'b121',label:'121+'}];
   var pivot = false;
   var SAVE_URL = "{% url 'realise:api_aging_remark' %}";
   var SAVE_LINES_URL = "{% url 'realise:api_aging_remark_lines' %}";
+  var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
+  var UPLOAD_URL = "{% url 'realise:api_aging_remark_upload' %}";
+  var CLEAR_URL = "{% url 'realise:api_aging_remark_clear' %}";
   var CSRF = "{{ csrf_token }}";
 
   function num(v){ v=String(v==null?'':v).replace(/[₹,\s]/g,''); var n=parseFloat(v); return isFinite(n)?n:0; }
@@ -175,9 +189,10 @@
     body.innerHTML = html;
   }
 
-  // ── Pivot view (group by split Category) ──
-  // Each split's amount inherits its parent invoice's age bucket; any balance not assigned to
-  // a split rolls into '(unallocated)', so the Grand Total still equals total Balance Due.
+  // ── Pivot view (group by Remark / split Category) ──
+  // A row with no split amounts contributes its whole balance under its Remark text; a row
+  // that uses splits is broken down by split Category (each split inheriting its invoice's age
+  // bucket) with any leftover under '(unallocated)'. Grand Total still equals total Balance Due.
   function buildCategoryPivot(){
     var map={}, order=[], gt={balance_due:0}; BUCKETS.forEach(function(b){gt[b.key]=0;});
     function add(key, amt, r){
@@ -197,13 +212,18 @@
         add((s.category||'').trim() || '(uncategorized)', amt, r); alloc += amt;
       });
       var rem = bal - alloc;
-      if(Math.abs(rem) > 0.5) add('(unallocated)', rem, r);
+      if(Math.abs(rem) > 0.5){
+        // No split amounts on this row → bucket the whole balance under its Remark (the
+        // category people type in the Remarks column or fill via Upload). Rows that DO use
+        // splits keep an explicit (unallocated) remainder for whatever isn't categorised.
+        add(alloc===0 ? ((r.remark||'').trim() || '(no remark)') : '(unallocated)', rem, r);
+      }
     });
     order.sort(function(a,b){ return map[b].balance_due - map[a].balance_due; });
     return {order:order, map:map, gt:gt};
   }
   function renderPivot(){
-    var head = '<th class="lbl">Category (Row Labels)</th><th>Sum of Balance Due</th>';
+    var head = '<th class="lbl">Remark / Category (Row Labels)</th><th>Sum of Balance Due</th>';
     BUCKETS.forEach(function(b){ head += '<th>Sum of '+esc(b.label)+'</th>'; });
     document.getElementById('adHead').innerHTML = head;
     var body = document.getElementById('adBody');
@@ -233,6 +253,19 @@
       det.setAttribute('data-rendered','1');
     }
   }
+  // <option> list for the Category dropdown; pre-selects the saved value (case-insensitive).
+  // A saved value outside the vocabulary shows once as "(invalid)" so it isn't hidden, but it
+  // can't be re-chosen — picking any real option replaces it and the server drops it on save.
+  function catOptions(val){
+    var cur = String(val==null?'':val).trim().toUpperCase(), matched = false;
+    var html = '<option value="">— select —</option>';
+    for(var k=0;k<CATEGORIES.length;k++){
+      var c = CATEGORIES[k], sel = c.toUpperCase()===cur; if(sel) matched = true;
+      html += '<option value="'+attr(c)+'"'+(sel?' selected':'')+'>'+esc(c)+'</option>';
+    }
+    if(cur && !matched) html += '<option value="'+attr(cur)+'" selected>'+esc(cur)+' (invalid)</option>';
+    return html;
+  }
   function renderSplits(i){
     var wrap = document.querySelector('.sp-wrap[data-i="'+i+'"]'); if(!wrap) return;
     if(!ROWS[i].splits) ROWS[i].splits = [];
@@ -240,7 +273,7 @@
     var lines = ROWS[i].splits.map(function(s,j){
       var amt = Number(s.amount)||0, av = Math.abs(amt)<0.005 ? '' : amt;
       return '<div class="sp-line" data-j="'+j+'">'+
-        '<input class="sp-cat" placeholder="e.g. TDS, RTV, Claim" value="'+attr(s.category)+'">'+
+        '<select class="sp-cat">'+catOptions(s.category)+'</select>'+
         '<input class="sp-amt" inputmode="decimal" placeholder="0" value="'+attr(av)+'">'+
         '<input class="sp-rmk" placeholder="Note (optional)" value="'+attr(s.remark)+'">'+
         '<button type="button" class="sp-del" title="Remove split">&times;</button>'+
@@ -314,7 +347,7 @@
     function rnd(n){return Math.round(Number(n)||0);}
     var lines=[];
     if(pivot){
-      lines.push(['Category','Sum of Balance Due'].concat(BUCKETS.map(function(b){return 'Sum of '+b.label;})).map(cell).join(','));
+      lines.push(['Remark / Category','Sum of Balance Due'].concat(BUCKETS.map(function(b){return 'Sum of '+b.label;})).map(cell).join(','));
       var P=buildCategoryPivot();
       P.order.forEach(function(k){lines.push([k,rnd(P.map[k].balance_due)].concat(BUCKETS.map(function(b){return rnd(P.map[k][b.key]);})).map(cell).join(','));});
       lines.push(['Grand Total',rnd(P.gt.balance_due)].concat(BUCKETS.map(function(b){return rnd(P.gt[b.key]);})).map(cell).join(','));
@@ -328,13 +361,89 @@
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   }
 
+  // Export ONE .xlsx with two sheets — Pivot (by category) and Data (per document) — built
+  // server-side from these arrays. Falls back to the single-view CSV if the request fails.
+  function exportXLSX(){
+    function rnd(n){return Math.round(Number(n)||0);}
+    function H(v){return {value:v, style:1};}                 // bold header cell
+    function G(v){return {value:v, style:3};}                 // grand-total cell
+
+    var P = buildCategoryPivot();
+    var pv = [ [H('Remark / Category'), H('Sum of Balance Due')].concat(BUCKETS.map(function(b){return H('Sum of '+b.label);})) ];
+    P.order.forEach(function(k){
+      pv.push([k, rnd(P.map[k].balance_due)].concat(BUCKETS.map(function(b){return rnd(P.map[k][b.key]);})));
+    });
+    pv.push([G('Grand Total'), G(rnd(P.gt.balance_due))].concat(BUCKETS.map(function(b){return G(rnd(P.gt[b.key]));})));
+
+    var dv = [ [H('Type'),H('Doc No'),H('Posting Date'),H('Due Date'),H('Original'),H('Balance Due'),H('Remarks')]
+                 .concat(BUCKETS.map(function(b){return H(b.label);})).concat([H('Branch')]) ];
+    ROWS.forEach(function(r){
+      dv.push([r.type, r.doc_no, r.posting_date, r.due_date, rnd(r.original), rnd(r.balance_due), r.remark]
+                .concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]));
+    });
+
+    var fn = (DATA.name||CODE||'Aging').replace(/[^A-Za-z0-9._ -]/g,'_')+'_aging.xlsx';
+    var btn = document.getElementById('adExport'); btn.disabled = true;
+    fetch(EXPORT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({filename:fn, sheets:[{name:'Pivot',rows:pv},{name:'Data',rows:dv}]})})
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.blob(); })
+      .then(function(blob){
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a'); a.href=url; a.download=fn;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},1500);
+      })
+      .catch(function(){ exportCSV(); })          // fallback: current-view CSV
+      .then(function(){ btn.disabled = false; });
+  }
+
   document.getElementById('adPivotBtn').addEventListener('click',function(){
     pivot = !pivot;
     document.getElementById('adPivotLbl').textContent = pivot ? 'Unpivot' : 'Pivot';
     document.getElementById('adSearch').parentElement.style.visibility = pivot ? 'hidden' : 'visible';
     render();
   });
-  document.getElementById('adExport').addEventListener('click', exportCSV);
+  document.getElementById('adExport').addEventListener('click', exportXLSX);
+
+  // ── Upload an edited export to bulk-update Remarks (matched by Doc No) ──
+  document.getElementById('adUpload').addEventListener('click', function(){
+    document.getElementById('adUploadFile').click();
+  });
+  document.getElementById('adUploadFile').addEventListener('change', function(){
+    var inp = this, f = inp.files && inp.files[0]; if(!f){ return; }
+    var fd = new FormData();
+    fd.append('file', f); fd.append('code', CODE); fd.append('as_of', DATA.aging_date||'');
+    var btn = document.getElementById('adUpload'); btn.disabled = true;
+    fetch(UPLOAD_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j && j.status==='ok'){
+          var msg = 'Updated '+j.updated+' remark(s) across '+j.matched_docs+' document(s) (from '+j.rows+' row(s) read).';
+          if(j.unmatched && j.unmatched.length){
+            msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open document and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
+          }
+          alert(msg);
+          location.reload();           // re-render with the updated remarks
+        } else {
+          alert('Upload failed: '+((j&&j.error)||'unknown error'));
+        }
+      })
+      .catch(function(){ alert('Upload failed — please try again.'); })
+      .then(function(){ btn.disabled = false; inp.value = ''; });   // allow re-selecting the same file
+  });
+
+  // ── Clear all saved remarks for this customer (splits are kept) ──
+  document.getElementById('adClear').addEventListener('click', function(){
+    if(!confirm('Clear ALL saved remarks for '+(DATA.name||CODE)+'?\nThis removes every remark in the Remarks column for this customer and cannot be undone. (Split breakdowns are kept.)')) return;
+    var btn = this; btn.disabled = true;
+    fetch(CLEAR_URL, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify({code:CODE})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j && j.status==='ok'){ alert('Cleared '+j.cleared+' remark(s).'); location.reload(); }
+        else { alert('Clear failed: '+((j&&j.error)||'unknown error')); btn.disabled = false; }
+      })
+      .catch(function(){ alert('Clear failed — please try again.'); btn.disabled = false; });
+  });
   document.getElementById('adSearch').addEventListener('input', filterData);
   document.getElementById('adBody').addEventListener('input', function(e){
     var t = e.target;
@@ -346,6 +455,15 @@
     else if(t.classList.contains('sp-amt')) sp.amount = num(t.value);
     else if(t.classList.contains('sp-rmk')) sp.remark = t.value;
     reconcile(i); saveSplits(i);
+  });
+  // A <select> reliably fires 'change' (not all browsers fire 'input' on it), so mirror the
+  // Category save here. Guarded to sp-cat only, so it never double-handles the text inputs.
+  document.getElementById('adBody').addEventListener('change', function(e){
+    var t = e.target; if(!t.classList || !t.classList.contains('sp-cat')) return;
+    var line = t.closest('.sp-line'), wrap = t.closest('.sp-wrap'); if(!line || !wrap) return;
+    var i = +wrap.getAttribute('data-i'), j = +line.getAttribute('data-j');
+    var sp = (ROWS[i].splits||[])[j]; if(!sp) return;
+    sp.category = t.value; reconcile(i); saveSplits(i);
   });
   document.getElementById('adBody').addEventListener('click', function(e){
     var exp = e.target.closest && e.target.closest('.ad-exp');

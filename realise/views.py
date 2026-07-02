@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import logging
+import re
 import time
 from datetime import datetime
 
@@ -120,6 +121,7 @@ def customer_aging_detail(request):
     return render(request, 'realise/customer_aging_detail.html', {
         'sidebar_active': 'customer_aging',
         'detail_payload': {'code': code, 'name': name, 'aging_date': aging_date.isoformat(),
+                           'categories': services.AGING_REMARK_CATEGORIES,
                            'rows': services.get_customer_aging_detail(code, aging_date) if code else []},
         'aging_date': aging_date.isoformat(),
         'aging_today': today.isoformat(),
@@ -154,6 +156,129 @@ def api_aging_remark_lines(request):
         return JsonResponse({'status': 'error', 'error': 'lines must be a list'}, status=400)
     services.save_aging_remark_lines(code, row_key, lines)
     return JsonResponse({'status': 'ok'})
+
+
+def _norm_docno(v):
+    """A cell value → a clean Doc No string (Excel often reads doc numbers as floats)."""
+    if v is None:
+        return ''
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    s = str(v).strip()
+    if s.endswith('.0') and s[:-2].isdigit():
+        s = s[:-2]
+    return s
+
+
+def _extract_doc_remarks(table):
+    """A sheet (list of rows) → [(doc_no, remark), ...], or None if it has no header row with
+    both a Doc-No-like and a Remarks-like column. The Doc column matches any header containing
+    'doc' (but not a date), e.g. 'Doc No' / 'Doc. No.' / 'Document No'; Remarks matches any
+    header containing 'remark'. The header may sit below blank/title rows."""
+    doc_i = rem_i = header_idx = None
+    for idx, row in enumerate(table):
+        cols = [str(c or '').strip().lower() for c in row]
+        d = next((j for j, c in enumerate(cols) if 'doc' in c and 'date' not in c), None)
+        r = next((j for j, c in enumerate(cols) if 'remark' in c), None)
+        if d is not None and r is not None:
+            doc_i, rem_i, header_idx = d, r, idx
+            break
+    if header_idx is None:
+        return None
+    out = []
+    for row in table[header_idx + 1:]:
+        doc = _norm_docno(row[doc_i]) if doc_i < len(row) else ''
+        if not doc:
+            continue
+        rem = '' if rem_i >= len(row) or row[rem_i] is None else str(row[rem_i]).strip()
+        out.append((doc, rem))
+    return out
+
+
+def _parse_remark_upload(uploaded):
+    """Read an uploaded .xlsx/.csv into [(doc_no, remark), ...]. Scans EVERY sheet (a 'Data'
+    sheet first) for the one carrying 'Doc No' + 'Remarks' columns — so both our own export and
+    hand-kept books (where the data sits on a later sheet alongside a pivot/summary sheet) work.
+    Raises ValueError if no sheet has those columns."""
+    raw = uploaded.read()
+    name = (getattr(uploaded, 'name', '') or '').lower()
+    tables = []
+    if name.endswith('.csv'):
+        text = raw.decode('utf-8-sig', errors='replace')
+        tables = [list(csv.reader(io.StringIO(text)))]
+    else:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        order = sorted(wb.sheetnames, key=lambda n: n.strip().lower() != 'data')   # 'Data' first
+        tables = [[list(r) for r in wb[sn].iter_rows(values_only=True)] for sn in order]
+    for table in tables:
+        parsed = _extract_doc_remarks(table)
+        if parsed is not None:
+            return parsed
+    raise ValueError('Could not find "Doc No" and "Remarks" columns in the file')
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_upload(request):
+    """Bulk-update per-document Remarks from an uploaded .xlsx/.csv, matching on Doc No.
+    multipart: file=<xlsx/csv>, code=<CardCode>, as_of=YYYY-MM-DD (the aging date the sheet
+    was exported for). Updates every open line sharing a Doc No; blanks are left unchanged."""
+    code = (request.POST.get('code') or '').strip()
+    upload = request.FILES.get('file')
+    if not code or not upload:
+        return JsonResponse({'status': 'error', 'error': 'code and file are required'}, status=400)
+    try:
+        doc_remarks = _parse_remark_upload(upload)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
+    result = services.bulk_update_aging_remarks(code, _parse_as_of(request.POST.get('as_of')), doc_remarks)
+    return JsonResponse({'status': 'ok', **result})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_clear(request):
+    """Clear all saved per-document Remarks for one customer (split breakdowns are kept).
+    Body: {code:<CardCode>}."""
+    body = _parse_body(request)
+    code = (body.get('code') or '').strip()
+    if not code:
+        return JsonResponse({'status': 'error', 'error': 'code required'}, status=400)
+    return JsonResponse({'status': 'ok', 'cleared': services.clear_aging_remarks(code)})
+
+
+@any_permission_flag('can_realise', 'can_customer_aging', 'can_oih_vs_stock', 'can_compare_sales',
+                     json_response=True)
+@require_http_methods(['POST'])
+def api_export_xlsx(request):
+    """Build a multi-sheet .xlsx from client-supplied sheets and stream it back.
+    Body: {filename, sheets:[{name, rows:[[cell, ...], ...]}, ...]} where each cell is a
+    scalar (numbers become real numeric cells) or {value, style, colspan}. Generic — powers
+    the Customer Aging detail 'Export Excel' (Pivot + Data sheets in one file)."""
+    body = _parse_body(request)
+    sheets_in = body.get('sheets') or []
+    if not isinstance(sheets_in, list) or not sheets_in:
+        return JsonResponse({'error': 'sheets required'}, status=400)
+    sheets = []
+    for s in sheets_in:
+        if not isinstance(s, dict):
+            continue
+        rows = s.get('rows')
+        if isinstance(rows, list) and rows:
+            sheets.append((str(s.get('name') or 'Sheet'), rows))
+    if not sheets:
+        return JsonResponse({'error': 'no rows to export'}, status=400)
+    content = build_workbook(sheets)
+    filename = re.sub(r'[^A-Za-z0-9._ -]', '_', str(body.get('filename') or 'export'))[:120]
+    if not filename.lower().endswith('.xlsx'):
+        filename += '.xlsx'
+    response = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 def _parse_as_of(s):
@@ -620,6 +745,19 @@ def api_order_in_hand(request):
 @require_http_methods(['GET'])
 def api_order_in_hand_rows(request):
     return JsonResponse({'status': 'ok', 'data': services.get_order_in_hand_rows()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_sales_pulse(request):
+    """Tiny data fingerprint for the dashboard 'live' heartbeat (see services.get_sales_pulse).
+    The client polls this cheaply every ~30s and only forces a fresh pull when it changes."""
+    dataset = (request.GET.get('dataset') or 'oils').strip().lower()
+    start = (request.GET.get('start') or '').strip()
+    end = (request.GET.get('end') or '').strip()
+    if not start or not end:
+        return JsonResponse({'status': 'ok', 'pulse': ''})
+    return JsonResponse({'status': 'ok', 'pulse': services.get_sales_pulse_cached(dataset, start, end)})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

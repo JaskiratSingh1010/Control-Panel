@@ -598,6 +598,54 @@ def get_sales_data_cached(start_date, end_date, force=False):
     return _sales_fetch_and_store(key, start_date, end_date)
 
 
+# ── Live "heartbeat" pulse ──────────────────────────────────────────────────
+# A tiny fingerprint of the data the dashboard shows, so the client can poll it cheaply every
+# 30s and only trigger a (heavy) fresh pull when something ACTUALLY changed. It moves when an
+# invoice in the window is added / edited / cancelled (OINV, + ORIN credit notes for oils) or an
+# open order is added or (partly) delivered (ORDR / RDR1). Header/line aggregates only — orders
+# of magnitude cheaper than REPORT_SALES_ANALYSIS — cached ~10s so many tabs can poll for free.
+_PULSE_CACHE = {}          # (dataset, start, end) -> (expires_at, pulse_string)
+_PULSE_TTL = 10
+
+
+def get_sales_pulse(dataset, start_date, end_date):
+    """Short fingerprint string for one (dataset, date-range); '' on any SAP error."""
+    S = BEVERAGES_SCHEMA if dataset == 'beverages' else SAP_SCHEMA
+    open_cnt = (f'(SELECT COUNT(*) FROM "{S}"."RDR1" L JOIN "{S}"."ORDR" H ON H."DocEntry"=L."DocEntry" '
+                f'''WHERE H."DocStatus"='O' AND L."LineStatus"='O')''')
+    open_qty = (f'(SELECT COALESCE(ROUND(SUM(L."OpenQty"),2),0) FROM "{S}"."RDR1" L JOIN "{S}"."ORDR" H '
+                f'''ON H."DocEntry"=L."DocEntry" WHERE H."DocStatus"='O' AND L."LineStatus"='O')''')
+    inv_cnt = f'(SELECT COUNT(*) FROM "{S}"."OINV" WHERE "DocDate" BETWEEN ? AND ?)'
+    inv_sum = f'(SELECT COALESCE(SUM("DocTotal"),0) FROM "{S}"."OINV" WHERE "DocDate" BETWEEN ? AND ?)'
+    if dataset == 'beverages':
+        sql = f'SELECT {inv_cnt} AS "A", {inv_sum} AS "B", {open_cnt} AS "C", {open_qty} AS "D" FROM DUMMY'
+        params = (start_date, end_date, start_date, end_date)
+    else:
+        crn_sum = f'(SELECT COALESCE(SUM("DocTotal"),0) FROM "{S}"."ORIN" WHERE "DocDate" BETWEEN ? AND ?)'
+        sql = f'SELECT {inv_cnt} AS "A", {inv_sum} AS "B", {crn_sum} AS "E", {open_cnt} AS "C", {open_qty} AS "D" FROM DUMMY'
+        params = (start_date, end_date, start_date, end_date, start_date, end_date)
+    try:
+        rows = sap_connector.execute_query(sql, params)
+    except Exception as exc:
+        logger.error('[PULSE] fetch failed: %s', exc)
+        return ''
+    if not rows:
+        return ''
+    r = rows[0]
+    return '|'.join(str(r.get(k)) for k in ('A', 'B', 'E', 'C', 'D') if k in r)
+
+
+def get_sales_pulse_cached(dataset, start_date, end_date):
+    key = (dataset or 'oils', str(start_date), str(end_date))
+    now = time.time()
+    hit = _PULSE_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    val = get_sales_pulse(*key)
+    _PULSE_CACHE[key] = (now + _PULSE_TTL, val)
+    return val
+
+
 def prewarm_sales_cache():
     """Pre-fetch the ranges the dashboard opens with (current month + current FY) so the
     first load after a server start is warm. Safe to call from a daemon thread."""
@@ -1444,7 +1492,7 @@ STATE_CODE_NAMES = {
     'UP': 'UTTAR PRADESH', 'PB': 'PUNJAB', 'JH': 'JHARKHAND',
     'MP': 'MADHYA PRADESH', 'WB': 'WEST BENGAL', 'CA': 'CHHATTISGARH',
     'TE': 'TELANGANA', 'AP': 'ANDHRA PRADESH', 'UK': 'UTTARAKHAND',
-    'JK': 'JAMMU & KASHMIR', 'KR': 'KERALA', 'AS': 'ASSAM', 'TN': 'TAMIL NADU',
+    'JK': 'JAMMU AND KASHMIR', 'KR': 'KERALA', 'AS': 'ASSAM', 'TN': 'TAMIL NADU',
     'BH': 'BIHAR', 'NSW': 'NEW SOUTH WALES', 'GO': 'GOA', 'CH': 'CHANDIGARH',
     'AZ': 'MIZORAM', 'CT': 'CHHATTISGARH', 'NG': 'NAGALAND',
     'DN': 'DADRA & NAGAR HAVELI', 'AN': 'ANDAMAN & NICOBAR',
@@ -2046,8 +2094,10 @@ def get_order_in_hand_rows():
 def _required_credit_open_rows():
     """Open sales-order lines grouped by (SO number, party, main group, ship-to state,
     segment) with the open litres AND open value (₹). Litres = OpenQty × SalPackUn
-    (matches Done / OIH). Value pro-rates the line total by the still-open fraction,
-    so a partially-delivered order contributes only its undelivered amount."""
+    (matches Done / OIH). Value pro-rates the still-open fraction of the row's
+    tax-INCLUSIVE total (LineTotal + VatSum, i.e. with GST), so Open Value / Total
+    Outstanding / Required Limit tie to what SAP bills and to the GST-inclusive ledger
+    balance. A partially-delivered order contributes only its undelivered amount."""
     sql = f'''
         SELECT H."DocNum"                            AS "DOCNUM",
                COALESCE(TRIM(C."U_Main_Group"), '')  AS "GRP",
@@ -2056,11 +2106,12 @@ def _required_credit_open_rows():
                COALESCE(TRIM(H."CardCode"), '')      AS "CCODE",
                COALESCE(TRIM(C."CardName"), '')      AS "CUST",
                COALESCE(C."Balance", 0)              AS "BAL",
+               COALESCE(H."DocTotal", 0)             AS "DOCTOTAL",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY",
                SUM(CASE WHEN L."Quantity" <> 0
-                        THEN L."OpenQty" / L."Quantity" * L."LineTotal"
+                        THEN L."OpenQty" / L."Quantity" * (L."LineTotal" + COALESCE(L."VatSum", 0))
                         ELSE 0 END)                  AS "OPEN_VAL"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
@@ -2071,7 +2122,7 @@ def _required_credit_open_rows():
         GROUP BY H."DocNum", COALESCE(TRIM(C."U_Main_Group"), ''),
                  {_SHIPTO_STATE}, {_SHIPTO_CITY},
                  COALESCE(TRIM(H."CardCode"), ''), COALESCE(TRIM(C."CardName"), ''),
-                 COALESCE(C."Balance", 0),
+                 COALESCE(C."Balance", 0), COALESCE(H."DocTotal", 0),
                  COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."U_Sub_Group"), '')
     '''
     try:
@@ -2088,8 +2139,8 @@ _OLIVE_TOKENS = ('OLIVE', 'POMACE')
 
 def _blank_bucket():
     return {'litres': {'premium': 0.0, 'commodity': 0.0, 'canola': 0.0, 'olive': 0.0, 'total': 0.0},
-            'value':  {'total': 0.0, 'ledger': 0.0, 'outstanding': 0.0, 'required_limit': 0.0,
-                       'payment_done': 0.0, 'remaining': 0.0}}
+            'value':  {'total': 0.0, 'pi_total': 0.0, 'ledger': 0.0, 'outstanding': 0.0,
+                       'required_limit': 0.0, 'payment_done': 0.0, 'remaining': 0.0}}
 
 
 def _round_bucket(b):
@@ -2257,13 +2308,14 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
     Type filter, the list of open SO numbers, and its saved (editable) delivery remark.
     Returns ASM groups (each with a subtotal) plus a grand total.
 
-    `as_of_date` (default today) drives the date-aware columns: Ledger Amt shows the balance
-    just before that date and Payment Done shows the receipts dated on that date."""
+    `as_of_date` (default today) drives the date-aware columns: Ledger Amt is the balance AS OF
+    that date (so the day's invoices are in it) taken BEFORE that day's collections, and Payment
+    Done shows the receipts dated on that date (which reduces Outstanding)."""
     if as_of_date is None:
         as_of_date = timezone.localdate()
-    receipts_on = _credit_receipts_on(as_of_date)                      # Payment Done = receipts that day
-    ledger_map = _credit_ledger_asof(as_of_date - timedelta(days=1))   # Ledger = balance just before the date
-    use_aging = bool(ledger_map)                                       # fall back to live balance if SAP failed
+    receipts_on = _credit_receipts_on(as_of_date)          # Payment Done = receipts that day
+    ledger_asof = _credit_ledger_asof(as_of_date)          # balance AS OF the date (incl. that day's invoices)
+    use_aging = bool(ledger_asof)                          # fall back to live OCRD.Balance if SAP aging failed
     # Display state as its short CODE (DL/HR/UP…), but keep the full NAME for ASM
     # resolution (the territory map is keyed by state name). Reverse the code→name map.
     name_to_code = {v: k for k, v in STATE_CODE_NAMES.items()}
@@ -2288,12 +2340,14 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
                 'main_group': group,
                 'state': state_code,
                 'asm': person_for_group_state(group, state_name, _normalize_name(d.get('CITY'))) or '',
-                '_so': set(),
+                '_so': {},          # SO number -> its open value (₹, incl GST) for the SO-list popup
+                '_sotot': {},       # SO number -> its FULL order total (ORDR.DocTotal, matches SAP)
                 **_blank_bucket(),
             }
         card_balance.setdefault(card_code, float(d.get('BAL') or 0))
         if docnum:
-            bucket['_so'].add(docnum)
+            bucket['_so'][docnum] = bucket['_so'].get(docnum, 0.0) + val
+            bucket['_sotot'][docnum] = float(d.get('DOCTOTAL') or 0)   # full SO total, set once per SO
         # total counts every open line; premium / commodity are STRICT (a line whose type is
         # neither only lands in total). Canola / Olive are premium sub-group splits for the
         # export's category columns.
@@ -2315,10 +2369,13 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
     for bucket in agg.values():
         card_buckets.setdefault(bucket['card_code'], []).append(bucket)
     for cc, buckets in card_buckets.items():
-        # Ledger Amt = the party's true account balance just before the selected date (SAP
-        # reconciliation engine, reverses invoices + payments after the date). Falls back to
-        # the live OCRD.Balance only if that historical query was unavailable.
-        ledger = ledger_map.get(cc, 0.0) if use_aging else card_balance.get(cc, 0.0)
+        # Ledger Amt = the party's account balance AS OF the selected date (SAP reconciliation
+        # engine, reverses only what's dated after the date — so the day's invoices ARE included),
+        # taken BEFORE that day's collections: add the day's receipts back so the separate Payment
+        # Done column nets Outstanding to the true post-payment balance without double-counting.
+        # Falls back to the live OCRD.Balance if the historical query was unavailable.
+        base = ledger_asof.get(cc, 0.0) if use_aging else card_balance.get(cc, 0.0)
+        ledger = base + receipts_on.get(cc, 0.0)
         total_pi = sum(b['value']['total'] for b in buckets)
         for i, b in enumerate(buckets):
             if total_pi > 0:
@@ -2335,10 +2392,15 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
 
     by_asm = {}
     for bucket in agg.values():
+        bucket['value']['pi_total'] = sum(bucket.pop('_sotot').values())   # Σ full SO totals (= SAP total)
         _round_bucket(bucket)
         prem, comm = bucket['litres']['premium'], bucket['litres']['commodity']
         bucket['type'] = 'P+C' if (prem > 0 and comm > 0) else ('P' if prem > 0 else ('C' if comm > 0 else '—'))
-        bucket['so_nos'] = ', '.join(sorted(bucket.pop('_so')))
+        # SO list, largest open value first: so_list carries each SO's amount for the popup;
+        # so_nos stays a plain string for the export column and the search/cell display.
+        so_items = sorted(bucket.pop('_so').items(), key=lambda kv: (-kv[1], kv[0]))
+        bucket['so_list'] = [{'no': n, 'value': round(v, 2)} for n, v in so_items]
+        bucket['so_nos'] = ', '.join(n for n, _ in so_items)
         bucket['remark'] = remarks.get(bucket['card_code'], '')
         by_asm.setdefault(bucket['asm'] or 'UNASSIGNED', []).append(bucket)
 
@@ -2515,8 +2577,8 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     # F DELIVERY REMARK, G PREMIUM, H COMMODITY, I Grand Total, J SO NO, K PI AMT,
     # L LEDGER AMT, M TOTAL OUTSTANDING, N REQUIRED LIMIT, O–P deferred financial columns.
     widths = {1: 26.7, 2: 46.6, 3: 7.0, 4: 14.4, 5: 9.0, 6: 28.0, 7: 12.3, 8: 12.3, 9: 12.0,
-              10: 22.0, 11: 14.0, 12: 14.0, 13: 18.0, 14: 14.0, 15: 14.0, 16: 14.0}
-    MAX_COL = 16
+              10: 22.0, 11: 14.0, 12: 15.0, 13: 14.0, 14: 18.0, 15: 14.0, 16: 14.0, 17: 14.0}
+    MAX_COL = 17
 
     cells = {}
 
@@ -2533,13 +2595,13 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
 
     put_text(1, 1, 'Sum of TOTAL LTR', style=_ST_TITLE)
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
-               'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT',
+               'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT', 'PI TOTAL AMT',
                'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING']
     for i, h in enumerate(headers, start=1):
         put_text(2, i, h, style=_ST_HEAD)
 
     r = 3
-    g_prem = g_com = g_tot = g_val = g_led = g_out = g_req = g_pay = g_rem = 0.0
+    g_prem = g_com = g_tot = g_val = g_pitot = g_led = g_out = g_req = g_pay = g_rem = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
         if types:
@@ -2547,12 +2609,13 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
-        s_prem = s_com = s_tot = s_val = s_led = s_out = s_req = s_pay = s_rem = 0.0
+        s_prem = s_com = s_tot = s_val = s_pitot = s_led = s_out = s_req = s_pay = s_rem = 0.0
         for row in rows:
             prem = float(row['litres'].get('premium', 0) or 0)
             commodity = float(row['litres'].get('commodity', 0) or 0)
             total = float(row['litres'].get('total', 0) or 0)
             val = float(row['value'].get('total', 0) or 0)
+            pi_total = float(row['value'].get('pi_total', 0) or 0)   # full SO total (matches SAP)
             ledger = float(row['value'].get('ledger', 0) or 0)
             outstanding = float(row['value'].get('outstanding', 0) or 0)
             required = float(row['value'].get('required_limit', 0) or 0)
@@ -2569,34 +2632,35 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 8, commodity)                      # H COMMODITY
             put_num(r, 9, total, style=_ST_BNUM)          # I Grand Total
             put_text(r, 10, row.get('so_nos'))            # J SO NO
-            put_num(r, 11, val)                           # K PI AMT (OIH revenue)
-            put_num(r, 12, ledger)                        # L LEDGER AMT (+rec / -pay)
-            put_num(r, 13, outstanding)                   # M TOTAL OUTSTANDING
-            put_num(r, 14, required)                      # N Required Limit (outstanding + 2%)
-            put_num(r, 15, payment)                       # O PAYMENT DONE (receipts on the selected date)
-            put_num(r, 16, remaining)                     # P OUTSTANDING (= Total Outstanding − Payment)
+            put_num(r, 11, val)                           # K PI AMT (OIH revenue — open/undelivered)
+            put_num(r, 12, pi_total)                      # L PI TOTAL AMT (full SO total, matches SAP)
+            put_num(r, 13, ledger)                        # M LEDGER AMT (+rec / -pay)
+            put_num(r, 14, outstanding)                   # N TOTAL OUTSTANDING
+            put_num(r, 15, required)                      # O Required Limit (outstanding + 2%)
+            put_num(r, 16, payment)                       # P PAYMENT DONE (receipts on the selected date)
+            put_num(r, 17, remaining)                     # Q OUTSTANDING (= Total Outstanding − Payment)
             s_prem += prem; s_com += commodity; s_tot += total
-            s_val += val; s_led += ledger; s_out += outstanding; s_req += required
+            s_val += val; s_pitot += pi_total; s_led += ledger; s_out += outstanding; s_req += required
             s_pay += payment; s_rem += remaining
             first = False
             r += 1
         put_text(r, 1, f"{g['asm']} Total", style=_ST_BTEXT)
         put_num(r, 7, s_prem, style=_ST_BNUM); put_num(r, 8, s_com, style=_ST_BNUM)
         put_num(r, 9, s_tot, style=_ST_BNUM); put_num(r, 11, s_val, style=_ST_BNUM)
-        put_num(r, 12, s_led, style=_ST_BNUM); put_num(r, 13, s_out, style=_ST_BNUM)
-        put_num(r, 14, s_req, style=_ST_BNUM)
-        put_num(r, 15, s_pay, style=_ST_BNUM); put_num(r, 16, s_rem, style=_ST_BNUM)
+        put_num(r, 12, s_pitot, style=_ST_BNUM); put_num(r, 13, s_led, style=_ST_BNUM)
+        put_num(r, 14, s_out, style=_ST_BNUM); put_num(r, 15, s_req, style=_ST_BNUM)
+        put_num(r, 16, s_pay, style=_ST_BNUM); put_num(r, 17, s_rem, style=_ST_BNUM)
         g_prem += s_prem; g_com += s_com; g_tot += s_tot
-        g_val += s_val; g_led += s_led; g_out += s_out; g_req += s_req
+        g_val += s_val; g_pitot += s_pitot; g_led += s_led; g_out += s_out; g_req += s_req
         g_pay += s_pay; g_rem += s_rem
         r += 1
 
     put_text(r, 1, 'Grand Total', style=_ST_BTEXT)
     put_num(r, 7, g_prem, style=_ST_BNUM); put_num(r, 8, g_com, style=_ST_BNUM)
     put_num(r, 9, g_tot, style=_ST_BNUM); put_num(r, 11, g_val, style=_ST_BNUM)
-    put_num(r, 12, g_led, style=_ST_BNUM); put_num(r, 13, g_out, style=_ST_BNUM)
-    put_num(r, 14, g_req, style=_ST_BNUM)
-    put_num(r, 15, g_pay, style=_ST_BNUM); put_num(r, 16, g_rem, style=_ST_BNUM)
+    put_num(r, 12, g_pitot, style=_ST_BNUM); put_num(r, 13, g_led, style=_ST_BNUM)
+    put_num(r, 14, g_out, style=_ST_BNUM); put_num(r, 15, g_req, style=_ST_BNUM)
+    put_num(r, 16, g_pay, style=_ST_BNUM); put_num(r, 17, g_rem, style=_ST_BNUM)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 
@@ -3083,6 +3147,7 @@ def get_oih_dimension_rows():
                COALESCE(TRIM(H."CardCode"), '')        AS "CCODE",
                COALESCE(TRIM(C."CardName"), '—')      AS "CUST",
                COALESCE(TRIM(I."U_TYPE"), '')          AS "UTYPE",
+               H."DocNum"                              AS "DOCNUM",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
@@ -3094,7 +3159,7 @@ def get_oih_dimension_rows():
                  COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
                  COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(I."ItemCode"), ''),
                  COALESCE(TRIM(H."CardCode"), ''),
-                 COALESCE(TRIM(C."CardName"), '—'), COALESCE(TRIM(I."U_TYPE"), '')
+                 COALESCE(TRIM(C."CardName"), '—'), COALESCE(TRIM(I."U_TYPE"), ''), H."DocNum"
     '''
     try:
         rows = sap_connector.execute_query(sql)
@@ -3112,13 +3177,16 @@ def get_oih_dimension_rows():
         icode = _normalize_name(r.get('ICODE'))
         if icode:
             name_codes.setdefault(item_name, set()).add(icode)
-        key = (_normalize_name(r.get('GRP')) or '—', _delhi_gt_state(r.get('CCODE'), _state_name(r)) or '—',
-               _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
-               item_name, _normalize_name(r.get('CUST')) or '—')
+        grp = _normalize_name(r.get('GRP')) or '—'
+        st = _delhi_gt_state(r.get('CCODE'), _state_name(r)) or '—'
+        so_no = str(r.get('DOCNUM') or '').strip() or '—'
+        person = person_for_group_state(grp, st) or '—'   # territory owner for this group+state
+        key = (grp, st, _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
+               item_name, _normalize_name(r.get('CUST')) or '—', so_no, person)
         cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0})
         cell['premium' if ut == 'PREMIUM' else 'commodity'] += float(r.get('QTY') or 0)
     out = [{'main_group': k[0], 'state': k[1], 'sub_group': k[2], 'packtype': k[3],
-            'item': k[4], 'customer': k[5],
+            'item': k[4], 'customer': k[5], 'so_no': k[6], 'sales_person': k[7],
             'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2)}
            for k, v in agg.items()]
     # On-hand stock per warehouse, keyed by item NAME (each ItemCode counted once),
@@ -3442,19 +3510,23 @@ def _load_aging_rows_sap(aging_date):
         code = str(r.get('code') or '').strip()
         name = str(r.get('name') or '').strip() or code
         fmt = (str(r.get('format')).strip() if r.get('format') else '') or 'Unclassified'
-        # Hide internal / non-receivable rows: JIVO WELLNESS inter-company branches (by name),
-        # and the PURCHASE OIL / EXPORT / TRANSPORT formats. Excluded from rows AND all
-        # totals/KPIs (and therefore from the Excel export too).
-        _fmt_u = fmt.upper()
-        if ('JIVO WELLNESS' in name.upper()
-                or 'PURCHASE OIL' in _fmt_u or 'EXPORT' in _fmt_u or 'TRANSPORT' in _fmt_u):
+        balance_due = _aging_num(r.get('balance_due'))
+        # Hide internal / non-receivable rows: JIVO WELLNESS inter-company branches and
+        # FUTURE RETAIL LTD (Modern Trade) by name, and the PURCHASE OIL / EXPORT / TRANSPORT
+        # formats. Also drop any customer whose Balance Due nets to exactly 0.00 — tiny but
+        # real balances (≥ ₹0.01) still show; only a true zero is hidden. Excluded from rows
+        # AND all totals/KPIs (and therefore from the Excel export too).
+        _name_u, _fmt_u = name.upper(), fmt.upper()
+        if ('JIVO WELLNESS' in _name_u or 'FUTURE RETAIL' in _name_u
+                or 'PURCHASE OIL' in _fmt_u or 'EXPORT' in _fmt_u or 'TRANSPORT' in _fmt_u
+                or balance_due == 0):
             continue
         out.append({
             'code': code,
             'name': name,
             'format': fmt,
             'original':    _aging_num(r.get('original')),
-            'balance_due': _aging_num(r.get('balance_due')),
+            'balance_due': balance_due,
             'b0_30':   _aging_num(r.get('b0_30')),
             'b31_60':  _aging_num(r.get('b31_60')),
             'b61_90':  _aging_num(r.get('b61_90')),
@@ -3671,6 +3743,17 @@ def save_aging_remark(card_code, row_key, remark):
     return True
 
 
+# Fixed category vocabulary for the aging-detail split breakdown. The detail page shows
+# these as a dropdown (no free text) and the server rejects anything else, so the Category
+# column can only ever hold one of these. Keep this the single source of truth — the view
+# hands it to the template and save_aging_remark_lines validates against it.
+AGING_REMARK_CATEGORIES = [
+    'NOT DUE', 'RTV DEBIT', 'RTV PICK UP', 'SHORTAGE', 'CLAIM', 'TDS',
+    'SHORT & EXCESS', 'OVERDUE', 'RC', 'JE', 'REVERSE WRONG CLAIM', 'ADVICE PENDING',
+]
+_AGING_REMARK_CATEGORY_SET = {c.upper() for c in AGING_REMARK_CATEGORIES}
+
+
 def get_aging_remark_lines(card_code):
     """{row_key: [{'category','amount','remark'}, ...]} of saved per-document splits for a
     customer (TDS / RTV / Claim / … breakdown behind each open document's balance)."""
@@ -3699,7 +3782,9 @@ def save_aging_remark_lines(card_code, row_key, lines):
     for i, ln in enumerate(lines or []):
         if not isinstance(ln, dict):
             continue
-        category = str(ln.get('category') or '').strip()[:60]
+        category = str(ln.get('category') or '').strip().upper()[:60]
+        if category and category not in _AGING_REMARK_CATEGORY_SET:
+            category = ''       # only the fixed dropdown vocabulary persists; drop anything else
         remark = str(ln.get('remark') or '').strip()[:255]
         raw = ln.get('amount')
         if isinstance(raw, str):
@@ -3716,3 +3801,53 @@ def save_aging_remark_lines(card_code, row_key, lines):
     if clean:
         AgingRemarkLine.objects.bulk_create(clean)
     return True
+
+
+def clear_aging_remarks(card_code, row_keys=None):
+    """Delete saved per-document Remarks for a customer (the top-level Remarks column only;
+    split breakdowns are left intact). Pass row_keys to limit the clear to specific lines;
+    omit it to clear every remark for the customer. Returns how many were removed."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return 0
+    qs = AgingRemark.objects.filter(card_code=cc)
+    if row_keys is not None:
+        qs = qs.filter(row_key__in=[str(k).strip() for k in row_keys if str(k).strip()])
+    n = qs.count()
+    qs.delete()
+    return n
+
+
+def bulk_update_aging_remarks(card_code, aging_date, doc_remarks):
+    """Apply an uploaded {Doc No → Remark} set to a customer's open documents, matching on
+    Doc No (JDT1.BaseRef) as of aging_date. A Doc No that spans several open lines updates
+    every matching line. Blank remarks are skipped (left unchanged), so a partial sheet only
+    sets what it fills. Returns a summary: rows read, distinct docs matched, lines updated,
+    and the Doc Nos that didn't match any open document."""
+    cc = (card_code or '').strip()
+    rows_in = list(doc_remarks or [])
+    if not cc:
+        return {'rows': len(rows_in), 'matched_docs': 0, 'updated': 0, 'unmatched': []}
+    by_doc = {}
+    for r in get_customer_aging_detail(cc, aging_date):
+        by_doc.setdefault(str(r.get('doc_no') or '').strip(), []).append(r.get('row_key'))
+    matched, updated, unmatched = set(), 0, []
+    for doc, remark in rows_in:
+        doc = str(doc or '').strip()
+        remark = (remark or '').strip()
+        if not doc or not remark:           # blank remark → leave the existing note untouched
+            continue
+        keys = by_doc.get(doc)
+        if not keys:
+            unmatched.append(doc)
+            continue
+        matched.add(doc)
+        for rk in keys:
+            if save_aging_remark(cc, rk, remark):
+                updated += 1
+    # de-dup unmatched, keep order, cap for the response
+    seen, uniq = set(), []
+    for d in unmatched:
+        if d not in seen:
+            seen.add(d); uniq.append(d)
+    return {'rows': len(rows_in), 'matched_docs': len(matched), 'updated': updated, 'unmatched': uniq[:50]}

@@ -121,6 +121,11 @@
     /* ── Main content ── */
     .cp-main { flex: 1; padding: 28px 32px; overflow: auto; min-width: 0; }
     /* (push mode) content sits flush after the flex sidebar — no extra left padding. */
+    /* Dashboard pages auto-size to the available width at any screen size / zoom: drop the
+       per-page fixed max-width caps on the content root (the single ".<name>-wrap" div that
+       each page renders directly inside .cp-main). Higher specificity than the page's own
+       ".x-wrap{max-width:…}" rule, so this wins without !important. */
+    .cp-main > div[class*="-wrap"] { max-width: none; }
   </style>
   {% block extra_styles %}{% endblock %}
 </head>
@@ -231,6 +236,15 @@
             <span class="material-icons">payments</span>Salaries
           </a>
           {% endif %}
+        </nav>
+        {% endif %}
+
+        {% if user.is_staff or user.is_superuser %}
+        <div class="cp-section-label">Admin</div>
+        <nav class="cp-nav">
+          <a class="cp-nav-item {% if sidebar_active == 'user_management' %}active{% endif %}" href="{% url 'user_management' %}" title="User Management">
+            <span class="material-icons">manage_accounts</span>Users
+          </a>
         </nav>
         {% endif %}
 

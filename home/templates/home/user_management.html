@@ -1,0 +1,207 @@
+{% extends "core/base.html" %}
+{% block title %}User Management — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f4f6fb !important}
+  .um-wrap{max-width:1100px;margin:0 auto}
+  .um-hero{border-radius:18px;padding:20px 24px;margin-bottom:18px;color:#fff;
+    background:linear-gradient(120deg,#4f46e5,#6366f1 55%,#7c3aed);box-shadow:0 14px 34px rgba(79,70,229,.3)}
+  .um-h1{font-size:23px;font-weight:900;margin:0;display:flex;align-items:center;gap:10px}
+  .um-sub{margin:6px 0 0;font-size:12.5px;color:#e0e7ff}
+
+  .um-card{background:#fff;border:1px solid #e8edf6;border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:0 6px 18px rgba(15,23,42,.06)}
+  .um-card.new{border:1px dashed #c7d2fe;background:#fbfcff}
+  .um-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .um-title{font-size:15px;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:8px}
+  .um-badge{font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:2px 8px;border-radius:999px}
+  .um-badge.super{background:#fee2e2;color:#b91c1c}
+  .um-badge.staff{background:#e0e7ff;color:#4338ca}
+  .um-badge.off{background:#f1f5f9;color:#64748b}
+  .um-badge.you{background:#dcfce7;color:#15803d}
+  .um-spacer{flex:1}
+
+  .um-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px;margin-top:12px}
+  .um-fld{display:flex;flex-direction:column;gap:4px}
+  .um-lbl{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#64748b}
+  .um-in,.um-sel{border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px;color:#0f172a;outline:none;background:#fff;width:100%;box-sizing:border-box}
+  .um-in:focus,.um-sel:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+
+  .um-perm-h{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#475569;margin:14px 0 6px}
+  .um-perms{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px 14px}
+  .um-chk{display:flex;align-items:center;gap:8px;font-size:13px;color:#1f2937;cursor:pointer;padding:4px 0}
+  .um-chk input{width:16px;height:16px;cursor:pointer}
+  .um-flags{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #eef2f6}
+
+  .um-actions{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid #eef2f6}
+  .um-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:#fff;color:#334155;font-family:inherit;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;cursor:pointer}
+  .um-btn:hover{background:#f8fafc}
+  .um-btn.primary{background:#4338ca;color:#fff;border-color:#4338ca}
+  .um-btn.primary:hover{background:#3730a3}
+  .um-btn.danger{color:#dc2626;border-color:#fecaca}
+  .um-btn.danger:hover{background:#fef2f2}
+  .um-btn:disabled{opacity:.5;cursor:default}
+  .um-status{font-size:12px;font-weight:700}
+  .um-status.ok{color:#16a34a}.um-status.err{color:#dc2626}
+  .um-ro{font-size:12px;color:#94a3b8;font-style:italic;margin-top:10px}
+  .um-material{font-size:18px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="um-wrap">
+  <div class="um-hero">
+    <h1 class="um-h1"><span class="material-icons">manage_accounts</span>User Management</h1>
+    <p class="um-sub">Create users and grant access per report — no Django admin needed. Changes apply on the user's next page load.</p>
+  </div>
+
+  <div id="umCreate"></div>
+  <div id="umList"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ um_users|json_script:"um-users" }}
+{{ um_catalog|json_script:"um-catalog" }}
+<script>
+(function(){
+  var USERS   = JSON.parse(document.getElementById('um-users').textContent || '[]');
+  var CATALOG = JSON.parse(document.getElementById('um-catalog').textContent || '{}');
+  var IS_SUPER = {{ um_is_super|yesno:"true,false" }};
+  var SELF_ID  = {{ um_self_id }};
+  var SAVE_URL = "{% url 'api_user_save' %}";
+  var DEL_URL  = "{% url 'api_user_delete' %}";
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+  function roleOptions(sel){
+    return (CATALOG.realise_roles||[]).map(function(r){
+      return '<option value="'+esc(r.value)+'"'+(r.value===sel?' selected':'')+'>'+esc(r.label)+'</option>';
+    }).join('');
+  }
+  function permGrid(list, selected){
+    var set = {}; (selected||[]).forEach(function(g){set[g]=1;});
+    return list.map(function(p){
+      return '<label class="um-chk"><input type="checkbox" data-group="'+esc(p.group)+'"'+(set[p.group]?' checked':'')+'>'+esc(p.label)+'</label>';
+    }).join('');
+  }
+  // Render the editable body shared by the create form and each user card.
+  function bodyHTML(u, isNew){
+    u = u || {};
+    var canEdit = isNew || IS_SUPER || !u.is_superuser;       // staff can't edit superusers
+    var flags = '';
+    if(IS_SUPER){
+      flags = '<div class="um-flags">'+
+        '<label class="um-chk"><input type="checkbox" data-k="is_staff"'+(u.is_staff?' checked':'')+'>Staff (can manage users)</label>'+
+        '<label class="um-chk"><input type="checkbox" data-k="is_superuser"'+(u.is_superuser?' checked':'')+'>Superuser (full access)</label>'+
+      '</div>';
+    }
+    var pwLabel = isNew ? 'Password' : 'New password (blank = keep)';
+    return '<div class="um-grid">'+
+        (isNew ? '<div class="um-fld"><span class="um-lbl">Username</span><input class="um-in" data-k="username" autocomplete="off" placeholder="e.g. ravi"></div>'
+               : '') +
+        '<div class="um-fld"><span class="um-lbl">Full name</span><input class="um-in" data-k="first_name" autocomplete="off" value="'+esc(u.first_name)+'"></div>'+
+        '<div class="um-fld"><span class="um-lbl">Email</span><input class="um-in" data-k="email" type="email" autocomplete="off" value="'+esc(u.email)+'"></div>'+
+        '<div class="um-fld"><span class="um-lbl">'+pwLabel+'</span><input class="um-in" data-k="password" type="password" autocomplete="new-password" placeholder="'+(isNew?'set a password':'••••••')+'"></div>'+
+        '<div class="um-fld"><span class="um-lbl">Realise role</span><select class="um-sel" data-k="realise_role">'+roleOptions(u.realise_role||'')+'</select></div>'+
+        '<div class="um-fld"><span class="um-lbl">Account</span><label class="um-chk"><input type="checkbox" data-k="is_active"'+(isNew||u.is_active?' checked':'')+'>Active (can log in)</label></div>'+
+      '</div>'+
+      flags+
+      '<div class="um-perm-h">Report pages</div><div class="um-perms" data-perms="page">'+permGrid(CATALOG.page_perms||[], u.groups)+'</div>'+
+      '<div class="um-perm-h">Modules</div><div class="um-perms" data-perms="module">'+permGrid(CATALOG.module_perms||[], u.groups)+'</div>'+
+      (canEdit ? '' : '<div class="um-ro">Read-only — only a superuser can edit a superuser account.</div>');
+  }
+
+  function collect(card){
+    var data = {};
+    card.querySelectorAll('[data-k]').forEach(function(el){
+      var k = el.getAttribute('data-k');
+      data[k] = (el.type==='checkbox') ? el.checked : el.value;
+    });
+    var groups = [];
+    card.querySelectorAll('[data-perms] input[type=checkbox]').forEach(function(c){ if(c.checked) groups.push(c.getAttribute('data-group')); });
+    data.groups = groups;
+    return data;
+  }
+  function post(url, data){
+    return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(data)})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); });
+  }
+  function setStatus(card, msg, ok){
+    var s = card.querySelector('.um-status'); if(!s) return;
+    s.textContent = msg; s.className = 'um-status '+(ok?'ok':'err');
+  }
+
+  function renderCreate(){
+    var box = document.getElementById('umCreate');
+    box.innerHTML = '<div class="um-card new" id="umNew">'+
+      '<div class="um-title"><span class="material-icons um-material">person_add</span>Create new user</div>'+
+      bodyHTML({}, true)+
+      '<div class="um-actions"><button type="button" class="um-btn primary" data-act="create"><span class="material-icons um-material">check</span>Create user</button>'+
+      '<span class="um-status"></span></div>'+
+    '</div>';
+  }
+  function renderList(){
+    var box = document.getElementById('umList');
+    box.innerHTML = USERS.map(function(u){
+      var canEdit = IS_SUPER || !u.is_superuser;
+      var badges = '';
+      if(u.is_superuser) badges += '<span class="um-badge super">Superuser</span>';
+      else if(u.is_staff) badges += '<span class="um-badge staff">Staff</span>';
+      if(!u.is_active) badges += '<span class="um-badge off">Inactive</span>';
+      if(u.id===SELF_ID) badges += '<span class="um-badge you">You</span>';
+      var actions = canEdit
+        ? '<button type="button" class="um-btn primary" data-act="save"><span class="material-icons um-material">save</span>Save</button>'+
+          (u.id!==SELF_ID ? '<button type="button" class="um-btn danger" data-act="delete"><span class="material-icons um-material">delete</span>Delete</button>' : '')+
+          '<span class="um-status"></span>'
+        : '';
+      return '<div class="um-card" data-id="'+u.id+'">'+
+        '<div class="um-row"><div class="um-title"><span class="material-icons um-material">person</span>'+esc(u.username)+
+          (u.first_name?' <span style="font-weight:600;color:#64748b">· '+esc(u.first_name)+'</span>':'')+'</div>'+
+          '<div class="um-spacer"></div>'+badges+'</div>'+
+        (canEdit ? bodyHTML(u, false) : '')+
+        (actions ? '<div class="um-actions">'+actions+'</div>' : (canEdit?'':'<div class="um-ro">Read-only — only a superuser can edit a superuser account.</div>'))+
+      '</div>';
+    }).join('') || '<div class="um-card">No users.</div>';
+  }
+
+  document.getElementById('umCreate').addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-act="create"]'); if(!b) return;
+    var card = document.getElementById('umNew'); var data = collect(card);
+    if(!data.username || !data.username.trim()){ setStatus(card,'Username is required',false); return; }
+    if(!data.password){ setStatus(card,'A password is required',false); return; }
+    b.disabled = true; setStatus(card,'Creating…',true);
+    post(SAVE_URL, data).then(function(res){
+      if(res.ok && res.j.status==='ok'){ location.reload(); }
+      else { setStatus(card, res.j.error||'Failed', false); b.disabled=false; }
+    }).catch(function(){ setStatus(card,'Failed',false); b.disabled=false; });
+  });
+
+  document.getElementById('umList').addEventListener('click', function(e){
+    var card = e.target.closest && e.target.closest('.um-card[data-id]'); if(!card) return;
+    var id = +card.getAttribute('data-id');
+    var save = e.target.closest('[data-act="save"]');
+    var del  = e.target.closest('[data-act="delete"]');
+    if(save){
+      var data = collect(card); data.id = id;
+      save.disabled = true; setStatus(card,'Saving…',true);
+      post(SAVE_URL, data).then(function(res){
+        if(res.ok && res.j.status==='ok'){ setStatus(card,'Saved ✓',true); }
+        else { setStatus(card, res.j.error||'Failed', false); }
+        save.disabled = false;
+      }).catch(function(){ setStatus(card,'Failed',false); save.disabled=false; });
+    } else if(del){
+      if(!confirm('Delete this user? This cannot be undone.')) return;
+      del.disabled = true; setStatus(card,'Deleting…',true);
+      post(DEL_URL, {id:id}).then(function(res){
+        if(res.ok && res.j.status==='ok'){ location.reload(); }
+        else { setStatus(card, res.j.error||'Failed', false); del.disabled=false; }
+      }).catch(function(){ setStatus(card,'Failed',false); del.disabled=false; });
+    }
+  });
+
+  renderCreate();
+  renderList();
+})();
+</script>
+{% endblock %}

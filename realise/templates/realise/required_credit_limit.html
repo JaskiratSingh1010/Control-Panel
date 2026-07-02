@@ -164,6 +164,8 @@
   .rc-so-item:last-child{border-bottom:0}
   .rc-so-n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;
     background:#ccfbf1;color:#0f766e;font-size:11px;font-weight:800}
+  .rc-so-no{flex:1}                                   /* SO number takes the row; amount sits right */
+  .rc-so-amt{margin-left:auto;font-weight:800;color:#0f766e;white-space:nowrap}
 
   /* editable remark */
   .rc-remark{width:160px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:12px;
@@ -407,18 +409,23 @@
   function soCell(r){
     var sos = (r.so_nos||'').split(', ').filter(Boolean);
     if(sos.length > 1){
-      return '<td><a href="#" class="rc-so-link" data-sos="'+attr(r.so_nos)+'" data-party="'+attr(r.party)+'">'+
+      return '<td><a href="#" class="rc-so-link" data-sos="'+attr(r.so_nos)+'" data-solist="'+attr(JSON.stringify(r.so_list||[]))+'" data-party="'+attr(r.party)+'">'+
         esc(sos[0])+'<span class="rc-so-more">+'+(sos.length-1)+'</span></a></td>';
     }
     if(sos.length === 1){ return '<td><span class="rc-so-one">'+esc(sos[0])+'</span></td>'; }
     return '<td><span class="v0">—</span></td>';
   }
 
-  function openSoModal(sosStr, party){
-    var sos = (sosStr||'').split(', ').filter(Boolean);
-    document.getElementById('rcModalTitle').textContent = (party||'') + ' — ' + sos.length + ' SO' + (sos.length===1?'':'s');
-    document.getElementById('rcModalBody').innerHTML = sos.map(function(s,i){
-      return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span>'+esc(s)+'</div>';
+  function openSoModal(sosStr, party, soListStr){
+    // Each SO shows its open value (₹, incl GST). Fall back to numbers-only if the amount
+    // list is somehow missing (older cached payload).
+    var list = [];
+    try{ list = JSON.parse(soListStr || '[]'); }catch(e){ list = []; }
+    if(!list.length) list = (sosStr||'').split(', ').filter(Boolean).map(function(n){ return {no:n, value:null}; });
+    document.getElementById('rcModalTitle').textContent = (party||'') + ' — ' + list.length + ' SO' + (list.length===1?'':'s');
+    document.getElementById('rcModalBody').innerHTML = list.map(function(s,i){
+      var amt = (s.value==null) ? '' : '<span class="rc-so-amt">'+money(s.value)+'</span>';
+      return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span><span class="rc-so-no">'+esc(s.no)+'</span>'+amt+'</div>';
     }).join('');
     document.getElementById('rcModal').classList.add('show');
   }
@@ -617,7 +624,7 @@
     document.getElementById('rcBody').addEventListener('click',function(e){
       if(e.target.closest('.rc-remark')) return;          // don't toggle when editing
       var soLink = e.target.closest('.rc-so-link');
-      if(soLink){ e.preventDefault(); openSoModal(soLink.getAttribute('data-sos'), soLink.getAttribute('data-party')); return; }
+      if(soLink){ e.preventDefault(); openSoModal(soLink.getAttribute('data-sos'), soLink.getAttribute('data-party'), soLink.getAttribute('data-solist')); return; }
       var grp = e.target.closest && e.target.closest('.rc-grp'); if(!grp) return;
       var gi = grp.getAttribute('data-gi');
       setGroup(gi, !grp.classList.contains('open'));

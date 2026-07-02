@@ -16,6 +16,11 @@
   .ois-tf:first-child{border-left:0}
   .ois-tf:hover:not(.on){background:#f4f7fb}
   .ois-tf.on{background:#2563eb;color:#fff}
+  /* Export Excel button */
+  .ois-exp{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;border-radius:10px;cursor:pointer}
+  .ois-exp:hover{background:#eef4ff;border-color:#bcd4f5}
+  .ois-exp:disabled{opacity:.55;cursor:default}
+  .ois-exp .material-icons{font-size:16px}
 
   /* Dynamic driller — same look as the Realise dashboard's Group-by control. */
   .com-drill-box{position:relative}
@@ -87,6 +92,7 @@
           <div class="com-dp-foot"><button type="button" id="oisApply">Apply</button></div>
         </div>
       </div>
+      <button type="button" class="ois-exp" id="oisExport"><span class="material-icons">download</span>Export Excel</button>
     </div>
   </div>
 
@@ -113,14 +119,15 @@
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
 
   // Product dimensions own each item cleanly, so their Stock (warehouse on-hand per item)
   // and 'Required = OIH − Stock' add up at every level. Customer is orthogonal — one item
   // can sit under many customers — so a customer's Stock is the shared on-hand of the items
   // that customer has on order (not reserved per customer) and customer rows won't sum back
   // to a product parent; the order-independent TOTAL still counts each item once.
-  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'}];
-  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer'};
+  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'},{key:'sales_person',label:'Sales Person'},{key:'so_no',label:'SO No'}];
+  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer',sales_person:'Sales Person',so_no:'SO No'};
   var order=['sub_group'], chosen=['sub_group'];
   var rows=[], itemStock={}, err=null, expanded={}, loaded=false;
   var typeFilter='all';   // 'all' | 'premium' | 'commodity' (premium/commodity are mutually exclusive per item)
@@ -197,6 +204,59 @@
     html+='<tr class="ois-total"><td>TOTAL</td><td class="num">'+num(tOih)+'</td><td class="num">'+num(tStock)+'</td>'+reqCell(tReq)+'</tr>';
     body.innerHTML=html;
   }
+
+  // ── Export (current Group By + Premium/Commodity filter) ──
+  // Mirrors the on-screen tree: one row per node (full tree, all levels), the drill path
+  // spread across one column per dimension, then OIH / Stock / Required, then a TOTAL row.
+  function buildSheet(){
+    var dims=order.slice(), dimLabels=dims.map(function(k){return DIM_NAME[k]||k;});
+    var fr=rows.filter(rowIn), tree=buildTree(fr,0), body=[];
+    (function walk(nodes,ancestors){
+      for(var i=0;i<nodes.length;i++){var n=nodes[i], path=ancestors.concat([n.name]);
+        var cells=dims.map(function(_,ci){return ci<path.length?path[ci]:'';});
+        body.push(cells.concat([Math.round(n.oih), Math.round(n.stock), Math.round(n.req)]));
+        if(n.kids&&n.kids.length)walk(n.kids,path);
+      }
+    })(tree,[]);
+    // order-independent totals, scoped to the active filter (matches the KPI strip)
+    var tOih=0; for(var i=0;i<fr.length;i++)tOih+=rowOih(fr[i]);
+    var allItems={}; for(var j=0;j<fr.length;j++){if(fr[j].item)allItems[fr[j].item]=1;}
+    var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
+    var totals=dims.map(function(_,ci){return ci===0?'TOTAL':'';})
+      .concat([Math.round(tOih), Math.round(tStock), Math.round(tStock-tOih)]);
+    return {headers:dimLabels.concat(['OIH (L)','Stock Avl (L)','Required (L)']), body:body, totals:totals};
+  }
+  function exportFilename(ext){ return 'OIH_vs_Stock'+(typeFilter!=='all'?'_'+typeFilter:'')+'.'+ext; }
+  function exportCSV(S){
+    S=S||buildSheet();
+    function cell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
+    var lines=[S.headers.map(cell).join(',')];
+    S.body.forEach(function(r){lines.push(r.map(cell).join(','));});
+    lines.push(S.totals.map(cell).join(','));
+    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download=exportFilename('csv'); a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+  function exportXLSX(){
+    if(!loaded || !rows.length) return;
+    var S=buildSheet();
+    function H(v){return {value:v, style:1};}   // bold header
+    function G(v){return {value:v, style:3};}   // total row
+    var out=[S.headers.map(H)].concat(S.body).concat([S.totals.map(G)]);
+    var fn=exportFilename('xlsx'), btn=document.getElementById('oisExport'); if(btn)btn.disabled=true;
+    fetch(EXPORT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn, sheets:[{name:'OIH vs Stock', rows:out}]})})
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.blob(); })
+      .then(function(blob){
+        var url=URL.createObjectURL(blob); var a=document.createElement('a');
+        a.href=url; a.download=fn; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},1500);
+      })
+      .catch(function(){ exportCSV(S); })       // fallback: CSV
+      .then(function(){ if(btn)btn.disabled=false; });
+  }
+  document.getElementById('oisExport').addEventListener('click', exportXLSX);
 
   var CACHE_KEY='ois_breakdown_v1', CACHE_TTL=90000;   // ms; matches the 90s server cache
   function applyPayload(p){ rows=p.rows||[]; itemStock=p.item_stock||{}; err=p.error||null; loaded=true; render(); }
