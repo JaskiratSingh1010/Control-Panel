@@ -4787,24 +4787,44 @@ def clear_aging_remarks(card_code, row_keys=None):
     return n
 
 
-def bulk_update_aging_remarks(card_code, aging_date, doc_remarks):
-    """Apply an uploaded {Doc No → Remark} set to a customer's open documents, matching on
-    Doc No (JDT1.BaseRef) as of aging_date. A Doc No that spans several open lines updates
-    every matching line. Blank remarks are skipped (left unchanged), so a partial sheet only
-    sets what it fills. Returns a summary: rows read, distinct docs matched, lines updated,
-    and the Doc Nos that didn't match any open document."""
+def bulk_update_aging_remarks(card_code, aging_date, entries):
+    """Apply an uploaded sheet to a customer's open documents, matching on Doc No (JDT1.BaseRef)
+    as of aging_date. ``entries`` is {doc_no: {'remark': str|None, 'splits': [{category, amount,
+    remark}, ...]}}. For each matched Doc No it sets the document Remark (the explicit Remark
+    column, or — when only splits were given — the joined split categories, so the note reflects
+    them) and, when the sheet carries Category/Amount, REPLACES that document's split breakdown so
+    the Balance Due gets allocated. A Doc No spanning several open lines is applied to each. Blank
+    entries are skipped (left unchanged). Category values outside AGING_REMARK_CATEGORIES are kept
+    as an amount but stored without a category label; they're reported in ``unknown_categories``.
+    Returns {rows, matched_docs, updated, splits, unmatched, unknown_categories}."""
     cc = (card_code or '').strip()
-    rows_in = list(doc_remarks or [])
+    entries = entries or {}
     if not cc:
-        return {'rows': len(rows_in), 'matched_docs': 0, 'updated': 0, 'unmatched': []}
+        return {'rows': 0, 'matched_docs': 0, 'updated': 0, 'splits': 0,
+                'unmatched': [], 'unknown_categories': []}
     by_doc = {}
     for r in get_customer_aging_detail(cc, aging_date):
         by_doc.setdefault(str(r.get('doc_no') or '').strip(), []).append(r.get('row_key'))
-    matched, updated, unmatched = set(), 0, []
-    for doc, remark in rows_in:
+    matched, updated, split_lines, unmatched, unknown = set(), 0, 0, [], set()
+    total_rows = 0
+    for doc, entry in entries.items():
         doc = str(doc or '').strip()
-        remark = (remark or '').strip()
-        if not doc or not remark:           # blank remark → leave the existing note untouched
+        splits = entry.get('splits') or []
+        remark = (entry.get('remark') or '').strip()
+        total_rows += len(splits) + (1 if (remark and not splits) else 0)
+        # doc-level Remark: explicit note, else the split categories joined (so "RTV" etc. shows)
+        if not remark and splits:
+            cats = []
+            for s in splits:
+                c = str(s.get('category') or '').strip()
+                if c and c not in cats:
+                    cats.append(c)
+            remark = ', '.join(cats)
+        for s in splits:                    # flag categories outside the fixed vocabulary
+            c = str(s.get('category') or '').strip().upper()
+            if c and c not in _AGING_REMARK_CATEGORY_SET:
+                unknown.add(c)
+        if not doc or (not remark and not splits):
             continue
         keys = by_doc.get(doc)
         if not keys:
@@ -4812,14 +4832,18 @@ def bulk_update_aging_remarks(card_code, aging_date, doc_remarks):
             continue
         matched.add(doc)
         for rk in keys:
-            if save_aging_remark(cc, rk, remark):
+            if remark and save_aging_remark(cc, rk, remark):
                 updated += 1
+            if splits:
+                save_aging_remark_lines(cc, rk, splits)
+                split_lines += 1
     # de-dup unmatched, keep order, cap for the response
     seen, uniq = set(), []
     for d in unmatched:
         if d not in seen:
             seen.add(d); uniq.append(d)
-    return {'rows': len(rows_in), 'matched_docs': len(matched), 'updated': updated, 'unmatched': uniq[:50]}
+    return {'rows': total_rows, 'matched_docs': len(matched), 'updated': updated,
+            'splits': split_lines, 'unmatched': uniq[:50], 'unknown_categories': sorted(unknown)[:20]}
 
 
 # ══════════════════════ Claims register ══════════════════════

@@ -120,7 +120,7 @@
     </span>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
-    <button type="button" class="ad-btn" id="adUpload" title="Upload an edited export to bulk-update Remarks by Doc No"><span class="material-icons">upload</span>Upload Excel</button>
+    <button type="button" class="ad-btn" id="adUpload" title="Upload an Excel/CSV to bulk-update by Doc No. A Remarks column sets the note; optional Category + Amount columns allocate the balance into splits (e.g. Doc No | Category | Amount)."><span class="material-icons">upload</span>Upload Excel</button>
     <input type="file" id="adUploadFile" accept=".xlsx,.csv" style="display:none">
     <button type="button" class="ad-btn danger" id="adClear" title="Clear all saved remarks for this customer"><span class="material-icons">backspace</span>Clear Remarks</button>
   </div>
@@ -489,11 +489,15 @@
       .then(function(j){
         if(j && j.status==='ok'){
           var msg = 'Updated '+j.updated+' remark(s) across '+j.matched_docs+' document(s) (from '+j.rows+' row(s) read).';
+          if(j.splits){ msg += '\nAllocated split amounts on '+j.splits+' document line(s).'; }
+          if(j.unknown_categories && j.unknown_categories.length){
+            msg += '\n\nThese Category values aren\'t in the standard list, so their amounts were kept but left uncategorised:\n'+j.unknown_categories.join(', ')+'\n\nUse one of: '+CATEGORIES.join(', ');
+          }
           if(j.unmatched && j.unmatched.length){
             msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open document and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
           }
           alert(msg);
-          location.reload();           // re-render with the updated remarks
+          location.reload();           // re-render with the updated remarks + splits
         } else {
           alert('Upload failed: '+((j&&j.error)||'unknown error'));
         }

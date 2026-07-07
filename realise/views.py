@@ -218,36 +218,82 @@ def _norm_docno(v):
     return s
 
 
-def _extract_doc_remarks(table):
-    """A sheet (list of rows) → [(doc_no, remark), ...], or None if it has no header row with
-    both a Doc-No-like and a Remarks-like column. The Doc column matches any header containing
-    'doc' (but not a date), e.g. 'Doc No' / 'Doc. No.' / 'Document No'; Remarks matches any
-    header containing 'remark'. The header may sit below blank/title rows."""
-    doc_i = rem_i = header_idx = None
+def _parse_amount(v):
+    """A cell → float; tolerates ₹, thousands commas and blanks (else 0.0)."""
+    s = str('' if v is None else v).replace('₹', '').replace(',', '').strip()
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _extract_doc_entries(table):
+    """A sheet (list of rows) → {doc_no: {'remark': str|None, 'splits': [{category, amount,
+    remark}, ...]}}, or None if it has no header row with a Doc-No-like column plus a Remark or a
+    Category column. The Doc column matches any header containing 'doc' (not a date); 'remark' any
+    'remark' header, 'category' any 'categ' header, 'amount' an exact 'amount'/'amt' (or a contains
+    match that isn't a document-total column like Original/Balance/Total Amount).
+
+    SPLIT mode (creating the RTV/TDS/… splits that drive Allocated/Unallocated) is enabled ONLY
+    when the sheet has a real **Category** column; then a row with a Category or non-zero Amount
+    becomes a split (several rows per Doc → several splits). WITHOUT a Category column the sheet is
+    remark-only — each row's Remark sets that document's note — even if it also carries Original/
+    Balance amount columns (so exported aging sheets aren't mistaken for split sheets). This keeps
+    the old Doc No + Remarks sheet working."""
+    doc_i = rem_i = cat_i = amt_i = header_idx = None
     for idx, row in enumerate(table):
         cols = [str(c or '').strip().lower() for c in row]
         d = next((j for j, c in enumerate(cols) if 'doc' in c and 'date' not in c), None)
+        if d is None:
+            continue
         r = next((j for j, c in enumerate(cols) if 'remark' in c), None)
-        if d is not None and r is not None:
-            doc_i, rem_i, header_idx = d, r, idx
+        cat = next((j for j, c in enumerate(cols) if 'categ' in c), None)
+        # Amount: prefer an exact split-amount header; else a contains-match that is NOT a
+        # document-total column (Original/Balance/Total/Gross Amount) — so an EXPORTED aging
+        # sheet (which carries Original/Balance amounts) is never mistaken for a split sheet.
+        amt = next((j for j, c in enumerate(cols)
+                    if c in ('amount', 'amt', 'amount (₹)', 'amount(₹)', 'split amount', 'amount to allocate')), None)
+        if amt is None:
+            amt = next((j for j, c in enumerate(cols) if 'amount' in c
+                        and not any(w in c for w in ('original', 'balance', 'total', 'gross'))), None)
+        # A real header row = a Doc column plus a Remark or a Category column. An Amount column
+        # ALONE does not make it a header (exported sheets carry Original/Balance amounts).
+        if r is not None or cat is not None:
+            doc_i, rem_i, cat_i, amt_i, header_idx = d, r, cat, amt, idx
             break
     if header_idx is None:
         return None
-    out = []
+    # Splits (which drive Allocated/Unallocated) are created ONLY when the sheet has a real
+    # Category column. A sheet with just Doc No + Remarks — even one that also carries Original/
+    # Balance amount columns from an export — is treated as remark-only and sets the note.
+    split_mode = cat_i is not None
+
+    def cell(row, i):
+        return '' if i is None or i >= len(row) or row[i] is None else str(row[i]).strip()
+
+    out = {}
     for row in table[header_idx + 1:]:
         doc = _norm_docno(row[doc_i]) if doc_i < len(row) else ''
         if not doc:
             continue
-        rem = '' if rem_i >= len(row) or row[rem_i] is None else str(row[rem_i]).strip()
-        out.append((doc, rem))
+        entry = out.setdefault(doc, {'remark': None, 'splits': []})
+        cat = cell(row, cat_i)
+        rem = cell(row, rem_i)
+        amt = _parse_amount(row[amt_i]) if (amt_i is not None and amt_i < len(row)) else 0.0
+        if split_mode and (cat or abs(amt) >= 0.005):   # a Category/Amount row → a split
+            entry['splits'].append({'category': cat, 'amount': amt, 'remark': rem})
+        elif rem:                                        # otherwise the Remark sets the note
+            entry['remark'] = rem
     return out
 
 
 def _parse_remark_upload(uploaded):
-    """Read an uploaded .xlsx/.csv into [(doc_no, remark), ...]. Scans EVERY sheet (a 'Data'
-    sheet first) for the one carrying 'Doc No' + 'Remarks' columns — so both our own export and
-    hand-kept books (where the data sits on a later sheet alongside a pivot/summary sheet) work.
-    Raises ValueError if no sheet has those columns."""
+    """Read an uploaded .xlsx/.csv into {doc_no: {'remark', 'splits'}} (see _extract_doc_entries).
+    Scans EVERY sheet (a 'Data' sheet first) for the one carrying a Doc No column alongside
+    Remarks and/or Category+Amount columns — so both our own export and hand-kept books (data on a
+    later sheet next to a pivot/summary) work. Raises ValueError if no sheet matches."""
     raw = uploaded.read()
     name = (getattr(uploaded, 'name', '') or '').lower()
     tables = []
@@ -260,10 +306,10 @@ def _parse_remark_upload(uploaded):
         order = sorted(wb.sheetnames, key=lambda n: n.strip().lower() != 'data')   # 'Data' first
         tables = [[list(r) for r in wb[sn].iter_rows(values_only=True)] for sn in order]
     for table in tables:
-        parsed = _extract_doc_remarks(table)
+        parsed = _extract_doc_entries(table)
         if parsed is not None:
             return parsed
-    raise ValueError('Could not find "Doc No" and "Remarks" columns in the file')
+    raise ValueError('Could not find a "Doc No" column with "Remarks" and/or "Category" + "Amount" columns')
 
 
 @permission_flag_required('can_customer_aging', json_response=True)
