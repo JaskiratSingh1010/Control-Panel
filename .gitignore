@@ -40,3 +40,9 @@ server.err.log
 # temp preview/harness files
 _*.html
 _*.png
+
+# Business data workbooks — never commit (data, not code)
+Excel File/
+*.xlsx
+*.xls
+~$*

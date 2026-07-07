@@ -1,6 +1,10 @@
 from .shared import FG_VALID, GIFT_EXCL, PM_VALID, RM_VALID, cf, q, safe, tf, wf
 
-SCHEMAS = {"jivo_oil": "JIVO_OIL_HANADB", "jivo_mart": "JIVO_MART_HANADB"}
+SCHEMAS = {
+    "jivo_oil": "JIVO_OIL_HANADB",
+    "jivo_mart": "JIVO_MART_HANADB",
+    "jivo_beverages": "JIVO_BEVERAGES_HANADB",
+}
 
 
 def get_schema(s):
@@ -18,6 +22,11 @@ STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU']
 
 
 def get_stock_available(schema="jivo_oil"):
+    # Jivo Beverages is a separate SAP company whose finished goods use a two-level
+    # DRINKS/WATER → variety taxonomy (not the 16 oil products), so it gets its own path.
+    if schema == "jivo_beverages":
+        return _beverages_stock(get_schema(schema))
+
     # Lazy import keeps the product taxonomy (the 16 cards + reclassification) in one
     # place — Realise — without a load-time dependency between the apps.
     from realise.services import _reclassify, ALLOWED_SUB_GROUPS, DEFAULT_TARGETS
@@ -98,6 +107,106 @@ def get_stock_available(schema="jivo_oil"):
     product_list.sort(key=lambda p: (0 if p["type"] == "PREMIUM" else 1, -p["qty"], p["sub_group"]))
 
     return {"warehouses": STOCK_WAREHOUSES, "products": product_list, "items": item_list}
+
+
+def _beverages_stock(db):
+    """Stock Available for the Jivo Beverages company (JIVO_BEVERAGES_HANADB).
+
+    Same In−Out net-stock method as the oil view, but beverages have their own
+    two-level taxonomy: U_Sub_Group (DRINKS / WATER / …) is the badge/type and
+    U_Variety (JEERA / SODA / MINERAL WATER / …) is the product card. All the FG
+    stock in this company is U_Unit='BEVERAGES' (the OIL/FOODS masters carry none),
+    but the filter is kept explicit so it stays "beverages only" if that changes.
+    Warehouses are derived from the data (stock spreads across ~15 godowns), ordered
+    by stock held so the busiest columns come first.
+
+    The headline metric is BOXES (net pieces ÷ SalFactor2, the pcs-per-box), matching
+    the Realise beverages view — not litres like oils. It is carried in the shared
+    'litres'/'wh_litres' slots the template/export render, with unit flags on the
+    payload telling the UI to label them "Boxes".
+    """
+    rows = q(f"""SELECT
+        I."ItemCode" AS "ItemCode", I."ItemName" AS "ItemName", O."Warehouse" AS "Warehouse",
+        I."U_SKU" AS "U_SKU", I."U_Sub_Group" AS "U_Sub_Group", I."U_Variety" AS "U_Variety",
+        SUM(O."InQty" - O."OutQty") AS "Qty",
+        CASE WHEN I."SalFactor2" > 0 THEN SUM(O."InQty" - O."OutQty") / I."SalFactor2" ELSE 0 END AS "Boxes"
+    FROM {db}.OINM O
+    INNER JOIN {db}.OITM I ON I."ItemCode" = O."ItemCode"
+    INNER JOIN {db}.OITB G ON I."ItmsGrpCod" = G."ItmsGrpCod"
+    WHERE G."ItmsGrpNam" = 'FINISHED' AND I."U_Unit" = 'BEVERAGES'
+    GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", O."Warehouse",
+             I."U_SKU", I."U_Sub_Group", I."U_Variety"
+    HAVING SUM(O."InQty" - O."OutQty") <> 0
+    ORDER BY I."U_Sub_Group", I."U_Variety", I."ItemName" """)
+
+    items = {}
+    whs_seen = []
+    for r in rows:
+        code = r.get("ItemCode")
+        name = str(r.get("ItemName") or "").strip()
+        # DRINKS/WATER/… is the type (badge); the variety (JEERA/SODA/…) is the card.
+        ctype = str(r.get("U_Sub_Group") or "").strip().upper() or "OTHER"
+        variety = str(r.get("U_Variety") or "").strip()
+        csub = variety.upper() or ctype
+        wcode = str(r.get("Warehouse") or "").strip().upper()
+        if wcode and wcode not in whs_seen:
+            whs_seen.append(wcode)
+        it = items.get(code)
+        if it is None:
+            it = items[code] = {
+                "type": ctype, "sub_group": csub, "variety": variety,
+                "item_code": code, "item_name": name,
+                "sku": str(r.get("U_SKU") or "").strip(),
+                "wh": {}, "wh_litres": {}, "grand_total": 0.0, "litres": 0.0,
+            }
+        qty = float(r.get("Qty") or 0)
+        box = float(r.get("Boxes") or 0)   # headline metric for beverages (see docstring)
+        if wcode:
+            it["wh"][wcode] = it["wh"].get(wcode, 0.0) + qty
+            it["wh_litres"][wcode] = it["wh_litres"].get(wcode, 0.0) + box
+        it["grand_total"] += qty
+        it["litres"] += box
+
+    item_list = list(items.values())
+
+    # Warehouse columns ordered by total stock held (busiest first).
+    wh_totals = {}
+    for it in item_list:
+        for w, v in it["wh"].items():
+            wh_totals[w] = wh_totals.get(w, 0.0) + (v or 0.0)
+    warehouses = sorted(whs_seen, key=lambda w: -wh_totals.get(w, 0.0))
+
+    for it in item_list:
+        it["wh"] = {w: round(it["wh"].get(w, 0.0), 2) for w in warehouses}
+        it["wh_litres"] = {w: round(it["wh_litres"].get(w, 0.0), 2) for w in warehouses}
+        it["grand_total"] = round(it["grand_total"], 2)
+        it["litres"] = round(it["litres"], 2)
+
+    # One card per (type, variety); cluster same-type cards, biggest first within a type.
+    type_litres = {}
+    products = {}
+    for it in item_list:
+        key = (it["type"], it["sub_group"])
+        p = products.get(key)
+        if p is None:
+            p = products[key] = {
+                "type": it["type"], "sub_group": it["sub_group"],
+                "qty": 0.0, "litres": 0.0, "sku_count": 0}
+        p["qty"] += it["grand_total"]
+        p["litres"] += it["litres"]
+        p["sku_count"] += 1
+        type_litres[it["type"]] = type_litres.get(it["type"], 0.0) + it["litres"]
+
+    product_list = []
+    for p in products.values():
+        p["qty"] = round(p["qty"], 2)
+        p["litres"] = round(p["litres"], 2)
+        product_list.append(p)
+    product_list.sort(key=lambda p: (-type_litres.get(p["type"], 0.0), p["type"], -p["qty"], p["sub_group"]))
+
+    # unit/unit_label tell the UI to render the headline metric as Boxes, not Litres.
+    return {"warehouses": warehouses, "products": product_list, "items": item_list,
+            "unit": "Box", "unit_label": "Boxes"}
 
 
 def get_kpi(category=None,schema="jivo_oil",whs=None):
@@ -319,6 +428,135 @@ def get_not_billed(days=30,subgroup=None,item_type=None,schema="jivo_oil",
       AND W."OnHand">0 AND RC."ItemCode" IS NULL AND M."CreateDate"<ADD_DAYS(CURRENT_DATE,-30) {GIFT_EXCL} {sg} {type_f}
     GROUP BY G."ItmsGrpNam",M."ItemCode",M."ItemName",M."U_Sub_Group",M."U_TYPE",LB."LastBillDate",LB."LastCustomer",M."CreateDate"
     ORDER BY "StockValue" DESC""")})
+
+# ════════════ Finished Goods — Non-Inventory (non-moving stock) ════════════
+# One row per in-stock FG item with: date of production (first goods receipt into stock,
+# MIN OINM.DocDate WHERE InQty>0), days in stock, last billed (MAX OINV.DocDate) + days
+# since, and "days since it moved" = days since last billed (falling back to production
+# age when never billed). Qty/Litres/Boxes are shown for every item (Litres = OnHand ×
+# SalPackUn when the SKU is a litre item; Boxes = OnHand ÷ SalFactor2 pcs-per-box).
+# FG warehouses for the Non-Inventory report — a fixed set; everything else (e.g. BH-FU) is
+# excluded so "in stock" only counts these godowns. Applied to the oil/mart view (beverages,
+# which live in different warehouses, are left unrestricted).
+NON_INV_WHS = ['BH-PF', 'BH-FG', 'GP-FG', 'BH-EC']
+_NON_INV_WHS_IN = ",".join("'%s'" % w for w in NON_INV_WHS)
+
+
+def _non_inventory_rows(db, unit, tax_select, tax_group, gift_excl='', whs_in=None):
+    whs_w  = f'AND W."WhsCode" IN ({whs_in})' if whs_in else ''
+    oinm_w = f'AND N."Warehouse" IN ({whs_in})' if whs_in else ''
+    return q(f"""SELECT M."ItemCode" AS "ItemCode", M."ItemName" AS "ItemName",
+        {tax_select}
+        TO_DATE(MAX(FR."FirstDate")) AS "ProdDate",
+        DAYS_BETWEEN(MAX(FR."FirstDate"), CURRENT_DATE) AS "DaysInStock",
+        TO_DATE(MAX(LB."LastBillDate")) AS "LastBillDate",
+        DAYS_BETWEEN(MAX(LB."LastBillDate"), CURRENT_DATE) AS "DaysSinceBilled",
+        MAX(LB."LastCustomer") AS "LastCustomer",
+        MAX(LB."LastCode") AS "LastCode",
+        MAX(LB."LastQty") AS "LastQty",
+        COALESCE(DAYS_BETWEEN(MAX(LB."LastBillDate"), CURRENT_DATE),
+                 DAYS_BETWEEN(MAX(FR."FirstDate"), CURRENT_DATE)) AS "DaysSinceMoved",
+        ROUND(SUM(W."OnHand"),0) AS "Qty",
+        CASE WHEN MAX(M."U_IsLitre")='Y' THEN ROUND(SUM(W."OnHand")*MAX(M."SalPackUn"),2) ELSE 0 END AS "Litres",
+        CASE WHEN MAX(M."SalFactor2")>0 THEN ROUND(SUM(W."OnHand")/MAX(M."SalFactor2"),2) ELSE 0 END AS "Boxes",
+        ROUND(SUM(W."OnHand")*MAX(M."LastPurPrc"),0) AS "Value",
+        CASE WHEN MAX(M."U_IsLitre")='Y' THEN MAX(M."SalPackUn") ELSE 0 END AS "LitrePer",
+        MAX(M."SalFactor2") AS "BoxPer",
+        MAX(M."LastPurPrc") AS "PricePer"
+    FROM {db}.OITW W
+    JOIN {db}.OITM M ON W."ItemCode"=M."ItemCode"
+    JOIN {db}.OITB G ON M."ItmsGrpCod"=G."ItmsGrpCod"
+    LEFT JOIN (SELECT N."ItemCode", MIN(N."DocDate") AS "FirstDate"
+               FROM {db}.OINM N WHERE N."InQty">0 {oinm_w} GROUP BY N."ItemCode") FR ON M."ItemCode"=FR."ItemCode"
+    LEFT JOIN (SELECT "ItemCode", "LastBillDate", "LastCustomer", "LastCode", "LastQty" FROM (
+                 SELECT L."ItemCode" AS "ItemCode", I."DocDate" AS "LastBillDate",
+                        I."CardName" AS "LastCustomer", I."CardCode" AS "LastCode",
+                        SUM(L."Quantity") AS "LastQty",
+                        ROW_NUMBER() OVER (PARTITION BY L."ItemCode" ORDER BY I."DocDate" DESC, I."DocEntry" DESC) AS "rn"
+                 FROM {db}.OINV I JOIN {db}.INV1 L ON I."DocEntry"=L."DocEntry"
+                 WHERE I."CANCELED"='N'
+                 GROUP BY L."ItemCode", I."DocEntry", I."DocDate", I."CardName", I."CardCode") X WHERE X."rn"=1) LB ON M."ItemCode"=LB."ItemCode"
+    WHERE M."InvntItem"='Y' AND M."U_Unit"='{unit}' AND G."ItmsGrpNam"='FINISHED' AND W."OnHand">0 {whs_w} {gift_excl}
+    GROUP BY M."ItemCode", M."ItemName"{tax_group}
+    ORDER BY "ProdDate" DESC NULLS LAST, "Value" DESC""")
+
+
+def _non_inventory_wh(db, unit, gift_excl='', whs_in=None):
+    """Per-(item, warehouse) on-hand for the same FG population — powers the warehouse
+    multi-select (the client re-aggregates Qty/Ltr/Boxes/Value from the picked warehouses)."""
+    whs_w = f'AND W."WhsCode" IN ({whs_in})' if whs_in else ''
+    return q(f"""SELECT W."ItemCode" AS "ItemCode", W."WhsCode" AS "WhsCode", SUM(W."OnHand") AS "OnHand"
+    FROM {db}.OITW W JOIN {db}.OITM M ON W."ItemCode"=M."ItemCode" JOIN {db}.OITB G ON M."ItmsGrpCod"=G."ItmsGrpCod"
+    WHERE M."InvntItem"='Y' AND M."U_Unit"='{unit}' AND G."ItmsGrpNam"='FINISHED' AND W."OnHand">0 {whs_w} {gift_excl}
+    GROUP BY W."ItemCode", W."WhsCode" """)
+
+
+def get_non_inventory(schema="jivo_oil"):
+    """In-stock finished goods as a non-moving aging view, newest-produced first. Each row
+    carries the full taxonomy (Sub Group, Variety, SKU, Prem/Comm) for the client-side filters,
+    per-item conversion factors, and a per-warehouse on-hand breakdown ('wh') so the warehouse
+    multi-select can re-aggregate client-side. Beverages (jivo_beverages) have no Prem/Comm and
+    aren't warehouse-restricted; oils/mart map Prem/Comm to U_TYPE and use the fixed FG godowns.
+    Returns {items, unit, schema, warehouses}."""
+    db = get_schema(schema)
+    # Shared taxonomy columns (all UDFs exist in the oil/mart/beverages item masters).
+    tax_common = ('COALESCE(M."U_Sub_Group",\'–\') AS "SubGroup", '
+                  'COALESCE(M."U_Variety",\'–\') AS "Variety", '
+                  'COALESCE(M."U_SKU",\'–\') AS "SKU", ')
+    if schema == "jivo_beverages":
+        # U_TYPE (Premium/Commodity) is an oils concept — keep it blank for beverages so the
+        # query never depends on that field being populated in the beverages company.
+        tax_select = tax_common + '\'–\' AS "PremComm",'
+        tax_group = ', M."U_Sub_Group", M."U_Variety", M."U_SKU"'
+        sql_unit, gift, whs_in, unit = 'BEVERAGES', '', None, 'boxes'
+    else:
+        tax_select = tax_common + 'COALESCE(M."U_TYPE",\'–\') AS "PremComm",'
+        tax_group = ', M."U_Sub_Group", M."U_Variety", M."U_SKU", M."U_TYPE"'
+        sql_unit, gift, whs_in, unit = 'OIL', GIFT_EXCL, _NON_INV_WHS_IN, 'litres'
+    rows = _non_inventory_rows(db, sql_unit, tax_select, tax_group, gift, whs_in)
+
+    # Attach per-warehouse on-hand to each item, and collect the warehouses present.
+    wh_map, whs_seen = {}, {}
+    for r in _non_inventory_wh(db, sql_unit, gift, whs_in):
+        wc = str(r.get('WhsCode') or '').strip()
+        if not wc:
+            continue
+        code = str(r.get('ItemCode') or '')
+        oh = float(r.get('OnHand') or 0)
+        wh_map.setdefault(code, {})[wc] = oh
+        whs_seen[wc] = whs_seen.get(wc, 0.0) + oh
+    for it in rows:
+        it['wh'] = wh_map.get(str(it.get('ItemCode') or ''), {})
+    return {'items': rows, 'unit': unit, 'schema': schema, 'warehouses': sorted(whs_seen.keys())}
+
+
+def get_non_inventory_drill(item="", schema="jivo_oil", whs=""):
+    """Per-warehouse breakdown behind one item's stock: warehouse code + name, on-hand qty,
+    and that warehouse's production (first-receipt) date. No movement history — just the split.
+    `whs` (comma-separated codes) limits the breakdown to the currently-picked warehouses."""
+    db = get_schema(schema)
+    it = safe(item)
+    if not it:
+        return []
+    codes = [c.strip() for c in str(whs or '').split(',') if c.strip()]
+    if codes:
+        whs_in = ",".join("'%s'" % safe(c) for c in codes)
+    else:
+        whs_in = None if schema == "jivo_beverages" else _NON_INV_WHS_IN
+    whs_w  = f'AND W."WhsCode" IN ({whs_in})' if whs_in else ''
+    oinm_w = f'AND N."Warehouse" IN ({whs_in})' if whs_in else ''
+    return q(f"""SELECT W."WhsCode" AS "WhsCode", COALESCE(H."WhsName", W."WhsCode") AS "WhsName",
+        ROUND(W."OnHand",0) AS "Qty",
+        TO_DATE(FR."FirstDate") AS "ProdDate"
+    FROM {db}.OITW W
+    JOIN {db}.OITM M ON W."ItemCode"=M."ItemCode"
+    LEFT JOIN {db}.OWHS H ON W."WhsCode"=H."WhsCode"
+    LEFT JOIN (SELECT N."ItemCode", N."Warehouse", MIN(N."DocDate") AS "FirstDate"
+               FROM {db}.OINM N WHERE N."InQty">0 {oinm_w} GROUP BY N."ItemCode", N."Warehouse") FR
+         ON W."ItemCode"=FR."ItemCode" AND W."WhsCode"=FR."Warehouse"
+    WHERE W."ItemCode"='{it}' AND W."OnHand">0 {whs_w}
+    ORDER BY W."OnHand" DESC""")
+
 
 def abc_inner(db):
     return f"""SELECT M."ItemCode",M."ItemName",COALESCE(M."U_Sub_Group",'UNCLASSIFIED') AS "SubGroup",COALESCE(M."U_TYPE",'–') AS "ItemType",

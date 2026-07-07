@@ -139,6 +139,49 @@
   .ag-empty{padding:40px;text-align:center;color:#7b8794}
   .ag-foot{font-size:11.5px;color:#94a3b8;margin:12px 2px 0;display:flex;gap:6px;align-items:center}
   .ag-foot .material-icons{font-size:15px}
+
+  /* Oil / Beverages company toggle */
+  .ag-cof{display:inline-flex;border:1px solid #cdb8e6;border-radius:11px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ag-cf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:800;padding:9px 15px;cursor:pointer}
+  .ag-cf:first-child{border-left:0}
+  .ag-cf:hover:not(.on){background:#f6f2fc}
+  .ag-cf.on{background:#7c3aed;color:#fff}
+  /* Raw-invoice drill button on the Beverages Sales-Person rows */
+  .ag-rawbtn{display:inline-flex;align-items:center;gap:4px;margin-left:10px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;
+    font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.3px;padding:3px 9px;border-radius:999px;cursor:pointer}
+  .ag-rawbtn:hover{background:#e0e7ff;border-color:#a5b4fc}
+  .ag-rawbtn .material-icons{font-size:13px}
+
+  /* ── Raw invoices modal (Excel-like) ── */
+  .agrx{display:none;position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.55);padding:3vh 2vw}
+  .agrx.show{display:block}
+  .agrx-panel{display:flex;flex-direction:column;height:94vh;max-width:1500px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 30px 70px rgba(2,6,23,.5)}
+  .agrx-head{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid #eef2f6;background:#0f172a}
+  .agrx-title{font-size:15px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+  .agrx-search{flex:1;min-width:150px;border:1px solid #334155;background:#1e293b;color:#fff;border-radius:9px;padding:8px 12px;font-family:inherit;font-size:13px;outline:none}
+  .agrx-search::placeholder{color:#94a3b8}
+  .agrx-count{font-size:12px;font-weight:700;color:#cbd5e1;white-space:nowrap}
+  .agrx-btn{border:0;background:#334155;color:#fff;border-radius:9px;padding:8px 13px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .agrx-btn:hover{background:#475569}
+  .agrx-x{border:0;background:transparent;color:#cbd5e1;font-size:20px;font-weight:800;cursor:pointer;line-height:1;padding:4px 8px}
+  .agrx-x:hover{color:#fff}
+  .agrx-tw{overflow:auto;flex:1}
+  table.agrx-tb{border-collapse:collapse;font-size:12.5px;white-space:nowrap;min-width:100%}
+  table.agrx-tb thead th{position:sticky;top:0;z-index:2;background:#1e293b;color:#fff;text-align:left;font-size:10.5px;font-weight:800;
+    letter-spacing:.3px;text-transform:uppercase;padding:9px 12px;cursor:pointer;user-select:none}
+  table.agrx-tb thead th.num{text-align:right}
+  table.agrx-tb thead th .ar{font-size:9px;margin-left:4px;opacity:.7}
+  table.agrx-tb thead tr.agrx-filt th{position:sticky;top:34px;z-index:2;background:#334155;padding:5px 8px;cursor:default}
+  table.agrx-tb thead tr.agrx-filt input{width:100%;box-sizing:border-box;min-width:70px;border:1px solid #475569;background:#0f172a;color:#fff;
+    border-radius:6px;padding:4px 7px;font-family:inherit;font-size:11.5px;outline:none}
+  table.agrx-tb tbody td{padding:8px 12px;border-bottom:1px solid #eef2f6;color:#334155}
+  table.agrx-tb tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.agrx-tb tbody tr:nth-child(even) td{background:#f8fafc}
+  table.agrx-tb tbody tr:hover td{background:#eef2ff}
+  .agrx-empty{padding:30px;text-align:center;color:#7b8794}
+  .agrx-rmk{width:100%;min-width:160px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-family:inherit;font-size:12px;color:#0f172a;outline:none;background:#fff}
+  .agrx-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.15)}
+  .agrx-rmk.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
 </style>
 {% endblock %}
 
@@ -157,6 +200,10 @@
   <div class="ag-kpis" id="agKpis"></div>
 
   <div class="ag-tools">
+    <div class="ag-cof" id="agCo" title="Switch company">
+      <button type="button" class="ag-cf on" data-co="oil">Oil</button>
+      <button type="button" class="ag-cf" data-co="bev">Beverages</button>
+    </div>
     <label class="ag-asof" title="Aging date — balances as of this date">
       <span class="material-icons">event</span>
       <span>As of</span>
@@ -174,6 +221,27 @@
       <div class="ag-ms-pop" id="agFmtPop">
         <div class="ag-ms-head"><a data-act="all">Select all</a><a data-act="clear">Clear</a></div>
         <div class="ag-ms-list" id="agFmtList"></div>
+      </div>
+    </div>
+    <div class="ag-ms" id="agRem" title="Filter customers by their document remarks">
+      <button type="button" class="ag-btn" id="agRemBtn">
+        <span class="material-icons">sell</span><span id="agRemLabel">All remarks</span>
+        <span class="material-icons" style="margin-left:2px">expand_more</span>
+      </button>
+      <div class="ag-ms-pop" id="agRemPop">
+        <div class="ag-ms-head"><a data-act="all">Select all</a><a data-act="clear">Clear</a></div>
+        <div class="ag-ms-list" id="agRemList"></div>
+      </div>
+    </div>
+    <div class="ag-ms" id="agDays" title="Filter by invoice age (days since invoice date)" style="display:none">
+      <button type="button" class="ag-btn" id="agDaysBtn">
+        <span class="material-icons">event_note</span><span id="agDaysLabel">All days</span>
+        <span class="material-icons" style="margin-left:2px">expand_more</span>
+      </button>
+      <div class="ag-ms-pop" id="agDaysPop">
+        <input type="text" id="agDaysSearch" placeholder="Search days…" style="width:100%;box-sizing:border-box;margin-bottom:6px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">
+        <div class="ag-ms-head"><a data-act="all">Select all</a><a data-act="clear">Clear</a></div>
+        <div class="ag-ms-list" id="agDaysList"></div>
       </div>
     </div>
     <div class="ag-seg" id="agSign" title="Filter by Balance Due sign">
@@ -202,6 +270,7 @@
     <button type="button" class="ag-btn" id="agExpand"><span class="material-icons">unfold_more</span>Expand all</button>
     <button type="button" class="ag-btn" id="agCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
     <button type="button" class="ag-btn" id="agExport"><span class="material-icons">download</span>Export Excel</button>
+    <button type="button" class="ag-btn" id="agExportDetail" title="Every open document + remarks for the filtered parties, in one file"><span class="material-icons">description</span><span id="agExportDetailLbl">Export Detail</span></button>
     <div class="ag-legend" id="agLegend"></div>
   </div>
 
@@ -216,15 +285,31 @@
 
   <div class="ag-foot">
     <span class="material-icons">info</span>
-    <span>Computed live from SAP using B1's reconciliation aging (ties to customer balances). Pick an
+    <span id="agFootNote">Computed live from SAP using B1's reconciliation aging (ties to customer balances). Pick an
       <b>As of</b> date to age to any point in time. Use the Balance‑Due sign filter and
       <b>Conditions</b> to narrow rows by amount.</span>
+  </div>
+</div>
+
+<!-- Raw open-invoice drill for a Beverages Sales Person / Customer (Excel-like) -->
+<div class="agrx" id="agRawModal">
+  <div class="agrx-panel">
+    <div class="agrx-head">
+      <div class="agrx-title" id="agRawTitle">Raw invoices</div>
+      <input type="text" id="agRawSearch" class="agrx-search" placeholder="Search all columns…" autocomplete="off">
+      <span class="agrx-count" id="agRawCount"></span>
+      <button type="button" class="agrx-btn" id="agRawExport">Export CSV</button>
+      <button type="button" class="agrx-x" id="agRawClose" title="Close">&times;</button>
+    </div>
+    <div class="agrx-tw"><table class="agrx-tb" id="agRawTable"></table></div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 {{ aging_payload|json_script:"aging-data" }}
+{{ aging_remark_index|json_script:"aging-remark-index" }}
+{{ aging_remark_options|json_script:"aging-remark-options" }}
 <script>
 (function(){
   var DATA = JSON.parse(document.getElementById('aging-data').textContent || '{}');
@@ -237,10 +322,104 @@
   var cond = {op:'', a:0, b:0};   // numeric Balance Due condition (gte / lte / between)
   var DETAIL_URL = "{% url 'realise:customer_aging_detail' %}";
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
+  var DETAIL_EXPORT_URL = "{% url 'realise:api_export_aging_detail' %}";
+  var AGING_REMARK_URL = "{% url 'realise:api_aging_remark' %}";
+  // Remark filter: card_code → [tokens] (split categories + free-text) and the master option list.
+  var REMARK_INDEX = JSON.parse(document.getElementById('aging-remark-index').textContent || '{}');
+  var REMARK_OPTIONS = JSON.parse(document.getElementById('aging-remark-options').textContent || '[]');
+  var selectedRemarks = [];   // [] = all; else a customer shows if any of its tokens is selected
+  function remarkPass(code){
+    if(!selectedRemarks.length) return true;
+    var toks = REMARK_INDEX[code]; if(!toks) return false;
+    for(var i=0;i<toks.length;i++){ if(selectedRemarks.indexOf(toks[i])!==-1) return true; }
+    return false;
+  }
   var ASOF = DATA.aging_date || '';
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
   var COLORS  = BUCKETS.map(function(b){return b.color;});
   var NCOL    = 3 + BUCKETS.length;   // label + original + balance + buckets
+
+  // ── Oil / Beverages company switch ──────────────────────────────────────────
+  // Oil = the embedded B1 pivot (OIL_DATA). Beverages = open A/R invoices fetched on demand,
+  // pivoted client-side (Sales Person → Customer) so the per-day multi-select can re-aggregate.
+  var OIL_DATA = DATA;                 // keep the oil payload to restore on toggle-back
+  var company = 'oil';
+  var BEV_URL = "{% url 'realise:api_customer_aging_beverages' %}";
+  var RAW_BEV = null, RAW_BEV_ASOF = null, BEV_ERR = null;
+  var BEV_DAYS = [];                   // distinct InDaysDifference values (ascending)
+  var selectedDays = null;             // null = all; else {day:true} of INCLUDED days
+  var BUCKET_KEYS = BUCKETS.map(function(b){return b.key;});
+
+  function emptyB(){ var o={original:0,balance_due:0}; BUCKET_KEYS.forEach(function(k){o[k]=0;}); return o; }
+  function roundRow(o){ ['original','balance_due'].concat(BUCKET_KEYS).forEach(function(k){o[k]=Math.round((Number(o[k])||0)*100)/100;}); }
+  function bucketKeyForDays(d){ d=Number(d)||0; if(d<=30)return 'b0_30'; if(d<=60)return 'b31_60'; if(d<=90)return 'b61_90'; if(d<=120)return 'b91_120'; return 'b121'; }
+  function bucketLabelForDays(d){ var k=bucketKeyForDays(d); for(var i=0;i<BUCKETS.length;i++){if(BUCKETS[i].key===k)return BUCKETS[i].label;} return ''; }
+  function dayIncluded(d){ return !selectedDays || !!selectedDays[d]; }
+
+  // Pivot the raw beverages invoices (honouring the day multi-select) into the shared
+  // {groups:[{format=SalesPerson, customers:[...]}], total} shape the renderer expects.
+  function buildBev(){
+    var gmap={}, total=emptyB();
+    (RAW_BEV||[]).forEach(function(r){
+      if(!dayIncluded(r.days)) return;
+      var g=gmap[r.sp]; if(!g){ g=gmap[r.sp]={format:r.sp, _cust:{}, customers:[]}; var e=emptyB(); for(var k in e)g[k]=e[k]; }
+      var c=g._cust[r.code];
+      if(!c){ c=g._cust[r.code]={code:r.code, name:r.name, outstanding:r.outstanding, original:0, balance_due:0};
+              BUCKET_KEYS.forEach(function(k){c[k]=0;}); }
+      var bk=bucketKeyForDays(r.days), t=Number(r.total)||0, b=Number(r.bal)||0;
+      c.original+=t; c.balance_due+=b; c[bk]+=b;
+      g.original+=t; g.balance_due+=b; g[bk]+=b;
+      total.original+=t; total.balance_due+=b; total[bk]+=b;
+    });
+    var groups=Object.keys(gmap).map(function(sp){
+      var g=gmap[sp];
+      g.customers=Object.keys(g._cust).map(function(k){var c=g._cust[k]; roundRow(c); return c;});
+      delete g._cust;
+      g.customers.sort(function(a,b){return b.balance_due-a.balance_due;});
+      g.count=g.customers.length; roundRow(g); return g;
+    }).sort(function(a,b){return b.balance_due-a.balance_due;});
+    roundRow(total);
+    GROUPS=groups; TOTAL=total;
+    DATA={company:'bev', groups:groups, total:total, buckets:BUCKETS, error:BEV_ERR, aging_date:ASOF};
+  }
+
+  function restoreOil(){
+    DATA=OIL_DATA; GROUPS=DATA.groups||[]; TOTAL=DATA.total||{}; ASOF=DATA.aging_date||'';
+  }
+
+  function loadBev(){
+    var asof=document.getElementById('agAsOf').value||'';
+    if(RAW_BEV && RAW_BEV_ASOF===asof){ buildBev(); rerenderAll(); return; }
+    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading beverages…</td></tr>';
+    fetch(BEV_URL+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{};})
+      .then(function(p){
+        if(company!=='bev') return;
+        RAW_BEV=p.rows||[]; RAW_BEV_ASOF=asof; BEV_ERR=p.error||null; ASOF=p.aging_date||asof;
+        var ds={}; RAW_BEV.forEach(function(r){ds[r.days]=1;});
+        BEV_DAYS=Object.keys(ds).map(Number).sort(function(a,b){return a-b;});
+        selectedDays=null;
+        buildBev(); rerenderAll();
+      })
+      .catch(function(){ if(company==='bev'){ BEV_ERR='load failed'; RAW_BEV=[]; BEV_DAYS=[]; selectedDays=null; buildBev(); rerenderAll(); } });
+  }
+
+  // Full refresh after a company switch or a beverages (re)load.
+  function rerenderAll(){ renderHead(); renderBody(); populateFmt(); populateDays(); applyView(); updateCompanyUI(); }
+  // Lighter refresh after a day-filter change (re-aggregate + repaint, keep the days popup).
+  function renderPivotOnly(){ buildBev(); renderBody(); applyView(); }
+
+  function updateCompanyUI(){
+    var bev = company==='bev';
+    document.getElementById('agDays').style.display = bev ? '' : 'none';
+    document.getElementById('agRem').style.display  = bev ? 'none' : '';
+    document.getElementById('agExportDetail').style.display = bev ? 'none' : '';
+    document.getElementById('agFmtLabel').textContent =
+      selectedFormats.length ? selectedFormats.length+(bev?' sales person':' format')+(selectedFormats.length>1?'s':'')
+                             : (bev?'All sales persons':'All formats');
+    var pill=document.querySelector('.ag-srcpill');
+    if(pill) pill.innerHTML='<span class="material-icons">bolt</span>Live · '+(bev?'Beverages A/R':'SAP B1')+' · as of '+esc(ASOF);
+  }
 
   // Per-format accent palette (cycled) — keeps the pivot colourful & scannable.
   var FMT_PALETTE = ['#4f46e5','#0891b2','#0d9488','#db2777','#d97706','#7c3aed','#059669','#dc2626','#2563eb','#9333ea','#c026d3','#65a30d'];
@@ -276,6 +455,7 @@
       if(useFmt && selectedFormats.indexOf(g.format)===-1) return;
       g.customers.forEach(function(c){
         if(q && (c.name+' '+g.format).toLowerCase().indexOf(q)===-1) return;
+        if(!remarkPass(c.code)) return;
         var bd = Number(c.balance_due)||0;
         if(signSel==='pos' && !(bd>0)) return;
         if(signSel==='neg' && !(bd<0)) return;
@@ -308,7 +488,7 @@
     var K = computeKpis();
     var cards = [
       {c:'k-total',ic:'account_balance',l:'Total Outstanding',v:abbr(K.total_outstanding),
-        m:(K.customer_count||0)+' customers · '+(K.format_count||0)+' formats'},
+        m:(K.customer_count||0)+' customers · '+(K.format_count||0)+(company==='bev'?' sales persons':' formats')},
       {c:'k-cur',ic:'check_circle',l:'Current (0–30 d)',v:abbr(K.current),
         m:(K.current_pct||0)+'% of book'},
       {c:'k-over',ic:'warning',l:'Overdue 90+ days',v:abbr(K.overdue_90),
@@ -327,7 +507,7 @@
 
   // ── Header + legend ──
   function renderHead(){
-    var th = '<th class="lbl">Format / Customer</th><th>Original</th><th>Balance Due</th>';
+    var th = '<th class="lbl">'+(company==='bev'?'Sales Person / Customer':'Format / Customer')+'</th><th>Original</th><th>Balance Due</th>';
     BUCKETS.forEach(function(b,i){ th += '<th class="b'+i+'"><span class="bk">'+esc(b.label)+'</span></th>'; });
     document.getElementById('agHead').innerHTML = th;
 
@@ -363,11 +543,14 @@
     var html = '';
     GROUPS.forEach(function(g,gi){
       var color = fmtColor(gi);
+      var rawBtn = company==='bev'
+        ? '<span class="ag-rawbtn" data-scope="sp" data-sp="'+esc(g.format)+'" title="Open raw invoices (Excel-like)"><span class="material-icons">table_view</span>Raw</span>'
+        : '';
       html += '<tr class="ag-grp" data-gi="'+gi+'">'+
         '<td><div class="cellpad ag-gname">'+
           '<span class="ag-tw-i">▶</span>'+
           '<span class="ag-chip" style="background:'+color+'">'+esc(g.format)+'</span>'+
-          '<span class="ag-cnt">'+g.count+'</span>'+
+          '<span class="ag-cnt">'+g.count+'</span>'+rawBtn+
         '</div></td>'+
         '<td class="num"><div class="cellpad">'+money(g.original)+'</div></td>'+
         '<td class="num"><div class="cellpad bal">'+money(g.balance_due)+'</div></td>'+
@@ -375,10 +558,13 @@
       '</tr>';
 
       g.customers.forEach(function(c){
-        html += '<tr class="ag-cust" data-gi="'+gi+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'">'+
+        var bdCell = company==='bev'
+          ? '<td class="num"><div class="cellpad bal"><a class="ag-bd-link ag-rawlink" title="Open raw invoices" data-scope="cust" data-code="'+esc(c.code)+'" data-name="'+esc(c.name)+'">'+money(c.balance_due)+'</a></div></td>'
+          : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+'">'+money(c.balance_due)+'</a></div></td>';
+        html += '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'">'+
           '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
           '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
-          '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+'">'+money(c.balance_due)+'</a></div></td>'+
+          bdCell+
           bucketCells(c,false)+
         '</tr>';
       });
@@ -397,7 +583,7 @@
 
   // ── Interactions ──
   function currentQuery(){ return (document.getElementById('agSearch').value||'').trim().toLowerCase(); }
-  function rowFilterActive(){ return !!currentQuery() || signSel!=='both' || !!cond.op; }
+  function rowFilterActive(){ return !!currentQuery() || signSel!=='both' || !!cond.op || selectedRemarks.length>0; }
   // Expand/Collapse only flip each group's open state, then let applyView() reconcile
   // visibility with the active filters — so they work whether or not a filter is on.
   function setGroup(gi,open){
@@ -416,6 +602,7 @@
   // Does a customer row pass the search + Balance-Due sign + numeric condition filters?
   function custPasses(r,q){
     if(q && r.getAttribute('data-name').indexOf(q)===-1) return false;
+    if(!remarkPass(r.getAttribute('data-code'))) return false;
     var bd = Number(r.getAttribute('data-bd'))||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
@@ -476,9 +663,72 @@
   function syncFmt(){
     selectedFormats = [];
     document.querySelectorAll('#agFmtList input:checked').forEach(function(i){ selectedFormats.push(i.value); });
+    var noun = company==='bev' ? ' sales person' : ' format';
     document.getElementById('agFmtLabel').textContent =
-      selectedFormats.length ? selectedFormats.length+' format'+(selectedFormats.length>1?'s':'') : 'All formats';
+      selectedFormats.length ? selectedFormats.length+noun+(selectedFormats.length>1?'s':'') : (company==='bev'?'All sales persons':'All formats');
     applyFilters();
+  }
+
+  // Build the Days multi-select (one per distinct InDaysDifference). All checked by default;
+  // unchecking a day removes those invoices and the pivot re-aggregates (buckets/balances).
+  function populateDays(){
+    var list=document.getElementById('agDaysList');
+    if(!BEV_DAYS.length){ list.innerHTML='<div style="padding:8px;color:#94a3b8;font-size:12px">No open invoices</div>'; return; }
+    list.innerHTML = BEV_DAYS.map(function(d){
+      return '<label data-day="'+d+'"><input type="checkbox" value="'+d+'"'+(dayIncluded(d)?' checked':'')+'>'+d+' day'+(d===1?'':'s')+'</label>';
+    }).join('');
+    filterDaysList();
+  }
+  function filterDaysList(){
+    var q=(document.getElementById('agDaysSearch').value||'').trim();
+    document.querySelectorAll('#agDaysList label').forEach(function(l){
+      l.style.display = (!q || l.getAttribute('data-day').indexOf(q)===0) ? '' : 'none';
+    });
+  }
+  function syncDays(){
+    var checked={}, all=true;
+    document.querySelectorAll('#agDaysList input').forEach(function(i){
+      if(i.checked) checked[Number(i.value)]=true; else all=false;
+    });
+    selectedDays = all ? null : checked;
+    var n = all ? 0 : Object.keys(checked).length;
+    document.getElementById('agDaysLabel').textContent = all ? 'All days' : (n+' day'+(n===1?'':'s'));
+    renderPivotOnly();
+  }
+
+  // Build the Remarks multi-select (split categories + any free-text remarks in use).
+  function populateRem(){
+    var list = document.getElementById('agRemList');
+    list.innerHTML = REMARK_OPTIONS.map(function(t){
+      return '<label><input type="checkbox" value="'+esc(t)+'">'+esc(t)+'</label>';
+    }).join('') || '<div style="padding:8px;color:#94a3b8;font-size:12px">No remarks yet</div>';
+  }
+  function syncRem(){
+    selectedRemarks = [];
+    document.querySelectorAll('#agRemList input:checked').forEach(function(i){ selectedRemarks.push(i.value); });
+    document.getElementById('agRemLabel').textContent =
+      selectedRemarks.length ? selectedRemarks.length+' remark'+(selectedRemarks.length>1?'s':'') : 'All remarks';
+    applyFilters();
+  }
+
+  // Whole-book detail export: every open document (+ its remarks/splits) for the parties
+  // passing the current filters, fetched live from SAP in one bulk query (can take a moment).
+  function exportAgingDetail(){
+    var parties = filteredCustomers().map(function(x){ return {code:x.c.code, name:x.c.name, format:x.format}; });
+    if(!parties.length){ alert('No parties match the current filters.'); return; }
+    var btn=document.getElementById('agExportDetail'), lbl=document.getElementById('agExportDetailLbl');
+    var old=lbl?lbl.textContent:''; if(btn)btn.disabled=true; if(lbl)lbl.textContent='Preparing… ('+parties.length+')';
+    var fn='Customer Aging Detail '+(document.getElementById('agAsOf').value||'')+'.xlsx';
+    fetch(DETAIL_EXPORT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({as_of:document.getElementById('agAsOf').value, parties:parties})})
+      .then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||('http '+r.status)); }); return r.blob(); })
+      .then(function(blob){
+        var url=URL.createObjectURL(blob), a=document.createElement('a');
+        a.href=url; a.download=fn; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},1500);
+      })
+      .catch(function(err){ alert('Could not export detail: '+((err&&err.message)||err)); })
+      .then(function(){ if(btn)btn.disabled=false; if(lbl)lbl.textContent=old; });
   }
 
   // Export the aging pivot to CSV (opens in Excel). Hidden formats/customers are already
@@ -487,7 +737,7 @@
     if(!GROUPS.length){ return; }
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     function rnd(n){ return Math.round(Number(n)||0); }
-    var head = ['Format','Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
+    var head = [(company==='bev'?'Sales Person':'Format'),'Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
     var lines = [head.map(cell).join(',')];
     GROUPS.forEach(function(g){
       lines.push([g.format,'(Format total)','',rnd(g.original),rnd(g.balance_due)]
@@ -521,7 +771,7 @@
     function hdr(v,left){return {value:v, fill:'0f172a', color:'ffffff', bold:true, align:left?'left':'right'};}
     function tot(v,isNum){var c={value:v, fill:'1e293b', color:'ffffff', bold:true, align:isNum?'right':'left'}; if(isNum)c.numfmt=NUMW; return c;}
 
-    var out=[ ['Format / Customer','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
+    var out=[ [(company==='bev'?'Sales Person / Customer':'Format / Customer'),'Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
                 .map(function(l,i){return hdr(l, i===0);}) ];
     GROUPS.forEach(function(g,gi){
       var acc=hx(fmtColor(gi));
@@ -555,16 +805,140 @@
       .then(function(){ if(btn)btn.disabled=false; });
   }
 
+  // ── Raw invoices drill (Beverages) — Excel-like sortable/filterable table ──
+  var RAW_COLS=[
+    {key:'doc',label:'Doc No',type:'text'},{key:'date',label:'Doc Date',type:'text'},
+    {key:'days',label:'Days',type:'num'},{key:'aging',label:'Aging',type:'text'},
+    {key:'name',label:'Customer',type:'text'},{key:'code',label:'Code',type:'text'},
+    {key:'sp',label:'Sales Person',type:'text'},{key:'total',label:'Doc Total',type:'money'},
+    {key:'bal',label:'Balance Due',type:'money'},{key:'outstanding',label:'Outstanding',type:'money'},
+    {key:'remark',label:'Remarks',type:'remark'},
+    {key:'ltd',label:'Last Trans',type:'text'},{key:'tdd',label:'Trans Days',type:'num'},
+    {key:'dispatch',label:'Dispatch',type:'text'},{key:'bilty',label:'Bilty No',type:'text'},
+    {key:'biltydate',label:'Bilty Date',type:'text'},{key:'transporter',label:'Transporter',type:'text'},
+    {key:'vehicle',label:'Vehicle',type:'text'},{key:'driver',label:'Driver',type:'text'},
+    {key:'mobile',label:'Mobile',type:'text'},{key:'status',label:'Status',type:'text'}
+  ];
+  var rawScope=null;                 // {type:'sp',sp} | {type:'cust',code,name}
+  var rawSort={key:'days',dir:-1};   // dir: 1 asc, -1 desc
+  var rawColF={};                    // column key → lower-cased filter text
+  function rawColByKey(k){ for(var i=0;i<RAW_COLS.length;i++){ if(RAW_COLS[i].key===k) return RAW_COLS[i]; } return null; }
+  function rawVal(r,col){ return col.key==='aging' ? bucketLabelForDays(r.days) : (r[col.key]==null?'':r[col.key]); }
+  function rawDisp(r,col){
+    if(col.type==='remark') return '<input class="agrx-rmk" data-doc="'+esc(r.doc)+'" data-code="'+esc(r.code)+'" value="'+esc(r.remark==null?'':r.remark)+'" placeholder="remark…">';
+    return col.type==='money' ? money(r[col.key]) : esc(String(rawVal(r,col)));
+  }
+  // Manual remark on a raw invoice — persisted via the shared aging-remark endpoint, keyed by
+  // (customer code, 'BEVDOC:'+DocNo). Debounced; updates the in-memory row so sort/filter keep it.
+  var rawRmkTimers={};
+  function saveRawRemark(code, doc, val, inp){
+    var k=code+'|'+doc;
+    clearTimeout(rawRmkTimers[k]);
+    rawRmkTimers[k]=setTimeout(function(){
+      fetch(AGING_REMARK_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body:JSON.stringify({code:code, row_key:'BEVDOC:'+doc, remark:val})})
+        .then(function(r){return r.json();})
+        .then(function(j){ if(j&&j.status==='ok'&&inp){ inp.classList.add('saved'); setTimeout(function(){inp.classList.remove('saved');},900); } })
+        .catch(function(){});
+    }, 450);
+  }
+  function isNumCol(col){ return col.type==='num'||col.type==='money'; }
+  function rawFilteredRows(){
+    var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
+    var rows=(RAW_BEV||[]).filter(function(r){
+      if(!dayIncluded(r.days)) return false;
+      if(rawScope){
+        if(rawScope.type==='sp' && r.sp!==rawScope.sp) return false;
+        if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
+      }
+      if(q){ var hit=false;
+        for(var i=0;i<RAW_COLS.length;i++){ if(String(rawVal(r,RAW_COLS[i])).toLowerCase().indexOf(q)!==-1){hit=true;break;} }
+        if(!hit) return false;
+      }
+      for(var k in rawColF){ var f=rawColF[k]; if(!f) continue; var col=rawColByKey(k);
+        if(col && String(rawVal(r,col)).toLowerCase().indexOf(f)===-1) return false;
+      }
+      return true;
+    });
+    var col=rawColByKey(rawSort.key), dir=rawSort.dir;
+    if(col) rows.sort(function(a,b){
+      var av=rawVal(a,col), bv=rawVal(b,col);
+      if(isNumCol(col)) return ((Number(av)||0)-(Number(bv)||0))*dir;
+      return String(av).localeCompare(String(bv))*dir;
+    });
+    return rows;
+  }
+  function renderRawHead(){
+    var h1=RAW_COLS.map(function(c){
+      var ar=rawSort.key===c.key?(rawSort.dir<0?'▼':'▲'):'';
+      return '<th class="'+(isNumCol(c)?'num':'')+'" data-key="'+c.key+'">'+esc(c.label)+'<span class="ar">'+ar+'</span></th>';
+    }).join('');
+    var h2=RAW_COLS.map(function(c){ return '<th><input type="text" data-fk="'+c.key+'" value="'+esc(rawColF[c.key]||'')+'" placeholder="filter"></th>'; }).join('');
+    var tbl=document.getElementById('agRawTable'), thead=tbl.querySelector('thead');
+    if(!thead){ thead=document.createElement('thead'); tbl.insertBefore(thead, tbl.firstChild); }
+    thead.innerHTML='<tr>'+h1+'</tr><tr class="agrx-filt">'+h2+'</tr>';
+  }
+  function renderRawBody(){
+    var rows=rawFilteredRows(), tbl=document.getElementById('agRawTable'), tbody=tbl.querySelector('tbody');
+    if(!tbody){ tbody=document.createElement('tbody'); tbl.appendChild(tbody); }
+    tbody.innerHTML = rows.length
+      ? rows.map(function(r){ return '<tr>'+RAW_COLS.map(function(c){ return '<td class="'+(isNumCol(c)?'num':'')+'">'+rawDisp(r,c)+'</td>'; }).join('')+'</tr>'; }).join('')
+      : '<tr><td class="agrx-empty" colspan="'+RAW_COLS.length+'">No invoices match.</td></tr>';
+    document.getElementById('agRawCount').textContent=rows.length+' invoice'+(rows.length===1?'':'s');
+  }
+  function openRaw(scope){
+    rawScope=scope; rawColF={}; rawSort={key:'days',dir:-1};
+    document.getElementById('agRawSearch').value='';
+    document.getElementById('agRawTitle').textContent='Raw invoices — '+(scope.type==='sp'?scope.sp:scope.name);
+    renderRawHead(); renderRawBody();
+    document.getElementById('agRawModal').classList.add('show');
+  }
+  function closeRaw(){ document.getElementById('agRawModal').classList.remove('show'); }
+  function exportRawCSV(){
+    var rows=rawFilteredRows();
+    function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
+    var lines=[RAW_COLS.map(function(c){return c.label;}).map(cell).join(',')];
+    rows.forEach(function(r){ lines.push(RAW_COLS.map(function(c){
+      var v=rawVal(r,c); if(isNumCol(c)) v=Math.round(Number(v)||0); return v;
+    }).map(cell).join(',')); });
+    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='Beverages_Raw_Invoices.csv'; a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+
   function wire(){
-    // Aging date picker → reload the page aged to the chosen date (server recomputes).
+    // Aging date picker → oil reloads the page (server recomputes); beverages refetches in place.
     var asof = document.getElementById('agAsOf');
     if(asof) asof.addEventListener('change',function(){
+      if(company==='bev'){ RAW_BEV=null; loadBev(); return; }
       var u = new URL(window.location.href);
       if(this.value) u.searchParams.set('as_of', this.value); else u.searchParams.delete('as_of');
       window.location.href = u.toString();
     });
 
+    // Oil / Beverages company toggle.
+    document.getElementById('agCo').addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b) return;
+      var c=b.getAttribute('data-co'); if(c===company) return;
+      company=c;
+      [].forEach.call(this.children,function(x){ x.classList.toggle('on', x===b); });
+      // Reset row filters on switch (groups/formats differ per company).
+      selectedFormats=[]; selectedRemarks=[]; signSel='both'; cond={op:'',a:0,b:0};
+      document.getElementById('agSearch').value='';
+      [].forEach.call(document.getElementById('agSign').children,function(x){ x.classList.toggle('on', x.getAttribute('data-sign')==='both'); });
+      document.getElementById('agCondLabel').textContent='Conditions';
+      document.getElementById('agRemLabel').textContent='All remarks';
+      if(c==='oil'){ restoreOil(); rerenderAll(); } else { loadBev(); }
+    });
+
     document.getElementById('agBody').addEventListener('click',function(e){
+      var raw = e.target.closest && e.target.closest('.ag-rawbtn, .ag-rawlink');
+      if(raw){ e.preventDefault(); e.stopPropagation();
+        if(raw.getAttribute('data-scope')==='sp') openRaw({type:'sp', sp:raw.getAttribute('data-sp')});
+        else openRaw({type:'cust', code:raw.getAttribute('data-code'), name:raw.getAttribute('data-name')});
+        return;
+      }
       var grp = e.target.closest && e.target.closest('.ag-grp'); if(!grp) return;
       var gi = grp.getAttribute('data-gi');
       setGroup(gi, !grp.classList.contains('open'));
@@ -572,6 +946,7 @@
     document.getElementById('agExpand').addEventListener('click',function(){ setAll(true); });
     document.getElementById('agCollapse').addEventListener('click',function(){ setAll(false); });
     document.getElementById('agExport').addEventListener('click', exportAgingXLSX);
+    document.getElementById('agExportDetail').addEventListener('click', exportAgingDetail);
 
     document.getElementById('agSearch').addEventListener('input', applyFilters);
 
@@ -586,6 +961,56 @@
       document.querySelectorAll('#agFmtList input').forEach(function(i){ i.checked = all; });
       syncFmt();
     });
+
+    // Remarks multi-select — identical behaviour to Format.
+    var rem = document.getElementById('agRem');
+    document.getElementById('agRemBtn').addEventListener('click',function(e){ e.stopPropagation(); rem.classList.toggle('open'); });
+    document.addEventListener('click',function(e){ if(!rem.contains(e.target)) rem.classList.remove('open'); });
+    document.getElementById('agRemList').addEventListener('change', syncRem);
+    rem.querySelector('.ag-ms-head').addEventListener('click',function(e){
+      var a = e.target.closest('a'); if(!a) return;
+      var all = a.getAttribute('data-act')==='all';
+      document.querySelectorAll('#agRemList input').forEach(function(i){ i.checked = all; });
+      syncRem();
+    });
+
+    // Days multi-select (Beverages only) — same pattern; re-aggregates the pivot on change.
+    var days = document.getElementById('agDays');
+    document.getElementById('agDaysBtn').addEventListener('click',function(e){ e.stopPropagation(); days.classList.toggle('open'); });
+    document.addEventListener('click',function(e){ if(!days.contains(e.target)) days.classList.remove('open'); });
+    document.getElementById('agDaysList').addEventListener('change', syncDays);
+    document.getElementById('agDaysSearch').addEventListener('input', filterDaysList);
+    days.querySelector('.ag-ms-head').addEventListener('click',function(e){
+      var a = e.target.closest('a'); if(!a) return;
+      var all = a.getAttribute('data-act')==='all';
+      document.querySelectorAll('#agDaysList input').forEach(function(i){ i.checked = all; });
+      syncDays();
+    });
+
+    // Raw-invoice modal (Beverages) — global search, per-column filter, click-to-sort, CSV.
+    document.getElementById('agRawClose').addEventListener('click', closeRaw);
+    document.getElementById('agRawModal').addEventListener('click',function(e){ if(e.target===this) closeRaw(); });
+    document.getElementById('agRawSearch').addEventListener('input', renderRawBody);
+    document.getElementById('agRawExport').addEventListener('click', exportRawCSV);
+    document.getElementById('agRawTable').addEventListener('click',function(e){
+      var th=e.target.closest('th[data-key]'); if(!th) return;
+      var k=th.getAttribute('data-key');
+      if(rawSort.key===k) rawSort.dir=-rawSort.dir; else rawSort={key:k,dir:(rawColByKey(k)&&isNumCol(rawColByKey(k)))?-1:1};
+      renderRawHead(); renderRawBody();
+    });
+    document.getElementById('agRawTable').addEventListener('input',function(e){
+      var rmk=e.target.closest('.agrx-rmk');
+      if(rmk){                                  // manual remark edit — save, don't re-render (keep focus)
+        var doc=rmk.getAttribute('data-doc'), code=rmk.getAttribute('data-code'), val=rmk.value;
+        (RAW_BEV||[]).forEach(function(r){ if(String(r.doc)===doc && String(r.code)===code) r.remark=val; });
+        saveRawRemark(code, doc, val, rmk);
+        return;
+      }
+      var inp=e.target.closest('input[data-fk]'); if(!inp) return;
+      rawColF[inp.getAttribute('data-fk')]=(inp.value||'').trim().toLowerCase();
+      renderRawBody();   // thead untouched → the filter input keeps focus/caret
+    });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeRaw(); });
 
     // Balance-Due sign filter (Both / Positive / Negative).
     document.getElementById('agSign').addEventListener('click',function(e){
@@ -632,6 +1057,8 @@
   renderHead();
   renderBody();
   populateFmt();
+  populateRem();
+  updateCompanyUI();
   wire();
 })();
 </script>

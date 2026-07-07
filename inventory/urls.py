@@ -39,11 +39,20 @@ urlpatterns = [
     path('stock-available/', views.stock_available, name='stock_available'),
     path('stock-available/api/data/', views.stock_available_data, name='stock_available_data'),
     path('stock-available/export/', views.stock_available_export, name='stock_available_export'),
+    path('non-inventory/', views.non_inventory, name='non_inventory'),
+    path('non-inventory/api/data/', views.non_inventory_data, name='non_inventory_data'),
+    path('non-inventory/api/drill/', views.non_inventory_drill, name='non_inventory_drill'),
+    path('reconciliation/', views.reconciliation_page, name='reconciliation'),
+    path('reconciliation/api/data/', views.reconciliation_data, name='reconciliation_data'),
+    path('reconciliation/api/ledgers/', views.reconciliation_ledgers, name='reconciliation_ledgers'),
+    path('reconciliation/export/', views.reconciliation_export, name='reconciliation_export'),
     path('production/', views.production, name='production'),
     path('production/api/feasibility/', views.production_feasibility_data, name='production_feasibility_data'),
     path('production/api/fg-list/', views.production_fg_list, name='production_fg_list'),
     path('production/api/plan/', views.production_plan_data, name='production_plan_data'),
     path('production/api/warehouses/', views.production_warehouses, name='production_warehouses'),
+    path('daily-production/', views.daily_production, name='daily_production'),
+    path('daily-production/api/data/', views.daily_production_data, name='daily_production_data'),
 ]
 
 for path_name, view_name in _ENDPOINTS:

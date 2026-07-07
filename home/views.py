@@ -107,9 +107,15 @@ PAGE_PERMS = [                       # standalone report pages (independent of f
     {'group': 'customer_aging_viewer',  'label': 'Customer Aging'},
     {'group': 'oih_vs_stock_viewer',    'label': 'OIH vs Stock'},
     {'group': 'compare_sales_viewer',   'label': 'Compare Sales'},
+    {'group': 'sales_cn_viewer',        'label': 'Sales vs Credit Notes'},
+    {'group': 'hidden_sales_viewer',    'label': 'Hidden Customer Sales'},
+    {'group': 'customer_master_viewer', 'label': 'Customer Master'},
+    {'group': 'sales_flow_viewer',      'label': 'Sales Document Flow'},
+    {'group': 'claims_viewer',          'label': 'Claims'},
     {'group': 'required_credit_viewer', 'label': 'Required Credit Limit'},
     {'group': 'stock_viewer',           'label': 'Stock Available'},
     {'group': 'production_viewer',       'label': 'Production Plan'},
+    {'group': 'daily_production_viewer', 'label': 'Daily Production Transaction'},
 ]
 MODULE_PERMS = [                     # whole-module read access
     {'group': 'inventory_viewer', 'label': 'Inventory'},

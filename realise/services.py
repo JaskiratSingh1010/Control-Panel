@@ -10,7 +10,7 @@ from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
                      CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot, FlexTarget,
-                     AgingRemark, AgingRemarkLine)
+                     AgingRemark, AgingRemarkLine, AgingDueConfig, Claim)
 
 logger = logging.getLogger(__name__)
 
@@ -686,14 +686,20 @@ def get_drill_down(start_date, end_date, raw_rows, u_type=None, u_sub_group=None
         if filters:
             skip = False
             for fk, fv in filters.items():
-                val = str(d.get(fk, '') or '').strip()
+                if fk == 'ItemName':          # item nodes are labelled 'CODE — NAME'
+                    nm = str(d.get('ItemName', '') or '').strip()
+                    val = _item_label(str(d.get('ItemCode', '') or '').strip(), nm) if nm else ''
+                else:
+                    val = str(d.get(fk, '') or '').strip()
                 if val.upper() != str(fv).upper():
                     skip = True
                     break
             if skip:
                 continue
 
-        dim_val = str(d.get(drill_by, '') or 'UNKNOWN').strip()
+        dim_val = str(d.get(drill_by, '') or '').strip()
+        if drill_by == 'ItemName' and dim_val:   # show the item code with the name
+            dim_val = _item_label(str(d.get('ItemCode', '') or '').strip(), dim_val)
         if not dim_val:
             dim_val = 'UNKNOWN'
 
@@ -1071,6 +1077,18 @@ def get_product_actuals_payload(channel, state, month, year):
 
 def _normalize_name(value):
     return str(value or '').strip().upper()
+
+
+def _item_label(code, name):
+    """Combine an item code + name into the 'CODE — NAME' string shown everywhere an item is
+    displayed. Falls back to just the name (or code, or '—') when one side is missing. Kept
+    consistent across the aggregation rows AND the drill-to-document queries so the modal's
+    item filter still matches after the label is combined."""
+    code = str(code or '').strip()
+    name = str(name or '').strip()
+    if code and name:
+        return f'{code} — {name}'
+    return name or code or '—'
 
 
 def get_target_editor_options(raw_rows=None):
@@ -2205,6 +2223,55 @@ def _credit_ledger_asof(as_of_date):
         return {}
 
 
+# Parties that owe money but have no open sales order (delivered, not yet paid) still belong on
+# the sheet so credit exposure stays visible until they pay. They are placed under their REAL ASM
+# (territory) — resolved from their main group + ship-to state, exactly like an open-order party —
+# rather than a separate section, so e.g. KNOWTABLE (ROI / Karnataka) sits under its owner PRINCE.
+
+
+def _card_territory(card_codes):
+    """{card_code: {'name', 'group', 'state'(code), 'city'}} for the given cards. `group` is the
+    customer's OCRD main group; state/city come from the ship-to address of the party's MOST RECENT
+    sales order (so a national account is placed by where it ships, matching how open orders group),
+    falling back to the OCRD billing address when the card has no orders at all. {} on empty/SAP
+    error. Feeds ASM resolution for unpaid parties that have no open order."""
+    codes = sorted({_normalize_name(c) for c in (card_codes or []) if _normalize_name(c)})
+    if not codes:
+        return {}
+    inlist = ','.join("'%s'" % c.replace("'", "''") for c in codes)
+    S = SAP_SCHEMA
+    sql = f'''
+        WITH ranked AS (
+          SELECT H."CardCode" AS "CC",
+                 ROW_NUMBER() OVER (PARTITION BY H."CardCode"
+                                    ORDER BY H."DocDate" DESC, H."DocNum" DESC) AS "RN",
+                 {_SHIPTO_STATE} AS "ST", {_SHIPTO_CITY} AS "CITY"
+          FROM "{S}"."ORDR" H
+          JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+          {_SHIPTO_JOIN.format(S=S)}
+          WHERE H."CardCode" IN ({inlist})
+        )
+        SELECT C."CardCode"                          AS "CC",
+               COALESCE(TRIM(C."CardName"), '')       AS "NAME",
+               COALESCE(TRIM(C."U_Main_Group"), '')   AS "GRP",
+               COALESCE(NULLIF(TRIM(r."ST"), ''),   TRIM(C."State1"), '') AS "ST",
+               COALESCE(NULLIF(TRIM(r."CITY"), ''), TRIM(C."City"),  '') AS "CITY"
+        FROM "{S}"."OCRD" C
+        LEFT JOIN ranked r ON r."CC" = C."CardCode" AND r."RN" = 1
+        WHERE C."CardCode" IN ({inlist})
+    '''
+    try:
+        return {_normalize_name(r.get('CC')): {
+                    'name':  _normalize_name(r.get('NAME')),
+                    'group': _normalize_name(r.get('GRP')),
+                    'state': _normalize_name(r.get('ST')),
+                    'city':  _normalize_name(r.get('CITY')),
+                } for r in sap_connector.execute_query(sql)}
+    except Exception as exc:
+        logger.error('[REQCREDIT] card-territory fetch failed: %s', exc)
+        return {}
+
+
 def get_active_credit_lock():
     """The current active CreditLock, or None. A lock past its lock_until date auto-clears
     (the freeze lapses and the columns revert to live SAP on the next read)."""
@@ -2362,6 +2429,35 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
         elif utype == 'COMMODITY':
             bucket['litres']['commodity'] += qty
 
+    # Parties that owe money but have NO open order (delivered, not yet paid) stay on the sheet
+    # until they clear, placed under their REAL ASM (territory) — resolved from main group + ship-to
+    # state, the same way an open-order party is — so they sit with the rest of that owner's book.
+    # Scope: any card with a positive ledger balance as of the date that isn't already an open-order
+    # party. Only when the historical ledger is available (else we can't see beyond open-order parties).
+    if use_aging:
+        have = {b['card_code'] for b in agg.values()}
+        owing = {cc: bal for cc, bal in ledger_asof.items()
+                 if cc and cc not in have and bal > 0}      # any unpaid balance (even ₹1) stays visible
+        terr = _card_territory(owing.keys()) if owing else {}
+        for cc, bal in owing.items():
+            t = terr.get(cc, {})
+            group = _normalize_name(t.get('group'))
+            st_raw = _normalize_name(t.get('state'))
+            state_name = _delhi_gt_state(cc, STATE_CODE_NAMES.get(st_raw, st_raw))
+            state_code = name_to_code.get(state_name, state_name)
+            city = _normalize_name(t.get('city'))
+            agg[(cc, state_name, group)] = {
+                'card_code': cc,
+                'party': _normalize_name(t.get('name')) or cc,
+                'main_group': group,
+                'state': state_code,
+                'asm': person_for_group_state(group, state_name, city) or '',
+                'no_open_order': True,          # dues but no live order — 0 OIH, excluded from OIH KPIs
+                '_so': {}, '_sotot': {},
+                **_blank_bucket(),
+            }
+            card_balance.setdefault(cc, bal)
+
     # Ledger balance is per CUSTOMER but a customer can span several (state/ASM) rows. Split
     # it across those rows in proportion to open-order value so the column still totals to the
     # real balance (single-row customers get the full amount). Outstanding = open value + ledger.
@@ -2415,7 +2511,7 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
 
     asms = []
     grand = _blank_bucket()
-    for asm in sorted(by_asm):
+    for asm in sorted(by_asm, key=lambda a: (a == 'UNASSIGNED', a)):   # UNASSIGNED last
         rows = sorted(by_asm[asm], key=lambda r: -r['litres']['total'])
         sub = _blank_bucket()
         for r in rows:
@@ -2577,8 +2673,8 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     # F DELIVERY REMARK, G PREMIUM, H COMMODITY, I Grand Total, J SO NO, K PI AMT,
     # L LEDGER AMT, M TOTAL OUTSTANDING, N REQUIRED LIMIT, O–P deferred financial columns.
     widths = {1: 26.7, 2: 46.6, 3: 7.0, 4: 14.4, 5: 9.0, 6: 28.0, 7: 12.3, 8: 12.3, 9: 12.0,
-              10: 22.0, 11: 14.0, 12: 15.0, 13: 14.0, 14: 18.0, 15: 14.0, 16: 14.0, 17: 14.0}
-    MAX_COL = 17
+              10: 22.0, 11: 14.0, 12: 15.0, 13: 14.0, 14: 18.0, 15: 14.0, 16: 14.0, 17: 14.0, 18: 18.0}
+    MAX_COL = 18
 
     cells = {}
 
@@ -2596,12 +2692,13 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     put_text(1, 1, 'Sum of TOTAL LTR', style=_ST_TITLE)
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
                'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT', 'PI TOTAL AMT',
-               'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING']
+               'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING',
+               'LEDGER - PAYMENT']
     for i, h in enumerate(headers, start=1):
         put_text(2, i, h, style=_ST_HEAD)
 
     r = 3
-    g_prem = g_com = g_tot = g_val = g_pitot = g_led = g_out = g_req = g_pay = g_rem = 0.0
+    g_prem = g_com = g_tot = g_val = g_pitot = g_led = g_out = g_req = g_pay = g_rem = g_ledpay = 0.0
     for g in payload.get('asms', []):
         rows = g.get('rows', [])
         if types:
@@ -2609,7 +2706,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
-        s_prem = s_com = s_tot = s_val = s_pitot = s_led = s_out = s_req = s_pay = s_rem = 0.0
+        s_prem = s_com = s_tot = s_val = s_pitot = s_led = s_out = s_req = s_pay = s_rem = s_ledpay = 0.0
         for row in rows:
             prem = float(row['litres'].get('premium', 0) or 0)
             commodity = float(row['litres'].get('commodity', 0) or 0)
@@ -2621,6 +2718,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             required = float(row['value'].get('required_limit', 0) or 0)
             payment = float(row['value'].get('payment_done', 0) or 0)   # receipts on the selected date
             remaining = float(row['value'].get('remaining', 0) or 0)
+            led_pay = ledger - payment                    # Ledger Amt − Payment Received (this date)
             if first:
                 put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
             put_text(r, 2, row['party'])                  # B PARTY NAME
@@ -2639,9 +2737,10 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 15, required)                      # O Required Limit (outstanding + 2%)
             put_num(r, 16, payment)                       # P PAYMENT DONE (receipts on the selected date)
             put_num(r, 17, remaining)                     # Q OUTSTANDING (= Total Outstanding − Payment)
+            put_num(r, 18, led_pay)                        # R LEDGER − PAYMENT (Ledger Amt − Payment Done)
             s_prem += prem; s_com += commodity; s_tot += total
             s_val += val; s_pitot += pi_total; s_led += ledger; s_out += outstanding; s_req += required
-            s_pay += payment; s_rem += remaining
+            s_pay += payment; s_rem += remaining; s_ledpay += led_pay
             first = False
             r += 1
         put_text(r, 1, f"{g['asm']} Total", style=_ST_BTEXT)
@@ -2650,9 +2749,10 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         put_num(r, 12, s_pitot, style=_ST_BNUM); put_num(r, 13, s_led, style=_ST_BNUM)
         put_num(r, 14, s_out, style=_ST_BNUM); put_num(r, 15, s_req, style=_ST_BNUM)
         put_num(r, 16, s_pay, style=_ST_BNUM); put_num(r, 17, s_rem, style=_ST_BNUM)
+        put_num(r, 18, s_ledpay, style=_ST_BNUM)
         g_prem += s_prem; g_com += s_com; g_tot += s_tot
         g_val += s_val; g_pitot += s_pitot; g_led += s_led; g_out += s_out; g_req += s_req
-        g_pay += s_pay; g_rem += s_rem
+        g_pay += s_pay; g_rem += s_rem; g_ledpay += s_ledpay
         r += 1
 
     put_text(r, 1, 'Grand Total', style=_ST_BTEXT)
@@ -2661,6 +2761,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     put_num(r, 12, g_pitot, style=_ST_BNUM); put_num(r, 13, g_led, style=_ST_BNUM)
     put_num(r, 14, g_out, style=_ST_BNUM); put_num(r, 15, g_req, style=_ST_BNUM)
     put_num(r, 16, g_pay, style=_ST_BNUM); put_num(r, 17, g_rem, style=_ST_BNUM)
+    put_num(r, 18, g_ledpay, style=_ST_BNUM)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 
@@ -2956,7 +3057,7 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
             'person': person_map.get(g + '|' + state_name) or '—',
             'customer': customer,
             'product': _normalize_name(row.get('SUBG')) or '—',
-            'item': _normalize_name(row.get('ITEM')) or '—',
+            'item': _item_label(_normalize_name(row.get('ICODE')), _normalize_name(row.get('ITEM'))),
         }
         if not _derived_node_match(derived, filters):
             continue
@@ -2976,6 +3077,426 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
             it = rec['_items'][ikey] = {'name': derived['item'], 'code': icode, 'litres': 0.0}
         it['litres'] += lit
     return _finalize_with_stock(docs)
+
+
+# ══════════════════════ Sales vs Credit Notes report ══════════════════════
+# Gross sales (OINV) alongside credit notes (ORIN), the latter split into CN for Goods (item
+# credit memos, DocType 'I' — real product returns, carry litres/type/product) and Claim for
+# Services (service credit memos, DocType 'S' — discounts / FOC / samples; no item line, so no
+# litres and no Premium/Commodity). Net Sales = Total Sales − Total CN (goods + services).
+# Grouped by any of main group / state / sales person / product / item / customer, filterable by
+# Premium/Commodity (oil only) and Revenue vs quantity (Litres for oil, Boxes for beverages).
+# Two companies: oil (JIVO_OIL_HANADB, U_SALES_PERSON, litres=Qty×SalPackUn, hides U_ARNO T/H) and
+# beverages (JIVO_BEVERAGES_HANADB, OSLP.SlpName, boxes=Qty/SalFactor2, FINISHED goods only).
+_salescn_cache = {}          # (company, start, end) -> (expiry, payload)
+_SALESCN_TTL = 90            # seconds — matches the other live SAP report windows
+
+# Sentinel dimension labels for service claims (they have no product / item / segment).
+_CN_SERVICE_LABEL = 'SERVICE / CLAIM'
+
+
+def _fetch_sales_cn_oil(start_date, end_date):
+    """Raw per-line rows for the oil company: three UNION-ed streams (SALES / CNG / CNS) each
+    carrying the report's dimensions, QTY (litres; 0 for service claims) and REV (LineTotal,
+    pre-VAT). Cancelled and hidden (U_ARNO 'T'/'H') documents are excluded, matching Done."""
+    S = SAP_SCHEMA
+    st, join = _SHIPTO_STATE, _SHIPTO_JOIN.format(S=S)
+    where = ('H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = \'N\' '
+             'AND (H."U_ARNO" NOT IN (\'T\', \'H\') OR H."U_ARNO" IS NULL)')
+    item_cols = f'''COALESCE(TRIM(I."U_Sub_Group"),'') AS "PROD",
+                    COALESCE(TRIM(I."ItemName"),'')     AS "ITEM",
+                    COALESCE(TRIM(I."ItemCode"),'')     AS "ICODE",
+                    COALESCE(TRIM(I."U_TYPE"),'')        AS "UTYPE",
+                    L."Quantity" * COALESCE(I."SalPackUn",0) AS "QTY"'''
+    hdr_cols = '''COALESCE(TRIM(C."U_Main_Group"),'') AS "GRP", {st} AS "ST",
+                  COALESCE(TRIM(H."U_SALES_PERSON"),'') AS "PERSON",
+                  COALESCE(TRIM(H."CardCode"),'') AS "CCODE",
+                  COALESCE(TRIM(C."CardName"),'') AS "CUST"'''.replace('{st}', st)
+    item_from = (f'JOIN "{S}"."{{ln}}" L ON L."DocEntry"=H."DocEntry" '
+                 f'JOIN "{S}"."OCRD" C ON C."CardCode"=H."CardCode" '
+                 f'LEFT JOIN "{S}"."OITM" I ON I."ItemCode"=L."ItemCode" {join}')
+    sales = (f'SELECT \'SALES\' AS "STREAM", {hdr_cols}, {item_cols}, COALESCE(L."LineTotal",0) AS "REV" '
+             f'FROM "{S}"."OINV" H ' + item_from.format(ln='INV1') + f' WHERE {where}')
+    cng = (f'SELECT \'CNG\' AS "STREAM", {hdr_cols}, {item_cols}, COALESCE(L."LineTotal",0) AS "REV" '
+           f'FROM "{S}"."ORIN" H ' + item_from.format(ln='RIN1') + f' WHERE {where} AND H."DocType"=\'I\'')
+    cns = (f'SELECT \'CNS\' AS "STREAM", {hdr_cols}, '
+           f'\'{_CN_SERVICE_LABEL}\' AS "PROD", \'{_CN_SERVICE_LABEL}\' AS "ITEM", \'\' AS "ICODE", \'SERVICE\' AS "UTYPE", '
+           f'0 AS "QTY", COALESCE(L."LineTotal",0) AS "REV" '
+           f'FROM "{S}"."ORIN" H JOIN "{S}"."RIN1" L ON L."DocEntry"=H."DocEntry" '
+           f'JOIN "{S}"."OCRD" C ON C."CardCode"=H."CardCode" {join} WHERE {where} AND H."DocType"=\'S\'')
+    sql = f'{sales} UNION ALL {cng} UNION ALL {cns}'
+    return sap_connector.execute_query(sql, (start_date, end_date) * 3)
+
+
+def _fetch_sales_cn_bev(start_date, end_date):
+    """Raw per-line rows for the beverages company. QTY = Boxes (Qty / SalFactor2). Beverages
+    have no Premium/Commodity, so UTYPE is blank; state resolves via OCST from the ship-to
+    address; sales person is OSLP.SlpName. Restricted to FINISHED goods (matching the beverages
+    sales report), except service claims which have no item line."""
+    B = BEVERAGES_SCHEMA
+    state_expr = (f'(SELECT K."Name" FROM "{B}"."OCST" K '
+                  f'WHERE K."Code"=A."State" AND K."Country"=A."Country")')
+    shipto = (f'LEFT JOIN "{B}"."CRD1" A ON A."CardCode"=H."CardCode" '
+              f'AND A."AdresType"=\'S\' AND A."Address"=H."ShipToCode"')
+    slp = f'LEFT JOIN "{B}"."OSLP" S ON S."SlpCode"=H."SlpCode"'
+    where = 'H."DocDate" BETWEEN ? AND ? AND H."CANCELED"=\'N\' AND C."GroupCode"<>100'
+    fin = (f'JOIN "{B}"."OITM" I ON I."ItemCode"=L."ItemCode" '
+           f'JOIN "{B}"."OITB" G ON G."ItmsGrpCod"=I."ItmsGrpCod"')
+    fin_where = 'AND L."TreeType"<>\'I\' AND G."ItmsGrpNam"=\'FINISHED\''
+    hdr_cols = ('COALESCE(TRIM(C."U_Main_Group"),\'\') AS "GRP", {st} AS "ST", '
+                'COALESCE(TRIM(S."SlpName"),\'\') AS "PERSON", '
+                'COALESCE(TRIM(H."CardCode"),\'\') AS "CCODE", '
+                'COALESCE(TRIM(C."CardName"),\'\') AS "CUST"').replace('{st}', state_expr)
+    item_cols = ('COALESCE(TRIM(I."U_Sub_Group"),\'\') AS "PROD", '
+                 'COALESCE(TRIM(I."ItemName"),\'\') AS "ITEM", '
+                 'COALESCE(TRIM(I."ItemCode"),\'\') AS "ICODE", \'\' AS "UTYPE", '
+                 'L."Quantity" / NULLIF(I."SalFactor2",0) AS "QTY"')
+    item_from = (f'JOIN "{B}"."{{ln}}" L ON L."DocEntry"=H."DocEntry" '
+                 f'JOIN "{B}"."OCRD" C ON C."CardCode"=H."CardCode" {fin} {slp} {shipto}')
+    sales = (f'SELECT \'SALES\' AS "STREAM", {hdr_cols}, {item_cols}, COALESCE(L."LineTotal",0) AS "REV" '
+             f'FROM "{B}"."OINV" H ' + item_from.format(ln='INV1') + f' WHERE {where} {fin_where}')
+    cng = (f'SELECT \'CNG\' AS "STREAM", {hdr_cols}, {item_cols}, COALESCE(L."LineTotal",0) AS "REV" '
+           f'FROM "{B}"."ORIN" H ' + item_from.format(ln='RIN1') + f' WHERE {where} {fin_where} AND H."DocType"=\'I\'')
+    cns = (f'SELECT \'CNS\' AS "STREAM", {hdr_cols}, '
+           f'\'{_CN_SERVICE_LABEL}\' AS "PROD", \'{_CN_SERVICE_LABEL}\' AS "ITEM", \'\' AS "ICODE", \'\' AS "UTYPE", '
+           f'0 AS "QTY", COALESCE(L."LineTotal",0) AS "REV" '
+           f'FROM "{B}"."ORIN" H JOIN "{B}"."RIN1" L ON L."DocEntry"=H."DocEntry" '
+           f'JOIN "{B}"."OCRD" C ON C."CardCode"=H."CardCode" {slp} {shipto} '
+           f'WHERE {where} AND H."DocType"=\'S\'')
+    sql = f'{sales} UNION ALL {cng} UNION ALL {cns}'
+    return sap_connector.execute_query(sql, (start_date, end_date) * 3)
+
+
+def _aggregate_sales_cn(raw, company):
+    """Collapse raw stream rows into per-dimension buckets carrying the five measures
+    (sales / CN-goods qty+rev, CN-service rev). State is normalised to a full name (oil codes →
+    names, with the Delhi-GT remap); beverages sales-person aliases are folded together."""
+    is_oil = company != 'beverages'
+    agg = {}
+    for r in raw or []:
+        stream = str(r.get('STREAM') or '').strip().upper()
+        grp = _normalize_name(r.get('GRP')) or '—'
+        ccode = _normalize_name(r.get('CCODE'))
+        if is_oil:
+            stc = _normalize_name(r.get('ST'))
+            state = _delhi_gt_state(ccode, STATE_CODE_NAMES.get(stc, stc)) or '—'
+        else:
+            state = _normalize_name(r.get('ST')) or '—'
+        person = _normalize_name(r.get('PERSON')) or '—'
+        if not is_oil:
+            person = _BEV_SALESPERSON_ALIAS.get(person, person)
+        prod = _normalize_name(r.get('PROD')) or '—'
+        item = _item_label(_normalize_name(r.get('ICODE')), _normalize_name(r.get('ITEM')))
+        cust = _normalize_name(r.get('CUST')) or '—'
+        utype = _normalize_name(r.get('UTYPE'))
+        key = (grp, state, person, prod, item, cust, utype)
+        b = agg.get(key)
+        if b is None:
+            b = agg[key] = {'main_group': grp, 'state': state, 'person': person,
+                            'product': prod, 'item_name': item, 'customer': cust, 'u_type': utype,
+                            'sales_qty': 0.0, 'sales_rev': 0.0, 'cng_qty': 0.0,
+                            'cng_rev': 0.0, 'cns_rev': 0.0}
+        qty, rev = float(r.get('QTY') or 0), float(r.get('REV') or 0)
+        if stream == 'SALES':
+            b['sales_qty'] += qty
+            b['sales_rev'] += rev
+        elif stream == 'CNG':
+            b['cng_qty'] += qty
+            b['cng_rev'] += rev
+        elif stream == 'CNS':
+            b['cns_rev'] += rev
+    out = list(agg.values())
+    for b in out:
+        for k in ('sales_qty', 'sales_rev', 'cng_qty', 'cng_rev', 'cns_rev'):
+            b[k] = round(b[k], 2)
+    return out
+
+
+def get_sales_cn_report(start_date, end_date, company='oil'):
+    """Sales vs Credit Notes payload for the given date range and company ('oil' | 'beverages').
+    Returns {status, company, measure ('Litres'|'Boxes'), has_type, rows[...], start, end}. Each
+    row carries its dimensions plus sales_qty/sales_rev, cng_qty/cng_rev (CN for Goods) and
+    cns_rev (Claim for Services). Cached per (company, range) for _SALESCN_TTL seconds."""
+    company = 'beverages' if str(company or '').lower().startswith('bev') else 'oil'
+    measure = 'Boxes' if company == 'beverages' else 'Litres'
+    key = (company, str(start_date), str(end_date))
+    now = time.time()
+    hit = _salescn_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    try:
+        raw = (_fetch_sales_cn_bev(start_date, end_date) if company == 'beverages'
+               else _fetch_sales_cn_oil(start_date, end_date))
+        payload = {'status': 'ok', 'company': company, 'measure': measure,
+                   'has_type': company != 'beverages', 'rows': _aggregate_sales_cn(raw, company),
+                   'start': str(start_date), 'end': str(end_date)}
+    except Exception as exc:
+        logger.error('[SALES-CN] %s report failed: %s', company, exc)
+        return {'status': 'error', 'company': company, 'measure': measure,
+                'has_type': company != 'beverages', 'rows': [], 'error': str(exc),
+                'start': str(start_date), 'end': str(end_date)}
+    if raw:
+        _salescn_cache[key] = (now + _SALESCN_TTL, payload)
+    return payload
+
+
+# ══════════════════════ Hidden Customer Sales report ══════════════════════
+# Sales invoices the SAP team has flagged HIDDEN (OINV.U_ARNO = 'H') are excluded from the
+# dashboard's Done (see the U_ARNO note near _DONE_LINE_SQL). This report surfaces them on their
+# own — one row per invoice line — so hidden sales stay auditable. Litres = Quantity × SalPackUn,
+# Value = INV1.LineTotal, Cost Center = INV1.OcrCode (holds the oil variety). Oil only. Same
+# filters as the source query: U_ARNO='H' and a DocDate range (nothing else).
+_hidden_sales_cache = {}
+_HIDDEN_SALES_TTL = 90
+
+
+def get_hidden_customer_sales(start_date, end_date):
+    """Hidden sales-invoice lines (OINV.U_ARNO='H') in [start_date, end_date]. Returns
+    {status, rows, start, end}; each row carries doc/status/date, customer, item, cost center
+    (OcrCode) and qty/litres/value. The client pivots + filters. Cached per range for
+    _HIDDEN_SALES_TTL seconds."""
+    key = (str(start_date), str(end_date))
+    now = time.time()
+    hit = _hidden_sales_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    S = SAP_SCHEMA
+    sql = f'''
+        SELECT T0."DocNum"   AS "DOCNUM", T0."DocStatus" AS "DSTATUS",
+               TO_VARCHAR(CAST(T0."DocDate" AS DATE), 'YYYY-MM-DD') AS "DDATE",
+               COALESCE(TRIM(T0."CardCode"), '') AS "CCODE",
+               COALESCE(TRIM(T0."CardName"), '') AS "CNAME",
+               COALESCE(TRIM(T1."ItemCode"), '') AS "ICODE",
+               COALESCE(TRIM(T2."ItemName"), '') AS "INAME",
+               COALESCE(T1."Quantity", 0)                        AS "QTY",
+               COALESCE(T1."Quantity", 0) * COALESCE(T2."SalPackUn", 0) AS "LIT",
+               COALESCE(T1."LineTotal", 0)                       AS "VAL",
+               COALESCE(TRIM(T2."U_TYPE"), '')  AS "UTYPE",
+               COALESCE(TRIM(T1."OcrCode"), '') AS "OCR",
+               COALESCE(NULLIF(TRIM(T4."State"), ''), TRIM(T3."State1")) AS "ST",
+               COALESCE(TRIM(T3."U_Main_Group"), '') AS "GRP"
+        FROM "{S}"."OINV" T0
+        INNER JOIN "{S}"."INV1" T1 ON T0."DocEntry" = T1."DocEntry"
+        INNER JOIN "{S}"."OITM" T2 ON T1."ItemCode" = T2."ItemCode"
+        LEFT JOIN "{S}"."OCRD" T3 ON T3."CardCode" = T0."CardCode"
+        LEFT JOIN "{S}"."CRD1" T4 ON T4."CardCode" = T0."CardCode"
+             AND T4."Address" = T0."ShipToCode" AND T4."AdresType" = 'S'
+        WHERE T0."U_ARNO" = 'H' AND T0."DocDate" BETWEEN ? AND ?
+        ORDER BY T0."DocDate" DESC, T0."DocNum" DESC
+    '''
+    try:
+        raw = sap_connector.execute_query(sql, (start_date, end_date))
+    except Exception as exc:
+        logger.error('[HIDDEN-SALES] fetch failed: %s', exc)
+        return {'status': 'error', 'rows': [], 'error': 'Could not read hidden invoices from SAP.',
+                'start': str(start_date), 'end': str(end_date)}
+    status_map = {'O': 'Open', 'C': 'Closed'}
+    rows = []
+    for r in raw:
+        code = _normalize_name(r.get('ICODE'))
+        stc = _normalize_name(r.get('ST'))
+        state = _normalize_name(_delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(stc, stc))) or '—'
+        rows.append({
+            'doc': str(r.get('DOCNUM') or '').strip(),
+            'status': status_map.get(str(r.get('DSTATUS') or '').strip().upper(),
+                                     str(r.get('DSTATUS') or '').strip()),
+            'date': str(r.get('DDATE') or '').strip(),
+            'card_code': _normalize_name(r.get('CCODE')),
+            'customer': _normalize_name(r.get('CNAME')) or _normalize_name(r.get('CCODE')) or '—',
+            'item_code': code,
+            'item_name': _item_label(code, _normalize_name(r.get('INAME'))),
+            'cost_center': _normalize_name(r.get('OCR')) or '—',
+            'state': state,
+            'main_group': _normalize_name(r.get('GRP')) or '—',
+            'u_type': _normalize_name(r.get('UTYPE')) or '—',
+            'qty': float(r.get('QTY') or 0),
+            'litres': round(float(r.get('LIT') or 0), 2),
+            'value': round(float(r.get('VAL') or 0), 2),
+        })
+    payload = {'status': 'ok', 'rows': rows, 'start': str(start_date), 'end': str(end_date)}
+    if raw:
+        _hidden_sales_cache[key] = (now + _HIDDEN_SALES_TTL, payload)
+    return payload
+
+
+# ══════════════════════ Customer Master report ══════════════════════
+# A clean master-data listing of every customer (OCRD, CardType='C') — the details that matter for
+# a sales/account team: contact, GSTIN/PAN, address & location, sales person, payment terms, credit
+# limit, balance and account status. GSTIN lives per-address in CRD1.GSTRegnNo (prefer the default
+# bill-to address, else any address that has one); state name via OCST; terms via OCTG; sales
+# person via OSLP. No internal SAP plumbing columns. Oil company (JIVO_OIL_HANADB).
+_customer_master_cache = {}
+_CUSTMASTER_TTL = 300   # 5 min — master data changes rarely
+
+
+def get_customer_master():
+    """Every customer (OCRD CardType='C') with the relevant master-data fields. Returns
+    {status, rows, count}. Each row: code, name, main_group, contact_person, phone, mobile, email,
+    gstin, pan, address, city, state, pincode, sales_person, payment_terms, credit_limit, balance,
+    status ('Active' | 'Frozen' | 'Inactive'). Cached _CUSTMASTER_TTL seconds."""
+    now = time.time()
+    hit = _customer_master_cache.get('all')
+    if hit and hit[0] > now:
+        return hit[1]
+    S = SAP_SCHEMA
+    sql = f'''
+        SELECT T."CardCode" AS "CODE", T."CardName" AS "NAME",
+               COALESCE(TRIM(T."U_Main_Group"), '') AS "GRP",
+               COALESCE(TRIM(T."CntctPrsn"), '')    AS "CONTACT",
+               COALESCE(TRIM(T."Phone1"), '')       AS "PHONE",
+               COALESCE(TRIM(T."Cellular"), '')     AS "MOBILE",
+               COALESCE(TRIM(T."E_Mail"), '')       AS "EMAIL",
+               COALESCE(TRIM(T."LicTradNum"), '')   AS "PAN",
+               COALESCE(TRIM(T."Address"), '')      AS "ADDRESS",
+               COALESCE(TRIM(T."City"), '')         AS "CITY",
+               COALESCE(TRIM(T."ZipCode"), '')      AS "PIN",
+               (SELECT MAX(K."Name") FROM "{S}"."OCST" K WHERE K."Code" = T."State1" AND K."Country" = T."Country") AS "STATE",
+               COALESCE(TRIM(SL."SlpName"), '')     AS "SALESPERSON",
+               COALESCE(TRIM(G."PymntGroup"), '')   AS "TERMS",
+               COALESCE(T."CreditLine", 0)          AS "CREDIT",
+               COALESCE(T."Balance", 0)             AS "BALANCE",
+               T."validFor" AS "ACTIVE", T."frozenFor" AS "FROZEN",
+               COALESCE(
+                 (SELECT MAX(B1."GSTRegnNo") FROM "{S}"."CRD1" B1 WHERE B1."CardCode" = T."CardCode"
+                    AND B1."Address" = T."BillToDef" AND B1."AdresType" = 'B'
+                    AND TRIM(COALESCE(B1."GSTRegnNo", '')) <> ''),
+                 (SELECT MAX(B2."GSTRegnNo") FROM "{S}"."CRD1" B2 WHERE B2."CardCode" = T."CardCode"
+                    AND TRIM(COALESCE(B2."GSTRegnNo", '')) <> '')
+               ) AS "GSTIN"
+        FROM "{S}"."OCRD" T
+        LEFT JOIN "{S}"."OSLP" SL ON SL."SlpCode" = T."SlpCode"
+        LEFT JOIN "{S}"."OCTG" G  ON G."GroupNum" = T."GroupNum"
+        WHERE T."CardType" = 'C'
+        ORDER BY T."CardName"
+    '''
+    try:
+        raw = sap_connector.execute_query(sql)
+    except Exception as exc:
+        logger.error('[CUST-MASTER] fetch failed: %s', exc)
+        return {'status': 'error', 'rows': [], 'count': 0,
+                'error': 'Could not read the customer master from SAP.'}
+
+    def _clean(v):
+        return str(v or '').strip()
+
+    rows = []
+    for r in raw:
+        sp = _clean(r.get('SALESPERSON'))
+        if sp.upper().startswith('-NO SALES'):      # SAP placeholder "-No Sales Employee / Buyer-"
+            sp = ''
+        frozen = _clean(r.get('FROZEN')).upper() == 'Y'
+        active = _clean(r.get('ACTIVE')).upper() == 'Y'
+        status = 'Frozen' if frozen else ('Active' if active else 'Inactive')
+        rows.append({
+            'code': _clean(r.get('CODE')),
+            'name': _clean(r.get('NAME')) or _clean(r.get('CODE')),
+            'main_group': _clean(r.get('GRP')) or '—',
+            'contact_person': _clean(r.get('CONTACT')),
+            'mobile': _clean(r.get('MOBILE')) or _clean(r.get('PHONE')),   # one contact number
+            'email': _clean(r.get('EMAIL')),
+            'gstin': _clean(r.get('GSTIN')),
+            'pan': _clean(r.get('PAN')),
+            'address': _clean(r.get('ADDRESS')),
+            'city': _clean(r.get('CITY')),
+            'state': _clean(r.get('STATE')),
+            'pincode': _clean(r.get('PIN')),
+            'sales_person': sp,
+            'payment_terms': _clean(r.get('TERMS')),
+            'credit_limit': float(r.get('CREDIT') or 0),
+            'balance': float(r.get('BALANCE') or 0),
+            'status': status,
+        })
+    payload = {'status': 'ok', 'rows': rows, 'count': len(rows)}
+    if rows:
+        _customer_master_cache['all'] = (now + _CUSTMASTER_TTL, payload)
+    return payload
+
+
+# ══════════════════════ Sales Document Flow report ══════════════════════
+# The sales document chain per party for a day's invoices: Sales Quotation → Sales Order → A/R
+# Invoice, with the invoiced litres. Anchored on invoices (OINV) in the date range (excluding
+# cancelled + hidden, matching Done). Each invoice line is traced to its Sales Order — directly
+# (INV1.BaseType=17) or via a Delivery (BaseType=15 → DLN1.BaseType=17) — and each order line to
+# its Quotation (RDR1.BaseType=23 → OQUT). Litres = Quantity × SalPackUn.
+_sales_flow_cache = {}
+_SALES_FLOW_TTL = 90
+
+
+def get_sales_document_flow(start_date, end_date, company='oil'):
+    """Rows of Party / Quotation No / Order No / Invoice No / qty for invoices dated in
+    [start_date, end_date] for `company` ('oil' | 'beverages'). One row per (invoice, order,
+    quotation) chain — an invoice drawn from several orders shows one row each. Order/Quotation are
+    blank when the invoice (or order) was raised directly. `qty` is Litres (oil, Qty×SalPackUn) or
+    Boxes (beverages, Qty/SalFactor2); `measure` names it. Returns {status, company, measure, rows,
+    start, end}. Cached _SALES_FLOW_TTL seconds."""
+    company = 'beverages' if str(company or '').lower().startswith('bev') else 'oil'
+    measure = 'Boxes' if company == 'beverages' else 'Litres'
+    key = (company, str(start_date), str(end_date))
+    now = time.time()
+    hit = _sales_flow_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    if company == 'beverages':
+        S = BEVERAGES_SCHEMA
+        qty = 'L."Quantity" / NULLIF(I."SalFactor2", 0)'
+        # beverages: finished goods only (join item group), skip internal group-100 parties
+        item_join = (f'JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode" '
+                     f'JOIN "{S}"."OITB" G ON G."ItmsGrpCod" = I."ItmsGrpCod" '
+                     f'JOIN "{S}"."OCRD" CU ON CU."CardCode" = H."CardCode"')
+        extra_where = 'AND CU."GroupCode" <> 100 AND L."TreeType" <> \'I\' AND G."ItmsGrpNam" = \'FINISHED\''
+    else:
+        S = SAP_SCHEMA
+        qty = 'L."Quantity" * COALESCE(I."SalPackUn", 0)'
+        item_join = f'LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"'
+        extra_where = 'AND (H."U_ARNO" NOT IN (\'T\', \'H\') OR H."U_ARNO" IS NULL)'   # exclude hidden, like Done
+    sql = f'''
+        SELECT H."DocNum"   AS "INV",
+               TO_VARCHAR(CAST(H."DocDate" AS DATE), 'YYYY-MM-DD') AS "DDATE",
+               COALESCE(TRIM(H."CardCode"), '') AS "CCODE",
+               COALESCE(TRIM(H."CardName"), '') AS "PARTY",
+               COALESCE(O1."DocNum", O2."DocNum") AS "ORDER_NO",
+               COALESCE(Q1."DocNum", Q2."DocNum") AS "QUOT_NO",
+               SUM({qty}) AS "QTY"
+        FROM "{S}"."OINV" H
+        JOIN "{S}"."INV1" L ON L."DocEntry" = H."DocEntry"
+        {item_join}
+        -- invoice line based directly on a Sales Order (BaseType 17)
+        LEFT JOIN "{S}"."ORDR" O1 ON L."BaseType" = 17 AND O1."DocEntry" = L."BaseEntry"
+        LEFT JOIN "{S}"."RDR1" R1 ON L."BaseType" = 17 AND R1."DocEntry" = L."BaseEntry" AND R1."LineNum" = L."BaseLine"
+        LEFT JOIN "{S}"."OQUT" Q1 ON R1."BaseType" = 23 AND Q1."DocEntry" = R1."BaseEntry"
+        -- invoice line based on a Delivery (BaseType 15) → its Sales Order
+        LEFT JOIN "{S}"."DLN1" D  ON L."BaseType" = 15 AND D."DocEntry" = L."BaseEntry" AND D."LineNum" = L."BaseLine"
+        LEFT JOIN "{S}"."ORDR" O2 ON D."BaseType" = 17 AND O2."DocEntry" = D."BaseEntry"
+        LEFT JOIN "{S}"."RDR1" R2 ON D."BaseType" = 17 AND R2."DocEntry" = D."BaseEntry" AND R2."LineNum" = D."BaseLine"
+        LEFT JOIN "{S}"."OQUT" Q2 ON R2."BaseType" = 23 AND Q2."DocEntry" = R2."BaseEntry"
+        WHERE CAST(H."DocDate" AS DATE) BETWEEN ? AND ? AND H."CANCELED" = 'N' {extra_where}
+        GROUP BY H."DocNum", CAST(H."DocDate" AS DATE), H."CardCode", H."CardName",
+                 COALESCE(O1."DocNum", O2."DocNum"), COALESCE(Q1."DocNum", Q2."DocNum")
+        ORDER BY H."DocNum" DESC
+    '''
+    try:
+        raw = sap_connector.execute_query(sql, (start_date, end_date))
+    except Exception as exc:
+        logger.error('[SALES-FLOW] %s fetch failed: %s', company, exc)
+        return {'status': 'error', 'company': company, 'measure': measure, 'rows': [],
+                'error': 'Could not read the sales document flow from SAP.',
+                'start': str(start_date), 'end': str(end_date)}
+    rows = []
+    for r in raw:
+        rows.append({
+            'party': _normalize_name(r.get('PARTY')) or _normalize_name(r.get('CCODE')) or '—',
+            'card_code': _normalize_name(r.get('CCODE')),
+            'date': str(r.get('DDATE') or '').strip(),
+            'quotation_no': str(r.get('QUOT_NO') or '').strip(),
+            'order_no': str(r.get('ORDER_NO') or '').strip(),
+            'invoice_no': str(r.get('INV') or '').strip(),
+            'qty': round(float(r.get('QTY') or 0), 2),
+        })
+    payload = {'status': 'ok', 'company': company, 'measure': measure, 'rows': rows,
+               'start': str(start_date), 'end': str(end_date)}
+    if raw:
+        _sales_flow_cache[key] = (now + _SALES_FLOW_TTL, payload)
+    return payload
 
 
 _OIH_LINE_SQL = f'''
@@ -3036,6 +3557,35 @@ def _warehouse_stock_litres(item_codes):
     return out
 
 
+def _warehouse_stock_lit_pcs(item_codes):
+    """{(ItemCode, WhsCode): {'lit': litres, 'pcs': pieces}} for OIH_STOCK_WAREHOUSES.
+    Litres = OnHand * SalPackUn (same conversion as OIH); pcs = raw OnHand quantity — so the
+    OIH-vs-Stock dashboard can switch its Stock column between litres and pieces."""
+    codes = sorted({str(c).strip() for c in item_codes if str(c or '').strip()})
+    if not codes:
+        return {}
+    whs_ph = ','.join(['?'] * len(OIH_STOCK_WAREHOUSES))
+    code_ph = ','.join(['?'] * len(codes))
+    sql = f'''
+        SELECT W."ItemCode" AS "ICODE", W."WhsCode" AS "WHS",
+               W."OnHand" * COALESCE(M."SalPackUn", 0) AS "LIT",
+               W."OnHand"                              AS "PCS"
+        FROM "{SAP_SCHEMA}"."OITW" W
+        JOIN "{SAP_SCHEMA}"."OITM" M ON M."ItemCode" = W."ItemCode"
+        WHERE W."WhsCode" IN ({whs_ph}) AND W."ItemCode" IN ({code_ph})
+    '''
+    try:
+        rows = sap_connector.execute_query(sql, tuple(OIH_STOCK_WAREHOUSES) + tuple(codes))
+    except Exception as exc:
+        logger.error('[OIH-KPI] warehouse stock (lit/pcs) fetch failed: %s', exc)
+        return {}
+    out = {}
+    for r in rows or []:
+        k = (_normalize_name(r.get('ICODE')), _normalize_name(r.get('WHS')))
+        out[k] = {'lit': float(r.get('LIT') or 0), 'pcs': float(r.get('PCS') or 0)}
+    return out
+
+
 def get_channel_oih_documents(channel, filters, seg=''):
     """Open sales-order documents behind an Order-in-Hand cell. Same ORDR/RDR1 source
     as the Order-in-Hand roll-up, kept at document grain and joined to OITM so product
@@ -3067,7 +3617,7 @@ def get_channel_oih_documents(channel, filters, seg=''):
             'person': person_map.get(g + '|' + state_name) or '—',
             'customer': customer,
             'product': _normalize_name(row.get('SUBG')) or '—',
-            'item': _normalize_name(row.get('ITEM')) or '—',
+            'item': _item_label(_normalize_name(row.get('ICODE')), _normalize_name(row.get('ITEM'))),
         }
         if not _derived_node_match(derived, filters):
             continue
@@ -3148,7 +3698,8 @@ def get_oih_dimension_rows():
                COALESCE(TRIM(C."CardName"), '—')      AS "CUST",
                COALESCE(TRIM(I."U_TYPE"), '')          AS "UTYPE",
                H."DocNum"                              AS "DOCNUM",
-               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY"
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "QTY",
+               SUM(L."OpenQty")                        AS "PCS"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
@@ -3165,7 +3716,7 @@ def get_oih_dimension_rows():
         rows = sap_connector.execute_query(sql)
     except Exception as exc:
         logger.error('[OIH-KPI] dimension rows failed: %s', exc)
-        return {'rows': [], 'dims': OIH_BREAKDOWN_DIMS, 'item_stock': {},
+        return {'rows': [], 'dims': OIH_BREAKDOWN_DIMS, 'item_stock': {}, 'item_stock_pcs': {},
                 'warehouses': OIH_STOCK_WAREHOUSES, 'error': str(exc)}
     agg = {}
     name_codes = {}   # item name -> set of ItemCodes (for per-item warehouse stock)
@@ -3173,8 +3724,8 @@ def get_oih_dimension_rows():
         ut = _normalize_name(r.get('UTYPE'))
         if ut not in ('PREMIUM', 'COMMODITY'):
             continue
-        item_name = _normalize_name(r.get('ITEM')) or '—'
         icode = _normalize_name(r.get('ICODE'))
+        item_name = _item_label(icode, _normalize_name(r.get('ITEM')))
         if icode:
             name_codes.setdefault(item_name, set()).add(icode)
         grp = _normalize_name(r.get('GRP')) or '—'
@@ -3183,21 +3734,33 @@ def get_oih_dimension_rows():
         person = person_for_group_state(grp, st) or '—'   # territory owner for this group+state
         key = (grp, st, _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
                item_name, _normalize_name(r.get('CUST')) or '—', so_no, person)
-        cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0})
-        cell['premium' if ut == 'PREMIUM' else 'commodity'] += float(r.get('QTY') or 0)
+        cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0,
+                                    'premium_pcs': 0.0, 'commodity_pcs': 0.0})
+        seg = 'premium' if ut == 'PREMIUM' else 'commodity'
+        cell[seg] += float(r.get('QTY') or 0)          # litres = OpenQty * SalPackUn
+        cell[seg + '_pcs'] += float(r.get('PCS') or 0)  # raw pieces / quantity
     out = [{'main_group': k[0], 'state': k[1], 'sub_group': k[2], 'packtype': k[3],
             'item': k[4], 'customer': k[5], 'so_no': k[6], 'sales_person': k[7],
-            'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2)}
+            'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2),
+            'premium_pcs': round(v['premium_pcs'], 2), 'commodity_pcs': round(v['commodity_pcs'], 2)}
            for k, v in agg.items()]
-    # On-hand stock per warehouse, keyed by item NAME (each ItemCode counted once),
-    # so the window can show GP-FG / BH-EC / BH-PF columns on item rows.
+    # On-hand stock per warehouse, keyed by item NAME (each ItemCode counted once), in both
+    # litres and pieces, so the window can show GP-FG / BH-EC / BH-PF columns on item rows and
+    # switch its Stock/Required columns between the two units.
     all_codes = {c for codes in name_codes.values() for c in codes}
-    stock = _warehouse_stock_litres(all_codes)
+    stock = _warehouse_stock_lit_pcs(all_codes)
     item_stock = {
-        name: [round(sum(stock.get((c, w), 0) for c in codes), 2) for w in OIH_STOCK_WAREHOUSES]
+        name: [round(sum((stock.get((c, w)) or {}).get('lit', 0) for c in codes), 2)
+               for w in OIH_STOCK_WAREHOUSES]
+        for name, codes in name_codes.items()
+    }
+    item_stock_pcs = {
+        name: [round(sum((stock.get((c, w)) or {}).get('pcs', 0) for c in codes), 2)
+               for w in OIH_STOCK_WAREHOUSES]
         for name, codes in name_codes.items()
     }
     return {'rows': out, 'dims': OIH_BREAKDOWN_DIMS, 'item_stock': item_stock,
+            'item_stock_pcs': item_stock_pcs,
             'warehouses': OIH_STOCK_WAREHOUSES, 'error': None}
 
 
@@ -3217,6 +3780,142 @@ def get_oih_dimension_rows_cached():
     result = get_oih_dimension_rows()
     if result and result.get('rows') and not result.get('error'):   # cache only successful pulls
         _OIH_DIM_CACHE['oih_dim'] = (now + _OIH_DIM_CACHE_TTL, result)
+    return result
+
+
+# ── OIH vs Stock — Jivo Beverages company ────────────────────────────────────
+# Same report as the oil path but against JIVO_BEVERAGES_HANADB. The headline metric is
+# BOXES (open-order OpenQty ÷ SalFactor2; stock = net (In−Out) ÷ SalFactor2), the segment
+# is the beverages family (U_Sub_Group: DRINKS/WATER/…) and the product card is U_Variety.
+# Warehouses are data-driven (beverages FG spreads across many godowns), like Stock Available.
+OIH_BEV_DIMS = [
+    {'key': 'variety', 'label': 'Variety'},
+    {'key': 'family', 'label': 'Family'},
+    {'key': 'item', 'label': 'Item Name'},
+    {'key': 'customer', 'label': 'Customer'},
+    {'key': 'state', 'label': 'State'},
+    {'key': 'sales_person', 'label': 'Sales Person'},
+    {'key': 'so_no', 'label': 'SO No'},
+]
+
+
+def _bev_empty_oih(error=None):
+    return {'rows': [], 'dims': OIH_BEV_DIMS, 'types': [{'key': 'all', 'label': 'All'}],
+            'item_stock': {}, 'item_stock_pcs': {}, 'warehouses': [], 'company': 'bev',
+            'unit_short': 'Box', 'unit_label': 'Boxes', 'default_dim': 'variety', 'error': error}
+
+
+def get_oih_dimension_rows_beverages():
+    """Granular open-order boxes/pcs by beverages dimensions (family, variety, item, customer,
+    state, sales person, SO), plus per-item on-hand stock in boxes and pcs across the beverage
+    warehouses. Payload shape mirrors get_oih_dimension_rows so the OIH-vs-Stock UI can render
+    either company; 'company'/'unit_*'/'types' tell it to relabel to Boxes and the families."""
+    # 1) Open-order lines → boxes (OpenQty ÷ SalFactor2) and raw pieces, by dimension.
+    oih_sql = f'''
+        SELECT COALESCE(TRIM(T2."U_Sub_Group"), '—') AS "FAMILY",
+               COALESCE(TRIM(T2."U_Variety"), '—')   AS "VARIETY",
+               COALESCE(TRIM(T2."ItemName"), '—')     AS "ITEM",
+               COALESCE(TRIM(T2."ItemCode"), '')       AS "ICODE",
+               COALESCE(TRIM(T4."CardName"), '—')     AS "CUST",
+               COALESCE(TRIM(T5."SlpName"), '—')      AS "PERSON",
+               (SELECT K."Name" FROM {BEVERAGES_SCHEMA}.OCST K
+                 WHERE K."Code" = T7."State" AND K."Country" = T7."Country") AS "STATE",
+               T0."DocNum" AS "DOCNUM",
+               SUM(T1."OpenQty") AS "PCS",
+               SUM(T1."OpenQty" / NULLIF(T2."SalFactor2", 0)) AS "BOX"
+        FROM {BEVERAGES_SCHEMA}.ORDR T0
+        JOIN {BEVERAGES_SCHEMA}.RDR1 T1 ON T0."DocEntry" = T1."DocEntry"
+        JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
+        JOIN {BEVERAGES_SCHEMA}.OITB G ON T2."ItmsGrpCod" = G."ItmsGrpCod"
+        JOIN {BEVERAGES_SCHEMA}.OCRD T4 ON T0."CardCode" = T4."CardCode"
+        LEFT JOIN {BEVERAGES_SCHEMA}.OSLP T5 ON T0."SlpCode" = T5."SlpCode"
+        LEFT JOIN {BEVERAGES_SCHEMA}.CRD1 T7
+            ON T7."CardCode" = T0."CardCode" AND T7."AdresType" = 'S' AND T7."Address" = T0."ShipToCode"
+        WHERE T0."CANCELED" = 'N' AND T4."GroupCode" <> 100 AND T1."TreeType" <> 'I'
+          AND T1."LineStatus" = 'O' AND G."ItmsGrpNam" = 'FINISHED' AND T2."U_Unit" = 'BEVERAGES'
+        GROUP BY T2."U_Sub_Group", T2."U_Variety", T2."ItemName", T2."ItemCode",
+                 T4."CardName", T5."SlpName", T7."State", T7."Country", T0."DocNum"
+    '''
+    try:
+        rows = sap_connector.execute_query(oih_sql)
+    except Exception as exc:
+        logger.error('[OIH-KPI-BEV] dimension rows failed: %s', exc)
+        return _bev_empty_oih(str(exc))
+
+    agg = {}
+    families = {}   # family -> total boxes, for ordering the segment control
+    for r in rows or []:
+        family = _normalize_name(r.get('FAMILY')) or '—'
+        variety = _normalize_name(r.get('VARIETY')) or '—'
+        item = _normalize_name(r.get('ITEM')) or '—'
+        key = (family, variety, item, _normalize_name(r.get('CUST')) or '—',
+               _normalize_name(r.get('PERSON')) or '—', _normalize_name(r.get('STATE')) or '—',
+               str(r.get('DOCNUM') or '').strip() or '—')
+        cell = agg.setdefault(key, {'boxes': 0.0, 'pcs': 0.0})
+        box = float(r.get('BOX') or 0)
+        cell['boxes'] += box
+        cell['pcs'] += float(r.get('PCS') or 0)
+        families[family] = families.get(family, 0.0) + box
+    out = [{'family': k[0], 'variety': k[1], 'item': k[2], 'customer': k[3],
+            'sales_person': k[4], 'state': k[5], 'so_no': k[6],
+            'boxes': round(v['boxes'], 2), 'pcs': round(v['pcs'], 2)}
+           for k, v in agg.items()]
+
+    # 2) On-hand FG stock → boxes/pcs per (item name, warehouse). Warehouses come from the
+    #    data, ordered by total boxes so the busiest godowns are the first columns.
+    stock_sql = f'''
+        SELECT I."ItemName" AS "ITEM", O."Warehouse" AS "WHS",
+               SUM(O."InQty" - O."OutQty") AS "PCS",
+               CASE WHEN I."SalFactor2" > 0
+                    THEN SUM(O."InQty" - O."OutQty") / I."SalFactor2" ELSE 0 END AS "BOX"
+        FROM {BEVERAGES_SCHEMA}.OINM O
+        JOIN {BEVERAGES_SCHEMA}.OITM I ON I."ItemCode" = O."ItemCode"
+        JOIN {BEVERAGES_SCHEMA}.OITB G ON I."ItmsGrpCod" = G."ItmsGrpCod"
+        WHERE G."ItmsGrpNam" = 'FINISHED' AND I."U_Unit" = 'BEVERAGES'
+        GROUP BY I."ItemName", I."SalFactor2", O."Warehouse"
+        HAVING SUM(O."InQty" - O."OutQty") <> 0
+    '''
+    try:
+        srows = sap_connector.execute_query(stock_sql)
+    except Exception as exc:
+        logger.error('[OIH-KPI-BEV] stock fetch failed: %s', exc)
+        srows = []
+    box_by, pcs_by, wh_tot = {}, {}, {}
+    for r in srows or []:
+        name = _normalize_name(r.get('ITEM')) or '—'
+        whs = _normalize_name(r.get('WHS'))
+        if not whs:
+            continue
+        b, p = float(r.get('BOX') or 0), float(r.get('PCS') or 0)
+        d = box_by.setdefault(name, {}); d[whs] = d.get(whs, 0.0) + b
+        e = pcs_by.setdefault(name, {}); e[whs] = e.get(whs, 0.0) + p
+        wh_tot[whs] = wh_tot.get(whs, 0.0) + b
+    warehouses = sorted(wh_tot.keys(), key=lambda w: -wh_tot[w])
+    names = set(box_by) | set(pcs_by)
+    item_stock = {n: [round(box_by.get(n, {}).get(w, 0.0), 2) for w in warehouses] for n in names}
+    item_stock_pcs = {n: [round(pcs_by.get(n, {}).get(w, 0.0), 2) for w in warehouses] for n in names}
+
+    # Segment control: All + each family, biggest first (data-driven, like Stock Available).
+    fam_order = sorted((f for f in families if f), key=lambda f: -families[f])
+    types = [{'key': 'all', 'label': 'All'}] + [{'key': f, 'label': f.title()} for f in fam_order]
+
+    return {'rows': out, 'dims': OIH_BEV_DIMS, 'types': types,
+            'item_stock': item_stock, 'item_stock_pcs': item_stock_pcs,
+            'warehouses': warehouses, 'company': 'bev',
+            'unit_short': 'Box', 'unit_label': 'Boxes', 'default_dim': 'variety', 'error': None}
+
+
+_OIH_BEV_CACHE = {}        # 'oih_bev' -> (expires_at, result)
+
+
+def get_oih_dimension_rows_beverages_cached():
+    now = time.time()
+    hit = _OIH_BEV_CACHE.get('oih_bev')
+    if hit and hit[0] > now:
+        return hit[1]
+    result = get_oih_dimension_rows_beverages()
+    if result and result.get('rows') and not result.get('error'):
+        _OIH_BEV_CACHE['oih_bev'] = (now + _OIH_DIM_CACHE_TTL, result)
     return result
 
 
@@ -3603,6 +4302,121 @@ def get_customer_aging(aging_date=None):
     return payload
 
 
+# ── Customer Aging — Jivo Beverages company ──────────────────────────────────
+# The Beverages toggle. Unlike oil (B1 reconciliation pivot), beverages ages the open A/R
+# invoices (OINV, DocStatus 'O') directly: InDaysDifference = days from DocDate to the aging
+# date, bucketed the same way. We return the RAW per-invoice rows; the client pivots them by
+# Sales Person → Customer, offers a per-day multi-select, and an Excel-like raw drill.
+_bev_aging_cache = {}
+
+
+def _bev_cell(v):
+    """A raw SAP cell → clean string for the JSON payload (dates → ISO; strips whitespace)."""
+    if v is None:
+        return ''
+    if isinstance(v, datetime):
+        return v.strftime('%Y-%m-%d')
+    if isinstance(v, date):
+        return v.strftime('%Y-%m-%d')
+    return str(v).strip()
+
+
+def get_bev_aging_remarks(card_codes):
+    """{(card_code, doc): remark} of manual remarks on the Beverages raw-invoice drill. Stored
+    in AgingRemark with row_key='BEVDOC:<DocNum>' so they never collide with the oil detail
+    page's 'TransId:Line_ID' remarks. All local DB — cheap and independent of the SAP cache."""
+    codes = {c for c in (card_codes or []) if c}
+    if not codes:
+        return {}
+    prefix = 'BEVDOC:'
+    out = {}
+    for a in AgingRemark.objects.filter(card_code__in=codes, row_key__startswith=prefix):
+        out[(a.card_code, a.row_key[len(prefix):])] = a.remark
+    return out
+
+
+def _bev_attach_remarks(payload):
+    """Merge current manual remarks onto a (possibly cached) beverages aging payload, so edits
+    show up immediately regardless of the SAP aging cache."""
+    rows = (payload or {}).get('rows') or []
+    if rows:
+        rem = get_bev_aging_remarks([r.get('code') for r in rows])
+        for r in rows:
+            r['remark'] = rem.get((r.get('code'), r.get('doc')), '')
+    return payload
+
+
+def get_customer_aging_beverages(aging_date=None):
+    """Open A/R invoice aging for Jivo Beverages (JIVO_BEVERAGES_HANADB). Returns raw invoice
+    rows (Sales Person, Customer, Days, Balance Due, Outstanding, dispatch/bilty fields, …),
+    each carrying its manual `remark`. The client pivots by Sales Person → Customer with the
+    shared aging buckets. Cached per aging date for _AGING_TTL seconds (remarks merged fresh)."""
+    if aging_date is None:
+        aging_date = date.today()
+    key = aging_date.isoformat()
+    now = time.time()
+    hit = _bev_aging_cache.get(key)
+    if hit and hit[0] > now:
+        return _bev_attach_remarks(hit[1])
+
+    ag, B = _aging_date_literal(aging_date), BEVERAGES_SCHEMA
+    sql = f'''
+        SELECT T4."SlpName" AS "sp", T0."CardCode" AS "code", T0."CardName" AS "name",
+               T0."DocNum" AS "doc", TO_VARCHAR(T0."DocDate",'YYYY-MM-DD') AS "date",
+               DAYS_BETWEEN(T0."DocDate", {ag}) AS "days",
+               TO_VARCHAR(T5."LastTransDate",'YYYY-MM-DD') AS "ltd",
+               DAYS_BETWEEN(T5."LastTransDate", {ag}) AS "tdd",
+               T0."U_Dipatch_Date" AS "dispatch", T0."U_BiltyNumber" AS "bilty",
+               T0."U_BiltyDate" AS "biltydate", T0."U_TransporterName" AS "transporter",
+               T0."U_VechileNom" AS "vehicle", T0."U_DriverName" AS "driver",
+               T0."U_Mob_No" AS "mobile", T0."DocStatus" AS "status",
+               T0."DocTotal" AS "total", (T0."DocTotal" - T0."PaidToDate") AS "bal",
+               T3."Balance" AS "outstanding"
+        FROM {B}.OINV T0
+        INNER JOIN {B}.OCRD T3 ON T0."CardCode" = T3."CardCode"
+        INNER JOIN {B}.OSLP T4 ON T3."SlpCode" = T4."SlpCode"
+        LEFT JOIN (SELECT T1."ShortName" AS "CardCode", MAX(T1."RefDate") AS "LastTransDate"
+                   FROM {B}.JDT1 T1 GROUP BY T1."ShortName") T5 ON T0."CardCode" = T5."CardCode"
+        WHERE T0."DocType" = 'I' AND T0."DocStatus" = 'O' AND T0."CANCELED" = 'N'
+          AND T0."CardCode" NOT IN ('CUSTA000001', 'CUSTA000002', 'CUSTA000003')
+          AND T0."DocDate" <= {ag}
+        ORDER BY "days" DESC
+    '''
+    try:
+        raw = sap_connector.execute_query(sql)
+    except Exception as e:
+        logger.exception('[aging-bev] beverages aging query failed')
+        return {'company': 'bev', 'rows': [], 'aging_date': key, 'error': str(e)}
+
+    rows = []
+    for r in raw or []:
+        tdd = r.get('tdd')
+        rows.append({
+            'sp': _bev_cell(r.get('sp')) or '—',
+            'code': _bev_cell(r.get('code')),
+            'name': _bev_cell(r.get('name')) or _bev_cell(r.get('code')),
+            'doc': _bev_cell(r.get('doc')),
+            'date': _bev_cell(r.get('date')),
+            'days': int(r.get('days') or 0),
+            'ltd': _bev_cell(r.get('ltd')),
+            'tdd': int(tdd) if tdd is not None else None,
+            'dispatch': _bev_cell(r.get('dispatch')),
+            'bilty': _bev_cell(r.get('bilty')),
+            'biltydate': _bev_cell(r.get('biltydate')),
+            'transporter': _bev_cell(r.get('transporter')),
+            'vehicle': _bev_cell(r.get('vehicle')),
+            'driver': _bev_cell(r.get('driver')),
+            'mobile': _bev_cell(r.get('mobile')),
+            'status': _bev_cell(r.get('status')),
+            'total': _aging_num(r.get('total')),
+            'bal': _aging_num(r.get('bal')),
+            'outstanding': _aging_num(r.get('outstanding')),
+        })
+    payload = {'company': 'bev', 'rows': rows, 'aging_date': key, 'error': None}
+    _bev_aging_cache[key] = (now + _AGING_TTL, payload)
+    return _bev_attach_remarks(payload)
+
+
 # ── Customer Aging — per-document DETAIL (drill from a Balance Due) ──────────
 # Same reconciliation engine as the aging pivot, but at journal-line (document) grain for
 # ONE customer, carrying the document fields (No / Type / dates / branch) so we can show the
@@ -3624,7 +4438,35 @@ def _aging_fmt_date(v):
         return s[:10] if s else ''
 
 
-def _aging_detail_sql(card_safe, ag, S, with_branch):
+def _aging_to_date(v):
+    """A SAP date value (date/datetime/'YYYY-MM-DD…' string) → a datetime.date, or None."""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    s = str(v).strip()[:10]
+    try:
+        return datetime.strptime(s, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _aging_age_days(bdate, aging_date):
+    """Whole days from a document's posting date up to the aging date (>=0), or None if the
+    posting date is unknown. Drives the NOT DUE / OVERDUE grace classification on the detail
+    page (a document is NOT DUE while this is below the customer's configured grace days)."""
+    d = _aging_to_date(bdate)
+    if d is None:
+        return None
+    return (aging_date - d).days
+
+
+def _aging_detail_sql(where_card, ag, S, with_branch):
+    """`where_card` is a SQL predicate on T0."ShortName" — e.g. `T0."ShortName"='X'` for one
+    customer or `T0."ShortName" IN (...)` for the bulk export. The `card` column is emitted so
+    bulk callers can group rows back per customer (single-customer callers ignore it)."""
     bsel = 'MAX(T0."BPLId") AS bplid,' if with_branch else ''
     bcol = 'COALESCE(B."BPLName", \'\') AS "branch",' if with_branch else '\'\' AS "branch",'
     bjoin = f'LEFT JOIN "{S}"."OBPL" B ON B."BPLId"=a.bplid' if with_branch else ''
@@ -3636,7 +4478,7 @@ def _aging_detail_sql(card_safe, ag, S, with_branch):
       FROM "{S}"."JDT1" T0
         JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
         JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
-      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='C'
+      WHERE {where_card} AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='C'
       GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
       HAVING MAX(T0."BalFcCred")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueCred")<>-SUM(T1."ReconSum")
       UNION ALL
@@ -3646,7 +4488,7 @@ def _aging_detail_sql(card_safe, ag, S, with_branch):
       FROM "{S}"."JDT1" T0
         JOIN "{S}"."ITR1" T1 ON T1."TransId"=T0."TransId" AND T1."TransRowId"=T0."Line_ID"
         JOIN "{S}"."OITR" T2 ON T2."ReconNum"=T1."ReconNum"
-      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='D'
+      WHERE {where_card} AND T0."RefDate"<={ag} AND T2."ReconDate">{ag} AND T1."IsCredit"='D'
       GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
       HAVING MAX(T0."BalFcDeb")<>-SUM(T1."ReconSumFC") OR MAX(T0."BalDueDeb")<>-SUM(T1."ReconSum")
       UNION ALL
@@ -3654,13 +4496,13 @@ def _aging_detail_sql(card_safe, ag, S, with_branch):
              MAX(T0."RefDate"), MAX(T0."DueDate"), MAX(T0."BaseRef"), MAX(T0."TransType"), {bsel}
              MAX(T0."BalDueDeb")-MAX(T0."BalDueCred"), MAX(T0."Debit")-MAX(T0."Credit")
       FROM "{S}"."JDT1" T0
-      WHERE T0."ShortName"='{card_safe}' AND T0."RefDate"<={ag}
+      WHERE {where_card} AND T0."RefDate"<={ag}
         AND (T0."BalDueCred"<>T0."BalDueDeb" OR T0."BalFcCred"<>T0."BalFcDeb")
         AND NOT EXISTS (SELECT 1 FROM "{S}"."ITR1" U0 JOIN "{S}"."OITR" U1 ON U1."ReconNum"=U0."ReconNum"
           WHERE U0."TransId"=T0."TransId" AND U0."TransRowId"=T0."Line_ID" AND U1."ReconDate">{ag})
       GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
     )
-    SELECT a.trans AS "trans", a.line AS "line", a.docno AS "docno", a.ttype AS "ttype",
+    SELECT a.card AS "card", a.trans AS "trans", a.line AS "line", a.docno AS "docno", a.ttype AS "ttype",
            a.bdate AS "bdate", a.duedate AS "duedate", a.orig AS "original", a.bal AS "balance_due",
            {bcol}
            CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END AS "b0_30",
@@ -3682,10 +4524,11 @@ def get_customer_aging_detail(card_code, aging_date=None):
     card_safe = (card_code or '').strip().replace("'", "''")
     if not card_safe:
         return []
+    where_card = 'T0."ShortName"=\'%s\'' % card_safe
     rows = None
     for with_branch in (True, False):     # retry without the branch join if it errors
         try:
-            rows = sap_connector.execute_query(_aging_detail_sql(card_safe, ag, SAP_SCHEMA, with_branch))
+            rows = sap_connector.execute_query(_aging_detail_sql(where_card, ag, SAP_SCHEMA, with_branch))
             break
         except Exception as exc:
             logger.error('[AGINGDETAIL] fetch failed (branch=%s): %s', with_branch, exc)
@@ -3707,6 +4550,7 @@ def get_customer_aging_detail(card_code, aging_date=None):
             'type': _AGING_TYPE_MAP.get(ttype, (str(r.get('ttype')).strip() if r.get('ttype') is not None else '')),
             'posting_date': _aging_fmt_date(r.get('bdate')),
             'due_date': _aging_fmt_date(r.get('duedate')),
+            'age_days': _aging_age_days(r.get('bdate'), aging_date),
             'branch': str(r.get('branch') or '').strip(),
             'original': _aging_num(r.get('original')),
             'balance_due': _aging_num(r.get('balance_due')),
@@ -3729,6 +4573,97 @@ def get_aging_remarks(card_code):
     return {a.row_key: a.remark for a in AgingRemark.objects.filter(card_code=cc)}
 
 
+def get_aging_remark_index():
+    """For the Customer Aging remark filter: {card_code: [tokens]} plus the sorted master
+    list of every distinct token. A token is either a split category (AgingRemarkLine) or a
+    free-text per-document remark (AgingRemark) that a customer actually carries. All local
+    DB — cheap and independent of the SAP aging cache, so it always reflects the latest edits."""
+    from collections import defaultdict
+    idx = defaultdict(set)
+    for cc, cat in AgingRemarkLine.objects.exclude(category='').values_list('card_code', 'category'):
+        c = (cat or '').strip()
+        if c:
+            idx[cc].add(c)
+    for cc, rem in AgingRemark.objects.exclude(remark='').values_list('card_code', 'remark'):
+        r = (rem or '').strip()
+        if r:
+            idx[cc].add(r)
+    index = {cc: sorted(v) for cc, v in idx.items()}
+    # The split categories are the fixed vocabulary, so always offer them (even before any
+    # are used); add whatever free-text remarks people have actually typed on top.
+    options = sorted(set(AGING_REMARK_CATEGORIES) | {t for toks in index.values() for t in toks},
+                     key=lambda s: s.upper())
+    return {'index': index, 'options': options}
+
+
+def get_customer_aging_detail_bulk(card_codes, aging_date=None):
+    """Per-document open items for MANY customers in one SAP round-trip (same engine as the
+    single-customer detail), with saved remarks/splits merged in. Returns {card_code: [rows]}
+    where each row matches get_customer_aging_detail. Used by the whole-book detail export."""
+    codes = []
+    seen = set()
+    for c in (card_codes or []):
+        c = (c or '').strip()
+        if c and c not in seen:
+            seen.add(c)
+            codes.append(c)
+    if not codes:
+        return {}
+    ag_date = aging_date or date.today()
+    ag = _aging_date_literal(ag_date)
+    in_list = ",".join("'%s'" % c.replace("'", "''") for c in codes)
+    where_card = 'T0."ShortName" IN (%s)' % in_list
+
+    rows = None
+    for with_branch in (True, False):
+        try:
+            rows = sap_connector.execute_query(_aging_detail_sql(where_card, ag, SAP_SCHEMA, with_branch))
+            break
+        except Exception as exc:
+            logger.error('[AGINGDETAIL-BULK] fetch failed (branch=%s): %s', with_branch, exc)
+            rows = None
+    if rows is None:
+        return {}
+
+    # Bulk-load the local remarks/splits for all requested customers.
+    remarks_by_card = {}
+    for a in AgingRemark.objects.filter(card_code__in=codes):
+        remarks_by_card.setdefault(a.card_code, {})[a.row_key] = a.remark
+    from collections import defaultdict
+    splits_by_card = defaultdict(lambda: defaultdict(list))
+    for ln in AgingRemarkLine.objects.filter(card_code__in=codes).order_by('position', 'id'):
+        splits_by_card[ln.card_code][ln.row_key].append(
+            {'category': ln.category, 'amount': _aging_num(ln.amount), 'remark': ln.remark})
+
+    out = defaultdict(list)
+    for r in rows:
+        card = str(r.get('card') or '').strip()
+        try:
+            ttype = int(r.get('ttype'))
+        except (TypeError, ValueError):
+            ttype = None
+        row_key = '%s:%s' % (str(r.get('trans') or '').strip(), str(r.get('line') or '').strip())
+        out[card].append({
+            'row_key': row_key,
+            'doc_no': str(r.get('docno') or '').strip(),
+            'type': _AGING_TYPE_MAP.get(ttype, (str(r.get('ttype')).strip() if r.get('ttype') is not None else '')),
+            'posting_date': _aging_fmt_date(r.get('bdate')),
+            'due_date': _aging_fmt_date(r.get('duedate')),
+            'age_days': _aging_age_days(r.get('bdate'), ag_date),
+            'branch': str(r.get('branch') or '').strip(),
+            'original': _aging_num(r.get('original')),
+            'balance_due': _aging_num(r.get('balance_due')),
+            'remark': remarks_by_card.get(card, {}).get(row_key, ''),
+            'splits': splits_by_card.get(card, {}).get(row_key, []),
+            'b0_30': _aging_num(r.get('b0_30')),
+            'b31_60': _aging_num(r.get('b31_60')),
+            'b61_90': _aging_num(r.get('b61_90')),
+            'b91_120': _aging_num(r.get('b91_120')),
+            'b121': _aging_num(r.get('b121')),
+        })
+    return dict(out)
+
+
 def save_aging_remark(card_code, row_key, remark):
     """Upsert (or clear) one per-document remark."""
     cc = (card_code or '').strip()
@@ -3741,6 +4676,40 @@ def save_aging_remark(card_code, row_key, remark):
     else:
         AgingRemark.objects.filter(card_code=cc, row_key=rk).delete()
     return True
+
+
+# ── Customer Aging NOT DUE / OVERDUE grace period (per customer) ──
+# grace_days is the window, counted from a document's posting date, during which it is
+# automatically 'NOT DUE' (Remarks cell locked). Once the aging date is that many days past
+# posting, the document is 'OVERDUE' and the cell becomes editable. 0 = feature off.
+def get_aging_grace_days(card_code):
+    """The saved NOT DUE grace period (whole days) for a customer, or 0 if none/feature off."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return 0
+    row = AgingDueConfig.objects.filter(card_code=cc).only('grace_days').first()
+    return int(row.grace_days) if row else 0
+
+
+def save_aging_grace_days(card_code, days, user=None):
+    """Set (or clear) the NOT DUE grace period for a customer. days<=0 removes the setting so
+    the Remarks column reverts to plain free text. Returns the stored value (0 when cleared)."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return 0
+    try:
+        d = int(float(days))
+    except (TypeError, ValueError):
+        d = 0
+    d = max(0, min(d, 100000))          # sane bound; 0 = off
+    if d > 0:
+        defaults = {'grace_days': d}
+        if user is not None and getattr(user, 'is_authenticated', False):
+            defaults['updated_by'] = user
+        AgingDueConfig.objects.update_or_create(card_code=cc, defaults=defaults)
+    else:
+        AgingDueConfig.objects.filter(card_code=cc).delete()
+    return d
 
 
 # Fixed category vocabulary for the aging-detail split breakdown. The detail page shows
@@ -3851,3 +4820,119 @@ def bulk_update_aging_remarks(card_code, aging_date, doc_remarks):
         if d not in seen:
             seen.add(d); uniq.append(d)
     return {'rows': len(rows_in), 'matched_docs': len(matched), 'updated': updated, 'unmatched': uniq[:50]}
+
+
+# ══════════════════════ Claims register ══════════════════════
+# A manually-maintained claim register (see the Claim model). Nothing here is read from SAP as
+# report data — SAP only feeds the entry pickers: customers (party → main group) and product/item
+# masters. Every claim row is entered and edited by a reviewer and persisted via the CRUD helpers.
+_claim_masters_cache = {}
+_CLAIM_MASTERS_TTL = 300   # 5 min — master data changes rarely
+
+
+def get_claim_masters():
+    """Picker data for the Claims add/edit form: {status, customers}. customers =
+    [{code, name, main_group}] from the customer master; picking a party fills its Main Group.
+    Cached _CLAIM_MASTERS_TTL seconds. (Product/Item pickers were removed from the form.)"""
+    now = time.time()
+    hit = _claim_masters_cache.get('all')
+    if hit and hit[0] > now:
+        return hit[1]
+
+    # Customers — reuse the (cached) customer master, trimmed to what the picker needs.
+    try:
+        cust_rows = get_customer_master().get('rows', [])
+    except Exception as exc:
+        logger.error('[CLAIMS] customer master fetch failed: %s', exc)
+        cust_rows = []
+    customers = [{'code': r.get('code', ''), 'name': r.get('name', ''),
+                  'main_group': r.get('main_group', '') or ''} for r in cust_rows if r.get('name')]
+    customers.sort(key=lambda c: c['name'])
+
+    payload = {'status': 'ok', 'customers': customers}
+    if customers:
+        _claim_masters_cache['all'] = (now + _CLAIM_MASTERS_TTL, payload)
+    return payload
+
+
+def _serialize_claim(c):
+    """One Claim row → the flat dict the frontend table/drill consumes."""
+    d = c.claim_date
+    return {
+        'id': c.id,
+        'claim_date': d.isoformat() if d else '',
+        'month_year': d.strftime('%b %Y') if d else '',      # 'Claim Month & Year' (derived)
+        'ym': d.strftime('%Y-%m') if d else '',              # sortable month key for the filter
+        'party_code': c.party_code or '',
+        'party_name': c.party_name or '',
+        'main_group': c.main_group or '',
+        'product': c.product or '',
+        'item': c.item or '',
+        'claim_type': c.claim_type or '',
+        'claim_amount': float(c.claim_amount or 0),
+        'claim_pass_date': c.claim_pass_date.isoformat() if c.claim_pass_date else '',
+        'claim_hold': c.claim_hold or '',
+        'claim_passed': float(c.claim_passed or 0),
+        'hold_amount': float(c.hold_amount or 0),
+        'reason_of_hold': c.reason_of_hold or '',
+    }
+
+
+def get_claims():
+    """Every claim register row, newest first, serialized for the report. Read straight from the
+    DB (no SAP, no cache — the set is small and edited live)."""
+    return {'status': 'ok', 'rows': [_serialize_claim(c) for c in Claim.objects.all()]}
+
+
+def _parse_claim_date(v):
+    """A 'YYYY-MM-DD' string → date, or None if blank/unparseable."""
+    try:
+        return datetime.strptime(str(v or '').strip(), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_claim_amount(v):
+    try:
+        return Decimal(str(v if v not in (None, '') else 0))
+    except Exception:
+        return Decimal('0')
+
+
+def upsert_claim(data, user=None):
+    """Create or update one claim from the submitted form dict. Requires a valid claim_date and a
+    non-blank party_name. Returns the serialized row, or raises ValueError on bad input."""
+    claim_date = _parse_claim_date(data.get('claim_date'))
+    if not claim_date:
+        raise ValueError('A valid Claim Date is required.')
+    party_name = str(data.get('party_name') or '').strip()
+    if not party_name:
+        raise ValueError('Party Name is required.')
+
+    cid = data.get('id')
+    claim = Claim.objects.filter(id=cid).first() if cid else None
+    if claim is None:
+        claim = Claim(created_by=user if getattr(user, 'is_authenticated', False) else None)
+
+    claim.claim_date      = claim_date
+    claim.party_code      = str(data.get('party_code') or '').strip()
+    claim.party_name      = party_name
+    claim.main_group      = str(data.get('main_group') or '').strip()
+    claim.product         = str(data.get('product') or '').strip()
+    claim.item            = str(data.get('item') or '').strip()
+    claim.claim_type      = str(data.get('claim_type') or '').strip()
+    claim.claim_amount    = _parse_claim_amount(data.get('claim_amount'))
+    claim.claim_pass_date = _parse_claim_date(data.get('claim_pass_date'))
+    hold = str(data.get('claim_hold') or '').strip().capitalize()
+    claim.claim_hold      = hold if hold in ('Yes', 'No') else ''
+    claim.claim_passed    = _parse_claim_amount(data.get('claim_passed'))
+    claim.hold_amount     = claim.claim_amount - claim.claim_passed   # Hold = Claim Amount − Claim Passed (derived)
+    claim.reason_of_hold  = str(data.get('reason_of_hold') or '').strip()[:255]
+    claim.save()
+    return _serialize_claim(claim)
+
+
+def delete_claim(claim_id):
+    """Delete one claim by id. Returns True if a row was removed."""
+    deleted, _ = Claim.objects.filter(id=claim_id).delete()
+    return bool(deleted)

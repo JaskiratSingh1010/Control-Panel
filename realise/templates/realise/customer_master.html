@@ -1,0 +1,231 @@
+{% extends "core/base.html" %}
+{% block title %}Customer Master — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .cm-wrap{max-width:1600px;margin:0 auto}
+  .cm-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .cm-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+
+  .cm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+  .cm-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.12)}
+  .cm-kpi .cm-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;opacity:.92;display:flex;align-items:center;gap:7px}
+  .cm-kpi .cm-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1}
+  .cm-kpi .cm-kpi-m{font-size:12px;font-weight:600;opacity:.9;margin-top:6px}
+  .cm-kpi .material-icons.cm-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;opacity:.16}
+  .k-cust{background:linear-gradient(135deg,#4f46e5,#3730a3)}
+  .k-gst{background:linear-gradient(135deg,#0d9488,#0f766e)}
+  .k-act{background:linear-gradient(135deg,#0891b2,#0e7490)}
+  .k-state{background:linear-gradient(135deg,#d97706,#b45309)}
+
+  .cm-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .cm-fld{display:flex;flex-direction:column;gap:5px}
+  .cm-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .cm-bar input[type=search],.cm-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .cm-bar input[type=search]{min-width:240px}
+  .cm-bar input[type=search]:focus,.cm-bar select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .cm-spacer{flex:1 1 auto}
+  .cm-export{background:#0d9488;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+  .cm-export:hover{background:#0f766e}
+
+  .cm-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .cm-table-wrap{overflow:auto;max-height:74vh}
+  table.cm-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.cm-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 14px;white-space:nowrap;cursor:pointer;user-select:none}
+  table.cm-table thead th.num{text-align:right}
+  table.cm-table thead th.stick{left:0;z-index:3}
+  table.cm-table thead th .cm-ar{opacity:.5;font-size:9px;margin-left:4px}
+  table.cm-table tbody td{padding:8px 14px;border-bottom:1px solid #eef2f6;color:#334155;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+  table.cm-table tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.cm-table tbody td.stick{position:sticky;left:0;background:#fff;font-weight:700;color:#0f172a;z-index:1}
+  table.cm-table tbody tr:nth-child(even) td.stick{background:#fafcff}
+  table.cm-table tbody tr:hover td{background:#f1f5ff}
+  table.cm-table tbody tr:hover td.stick{background:#eef3ff}
+  .cm-name{font-weight:700;color:#0f172a}
+  .cm-v0{color:#cbd5e1}
+  .cm-gst{font-variant-numeric:tabular-nums;letter-spacing:.2px}
+  .cm-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:999px}
+  .st-Active{background:#dcfce7;color:#166534}
+  .st-Frozen{background:#fee2e2;color:#991b1b}
+  .st-Inactive{background:#e2e8f0;color:#475569}
+  .cm-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef2ff;color:#4338ca}
+  .cm-empty{padding:40px;text-align:center;color:#7b8794}
+  .cm-count{font-size:12px;color:#64748b;font-weight:700;padding:8px 4px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cm-wrap">
+  <div>
+    <h1 class="cm-h1">Customer Master</h1>
+    <p class="cm-psub">Every customer with the details that matter — contact, GSTIN / PAN, address &amp; location, sales person, terms, credit limit and balance. Search, filter, sort or export.</p>
+  </div>
+
+  <div class="cm-kpis" id="cmKpis"></div>
+
+  <div class="cm-bar">
+    <div class="cm-fld"><span class="cm-lbl">Search</span>
+      <input type="search" id="cmSearch" placeholder="Name / code / GSTIN / mobile / city…" autocomplete="off">
+    </div>
+    <div class="cm-fld"><span class="cm-lbl">State</span><select id="cmState"><option value="">All states</option></select></div>
+    <div class="cm-fld"><span class="cm-lbl">Main Group</span><select id="cmGroup"><option value="">All groups</option></select></div>
+    <div class="cm-fld"><span class="cm-lbl">Status</span>
+      <select id="cmStatus"><option value="">All</option><option value="Active">Active</option><option value="Frozen">Frozen</option><option value="Inactive">Inactive</option></select>
+    </div>
+    <div class="cm-spacer"></div>
+    <div class="cm-fld"><span class="cm-lbl">&nbsp;</span>
+      <a class="cm-export" id="cmExport" href="{% url 'realise:export_customer_master' %}"><span class="material-icons" style="font-size:16px">download</span>Export Excel</a>
+    </div>
+  </div>
+
+  <div class="cm-table-card">
+    <div class="cm-count" id="cmCount"></div>
+    <div class="cm-table-wrap">
+      <table class="cm-table">
+        <thead id="cmHead"></thead>
+        <tbody id="cmBody"><tr><td class="cm-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fMoney(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="cm-v0">—</span>';var s='₹'+Math.round(Math.abs(n)).toLocaleString('en-IN');return n<0?'-'+s:s;}
+  function txt(v){v=String(v==null?'':v).trim();return v?esc(v):'<span class="cm-v0">—</span>';}
+  function abbr(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e7)return sg+'₹'+(a/1e7).toFixed(2)+' Cr';if(a>=1e5)return sg+'₹'+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+'₹'+(a/1e3).toFixed(1)+' K';return sg+'₹'+Math.round(a);}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+
+  var COLS=[
+    {k:'code',l:'Code',stick:true},
+    {k:'name',l:'Customer Name'},
+    {k:'main_group',l:'Main Group',tag:true},
+    {k:'status',l:'Status',badge:true},
+    {k:'gstin',l:'GSTIN',mono:true},
+    {k:'pan',l:'PAN',mono:true},
+    {k:'contact_person',l:'Contact'},
+    {k:'mobile',l:'Mobile'},
+    {k:'email',l:'Email'},
+    {k:'address',l:'Address'},
+    {k:'city',l:'City'},
+    {k:'state',l:'State'},
+    {k:'pincode',l:'Pincode'},
+    {k:'sales_person',l:'Sales Person'},
+    {k:'payment_terms',l:'Payment Terms'},
+    {k:'credit_limit',l:'Credit Limit',money:true},
+    {k:'balance',l:'Balance',money:true},
+  ];
+
+  var rows=[], loaded=false, err=null;
+  var searchF='', stateF='', groupF='', statusF='';
+  var sortKey='name', sortDir=1;
+
+  function matches(r){
+    if(stateF && r.state!==stateF) return false;
+    if(groupF && r.main_group!==groupF) return false;
+    if(statusF && r.status!==statusF) return false;
+    if(searchF){
+      var hay=(r.name+' '+r.code+' '+r.gstin+' '+r.pan+' '+r.mobile+' '+r.city+' '+r.state+' '+r.contact_person+' '+r.email+' '+r.sales_person).toLowerCase();
+      if(hay.indexOf(searchF)===-1) return false;
+    }
+    return true;
+  }
+  function activeRows(){
+    var out=rows.filter(matches);
+    var money=(sortKey==='credit_limit'||sortKey==='balance');
+    out.sort(function(a,b){
+      var x=a[sortKey],y=b[sortKey];
+      if(money){return ((Number(x)||0)-(Number(y)||0))*sortDir;}
+      return String(x||'').localeCompare(String(y||''))*sortDir;
+    });
+    return out;
+  }
+
+  function renderKpis(){
+    var a=rows;   // KPIs describe the whole master, not the filtered view
+    var gst=0,act=0,states={};
+    a.forEach(function(r){if(r.gstin)gst++;if(r.status==='Active')act++;if(r.state)states[r.state]=1;});
+    var cards=[
+      {c:'k-cust',ic:'groups',l:'Customers',v:fN(a.length),m:'In the master'},
+      {c:'k-gst',ic:'receipt_long',l:'With GSTIN',v:fN(gst),m:(a.length?Math.round(gst/a.length*100):0)+'% registered'},
+      {c:'k-act',ic:'check_circle',l:'Active',v:fN(act),m:'Not frozen / inactive'},
+      {c:'k-state',ic:'public',l:'States',v:fN(Object.keys(states).length),m:'Geographic spread'}
+    ];
+    document.getElementById('cmKpis').innerHTML=cards.map(function(k){
+      return '<div class="cm-kpi '+k.c+'"><div class="cm-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="cm-kpi-v">'+k.v+'</div><div class="cm-kpi-m">'+esc(k.m)+'</div>'
+        +'<span class="material-icons cm-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function cellHtml(c,r){
+    var v=r[c.k];
+    if(c.money)return fMoney(v);
+    if(!String(v||'').trim())return '<span class="cm-v0">—</span>';
+    if(c.badge)return '<span class="cm-badge st-'+esc(r.status)+'">'+esc(v)+'</span>';
+    if(c.tag)return '<span class="cm-tag">'+esc(v)+'</span>';
+    if(c.k==='name')return '<span class="cm-name">'+esc(v)+'</span>';
+    if(c.mono)return '<span class="cm-gst">'+esc(v)+'</span>';
+    return esc(v);
+  }
+
+  function render(){
+    var head=document.getElementById('cmHead'), body=document.getElementById('cmBody'), cnt=document.getElementById('cmCount');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="cm-empty">Could not load ('+esc(err)+').</td></tr>';cnt.textContent='';return;}
+    if(!loaded){body.innerHTML='<tr><td class="cm-empty">Loading…</td></tr>';return;}
+    renderKpis();
+    head.innerHTML='<tr>'+COLS.map(function(c){
+      var cls=(c.money?'num':'')+(c.stick?' stick':'');
+      var ar=(sortKey===c.k)?('<span class="cm-ar">'+(sortDir>0?'▲':'▼')+'</span>'):'';
+      return '<th class="'+cls+'" data-k="'+c.k+'">'+esc(c.l)+ar+'</th>';
+    }).join('')+'</tr>';
+    var a=activeRows();
+    cnt.textContent=a.length+' of '+rows.length+' customers';
+    if(!a.length){body.innerHTML='<tr><td class="cm-empty" colspan="'+COLS.length+'">No customers match the filters.</td></tr>';return;}
+    var html=a.map(function(r){
+      return '<tr>'+COLS.map(function(c){
+        var cls=(c.money?'num':'')+(c.stick?' stick':'');
+        return '<td class="'+cls+'"'+((c.k==='address'||c.k==='name')?' title="'+esc(r[c.k]||'')+'"':'')+'>'+cellHtml(c,r)+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+    body.innerHTML=html;
+  }
+
+  function fillSelect(id,vals,cur){
+    var el=document.getElementById(id), first=el.querySelector('option');
+    el.innerHTML=''; el.appendChild(first);
+    vals.forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=v;if(v===cur)o.selected=true;el.appendChild(o);});
+  }
+  function buildFilters(){
+    var st={},gr={};
+    rows.forEach(function(r){if(r.state)st[r.state]=1;if(r.main_group&&r.main_group!=='—')gr[r.main_group]=1;});
+    fillSelect('cmState',Object.keys(st).sort(),stateF);
+    fillSelect('cmGroup',Object.keys(gr).sort(),groupF);
+  }
+
+  function load(){
+    fetch('/realise/api/customer-master/',{headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ rows=p.rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; buildFilters(); render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); });
+  }
+
+  // Wiring
+  var searchDeb=debounce(render,120);
+  document.getElementById('cmSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('cmState').addEventListener('change',function(){stateF=this.value;render();});
+  document.getElementById('cmGroup').addEventListener('change',function(){groupF=this.value;render();});
+  document.getElementById('cmStatus').addEventListener('change',function(){statusF=this.value;render();});
+  document.getElementById('cmHead').addEventListener('click',function(e){
+    var th=e.target&&e.target.closest?e.target.closest('th[data-k]'):null; if(!th)return;
+    var k=th.getAttribute('data-k'); if(k===sortKey){sortDir=-sortDir;}else{sortKey=k;sortDir=1;} render();
+  });
+  load();
+})();
+</script>
+{% endblock %}

@@ -345,3 +345,60 @@ class AgingRemarkLine(models.Model):
 
     def __str__(self):
         return f"{self.card_code}/{self.row_key}: {self.category} {self.amount}"
+
+
+class Claim(models.Model):
+    """A manually-maintained claim register row. Unlike the other Realise reports, claims are
+    NOT read from SAP — every field is entered by a reviewer and persisted here. SAP only powers
+    the entry pickers: the party is chosen from the customer master (which fills party_code and
+    main_group), and product/item are chosen from the item master. Amount, type, pass date and the
+    hold/pass workflow are all manual (no derivation). ``claim_hold`` is a plain 'Yes'/'No' flag;
+    ``claim_passed`` and ``hold_amount`` are the manual ₹ amounts approved / withheld; the report's
+    'Claim Month & Year' column is derived from ``claim_date``. Drill By pivots on party_name
+    (Customer) / product / item / main_group."""
+
+    claim_date      = models.DateField()
+    party_code      = models.CharField(max_length=50, blank=True, default='')    # SAP CardCode (if picked)
+    party_name      = models.CharField(max_length=200)                            # Party Name / Customer
+    main_group      = models.CharField(max_length=100, blank=True, default='')    # channel, auto from the party
+    product         = models.CharField(max_length=120, blank=True, default='')    # oil variety / sub-group
+    item            = models.CharField(max_length=200, blank=True, default='')    # SKU / item name
+    claim_type      = models.CharField(max_length=120, blank=True, default='')    # manual (Discount / FOC / …)
+    claim_amount    = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    claim_pass_date = models.DateField(null=True, blank=True)
+    claim_hold      = models.CharField(max_length=10, blank=True, default='')     # 'Yes' / 'No'
+    claim_passed    = models.DecimalField(max_digits=16, decimal_places=2, default=0)  # Claim Passed (Manual) ₹
+    hold_amount     = models.DecimalField(max_digits=16, decimal_places=2, default=0)  # Hold (Manual) ₹
+    reason_of_hold  = models.CharField(max_length=255, blank=True, default='')    # Reason of Hold (Manual)
+    created_by      = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='claims')
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-claim_date', '-id']
+        indexes = [
+            models.Index(fields=['claim_date']),
+            models.Index(fields=['party_code']),
+        ]
+
+    def __str__(self):
+        return f"{self.claim_date} {self.party_name}: {self.claim_amount}"
+
+
+class AgingDueConfig(models.Model):
+    """Per-customer grace period (in days) driving the automatic NOT DUE / OVERDUE remark on
+    the Customer Aging detail page. A document is NOT DUE while (aging date − posting date) is
+    below ``grace_days`` — its Remarks cell is locked to 'NOT DUE' and can't be edited until
+    the days change; once that many days pass the document is OVERDUE and the cell becomes
+    editable again (defaulting to 'OVERDUE'). ``grace_days`` = 0 / no row = feature off, so the
+    Remarks column behaves as plain free text. Keyed by SAP CardCode, shared across users."""
+
+    card_code = models.CharField(max_length=50, unique=True)
+    grace_days = models.PositiveIntegerField(default=0)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.card_code}: {self.grace_days}d"

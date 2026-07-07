@@ -178,7 +178,7 @@
           {% endif %}
         </nav>
 
-        {% if can_inventory or can_stock_available or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_expenses or can_salaries or can_realise %}
+        {% if can_inventory or can_stock_available or can_reconciliation or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_expenses or can_salaries or can_realise %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
           {% if can_inventory %}
@@ -186,33 +186,46 @@
             <span class="material-icons">inventory_2</span>Inventory
           </a>
           {% endif %}
-          {% if can_stock_available or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit %}
-          <div class="cp-nav-group{% if sidebar_active == 'stock_available' or sidebar_active == 'production' or sidebar_active == 'oih_vs_stock' or sidebar_active == 'compare_sales' or sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' %} open{% endif %}" data-group="analytics">
-            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Analytical Reports" aria-label="Toggle Analytical Reports">
-              <span class="cp-nav-group-lead"><span class="material-icons">analytics</span>Analytical Reports</span>
+          {# ── Sales reports ── #}
+          {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow %}
+          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' %} open{% endif %}" data-group="reports-sales">
+            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Sales" aria-label="Toggle Sales reports">
+              <span class="cp-nav-group-lead"><span class="material-icons">trending_up</span>Sales</span>
               <span class="material-icons cp-nav-group-chev">expand_more</span>
             </button>
             <div class="cp-nav-sub">
-              {% if can_stock_available %}
-              <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
-                <span class="material-icons">warehouse</span>Stock Available
-              </a>
-              {% endif %}
-              {% if can_production %}
-              <a class="cp-nav-item {% if sidebar_active == 'production' %}active{% endif %}" href="{% url 'inventory:production' %}" title="Production Plan">
-                <span class="material-icons">precision_manufacturing</span>Production Plan
-              </a>
-              {% endif %}
-              {% if can_oih_vs_stock %}
-              <a class="cp-nav-item {% if sidebar_active == 'oih_vs_stock' %}active{% endif %}" href="{% url 'realise:oih_vs_stock' %}" title="OIH vs Stock">
-                <span class="material-icons">compare_arrows</span>OIH vs Stock
-              </a>
-              {% endif %}
               {% if can_compare_sales %}
               <a class="cp-nav-item {% if sidebar_active == 'compare_sales' %}active{% endif %}" href="{% url 'realise:compare_sales' %}" title="Compare Sales">
                 <span class="material-icons">bar_chart</span>Compare Sales
               </a>
               {% endif %}
+              {% if can_sales_cn %}
+              <a class="cp-nav-item {% if sidebar_active == 'sales_cn' %}active{% endif %}" href="{% url 'realise:sales_cn' %}" title="Sales vs Credit Notes">
+                <span class="material-icons">receipt_long</span>Sales vs CN
+              </a>
+              {% endif %}
+              {% if can_hidden_sales %}
+              <a class="cp-nav-item {% if sidebar_active == 'hidden_sales' %}active{% endif %}" href="{% url 'realise:hidden_sales' %}" title="Hidden Customer Sales">
+                <span class="material-icons">visibility_off</span>Hidden Sales
+              </a>
+              {% endif %}
+              {% if can_sales_flow %}
+              <a class="cp-nav-item {% if sidebar_active == 'sales_flow' %}active{% endif %}" href="{% url 'realise:sales_flow' %}" title="Sales Document Flow">
+                <span class="material-icons">account_tree</span>Sales Doc Flow
+              </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Accounts / receivables ── #}
+          {% if can_customer_aging or can_required_credit_limit or can_claims or can_reconciliation %}
+          <div class="cp-nav-group{% if sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' or sidebar_active == 'claims' or sidebar_active == 'reconciliation' %} open{% endif %}" data-group="reports-accounts">
+            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Accounts" aria-label="Toggle Accounts reports">
+              <span class="cp-nav-group-lead"><span class="material-icons">account_balance</span>Accounts</span>
+              <span class="material-icons cp-nav-group-chev">expand_more</span>
+            </button>
+            <div class="cp-nav-sub">
               {% if can_customer_aging %}
               <a class="cp-nav-item {% if sidebar_active == 'customer_aging' %}active{% endif %}" href="{% url 'realise:customer_aging' %}" title="Customer Aging">
                 <span class="material-icons">account_balance_wallet</span>Customer Aging
@@ -221,6 +234,70 @@
               {% if can_required_credit_limit %}
               <a class="cp-nav-item {% if sidebar_active == 'required_credit_limit' %}active{% endif %}" href="{% url 'realise:required_credit_limit' %}" title="Required Credit Limit">
                 <span class="material-icons">credit_score</span>Required Credit Limit
+              </a>
+              {% endif %}
+              {% if can_claims %}
+              <a class="cp-nav-item {% if sidebar_active == 'claims' %}active{% endif %}" href="{% url 'realise:claims' %}" title="Claims">
+                <span class="material-icons">gavel</span>Claims
+              </a>
+              {% endif %}
+              {% if can_reconciliation %}
+              <a class="cp-nav-item {% if sidebar_active == 'reconciliation' %}active{% endif %}" href="{% url 'inventory:reconciliation' %}" title="Wellness–Mart Reconciliation">
+                <span class="material-icons">account_tree</span>Wellness–Mart Recon
+              </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Inventory & production ── #}
+          {% if can_stock_available or can_non_inventory or can_oih_vs_stock or can_production or can_daily_production %}
+          <div class="cp-nav-group{% if sidebar_active == 'stock_available' or sidebar_active == 'non_inventory' or sidebar_active == 'oih_vs_stock' or sidebar_active == 'production' or sidebar_active == 'daily_production' %} open{% endif %}" data-group="reports-inventory">
+            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Inventory & Production" aria-label="Toggle Inventory & Production reports">
+              <span class="cp-nav-group-lead"><span class="material-icons">inventory</span>Inventory &amp; Production</span>
+              <span class="material-icons cp-nav-group-chev">expand_more</span>
+            </button>
+            <div class="cp-nav-sub">
+              {% if can_stock_available %}
+              <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
+                <span class="material-icons">warehouse</span>Stock Available
+              </a>
+              {% endif %}
+              {% if can_non_inventory %}
+              <a class="cp-nav-item {% if sidebar_active == 'non_inventory' %}active{% endif %}" href="{% url 'inventory:non_inventory' %}" title="Finished Goods — Non Moving Stock">
+                <span class="material-icons">inventory_2</span>Non Moving Stock
+              </a>
+              {% endif %}
+              {% if can_oih_vs_stock %}
+              <a class="cp-nav-item {% if sidebar_active == 'oih_vs_stock' %}active{% endif %}" href="{% url 'realise:oih_vs_stock' %}" title="OIH vs Stock">
+                <span class="material-icons">compare_arrows</span>OIH vs Stock
+              </a>
+              {% endif %}
+              {% if can_production %}
+              <a class="cp-nav-item {% if sidebar_active == 'production' %}active{% endif %}" href="{% url 'inventory:production' %}" title="Production Plan">
+                <span class="material-icons">precision_manufacturing</span>Production Plan
+              </a>
+              {% endif %}
+              {% if can_daily_production %}
+              <a class="cp-nav-item {% if sidebar_active == 'daily_production' %}active{% endif %}" href="{% url 'inventory:daily_production' %}" title="Daily Production Transaction">
+                <span class="material-icons">factory</span>Daily Production
+              </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Master data ── #}
+          {% if can_customer_master %}
+          <div class="cp-nav-group{% if sidebar_active == 'customer_master' %} open{% endif %}" data-group="reports-master">
+            <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Master Data" aria-label="Toggle Master Data">
+              <span class="cp-nav-group-lead"><span class="material-icons">dataset</span>Master Data</span>
+              <span class="material-icons cp-nav-group-chev">expand_more</span>
+            </button>
+            <div class="cp-nav-sub">
+              {% if can_customer_master %}
+              <a class="cp-nav-item {% if sidebar_active == 'customer_master' %}active{% endif %}" href="{% url 'realise:customer_master' %}" title="Customer Master">
+                <span class="material-icons">contacts</span>Customer Master
               </a>
               {% endif %}
             </div>

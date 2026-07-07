@@ -81,6 +81,20 @@ def compare_sales(request):
     })
 
 
+@permission_flag_required('can_sales_cn')
+def sales_cn(request):
+    """Standalone tab: gross Sales vs Credit Notes. Rows = a chosen dimension (main group /
+    state / sales person / product / item / customer); columns = Total Sales, Total CN (split
+    into CN for Goods and Claim for Services) and Net Sales = Total Sales − Total CN. Filters:
+    company (Oil / Beverages), Revenue vs quantity (Litres/Boxes), Premium/Commodity (oil),
+    and a date range. Data via /realise/api/sales-cn/. The territory payload lets the client
+    resolve the Contact Person dimension to the mapped territory owner (same as Compare Sales)."""
+    return render(request, 'realise/sales_cn.html', {
+        'sidebar_active': 'sales_cn',
+        'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
+    })
+
+
 @permission_flag_required('can_customer_aging')
 def customer_aging(request):
     """Standalone tab: customer-receivables aging pivot (FORMAT → customers) with the five
@@ -94,11 +108,14 @@ def customer_aging(request):
         aging_date = today
     if aging_date > today:                  # no aging into the future
         aging_date = today
+    remark_idx = services.get_aging_remark_index()
     return render(request, 'realise/customer_aging.html', {
         'sidebar_active': 'customer_aging',
         # raw dict — the template's |json_script does the JSON serialization (passing a
         # pre-dumped string here would double-encode and JSON.parse would yield a string).
         'aging_payload': services.get_customer_aging(aging_date),
+        'aging_remark_index': remark_idx['index'],      # {card_code: [remark tokens]}
+        'aging_remark_options': remark_idx['options'],  # sorted master list for the filter
         'aging_date': aging_date.isoformat(),
         'aging_today': today.isoformat(),
     })
@@ -122,10 +139,28 @@ def customer_aging_detail(request):
         'sidebar_active': 'customer_aging',
         'detail_payload': {'code': code, 'name': name, 'aging_date': aging_date.isoformat(),
                            'categories': services.AGING_REMARK_CATEGORIES,
+                           'grace_days': services.get_aging_grace_days(code) if code else 0,
                            'rows': services.get_customer_aging_detail(code, aging_date) if code else []},
         'aging_date': aging_date.isoformat(),
         'aging_today': today.isoformat(),
     })
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['GET'])
+def api_customer_aging_beverages(request):
+    """Raw open-invoice aging rows for the Jivo Beverages company, for the Beverages toggle on
+    Customer Aging. The client pivots them (Sales Person → Customer) and offers the per-day
+    multi-select + Excel-like raw drill. ?as_of=YYYY-MM-DD (default today)."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:
+        aging_date = today
+    return JsonResponse({'status': 'ok', **services.get_customer_aging_beverages(aging_date)})
 
 
 @permission_flag_required('can_customer_aging', json_response=True)
@@ -139,6 +174,19 @@ def api_aging_remark(request):
         return JsonResponse({'status': 'error', 'error': 'code and row_key required'}, status=400)
     services.save_aging_remark(code, row_key, body.get('remark', ''))
     return JsonResponse({'status': 'ok'})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_due_days(request):
+    """Set (or clear) the NOT DUE grace period for one customer on the Customer Aging detail
+    page. Body: {code:<CardCode>, days:<int>}. days<=0 turns the auto NOT DUE/OVERDUE off."""
+    body = _parse_body(request)
+    code = (body.get('code') or '').strip()
+    if not code:
+        return JsonResponse({'status': 'error', 'error': 'code required'}, status=400)
+    days = services.save_aging_grace_days(code, body.get('days'), user=request.user)
+    return JsonResponse({'status': 'ok', 'days': days})
 
 
 @permission_flag_required('can_customer_aging', json_response=True)
@@ -249,7 +297,7 @@ def api_aging_remark_clear(request):
 
 
 @any_permission_flag('can_realise', 'can_customer_aging', 'can_oih_vs_stock', 'can_compare_sales',
-                     json_response=True)
+                     'can_claims', json_response=True)
 @require_http_methods(['POST'])
 def api_export_xlsx(request):
     """Build a multi-sheet .xlsx from client-supplied sheets and stream it back.
@@ -287,6 +335,74 @@ def _parse_as_of(s):
         return datetime.strptime((s or '').strip(), '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return None
+
+
+@any_permission_flag('can_realise', 'can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_export_aging_detail(request):
+    """Whole-book Customer Aging detail export: every open document — with its per-document
+    Remark and split breakdown — for the parties the client passes (the currently-filtered
+    set), in one sheet. All detail is fetched in a single bulk SAP query."""
+    body = _parse_body(request)
+    parties = body.get('parties') or []
+    if not isinstance(parties, list) or not parties:
+        return JsonResponse({'error': 'parties required'}, status=400)
+    codes, meta = [], {}
+    for p in parties:
+        if not isinstance(p, dict):
+            continue
+        code = str(p.get('code') or '').strip()
+        if not code or code in meta:
+            continue
+        meta[code] = (str(p.get('name') or code).strip(), str(p.get('format') or '').strip())
+        codes.append(code)
+    if not codes:
+        return JsonResponse({'error': 'no valid parties'}, status=400)
+
+    as_of = _parse_as_of(body.get('as_of'))
+    detail = services.get_customer_aging_detail_bulk(codes, as_of)
+
+    def famt(a):
+        try:
+            return '{:,.0f}'.format(float(a or 0))
+        except (TypeError, ValueError):
+            return '0'
+
+    hdr = {'bold': True, 'fill': '0F172A', 'color': 'FFFFFF'}
+    headers = ['Format', 'Customer', 'Doc No', 'Type', 'Posting Date', 'Due Date', 'Branch',
+               'Original', 'Balance Due', '0-30', '31-60', '61-90', '91-120', '121+', 'Remark', 'Splits']
+    rows = [[{'value': h, **hdr} for h in headers]]
+    tot = {k: 0.0 for k in ('original', 'balance_due', 'b0_30', 'b31_60', 'b61_90', 'b91_120', 'b121')}
+    for code in codes:
+        name, fmt = meta[code]
+        for d in detail.get(code, []):
+            splits = '; '.join(
+                (('%s: %s' % (s.get('category') or '?', famt(s.get('amount'))))
+                 + ((' (%s)' % s['remark']) if s.get('remark') else ''))
+                for s in (d.get('splits') or []))
+            rows.append([
+                fmt, name, d['doc_no'], d['type'], d['posting_date'], d['due_date'], d['branch'],
+                d['original'], d['balance_due'], d['b0_30'], d['b31_60'], d['b61_90'],
+                d['b91_120'], d['b121'], d['remark'], splits,
+            ])
+            for k in tot:
+                tot[k] += d.get(k, 0) or 0
+    if len(rows) == 1:
+        return JsonResponse({'error': 'No open documents for the selected parties'}, status=400)
+
+    def tcell(v):
+        return {'value': round(v, 2), 'bold': True, 'fill': 'E2E8F0'}
+    rows.append([{'value': 'TOTAL', 'bold': True, 'fill': 'E2E8F0'}] + ['' ] * 6
+                + [tcell(tot['original']), tcell(tot['balance_due']), tcell(tot['b0_30']),
+                   tcell(tot['b31_60']), tcell(tot['b61_90']), tcell(tot['b91_120']), tcell(tot['b121'])]
+                + ['', ''])
+
+    content = build_workbook([('Aging Detail', rows)])
+    fname = 'Customer Aging Detail %s.xlsx' % (as_of or datetime.now().date()).strftime('%d.%m.%Y')
+    resp = HttpResponse(
+        content, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    return resp
 
 
 @permission_flag_required('can_required_credit_limit')
@@ -379,7 +495,8 @@ def _aggregate_channel_rows(raw_rows):
         u_main = str(row.get('U_Main_Group', '') or '').strip().upper()
         state = str(row.get('State', '') or '').strip().upper()
         card_name = str(row.get('CardName', '') or '').strip().upper()
-        item_name = str(row.get('ItemName', '') or '').strip().upper()
+        item_name = services._item_label(str(row.get('ItemCode', '') or '').strip().upper(),
+                                          str(row.get('ItemName', '') or '').strip().upper())
         key = (u_type, u_sub, u_main, state, sales_person, card_name, item_name)
         bucket = agg.get(key)
         if bucket is None:
@@ -424,7 +541,8 @@ def _aggregate_channel_month_rows(raw_rows):
         u_main = str(row.get('U_Main_Group', '') or '').strip().upper()
         u_sub = str(row.get('U_Sub_Group', '') or '').strip().upper()
         state = str(row.get('State', '') or '').strip().upper()
-        item_name = str(row.get('ItemName', '') or '').strip().upper()
+        item_name = services._item_label(str(row.get('ItemCode', '') or '').strip().upper(),
+                                          str(row.get('ItemName', '') or '').strip().upper())
         card_name = str(row.get('CardName', '') or '').strip().upper()
         ym = '%s-%02d' % (year, mnum)
         key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym)
@@ -559,6 +677,153 @@ def api_sales_data(request):
     channel_rows, channel_month_rows = _channel_aggregates(start_date, end_date, raw_rows)
     return JsonResponse({'status': 'ok', 'data': output, 'count': len(output),
                          'channel_rows': channel_rows, 'channel_month_rows': channel_month_rows})
+
+
+@any_permission_flag('can_sales_cn', json_response=True)
+@require_http_methods(['POST'])
+def api_sales_cn_data(request):
+    """Sales vs Credit Notes rows for a date range + company. Body: {start_date, end_date,
+    company: 'oil'|'beverages'}. Returns the get_sales_cn_report payload (rows carry each
+    dimension plus the sales / CN-goods / CN-service measures; the client pivots + filters)."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date = body.get('end_date', '')
+    company = body.get('company', 'oil')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    return JsonResponse(services.get_sales_cn_report(start_date, end_date, company))
+
+
+@permission_flag_required('can_hidden_sales')
+def hidden_sales(request):
+    """Standalone tab: sales invoices flagged HIDDEN (OINV.U_ARNO='H') — the ones excluded from
+    the dashboard's Done — surfaced per invoice line and drillable by customer / item / cost
+    center / date / status, with quantity, litres and value. Data via /realise/api/hidden-sales/."""
+    return render(request, 'realise/hidden_sales.html', {'sidebar_active': 'hidden_sales'})
+
+
+@any_permission_flag('can_hidden_sales', json_response=True)
+@require_http_methods(['POST'])
+def api_hidden_sales_data(request):
+    """Hidden invoice lines for a date range. Body: {start_date, end_date}."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date = body.get('end_date', '')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    return JsonResponse(services.get_hidden_customer_sales(start_date, end_date))
+
+
+@permission_flag_required('can_customer_master')
+def customer_master(request):
+    """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /
+    PAN, address & location, sales person, payment terms, credit limit, balance and status.
+    Searchable / filterable table with an Excel export. Data via /realise/api/customer-master/."""
+    return render(request, 'realise/customer_master.html', {'sidebar_active': 'customer_master'})
+
+
+@any_permission_flag('can_customer_master', json_response=True)
+@require_http_methods(['GET'])
+def api_customer_master_data(request):
+    """Full customer master (all OCRD customers) as JSON. Cached in the service layer."""
+    return JsonResponse(services.get_customer_master())
+
+
+# (key, column header) for the Customer Master Excel export — order = on-screen order.
+_CUST_MASTER_COLS = [
+    ('code', 'Code'), ('name', 'Customer Name'), ('main_group', 'Main Group'),
+    ('status', 'Status'), ('gstin', 'GSTIN'), ('pan', 'PAN'),
+    ('contact_person', 'Contact Person'), ('mobile', 'Mobile'),
+    ('email', 'Email'), ('address', 'Address'), ('city', 'City'), ('state', 'State'),
+    ('pincode', 'Pincode'), ('sales_person', 'Sales Person'), ('payment_terms', 'Payment Terms'),
+    ('credit_limit', 'Credit Limit'), ('balance', 'Balance'),
+]
+
+
+@permission_flag_required('can_customer_master')
+@require_http_methods(['GET'])
+def export_customer_master(request):
+    """Download the customer master as an .xlsx (all columns, all customers)."""
+    payload = services.get_customer_master()
+
+    def _cell(key, r):
+        v = r.get(key, '')
+        return round(float(v or 0), 2) if key in ('credit_limit', 'balance') else v
+
+    header = [label for _, label in _CUST_MASTER_COLS]
+    body = [[_cell(key, r) for key, _ in _CUST_MASTER_COLS] for r in payload.get('rows', [])]
+    content = build_workbook([('Customer Master', [header] + body)])
+    response = HttpResponse(
+        content, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="Customer Master.xlsx"'
+    return response
+
+
+@permission_flag_required('can_claims')
+def claims(request):
+    """Standalone tab: the Claims register — a manually-maintained table of claims (Claim Date,
+    Party, Pass Date, Month & Year, Type, Hold, Amount, and the manual Passed / Hold / Reason
+    columns). Rows are added/edited in-app (nothing is read from SAP as report data); SAP only
+    powers the party and product/item pickers. Filter by Month/Year, date range and Type; Drill By
+    Customer / Product / Item / Main Group. Data via /realise/api/claims/."""
+    return render(request, 'realise/claims.html', {'sidebar_active': 'claims'})
+
+
+@any_permission_flag('can_claims', json_response=True)
+@require_http_methods(['GET'])
+def api_claims_data(request):
+    """All claim rows plus the entry-picker masters (customers / products / items)."""
+    payload = services.get_claims()
+    payload['masters'] = services.get_claim_masters()
+    return JsonResponse(payload)
+
+
+@any_permission_flag('can_claims', json_response=True)
+@require_http_methods(['POST'])
+def api_claim_save(request):
+    """Create or update one claim from the add/edit form. Body: the claim fields (+ optional id)."""
+    body = _parse_body(request)
+    try:
+        row = services.upsert_claim(body, user=request.user)
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
+    except Exception as exc:
+        logger.error('[CLAIMS] save failed: %s', exc)
+        return JsonResponse({'status': 'error', 'error': 'Could not save the claim.'}, status=500)
+    return JsonResponse({'status': 'ok', 'row': row})
+
+
+@any_permission_flag('can_claims', json_response=True)
+@require_http_methods(['POST'])
+def api_claim_delete(request):
+    """Delete one claim by id. Body: {id}."""
+    body = _parse_body(request)
+    cid = body.get('id')
+    if not cid:
+        return JsonResponse({'status': 'error', 'error': 'id required'}, status=400)
+    return JsonResponse({'status': 'ok', 'deleted': services.delete_claim(cid)})
+
+
+@permission_flag_required('can_sales_flow')
+def sales_document_flow(request):
+    """Standalone tab: the sales document chain for a day's sales — Party, Sales Quotation No,
+    Sales Order No, Invoice No and invoiced Litres, one row per document chain. Defaults to
+    yesterday. Data via /realise/api/sales-flow/."""
+    return render(request, 'realise/sales_document_flow.html', {'sidebar_active': 'sales_flow'})
+
+
+@any_permission_flag('can_sales_flow', json_response=True)
+@require_http_methods(['POST'])
+def api_sales_flow_data(request):
+    """Sales document-flow rows for a date range (defaults to yesterday when omitted).
+    Body: {start_date, end_date}."""
+    from datetime import date, timedelta
+    body = _parse_body(request)
+    yday = (date.today() - timedelta(days=1)).isoformat()
+    start_date = body.get('start_date') or yday
+    end_date = body.get('end_date') or yday
+    company = body.get('company', 'oil')
+    return JsonResponse(services.get_sales_document_flow(start_date, end_date, company))
 
 
 @group_required(*REALISE_GROUPS, json_response=True)
@@ -803,6 +1068,15 @@ def api_oih_breakdown(request):
     OIH KPI window's dynamic drill; the client nests them into any chosen order.
     Cached (90s) so repeat opens of the OIH-vs-Stock tab / dashboard reuse one pull."""
     return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows_cached()})
+
+
+@any_permission_flag('can_realise', 'can_oih_vs_stock', json_response=True)
+@require_http_methods(['GET'])
+def api_oih_breakdown_beverages(request):
+    """Jivo Beverages variant of the OIH-vs-Stock breakdown: open-order BOXES vs on-hand
+    stock (boxes), grouped by the beverages family (DRINKS/WATER/…) and variety. Same payload
+    shape as api_oih_breakdown so the OIH-vs-Stock page renders it with the Beverages toggle."""
+    return JsonResponse({'status': 'ok', **services.get_oih_dimension_rows_beverages_cached()})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

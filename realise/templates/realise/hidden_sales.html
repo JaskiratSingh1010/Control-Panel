@@ -1,0 +1,299 @@
+{% extends "core/base.html" %}
+{% block title %}Hidden Customer Sales — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .hs-wrap{max-width:1500px;margin:0 auto}
+  .hs-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .hs-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+
+  .hs-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
+  .hs-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.12)}
+  .hs-kpi .hs-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;opacity:.92;display:flex;align-items:center;gap:7px}
+  .hs-kpi .hs-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1}
+  .hs-kpi .hs-kpi-m{font-size:12px;font-weight:600;opacity:.9;margin-top:6px}
+  .hs-kpi .material-icons.hs-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;opacity:.16}
+  .k-val{background:linear-gradient(135deg,#7c3aed,#5b21b6)}
+  .k-ltr{background:linear-gradient(135deg,#0d9488,#0f766e)}
+  .k-inv{background:linear-gradient(135deg,#e11d48,#9f1239)}
+  .k-cust{background:linear-gradient(135deg,#0891b2,#0e7490)}
+  .k-prem{background:linear-gradient(135deg,#2563eb,#1e40af)}
+  .k-comm{background:linear-gradient(135deg,#d97706,#b45309)}
+
+  .hs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .hs-fld{display:flex;flex-direction:column;gap:5px}
+  .hs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .hs-bar input[type=date],.hs-bar input[type=search],.hs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .hs-bar input[type=search]{min-width:200px}
+  .hs-bar input[type=search]:focus,.hs-bar input[type=date]:focus,.hs-bar select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .hs-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .hs-fetch:hover{background:#c2410c}
+
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:170px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:250px;max-height:320px;overflow:auto;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6;position:sticky;top:0;background:#fff}
+  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:#f4f7fb}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
+  .com-dp-item .com-dp-sub{font-size:10px;color:#94a3b8;font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6;position:sticky;bottom:0;background:#fff}
+  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  .hs-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .hs-table-wrap{overflow:auto;max-height:72vh}
+  table.hs-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.hs-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap}
+  table.hs-table thead th.gc-name{text-align:left;left:0;z-index:3}
+  table.hs-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:#334155;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.hs-table tbody td.gc-name{text-align:left;color:#0f172a;font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
+  table.hs-table tbody tr:nth-child(even) td.gc-name{background:#fafcff}
+  table.hs-table tbody tr:hover td{background:#f1f5ff}
+  table.hs-table tbody tr:hover td.gc-name{background:#eef3ff}
+  td.hs-hi{font-weight:800;color:#0f172a}
+  .hs-v0{color:#cbd5e1}
+  table.hs-table tbody tr.hs-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  table.hs-table tbody tr.hs-total td.gc-name{background:#1f3a5f;color:#fff}
+  .hs-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .hs-tw.open{transform:rotate(90deg)}
+  .hs-tw-empty{display:inline-block;width:13px;margin-right:7px}
+  .hs-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:#e2e8f0;color:#475569;margin-right:8px;vertical-align:middle}
+  .hs-empty{padding:40px;text-align:center;color:#7b8794}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hs-wrap">
+  <div>
+    <h1 class="hs-h1">Hidden Customer Sales</h1>
+    <p class="hs-psub">Sales invoices flagged hidden in SAP (U_ARNO = 'H') — excluded from the dashboard's Done. Drill by customer, item, cost center, date or status; quantity, litres &amp; value shown.</p>
+  </div>
+
+  <div class="hs-kpis" id="hsKpis"></div>
+
+  <div class="hs-bar">
+    <div class="hs-fld"><span class="hs-lbl">From</span><input type="date" id="hsStart"></div>
+    <div class="hs-fld"><span class="hs-lbl">To</span><input type="date" id="hsEnd"></div>
+    <button class="hs-fetch" id="hsFetch">&#9654; Fetch</button>
+    <div class="hs-fld"><span class="hs-lbl">Type</span>
+      <select id="hsType"><option value="">All</option><option value="PREMIUM">Premium</option><option value="COMMODITY">Commodity</option></select>
+    </div>
+    <div class="hs-fld"><span class="hs-lbl">State</span>
+      <select id="hsState"><option value="">All states</option></select>
+    </div>
+    <div class="hs-fld"><span class="hs-lbl">Main Group</span>
+      <select id="hsGroup"><option value="">All groups</option></select>
+    </div>
+    <div class="hs-fld"><span class="hs-lbl">Search</span>
+      <input type="search" id="hsSearch" placeholder="Customer / item / cost center / doc…" autocomplete="off">
+    </div>
+    <div class="hs-fld"><span class="hs-lbl">Drill By</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="hsDrillBtn"><span id="hsDrillLabel">Customer › Item</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="hsDrillPanel">
+          <div class="com-dp-head"><a id="hsDrillAll">Select All</a><a id="hsDrillClr">Clear All</a></div>
+          <div class="com-dp-list" id="hsDrillList"></div>
+          <div class="com-dp-foot"><button type="button" id="hsDrillApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hs-table-card">
+    <div class="hs-table-wrap">
+      <table class="hs-table">
+        <thead id="hsHead"></thead>
+        <tbody id="hsBody"><tr><td class="hs-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="hs-v0">—</span>';return Math.round(n).toLocaleString('en-IN');}
+  function money(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="hs-v0">—</span>';return '₹'+Math.round(n).toLocaleString('en-IN');}
+  function abbr(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e7)return sg+'₹'+(a/1e7).toFixed(2)+' Cr';if(a>=1e5)return sg+'₹'+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+'₹'+(a/1e3).toFixed(1)+' K';return sg+'₹'+Math.round(a);}
+  function abbrQ(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e5)return sg+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+(a/1e3).toFixed(1)+' K';return sg+Math.round(a).toLocaleString('en-IN');}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+  var DIMS=[
+    {key:'customer',label:'Customer',sub:'CardName / buyer'},
+    {key:'item_name',label:'Item Name',sub:'SAP item name'},
+    {key:'state',label:'State',sub:'Ship-to state'},
+    {key:'main_group',label:'Main Group',sub:'Channel'},
+    {key:'u_type',label:'Prem/Comm',sub:'Premium / Commodity'},
+    {key:'cost_center',label:'Cost Center',sub:'OcrCode (variety)'},
+    {key:'date',label:'Date',sub:'Invoice date'},
+    {key:'status',label:'Status',sub:'Open / Closed'},
+  ];
+  var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
+  var COLS=[{k:'inv',l:'Invoices'},{k:'qty',l:'Quantity'},{k:'lit',l:'Litres'},{k:'val',l:'Value'}];
+
+  var rows=[], loaded=false, err=null, expanded={};
+  var order=['customer','item_name'], chosen=['customer','item_name'];
+  var searchF='', typeF='', stateF='', groupF='';
+
+  function blank(){return {docs:{},qty:0,lit:0,val:0};}
+  function addRow(n,r){if(r.doc)n.docs[r.doc]=1;n.qty+=Number(r.qty)||0;n.lit+=Number(r.litres)||0;n.val+=Number(r.value)||0;}
+  function vals(n){return {inv:Object.keys(n.docs).length,qty:n.qty,lit:n.lit,val:n.val};}
+
+  function rowMatches(r){
+    if(typeF && String(r.u_type||'').toUpperCase()!==typeF)return false;
+    if(stateF && String(r.state||'')!==stateF)return false;
+    if(groupF && String(r.main_group||'')!==groupF)return false;
+    if(!searchF)return true;
+    var hay=(r.customer+' '+r.item_name+' '+r.state+' '+r.main_group+' '+r.cost_center+' '+r.doc+' '+r.status+' '+r.item_code).toLowerCase();
+    return hay.indexOf(searchF)!==-1;
+  }
+  function fillFilter(id,key,cur){
+    var s={}; rows.forEach(function(r){var v=r[key];if(v&&v!=='—')s[v]=1;});
+    var el=document.getElementById(id), first=el.querySelector('option').outerHTML;
+    el.innerHTML=first+Object.keys(s).sort().map(function(v){
+      return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(v)+'</option>';}).join('');
+  }
+  function buildFilters(){ fillFilter('hsState','state',stateF); fillFilter('hsGroup','main_group',groupF); }
+  function activeRows(){var out=[];for(var i=0;i<rows.length;i++){if(rowMatches(rows[i]))out.push(rows[i]);}return out;}
+
+  function buildTree(subset,dims,depth,prefix){
+    if(depth>=dims.length)return [];
+    var dim=dims[depth], map={}, ord=[];
+    for(var i=0;i<subset.length;i++){var r=subset[i],k=String(r[dim]||'—')||'—';
+      var n=map[k]; if(!n){n=map[k]=blank();n.label=k;n.dim=dim;n._rows=[];ord.push(k);}
+      addRow(n,r); n._rows.push(r);
+    }
+    return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
+      n.kids=buildTree(n._rows,dims,depth+1,n.path); n.leaf=!n.kids.length; delete n._rows; return n;
+    }).sort(function(a,b){
+      if(dim==='date')return String(b.label).localeCompare(String(a.label));   // newest first
+      return (b.val-a.val)||(b.lit-a.lit)||String(a.label).localeCompare(String(b.label));
+    });
+  }
+
+  function cells(v){return '<td class="hs-hi">'+fN(v.inv)+'</td><td>'+fN(v.qty)+'</td><td>'+fN(v.lit)+'</td><td class="hs-hi">'+money(v.val)+'</td>';}
+
+  function treeRows(nodes,depth){
+    var html='';
+    nodes.forEach(function(n){
+      var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
+      var tw=hasKids?'<span class="hs-tw'+(open?' open':'')+'" data-hspath="'+esc(n.path)+'">&#9654;</span>':'<span class="hs-tw-empty"></span>';
+      var tag='<span class="hs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
+      var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-hstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
+      html+='<tr>'+name+cells(vals(n))+'</tr>';
+      if(hasKids&&open)html+=treeRows(n.kids,depth+1);
+    });
+    return html;
+  }
+
+  function renderKpis(){
+    var a=activeRows(), docs={}, custs={}, lit=0, val=0, prem=0, comm=0;
+    a.forEach(function(r){
+      if(r.doc)docs[r.doc]=1;if(r.card_code)custs[r.card_code]=1;
+      lit+=Number(r.litres)||0;val+=Number(r.value)||0;
+      var t=String(r.u_type||'').toUpperCase();
+      if(t==='PREMIUM')prem+=Number(r.value)||0; else if(t==='COMMODITY')comm+=Number(r.value)||0;
+    });
+    var cards=[
+      {c:'k-val',ic:'payments',l:'Hidden Value',v:abbr(val),m:'Σ invoice line value (₹)'},
+      {c:'k-prem',ic:'workspace_premium',l:'Premium',v:abbr(prem),m:'Hidden premium value (₹)'},
+      {c:'k-comm',ic:'inventory_2',l:'Commodity',v:abbr(comm),m:'Hidden commodity value (₹)'},
+      {c:'k-ltr',ic:'water_drop',l:'Hidden Litres',v:abbrQ(lit),m:'Quantity × pack size'},
+      {c:'k-inv',ic:'visibility_off',l:'Invoices',v:fN(Object.keys(docs).length),m:'Hidden invoices'},
+      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'With hidden sales'}
+    ];
+    document.getElementById('hsKpis').innerHTML=cards.map(function(k){
+      return '<div class="hs-kpi '+k.c+'"><div class="hs-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="hs-kpi-v">'+k.v+'</div><div class="hs-kpi-m">'+esc(k.m)+'</div>'
+        +'<span class="material-icons hs-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function render(){
+    document.getElementById('hsDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none —';
+    var head=document.getElementById('hsHead'), body=document.getElementById('hsBody');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="hs-empty">Could not load ('+esc(err)+').</td></tr>';document.getElementById('hsKpis').innerHTML='';return;}
+    if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="hs-empty">Loading…</td></tr>';return;}
+    renderKpis();
+    var dims=order.length?order:['customer'];
+    head.innerHTML='<tr><th class="gc-name">'+esc(dims.map(function(k){return DIM_LABEL[k];}).join(' › '))+'</th>'+COLS.map(function(c){return '<th>'+esc(c.l)+'</th>';}).join('')+'</tr>';
+    var a=activeRows();
+    if(!a.length){body.innerHTML='<tr><td class="hs-empty" colspan="5">No hidden invoices in this selection.</td></tr>';return;}
+    var html=treeRows(buildTree(a,dims,0,''),0);
+    var t=blank(); a.forEach(function(r){addRow(t,r);});
+    html+='<tr class="hs-total"><td class="gc-name">TOTAL</td>'+cells(vals(t))+'</tr>';
+    body.innerHTML=html;
+  }
+
+  function renderDrillList(){
+    var list=document.getElementById('hsDrillList'); list.innerHTML='';
+    DIMS.forEach(function(d){
+      var pos=chosen.indexOf(d.key);
+      var item=document.createElement('label'); item.className='com-dp-item'+(pos!==-1?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'<div class="com-dp-sub">'+esc(d.sub)+'</div></span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=chosen.indexOf(d.key); if(this.checked){if(i===-1)chosen.push(d.key);}else if(i!==-1)chosen.splice(i,1);
+        renderDrillList();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function load(){
+    var sd=document.getElementById('hsStart').value, ed=document.getElementById('hsEnd').value;
+    if(!sd||!ed)return;
+    var btn=document.getElementById('hsFetch'); btn.disabled=true; btn.textContent='Loading…';
+    loaded=false; render();
+    fetch('/realise/api/hidden-sales/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:sd,end_date:ed})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ rows=p.rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; buildFilters(); render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  // Wiring
+  document.getElementById('hsFetch').addEventListener('click',load);
+  document.getElementById('hsStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('hsEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  var searchDeb=debounce(render,120);
+  document.getElementById('hsSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('hsType').addEventListener('change',function(){typeF=this.value;render();});
+  document.getElementById('hsState').addEventListener('change',function(){stateF=this.value;render();});
+  document.getElementById('hsGroup').addEventListener('change',function(){groupF=this.value;render();});
+  document.getElementById('hsBody').addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target.closest('[data-hstoggle]'):null; if(!t)return;
+    var p=t.getAttribute('data-hstoggle'); expanded[p]=!expanded[p]; render();
+  });
+  (function(){
+    var btn=document.getElementById('hsDrillBtn'), panel=document.getElementById('hsDrillPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();chosen=order.slice();renderDrillList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('hsDrillAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;});renderDrillList();});
+    document.getElementById('hsDrillClr').addEventListener('click',function(){chosen=[];renderDrillList();});
+    document.getElementById('hsDrillApply').addEventListener('click',function(){if(!chosen.length)return;order=chosen.slice();expanded={};panel.classList.remove('open');render();});
+  })();
+
+  // Default range = current month to date, then auto-fetch.
+  (function(){var t=new Date();
+    document.getElementById('hsStart').value=ymd(new Date(t.getFullYear(),t.getMonth(),1));
+    document.getElementById('hsEnd').value=ymd(t);
+  })();
+  renderDrillList();
+  load();
+})();
+</script>
+{% endblock %}

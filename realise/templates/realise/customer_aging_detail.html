@@ -44,6 +44,22 @@
   .ad-rmk{width:100%;min-width:150px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
   .ad-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .ad-rmk.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
+  /* Auto NOT DUE (locked, within grace) / OVERDUE (editable, grace exceeded) */
+  .ad-rmk.locked{background:#f0fdf4;border-color:#bbf7d0;color:#166534;font-weight:800;cursor:not-allowed;letter-spacing:.3px}
+  /* NOT DUE but partly paid → still green, but editable (dashed = unlocked note) */
+  .ad-rmk.notdue-edit{background:#f0fdf4;border-color:#86efac;border-style:dashed;color:#166534;font-weight:800}
+  .ad-rmk.notdue-edit::placeholder{color:#4ade80;font-weight:800}
+  .ad-rmk.overdue{border-color:#fecaca;color:#b91c1c;font-weight:800}
+  .ad-rmk.overdue::placeholder{color:#f87171;font-weight:800}
+
+  /* NOT DUE grace-days control */
+  .ad-days{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;border-radius:11px;
+    padding:8px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05);font-size:12.5px;color:#475569;font-weight:700;white-space:nowrap}
+  .ad-days label{color:#475569}
+  .ad-days input{width:56px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;
+    text-align:center;color:#0f172a;outline:none;font-weight:700}
+  .ad-days input:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
+  .ad-days .ad-days-hint{color:#94a3b8;font-weight:600}
   .neg{color:#e11d48;font-weight:700}
   .v0{color:#cbd5e1}
   .bal{font-weight:800;color:#0f172a}
@@ -97,6 +113,11 @@
       <span class="material-icons">search</span>
       <input type="text" id="adSearch" placeholder="Search doc no, remark, branch…" autocomplete="off">
     </label>
+    <span class="ad-days" title="Documents within this many days of their posting date are auto-marked NOT DUE (Remarks locked). Once that many days pass, they turn OVERDUE and the Remarks cell becomes editable. Set 0 to turn this off.">
+      <label for="adDays">NOT DUE within</label>
+      <input type="number" id="adDays" min="0" step="1" inputmode="numeric" placeholder="0">
+      <span class="ad-days-hint">days &rarr; then OVERDUE</span>
+    </span>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
     <button type="button" class="ad-btn" id="adUpload" title="Upload an edited export to bulk-update Remarks by Doc No"><span class="material-icons">upload</span>Upload Excel</button>
@@ -130,7 +151,10 @@
   var BUCKETS = [{key:'b0_30',label:'0 - 30'},{key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
                  {key:'b91_120',label:'91 - 120'},{key:'b121',label:'121+'}];
   var pivot = false;
+  // Per-customer NOT DUE grace window (whole days from posting). 0 = feature off (free text).
+  var GRACE = Math.max(0, parseInt(DATA.grace_days, 10) || 0);
   var SAVE_URL = "{% url 'realise:api_aging_remark' %}";
+  var SAVE_DAYS_URL = "{% url 'realise:api_aging_due_days' %}";
   var SAVE_LINES_URL = "{% url 'realise:api_aging_remark_lines' %}";
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
   var UPLOAD_URL = "{% url 'realise:api_aging_remark_upload' %}";
@@ -148,6 +172,36 @@
     var s = '₹'+Math.round(Math.abs(n)).toLocaleString('en-IN');
     return n<0 ? '<span class="neg">('+s+')</span>' : s;
   }
+  // ── Auto NOT DUE / OVERDUE from the per-customer grace window ──
+  // A document is NOT DUE while it is fewer than GRACE days past its posting date (its
+  // Remarks cell is locked to 'NOT DUE'); once GRACE days pass it is OVERDUE and the cell
+  // becomes editable, defaulting to 'OVERDUE'. GRACE<=0 or an unknown posting date → no
+  // auto-status, so the Remarks column is plain free text.
+  function statusOf(r){
+    if(GRACE<=0) return '';
+    var a = r.age_days;
+    if(a==null) return '';
+    return a < GRACE ? 'notdue' : 'overdue';
+  }
+  // A document is partly paid when some of its original value has been settled but a balance
+  // still remains (fully-paid documents drop off the list entirely). original & balance_due
+  // are already reconciled as of the aging date, so their gap is exactly what's been paid.
+  function partlyPaid(r){
+    var o = Math.abs(Number(r.original)||0), b = Math.abs(Number(r.balance_due)||0);
+    return (o - b) > 0.5 && b > 0.5;
+  }
+  // A NOT DUE row is locked (auto 'NOT DUE', read-only) ONLY while nothing has been paid yet;
+  // a partial payment unlocks it so the note can be edited even inside the grace window.
+  function lockedNotDue(r){ return statusOf(r)==='notdue' && !partlyPaid(r); }
+  // The remark text a row contributes to Pivot / Export / Search: forced 'NOT DUE' while
+  // locked, else the stored remark falling back to the status default (NOT DUE / OVERDUE).
+  function effRemark(r){
+    var s = statusOf(r);
+    if(s==='notdue') return lockedNotDue(r) ? 'NOT DUE' : (((r.remark||'').trim()) || 'NOT DUE');
+    if(s==='overdue') return ((r.remark||'').trim()) || 'OVERDUE';
+    return r.remark||'';
+  }
+
   document.getElementById('adCode').textContent = CODE;
   document.getElementById('adName').childNodes[0].nodeValue = (DATA.name||'Customer')+' ';
   document.getElementById('adAsOf').textContent = DATA.aging_date||'';
@@ -168,14 +222,30 @@
     var html = ROWS.map(function(r,i){
       t.original+=Number(r.original)||0; t.balance_due+=Number(r.balance_due)||0;
       BUCKETS.forEach(function(b){ t[b.key]+=Number(r[b.key])||0; });
-      var hay = ((r.doc_no||'')+' '+(r.remark||'')+' '+(r.branch||'')+' '+(r.type||'')).toLowerCase();
+      var hay = ((r.doc_no||'')+' '+effRemark(r)+' '+(r.branch||'')+' '+(r.type||'')).toLowerCase();
       var n = splitCount(r.splits);
+      var st = statusOf(r), rmkCell;
+      if(st==='notdue' && lockedNotDue(r)){
+        rmkCell = '<input class="ad-rmk locked notdue" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
+          'value="NOT DUE" readonly title="Auto: within the '+GRACE+'-day grace of posting — locked until you change the days">';
+      } else if(st==='notdue'){
+        var nv = ((r.remark||'').trim()) || 'NOT DUE';
+        rmkCell = '<input class="ad-rmk notdue-edit" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
+          'value="'+attr(nv)+'" placeholder="NOT DUE" title="Partly paid within grace — editable">';
+      } else if(st==='overdue'){
+        var ov = ((r.remark||'').trim()) || 'OVERDUE';
+        rmkCell = '<input class="ad-rmk overdue" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
+          'value="'+attr(ov)+'" placeholder="OVERDUE">';
+      } else {
+        rmkCell = '<input class="ad-rmk" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
+          'value="'+attr(r.remark)+'" placeholder="Add remark…">';
+      }
       return '<tr data-i="'+i+'" data-hay="'+attr(hay)+'">'+
         '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><span class="material-icons">chevron_right</span></button>'+
           '<span class="ad-cnt"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></td>'+
         '<td>'+esc(r.type)+'</td><td>'+esc(r.doc_no)+'</td><td>'+esc(r.posting_date)+'</td><td>'+esc(r.due_date)+'</td>'+
         '<td class="num">'+money(r.original)+'</td><td class="num bal">'+money(r.balance_due)+'</td>'+
-        '<td><input class="ad-rmk" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" value="'+attr(r.remark)+'" placeholder="Add remark…"></td>'+
+        '<td>'+rmkCell+'</td>'+
         BUCKETS.map(function(b,bi){return '<td class="num bk'+bi+'">'+money(r[b.key])+'</td>';}).join('')+
         '<td>'+esc(r.branch)+'</td>'+
       '</tr>'+
@@ -216,7 +286,7 @@
         // No split amounts on this row → bucket the whole balance under its Remark (the
         // category people type in the Remarks column or fill via Upload). Rows that DO use
         // splits keep an explicit (unallocated) remainder for whatever isn't categorised.
-        add(alloc===0 ? ((r.remark||'').trim() || '(no remark)') : '(unallocated)', rem, r);
+        add(alloc===0 ? ((effRemark(r)||'').trim() || '(no remark)') : '(unallocated)', rem, r);
       }
     });
     order.sort(function(a,b){ return map[b].balance_due - map[a].balance_due; });
@@ -353,7 +423,7 @@
       lines.push(['Grand Total',rnd(P.gt.balance_due)].concat(BUCKETS.map(function(b){return rnd(P.gt[b.key]);})).map(cell).join(','));
     }else{
       lines.push(['Type','Doc No','Posting Date','Due Date','Original','Balance Due','Remarks'].concat(BUCKETS.map(function(b){return b.label;})).concat(['Branch']).map(cell).join(','));
-      ROWS.forEach(function(r){lines.push([r.type,r.doc_no,r.posting_date,r.due_date,rnd(r.original),rnd(r.balance_due),r.remark].concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]).map(cell).join(','));});
+      ROWS.forEach(function(r){lines.push([r.type,r.doc_no,r.posting_date,r.due_date,rnd(r.original),rnd(r.balance_due),effRemark(r)].concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]).map(cell).join(','));});
     }
     var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob);
@@ -378,7 +448,7 @@
     var dv = [ [H('Type'),H('Doc No'),H('Posting Date'),H('Due Date'),H('Original'),H('Balance Due'),H('Remarks')]
                  .concat(BUCKETS.map(function(b){return H(b.label);})).concat([H('Branch')]) ];
     ROWS.forEach(function(r){
-      dv.push([r.type, r.doc_no, r.posting_date, r.due_date, rnd(r.original), rnd(r.balance_due), r.remark]
+      dv.push([r.type, r.doc_no, r.posting_date, r.due_date, rnd(r.original), rnd(r.balance_due), effRemark(r)]
                 .concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]));
     });
 
@@ -447,7 +517,7 @@
   document.getElementById('adSearch').addEventListener('input', filterData);
   document.getElementById('adBody').addEventListener('input', function(e){
     var t = e.target;
-    var rmk = t.closest && t.closest('input.ad-rmk'); if(rmk){ saveRemark(rmk); return; }
+    var rmk = t.closest && t.closest('input.ad-rmk'); if(rmk){ if(!rmk.readOnly) saveRemark(rmk); return; }
     var line = t.closest && t.closest('.sp-line'); if(!line) return;
     var wrap = t.closest('.sp-wrap'), i = +wrap.getAttribute('data-i'), j = +line.getAttribute('data-j');
     var sp = (ROWS[i].splits||[])[j]; if(!sp) return;
@@ -477,6 +547,26 @@
     if(del){ var w = del.closest('.sp-wrap'), id = +w.getAttribute('data-i'), jd = +del.closest('.sp-line').getAttribute('data-j');
       ROWS[id].splits.splice(jd,1); renderSplits(id); saveSplits(id); return; }
   });
+
+  // ── NOT DUE grace-days control: reclassify every row live, persist per customer ──
+  var daysInput = document.getElementById('adDays');
+  if(daysInput){
+    daysInput.value = GRACE>0 ? String(GRACE) : '';
+    var daysTimer;
+    var applyDays = function(){
+      var v = parseInt(daysInput.value, 10);
+      GRACE = (isFinite(v) && v>0) ? v : 0;
+      render();                          // re-classify NOT DUE / OVERDUE with the new window
+      if(!pivot) filterData();           // keep any active search filter applied
+      clearTimeout(daysTimer);
+      daysTimer = setTimeout(function(){
+        fetch(SAVE_DAYS_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+          body:JSON.stringify({code:CODE, days:GRACE})}).catch(function(){});
+      }, 500);
+    };
+    daysInput.addEventListener('input', applyDays);
+    daysInput.addEventListener('change', applyDays);
+  }
 
   render();
 })();

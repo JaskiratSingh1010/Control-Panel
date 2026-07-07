@@ -10,6 +10,12 @@
   .ois-psub{margin:6px 0 0;font-size:13px;color:#94a3b8;max-width:640px}
   .ois-drill{display:flex;align-items:center;gap:10px;padding-top:6px;flex-wrap:wrap}
   .ois-drill-lbl{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  /* Oil / Beverages company toggle — swaps the whole report between companies. */
+  .ois-cof{display:inline-flex;border:1px solid #cdb8e6;border-radius:10px;overflow:hidden;background:#fff}
+  .ois-cf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:800;padding:8px 14px;cursor:pointer}
+  .ois-cf:first-child{border-left:0}
+  .ois-cf:hover:not(.on){background:#f6f2fc}
+  .ois-cf.on{background:#7c3aed;color:#fff}
   /* Premium / Commodity filter — segmented control beside the Group-by driller. */
   .ois-typef{display:inline-flex;border:1px solid #d9e5ee;border-radius:10px;overflow:hidden;background:#fff}
   .ois-tf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;cursor:pointer}
@@ -75,13 +81,30 @@
   <div class="ois-topbar">
     <div>
       <h1 class="ois-h1">OIH vs Stock</h1>
-      <p class="ois-psub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
+      <p class="ois-psub" id="oisSub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
     </div>
     <div class="ois-drill">
+      <div class="ois-cof" id="oisCo">
+        <button type="button" class="ois-cf on" data-co="oil">Oil</button>
+        <button type="button" class="ois-cf" data-co="bev">Beverages</button>
+      </div>
       <div class="ois-typef" id="oisTypeF">
         <button type="button" class="ois-tf on" data-type="all">All</button>
         <button type="button" class="ois-tf" data-type="premium">Premium</button>
         <button type="button" class="ois-tf" data-type="commodity">Commodity</button>
+      </div>
+      <div class="ois-typef" id="oisUnitF">
+        <button type="button" class="ois-tf on" data-unit="ltr">LTR</button>
+        <button type="button" class="ois-tf" data-unit="pcs">PCS</button>
+      </div>
+      <span class="ois-drill-lbl">Warehouse</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="oisWhBtn" style="min-width:150px"><span id="oisWhLabel">All warehouses</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="oisWhPanel">
+          <div class="com-dp-head"><a id="oisWhSelAll">Select All</a><a id="oisWhClrAll">Clear All</a></div>
+          <div class="com-dp-list" id="oisWhList"></div>
+          <div class="com-dp-foot"><button type="button" id="oisWhApply">Apply</button></div>
+        </div>
       </div>
       <span class="ois-drill-lbl">Group by</span>
       <div class="com-drill-box">
@@ -97,15 +120,15 @@
   </div>
 
   <div class="ois-kpis">
-    <div class="ois-kpi oih"><div class="ois-kpi-l">Total OIH (L)</div><div class="ois-kpi-v" id="oisKpiOih">&mdash;</div></div>
-    <div class="ois-kpi stock"><div class="ois-kpi-l">Total Stock Avl (L)</div><div class="ois-kpi-v" id="oisKpiStock">&mdash;</div></div>
-    <div class="ois-kpi req"><div class="ois-kpi-l">Total Required (L)</div><div class="ois-kpi-v" id="oisKpiReq">&mdash;</div></div>
+    <div class="ois-kpi oih"><div class="ois-kpi-l" id="oisKpiOihL">Total OIH (L)</div><div class="ois-kpi-v" id="oisKpiOih">&mdash;</div></div>
+    <div class="ois-kpi stock"><div class="ois-kpi-l" id="oisKpiStockL">Total Stock Avl (L)</div><div class="ois-kpi-v" id="oisKpiStock">&mdash;</div></div>
+    <div class="ois-kpi req"><div class="ois-kpi-l" id="oisKpiReqL">Total Required (L)</div><div class="ois-kpi-v" id="oisKpiReq">&mdash;</div></div>
   </div>
 
   <div class="ois-table-card">
     <div class="ois-table-wrap">
       <table class="ois-table">
-        <thead><tr><th id="oisColProduct">U_Sub_Group</th><th class="num">OIH (L)</th><th class="num">Stock Avl (L)</th><th class="num">Required (L)</th></tr></thead>
+        <thead><tr><th id="oisColProduct">U_Sub_Group</th><th class="num" id="oisHOih">OIH (L)</th><th class="num" id="oisHStock">Stock Avl (L)</th><th class="num" id="oisHReq">Required (L)</th></tr></thead>
         <tbody id="oisBody"><tr><td colspan="4" class="ois-empty">Loading&hellip;</td></tr></tbody>
       </table>
     </div>
@@ -120,25 +143,63 @@
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
+  var OIL_URL = "{% url 'realise:api_oih_breakdown' %}";
+  var BEV_URL = "{% url 'realise:api_oih_breakdown_beverages' %}";
 
   // Product dimensions own each item cleanly, so their Stock (warehouse on-hand per item)
   // and 'Required = OIH − Stock' add up at every level. Customer is orthogonal — one item
   // can sit under many customers — so a customer's Stock is the shared on-hand of the items
   // that customer has on order (not reserved per customer) and customer rows won't sum back
   // to a product parent; the order-independent TOTAL still counts each item once.
-  var DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'},{key:'sales_person',label:'Sales Person'},{key:'so_no',label:'SO No'}];
-  var DIM_NAME={main_group:'Main Group',sub_group:'U_Sub_Group',packtype:'PackType',item:'Item Name',customer:'Customer',sales_person:'Sales Person',so_no:'SO No'};
+  // Oil is litres + Premium/Commodity; Beverages is boxes + families (DRINKS/WATER/…) → variety.
+  // The dimension list, segment control and headline unit switch with the company.
+  var OIL_DIMS=[{key:'main_group',label:'Main Group'},{key:'sub_group',label:'U_Sub_Group'},{key:'packtype',label:'PackType'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'},{key:'sales_person',label:'Sales Person'},{key:'so_no',label:'SO No'}];
+  var BEV_DIMS=[{key:'variety',label:'Variety'},{key:'family',label:'Family'},{key:'item',label:'Item Name'},{key:'customer',label:'Customer'},{key:'state',label:'State'},{key:'sales_person',label:'Sales Person'},{key:'so_no',label:'SO No'}];
+  var OIL_TYPES=[{key:'all',label:'All'},{key:'premium',label:'Premium'},{key:'commodity',label:'Commodity'}];
+  function buildDimName(dims){var m={}; dims.forEach(function(d){m[d.key]=d.label;}); return m;}
+  // Keep only drill keys valid for the active DIMS; fall back to the company's default card.
+  function validOrder(ord){
+    var keys={}; DIMS.forEach(function(d){keys[d.key]=1;});
+    var o=(ord||[]).filter(function(k){return keys[k];});
+    return o.length?o:[(company==='bev'?'variety':'sub_group')];
+  }
+  function typeInList(k){ for(var i=0;i<TYPES.length;i++){if(TYPES[i].key===k)return true;} return false; }
+
+  var company='oil';          // 'oil' | 'bev'
+  var DIMS=OIL_DIMS.slice(), DIM_NAME=buildDimName(OIL_DIMS), TYPES=OIL_TYPES.slice();
   var order=['sub_group'], chosen=['sub_group'];
-  var rows=[], itemStock={}, err=null, expanded={}, loaded=false;
-  var typeFilter='all';   // 'all' | 'premium' | 'commodity' (premium/commodity are mutually exclusive per item)
+  var rows=[], itemStock={}, itemStockPcs={}, err=null, expanded={}, loaded=false;
+  var typeFilter='all';   // 'all' | (oil) 'premium'/'commodity' | (bev) a family key like 'DRINKS'
+  var unit='ltr';         // 'ltr' = headline unit (litres for oil, boxes for bev); 'pcs' = raw pieces
+  var warehouses=[];      // per-company stock warehouses (indices match the item_stock arrays)
+  var whSel=null, whChosen={};  // whSel: {idx:true} of counted warehouses (null until payload loads = all)
 
-  // OIH litres a row contributes under the current Premium/Commodity filter.
-  function rowOih(r){var p=Number(r.premium)||0,c=Number(r.commodity)||0; return typeFilter==='premium'?p:(typeFilter==='commodity'?c:p+c);}
+  // Whether warehouse index i is counted in Stock (Stock/Required scope; OIH is warehouse-agnostic).
+  function whActive(i){ return whSel ? !!whSel[i] : true; }
+  // Headline-unit label: litres for oil, boxes for beverages; PCS in either when pieces is picked.
+  function unitLbl(){ return unit==='pcs' ? 'PCS' : (company==='bev' ? 'Box' : 'L'); }
+
+  // OIH a row contributes in the active unit under the current segment filter. Oil rows carry
+  // premium/commodity (+_pcs); beverages rows carry a single boxes/pcs plus their family.
+  function segVal(r,seg){ return Number(unit==='pcs' ? r[seg+'_pcs'] : r[seg])||0; }
+  function rowOih(r){
+    if(company==='bev'){
+      if(typeFilter!=='all' && r.family!==typeFilter) return 0;
+      return Number(unit==='pcs' ? r.pcs : r.boxes)||0;
+    }
+    var p=segVal(r,'premium'),c=segVal(r,'commodity');
+    return typeFilter==='premium'?p:(typeFilter==='commodity'?c:p+c);
+  }
   // Whether a row belongs to the current filter (so its item's stock is counted too).
-  function rowIn(r){ if(typeFilter==='premium')return (Number(r.premium)||0)>0; if(typeFilter==='commodity')return (Number(r.commodity)||0)>0; return true; }
+  function rowIn(r){
+    if(company==='bev') return typeFilter==='all' || r.family===typeFilter;
+    if(typeFilter==='premium')return segVal(r,'premium')>0;
+    if(typeFilter==='commodity')return segVal(r,'commodity')>0;
+    return true;
+  }
 
-  // Total on-hand litres for an item (sum across the three warehouses).
-  function itemStockTotal(name){var a=itemStock[name]; if(!a)return 0; var t=0; for(var i=0;i<a.length;i++)t+=Number(a[i])||0; return t;}
+  // Total on-hand stock for an item in the active unit, summed across the SELECTED warehouses only.
+  function itemStockTotal(name){var a=(unit==='pcs'?itemStockPcs:itemStock)[name]; if(!a)return 0; var t=0; for(var i=0;i<a.length;i++){if(whActive(i))t+=Number(a[i])||0;} return t;}
 
   // Nest OIH rows by the chosen product order. OIH sums each row's filtered contribution
   // (rowOih); Stock sums each UNIQUE item once (an item shows in many rows across
@@ -184,6 +245,14 @@
     var label=order.map(function(k){return DIM_NAME[k]||k;}).join(' › ')||'Dimension';
     document.getElementById('oisDrillLabel').textContent=label;
     document.getElementById('oisColProduct').textContent=label;
+    // Unit labels (L / PCS) on the KPI strip and numeric column headers.
+    var u=unitLbl();
+    document.getElementById('oisKpiOihL').textContent='Total OIH ('+u+')';
+    document.getElementById('oisKpiStockL').textContent='Total Stock Avl ('+u+')';
+    document.getElementById('oisKpiReqL').textContent='Total Required ('+u+')';
+    document.getElementById('oisHOih').textContent='OIH ('+u+')';
+    document.getElementById('oisHStock').textContent='Stock Avl ('+u+')';
+    document.getElementById('oisHReq').textContent='Required ('+u+')';
     var body=document.getElementById('oisBody');
     // Order-independent totals, scoped to the current Premium/Commodity filter.
     var fr=rows.filter(rowIn);
@@ -224,9 +293,10 @@
     var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
     var totals=dims.map(function(_,ci){return ci===0?'TOTAL':'';})
       .concat([Math.round(tOih), Math.round(tStock), Math.round(tStock-tOih)]);
-    return {headers:dimLabels.concat(['OIH (L)','Stock Avl (L)','Required (L)']), body:body, totals:totals};
+    var u=unitLbl();
+    return {headers:dimLabels.concat(['OIH ('+u+')','Stock Avl ('+u+')','Required ('+u+')']), body:body, totals:totals};
   }
-  function exportFilename(ext){ return 'OIH_vs_Stock'+(typeFilter!=='all'?'_'+typeFilter:'')+'.'+ext; }
+  function exportFilename(ext){ return 'OIH_vs_Stock'+(company==='bev'?'_Beverages':'')+(typeFilter!=='all'?'_'+typeFilter:'')+(unit==='pcs'?'_PCS':'')+'.'+ext; }
   function exportCSV(S){
     S=S||buildSheet();
     function cell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
@@ -258,23 +328,45 @@
   }
   document.getElementById('oisExport').addEventListener('click', exportXLSX);
 
-  var CACHE_KEY='ois_breakdown_v1', CACHE_TTL=90000;   // ms; matches the 90s server cache
-  function applyPayload(p){ rows=p.rows||[]; itemStock=p.item_stock||{}; err=p.error||null; loaded=true; render(); }
+  var CACHE_TTL=90000;   // ms; matches the 90s server cache
+  function cacheKey(){ return 'ois_breakdown_v3_'+company; }   // per-company session cache
+  function endpoint(){ return company==='bev' ? BEV_URL : OIL_URL; }
+
+  // Adopt a payload: rows/stock and — for beverages — the data-driven dims and segment types.
+  // Oil keeps its fixed dims/types (the payload's are ignored) so the oil view is unchanged.
+  function applyPayload(p){
+    company=(p.company==='bev')?'bev':'oil';
+    rows=p.rows||[]; itemStock=p.item_stock||{}; itemStockPcs=p.item_stock_pcs||{};
+    warehouses=p.warehouses||[];
+    if(company==='bev'){
+      if(p.dims&&p.dims.length){ DIMS=p.dims.slice(); DIM_NAME=buildDimName(DIMS); }
+      TYPES=(p.types&&p.types.length)?p.types.slice():[{key:'all',label:'All'}];
+    }else{
+      DIMS=OIL_DIMS.slice(); DIM_NAME=buildDimName(OIL_DIMS); TYPES=OIL_TYPES.slice();
+    }
+    order=validOrder(order); chosen=order.slice();
+    if(!typeInList(typeFilter)) typeFilter='all';
+    if(whSel===null && warehouses.length){ whSel={}; warehouses.forEach(function(_,i){whSel[i]=true;}); }
+    err=p.error||null; loaded=true;
+    renderTypes(); renderWhLabel(); render();
+  }
   function fetchFresh(){
-    fetch('/realise/api/oih-breakdown/',{headers:{'X-CSRFToken':csrf()}})
+    var comp=company;   // guard against a slow response arriving after the user toggles company
+    fetch(endpoint(),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{};})
       .then(function(p){
+        if(comp!==company) return;
         applyPayload(p);
-        try{ if(p&&p.rows)sessionStorage.setItem(CACHE_KEY,JSON.stringify({t:Date.now(),p:p})); }catch(e){}
+        try{ if(p&&p.rows)sessionStorage.setItem(cacheKey(),JSON.stringify({t:Date.now(),p:p})); }catch(e){}
       })
-      .catch(function(){ if(!loaded){err='load failed'; loaded=true; render();} });
+      .catch(function(){ if(comp===company && !loaded){err='load failed'; loaded=true; render();} });
   }
-  // Paint instantly from a recent pull (this browser session) so flipping back to the tab
-  // feels immediate, then refresh in the background. Drill order is applied client-side, so
-  // a cached payload is valid regardless of the chosen Group-by.
+  // Paint instantly from a recent pull (this browser session) so flipping companies/tabs feels
+  // immediate, then refresh in the background. Drill order is applied client-side, so a cached
+  // payload is valid regardless of the chosen Group-by.
   function load(){
     try{
-      var raw=sessionStorage.getItem(CACHE_KEY);
+      var raw=sessionStorage.getItem(cacheKey());
       if(raw){var c=JSON.parse(raw); if(c&&c.p&&(Date.now()-c.t)<CACHE_TTL)applyPayload(c.p);}
     }catch(e){}
     fetchFresh();
@@ -303,9 +395,10 @@
     });
   }
   var btn=document.getElementById('oisDrillBtn'), panel=document.getElementById('oisDrillPanel');
-  btn.addEventListener('click',function(e){e.stopPropagation(); chosen=order.slice(); renderDp(); panel.classList.toggle('open');});
+  var whPanel=document.getElementById('oisWhPanel');
+  btn.addEventListener('click',function(e){e.stopPropagation(); chosen=order.slice(); renderDp(); whPanel.classList.remove('open'); panel.classList.toggle('open');});
   panel.addEventListener('click',function(e){e.stopPropagation();});
-  document.addEventListener('click',function(){panel.classList.remove('open');});
+  document.addEventListener('click',function(){panel.classList.remove('open'); whPanel.classList.remove('open');});
   document.getElementById('oisSelAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;}); renderDp();});
   document.getElementById('oisClrAll').addEventListener('click',function(){chosen=[]; renderDp();});
   document.getElementById('oisApply').addEventListener('click',function(){
@@ -313,8 +406,13 @@
     order=chosen.slice(); expanded={}; panel.classList.remove('open'); render();
   });
 
-  // Premium / Commodity filter.
+  // Segment filter — Premium/Commodity for oil, or the beverages families (data-driven).
   var tf=document.getElementById('oisTypeF');
+  function renderTypes(){
+    tf.innerHTML=TYPES.map(function(t){
+      return '<button type="button" class="ois-tf'+(t.key===typeFilter?' on':'')+'" data-type="'+esc(t.key)+'">'+esc(t.label)+'</button>';
+    }).join('');
+  }
   tf.addEventListener('click',function(e){
     var b=e.target&&e.target.closest?e.target.closest('.ois-tf'):null; if(!b)return;
     typeFilter=b.getAttribute('data-type'); expanded={};
@@ -322,7 +420,79 @@
     render();
   });
 
-  render(); load();
+  // Headline-unit / PCS toggle — flips OIH, Stock and Required between the headline unit
+  // (litres for oil, boxes for beverages) and raw pieces. The 'ltr' button relabels per company.
+  var uf=document.getElementById('oisUnitF');
+  function renderUnitBtns(){
+    var l=uf.querySelector('[data-unit="ltr"]'); if(l)l.textContent=(company==='bev'?'BOX':'LTR');
+  }
+  uf.addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.ois-tf'):null; if(!b)return;
+    unit=b.getAttribute('data-unit'); expanded={};
+    Array.prototype.forEach.call(uf.querySelectorAll('.ois-tf'),function(x){x.classList.toggle('on',x===b);});
+    render();
+  });
+
+  // Sub-heading reflects the active company's unit and stock source.
+  function renderSub(){
+    var el=document.getElementById('oisSub'); if(!el)return;
+    el.innerHTML = company==='bev'
+      ? 'Open sales-order boxes (OIH) vs available stock per beverage. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Boxes = pieces &divide; pcs-per-box; stock is on-hand across the beverage godowns.'
+      : 'Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.';
+  }
+
+  // Warehouse filter — which of GP-FG / BH-EC / BH-PF feed the Stock (and Required) columns.
+  function renderWhLabel(){
+    var el=document.getElementById('oisWhLabel'); if(!el)return;
+    if(!warehouses.length){el.textContent='All warehouses';return;}
+    var sel=warehouses.filter(function(_,i){return whActive(i);});
+    if(sel.length===warehouses.length)el.textContent='All warehouses';
+    else if(!sel.length)el.textContent='No warehouse';
+    else if(sel.length<=2)el.textContent=sel.join(', ');
+    else el.textContent=sel.length+' of '+warehouses.length;
+  }
+  function renderWh(){
+    var list=document.getElementById('oisWhList'); if(!list)return; list.innerHTML='';
+    warehouses.forEach(function(w,i){
+      var on=!!whChosen[i];
+      var item=document.createElement('label');
+      item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(w)+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        whChosen[i]=this.checked; item.classList.toggle('checked',this.checked);
+      });
+      list.appendChild(item);
+    });
+  }
+  var whBtn=document.getElementById('oisWhBtn');
+  whBtn.addEventListener('click',function(e){e.stopPropagation(); whChosen=Object.assign({},whSel||{}); renderWh(); panel.classList.remove('open'); whPanel.classList.toggle('open');});
+  whPanel.addEventListener('click',function(e){e.stopPropagation();});
+  document.getElementById('oisWhSelAll').addEventListener('click',function(){warehouses.forEach(function(_,i){whChosen[i]=true;}); renderWh();});
+  document.getElementById('oisWhClrAll').addEventListener('click',function(){warehouses.forEach(function(_,i){whChosen[i]=false;}); renderWh();});
+  document.getElementById('oisWhApply').addEventListener('click',function(){
+    whSel=Object.assign({},whChosen); whPanel.classList.remove('open'); expanded={}; renderWhLabel(); render();
+  });
+
+  // Oil / Beverages company toggle — reset the view state for the new company, then fetch it.
+  function setCompany(c){
+    if(c===company) return;
+    company=c;
+    typeFilter='all'; unit='ltr'; expanded={}; whSel=null; loaded=false; err=null;
+    rows=[]; itemStock={}; itemStockPcs={}; warehouses=[];
+    if(company==='bev'){ DIMS=BEV_DIMS.slice(); TYPES=[{key:'all',label:'All'}]; order=['variety']; }
+    else { DIMS=OIL_DIMS.slice(); TYPES=OIL_TYPES.slice(); order=['sub_group']; }
+    DIM_NAME=buildDimName(DIMS); chosen=order.slice();
+    Array.prototype.forEach.call(uf.querySelectorAll('.ois-tf'),function(x){x.classList.toggle('on',x.getAttribute('data-unit')==='ltr');});
+    renderTypes(); renderUnitBtns(); renderSub(); render(); load();
+  }
+  document.getElementById('oisCo').addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.ois-cf'):null; if(!b)return;
+    var c=b.getAttribute('data-co'); if(c===company)return;
+    Array.prototype.forEach.call(this.querySelectorAll('.ois-cf'),function(x){x.classList.toggle('on',x===b);});
+    setCompany(c);
+  });
+
+  renderTypes(); renderUnitBtns(); renderSub(); render(); load();
 })();
 </script>
 {% endblock %}

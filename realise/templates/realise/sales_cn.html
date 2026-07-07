@@ -1,0 +1,370 @@
+{% extends "core/base.html" %}
+{% block title %}Sales vs Credit Notes — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .scn-wrap{max-width:1500px;margin:0 auto}
+  .scn-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .scn-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+
+  /* KPI cards */
+  .scn-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:16px 0}
+  .scn-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.12)}
+  .scn-kpi .scn-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;opacity:.92;display:flex;align-items:center;gap:7px}
+  .scn-kpi .scn-kpi-v{font-size:30px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1}
+  .scn-kpi .scn-kpi-m{font-size:12px;font-weight:600;opacity:.9;margin-top:6px}
+  .scn-kpi .material-icons.scn-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;opacity:.16}
+  .k-sales{background:linear-gradient(135deg,#0d9488,#0f766e)}
+  .k-cn{background:linear-gradient(135deg,#e11d48,#9f1239)}
+  .k-net{background:linear-gradient(135deg,#6366f1,#4338ca)}
+
+  /* Toolbar */
+  .scn-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .scn-fld{display:flex;flex-direction:column;gap:5px}
+  .scn-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .scn-bar input[type=date],.scn-bar input[type=search],.scn-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .scn-bar input[type=search]{min-width:200px}
+  .scn-bar input[type=search]:focus,.scn-bar input[type=date]:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .scn-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .scn-fetch:hover{background:#c2410c}
+  .scn-seg{display:inline-flex;background:#eef2f7;border-radius:10px;padding:3px}
+  .scn-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .scn-seg button.active{background:#2563eb;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.3)}
+  .scn-hide{display:none !important}
+
+  /* Dropdown panels (Drill By) — shared with the Realise theme */
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:260px;max-height:320px;overflow:auto;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6;position:sticky;top:0;background:#fff}
+  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:#f4f7fb}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
+  .com-dp-item .com-dp-sub{font-size:10px;color:#94a3b8;font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6;position:sticky;bottom:0;background:#fff}
+  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  /* Table */
+  .scn-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .scn-table-wrap{overflow:auto;max-height:72vh}
+  table.scn-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.scn-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap}
+  table.scn-table thead th.gc-name{text-align:left;left:0;z-index:3}
+  table.scn-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:#334155;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.scn-table tbody td.gc-name{text-align:left;color:#0f172a;font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
+  table.scn-table tbody tr:nth-child(even) td.gc-name{background:#fafcff}
+  table.scn-table tbody tr:hover td{background:#f1f5ff}
+  table.scn-table tbody tr:hover td.gc-name{background:#eef3ff}
+  td.scn-net{font-weight:800;color:#0f172a}
+  td.scn-cn{color:#b91c1c}
+  .scn-neg{color:#dc2626}
+  .scn-v0{color:#cbd5e1}
+  table.scn-table tbody tr.scn-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  table.scn-table tbody tr.scn-total td.gc-name{background:#1f3a5f;color:#fff}
+  table.scn-table tbody tr.scn-total td.scn-net{color:#fff}
+  .scn-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .scn-tw.open{transform:rotate(90deg)}
+  .scn-tw-empty{display:inline-block;width:13px;margin-right:7px}
+  .scn-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:#e2e8f0;color:#475569;margin-right:8px;vertical-align:middle}
+  .scn-empty{padding:40px;text-align:center;color:#7b8794}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="scn-wrap">
+  <div>
+    <h1 class="scn-h1">Sales vs Credit Notes</h1>
+    <p class="scn-psub">Gross sales against credit notes — CN for Goods (product returns) and Claim for Services (discounts / FOC / samples). Net Sales = Total Sales − Total CN. Drill by any dimension.</p>
+  </div>
+
+  <div class="scn-kpis" id="scnKpis"></div>
+
+  <div class="scn-bar">
+    <div class="scn-fld"><span class="scn-lbl">Company</span>
+      <div class="scn-seg" id="scnCompany">
+        <button type="button" data-co="oil" class="active">Oil</button>
+        <button type="button" data-co="beverages">Beverages</button>
+      </div>
+    </div>
+    <div class="scn-fld"><span class="scn-lbl">From</span>
+      <input type="date" id="scnStart">
+    </div>
+    <div class="scn-fld"><span class="scn-lbl">To</span>
+      <input type="date" id="scnEnd">
+    </div>
+    <button class="scn-fetch" id="scnFetch">&#9654; Fetch</button>
+    <div class="scn-fld"><span class="scn-lbl">Measure</span>
+      <div class="scn-seg" id="scnMeasure">
+        <button type="button" data-m="rev" class="active">Revenue ₹</button>
+        <button type="button" data-m="qty" id="scnQtyBtn">Litres</button>
+      </div>
+    </div>
+    <div class="scn-fld" id="scnTypeFld"><span class="scn-lbl">Type</span>
+      <select id="scnType">
+        <option value="">All</option>
+        <option value="PREMIUM">Premium</option>
+        <option value="COMMODITY">Commodity</option>
+      </select>
+    </div>
+    <div class="scn-fld"><span class="scn-lbl">Search</span>
+      <input type="search" id="scnSearch" placeholder="Customer / item / person…" autocomplete="off">
+    </div>
+    <div class="scn-fld"><span class="scn-lbl">Drill By</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="scnDrillBtn"><span id="scnDrillLabel">Main Group</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="scnDrillPanel">
+          <div class="com-dp-head"><a id="scnDrillAll">Select All</a><a id="scnDrillClr">Clear All</a></div>
+          <div class="com-dp-list" id="scnDrillList"></div>
+          <div class="com-dp-foot"><button type="button" id="scnDrillApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scn-table-card">
+    <div class="scn-table-wrap">
+      <table class="scn-table">
+        <thead id="scnHead"></thead>
+        <tbody id="scnBody"><tr><td class="scn-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  // Territory map (group|state → mapped owner) so the Contact Person dimension shows the
+  // assigned person, exactly like Compare Sales — not the raw invoice sales-person UDF.
+  var TERRITORY_DATA={{ territory_payload|safe }};
+  var TERRITORY=TERRITORY_DATA.map||{}, GROUP_OWNERS=TERRITORY_DATA.group_owners||{};
+  function assignedPerson(group,state){
+    group=String(group||'').trim().toUpperCase(); state=String(state||'').trim().toUpperCase();
+    return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||'—';
+  }
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return Math.round(Number(n)||0).toLocaleString('en-IN');}
+  function money(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="scn-v0">—</span>';var s='₹'+Math.round(Math.abs(n)).toLocaleString('en-IN');return n<0?'<span class="scn-neg">-'+s+'</span>':s;}
+  function qtyF(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="scn-v0">—</span>';var s=Math.round(Math.abs(n)).toLocaleString('en-IN');return n<0?'<span class="scn-neg">-'+s+'</span>':s;}
+  function abbr(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e7)return sg+'₹'+(a/1e7).toFixed(2)+' Cr';if(a>=1e5)return sg+'₹'+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+'₹'+(a/1e3).toFixed(1)+' K';return sg+'₹'+Math.round(a);}
+  function abbrQ(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e5)return sg+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+(a/1e3).toFixed(1)+' K';return sg+fN(a);}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+  var DIMS=[
+    {key:'main_group',label:'Main Group',sub:'GT / MT / ROI / …'},
+    {key:'state',label:'State',sub:'Full state names'},
+    {key:'person',label:'Contact Person',sub:'Assigned territory owner'},
+    {key:'product',label:'Product',sub:'Sub-group / variety'},
+    {key:'item_name',label:'Item Name',sub:'SAP item name'},
+    {key:'customer',label:'Customer',sub:'CardName / buyer'},
+  ];
+  var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
+  var COLS=['Total Sales','Total CN','CN for Goods','Claim for Services','Net Sales'];
+
+  var rows=[], loaded=false, err=null, expanded={};
+  var order=['main_group'], chosen=['main_group'];
+  var company='oil', measure='Litres', hasType=true;
+  var mode='rev', typeF='', searchF='';
+
+  // The value a row contributes for a given drill dimension. Contact Person is the mapped
+  // territory owner (group|state → person); every other dimension is the row's own field.
+  function rowVal(r,dim){
+    if(dim==='person')return assignedPerson(r.main_group,r.state);
+    return String(r[dim]||'—').toUpperCase()||'—';
+  }
+
+  // Aggregate a node's five raw measures, then derive the display value per column & mode.
+  function blank(){return {sq:0,sr:0,gq:0,gr:0,sv:0};}
+  function addRow(n,r){
+    n.sq+=Number(r.sales_qty)||0; n.sr+=Number(r.sales_rev)||0;
+    n.gq+=Number(r.cng_qty)||0;  n.gr+=Number(r.cng_rev)||0;
+    n.sv+=Number(r.cns_rev)||0;
+  }
+  // [totalSales, totalCN, cnGoods, cnService, netSales] for the active mode. Service claims
+  // have no quantity, so in qty mode the CN-service and its share of Total CN are null (blank).
+  function measures(n){
+    if(mode==='qty'){
+      var cn=n.gq;
+      return [n.sq, cn, n.gq, null, n.sq-cn];
+    }
+    var tcn=n.gr+n.sv;
+    return [n.sr, tcn, n.gr, n.sv, n.sr-tcn];
+  }
+  function allZero(m){for(var i=0;i<m.length;i++){if(m[i]!=null&&Math.abs(m[i])>=0.5)return false;}return true;}
+  function fmt(v){return v==null?'<span class="scn-v0">—</span>':(mode==='rev'?money(v):qtyF(v));}
+
+  function rowMatchesFilters(r){
+    if(typeF && String(r.u_type||'').toUpperCase()!==typeF) return false;
+    if(searchF){
+      var hay=(r.customer+' '+r.item_name+' '+assignedPerson(r.main_group,r.state)+' '+r.state+' '+r.main_group+' '+r.product).toLowerCase();
+      if(hay.indexOf(searchF)===-1) return false;
+    }
+    return true;
+  }
+
+  function buildTree(subset,dims,depth,prefix){
+    if(depth>=dims.length)return [];
+    var dim=dims[depth], map={}, ord=[];
+    for(var i=0;i<subset.length;i++){var r=subset[i],k=rowVal(r,dim);
+      var n=map[k]; if(!n){n=map[k]=blank();n.label=k;n.dim=dim;n._rows=[];ord.push(k);}
+      addRow(n,r); n._rows.push(r);
+    }
+    return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
+      n.kids=buildTree(n._rows,dims,depth+1,n.path); n.leaf=!n.kids.length; delete n._rows; return n;
+    }).sort(function(a,b){var ma=measures(a),mb=measures(b);return (mb[0]-ma[0])||String(a.label).localeCompare(String(b.label));});
+  }
+
+  function treeRows(nodes,depth){
+    var html='';
+    nodes.forEach(function(n){
+      var m=measures(n); if(allZero(m))return;
+      var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
+      var tw=hasKids?'<span class="scn-tw'+(open?' open':'')+'" data-scnpath="'+esc(n.path)+'">&#9654;</span>':'<span class="scn-tw-empty"></span>';
+      var tag='<span class="scn-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
+      var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-scntoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
+      html+='<tr>'+name
+        +'<td>'+fmt(m[0])+'</td>'
+        +'<td class="scn-cn">'+fmt(m[1])+'</td>'
+        +'<td class="scn-cn">'+fmt(m[2])+'</td>'
+        +'<td class="scn-cn">'+fmt(m[3])+'</td>'
+        +'<td class="scn-net">'+fmt(m[4])+'</td></tr>';
+      if(hasKids&&open)html+=treeRows(n.kids,depth+1);
+    });
+    return html;
+  }
+
+  function activeRows(){var out=[];for(var i=0;i<rows.length;i++){if(rowMatchesFilters(rows[i]))out.push(rows[i]);}return out;}
+
+  function renderKpis(){
+    var tot=blank(); activeRows().forEach(function(r){addRow(tot,r);});
+    var m=measures(tot);
+    var unit=mode==='rev'?'':(' '+measure);
+    var fmtK=mode==='rev'?abbr:function(v){return abbrQ(v)+unit;};
+    var cards=[
+      {c:'k-sales',ic:'trending_up',l:'Total Sales',v:fmtK(m[0]),s:'Gross invoices (OINV)'},
+      {c:'k-cn',ic:'receipt_long',l:'Total CN',v:fmtK(m[1]),s:(mode==='rev'?('Goods '+abbr(tot.gr)+' + Services '+abbr(tot.sv)):'CN for Goods only')},
+      {c:'k-net',ic:'account_balance',l:'Net Sales',v:fmtK(m[4]),s:'Total Sales − Total CN'}
+    ];
+    document.getElementById('scnKpis').innerHTML=cards.map(function(k){
+      return '<div class="scn-kpi '+k.c+'"><div class="scn-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="scn-kpi-v">'+k.v+'</div><div class="scn-kpi-m">'+esc(k.s)+'</div>'
+        +'<span class="material-icons scn-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function render(){
+    document.getElementById('scnDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none —';
+    var head=document.getElementById('scnHead'), body=document.getElementById('scnBody');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="scn-empty">Could not load ('+esc(err)+').</td></tr>';document.getElementById('scnKpis').innerHTML='';return;}
+    if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="scn-empty">Loading…</td></tr>';return;}
+    renderKpis();
+    var dims=order.length?order:['main_group'];
+    var rowLabel=dims.map(function(k){return DIM_LABEL[k];}).join(' › ');
+    head.innerHTML='<tr><th class="gc-name">'+esc(rowLabel)+'</th>'+COLS.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr>';
+    var a=activeRows();
+    if(!a.length){body.innerHTML='<tr><td class="scn-empty" colspan="6">No sales or credit notes in this selection.</td></tr>';return;}
+    var tree=buildTree(a,dims,0,'');
+    var html=treeRows(tree,0);
+    if(!html){body.innerHTML='<tr><td class="scn-empty" colspan="6">No non-zero rows for this measure.</td></tr>';return;}
+    var tot=blank(); a.forEach(function(r){addRow(tot,r);});
+    var tm=measures(tot);
+    html+='<tr class="scn-total"><td class="gc-name">TOTAL</td>'
+      +'<td>'+fmt(tm[0])+'</td><td>'+fmt(tm[1])+'</td><td>'+fmt(tm[2])+'</td><td>'+fmt(tm[3])+'</td><td class="scn-net">'+fmt(tm[4])+'</td></tr>';
+    body.innerHTML=html;
+  }
+
+  function renderDrillList(){
+    var list=document.getElementById('scnDrillList'); list.innerHTML='';
+    DIMS.forEach(function(d){
+      var pos=chosen.indexOf(d.key);
+      var item=document.createElement('label'); item.className='com-dp-item'+(pos!==-1?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'<div class="com-dp-sub">'+esc(d.sub)+'</div></span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=chosen.indexOf(d.key); if(this.checked){if(i===-1)chosen.push(d.key);}else if(i!==-1)chosen.splice(i,1);
+        renderDrillList();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function applyCompanyUi(){
+    // Prem/Comm only applies to oil; the qty button label follows the measure (Litres / Boxes).
+    document.getElementById('scnTypeFld').classList.toggle('scn-hide',!hasType);
+    if(!hasType){ typeF=''; document.getElementById('scnType').value=''; }
+    document.getElementById('scnQtyBtn').textContent=measure;
+  }
+
+  function load(){
+    var sd=document.getElementById('scnStart').value, ed=document.getElementById('scnEnd').value;
+    if(!sd||!ed){return;}
+    var btn=document.getElementById('scnFetch'); btn.disabled=true; btn.textContent='Loading…';
+    loaded=false; render();
+    fetch('/realise/api/sales-cn/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:sd,end_date:ed,company:company})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){
+        rows=p.rows||[]; measure=p.measure||'Litres'; hasType=!!p.has_type;
+        err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={};
+        applyCompanyUi(); render();
+      })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+  // Wiring
+  document.getElementById('scnFetch').addEventListener('click',load);
+  document.getElementById('scnStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('scnEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('scnType').addEventListener('change',function(){typeF=this.value;render();});
+  var searchDeb=debounce(render,120);
+  document.getElementById('scnSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('scnBody').addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target.closest('[data-scntoggle]'):null; if(!t)return;
+    var p=t.getAttribute('data-scntoggle'); expanded[p]=!expanded[p]; render();
+  });
+  document.getElementById('scnCompany').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b||b.getAttribute('data-co')===company)return;
+    company=b.getAttribute('data-co');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    load();
+  });
+  document.getElementById('scnMeasure').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    mode=b.getAttribute('data-m');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    render();
+  });
+  (function(){
+    var btn=document.getElementById('scnDrillBtn'), panel=document.getElementById('scnDrillPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();chosen=order.slice();renderDrillList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('scnDrillAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;});renderDrillList();});
+    document.getElementById('scnDrillClr').addEventListener('click',function(){chosen=[];renderDrillList();});
+    document.getElementById('scnDrillApply').addEventListener('click',function(){if(!chosen.length)return;order=chosen.slice();expanded={};panel.classList.remove('open');render();});
+  })();
+
+  // Default range = current month to date, then auto-fetch.
+  (function(){
+    var t=new Date();
+    document.getElementById('scnStart').value=ymd(new Date(t.getFullYear(),t.getMonth(),1));
+    document.getElementById('scnEnd').value=ymd(t);
+  })();
+  renderDrillList();
+  applyCompanyUi();
+  load();
+})();
+</script>
+{% endblock %}

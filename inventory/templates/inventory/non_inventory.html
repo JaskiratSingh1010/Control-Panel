@@ -1,0 +1,689 @@
+{% extends "core/base.html" %}
+{% block title %}Finished Goods — Non Moving Stock{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f4f6fb !important}
+  .ni-wrap{max-width:1600px;margin:0 auto}
+
+  .ni-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 24px;margin-bottom:16px;
+    background:linear-gradient(120deg,#0f766e,#0d9488 55%,#14b8a6);box-shadow:0 14px 34px rgba(13,148,136,.28)}
+  .ni-hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .ni-h1{font-size:23px;font-weight:900;color:#fff;margin:0}
+
+  .ni-seg{display:inline-flex;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:24px;padding:4px}
+  .ni-seg button{padding:8px 18px;border-radius:20px;font-weight:700;font-size:12.5px;color:#ecfdf5;border:0;background:transparent;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+  .ni-seg button:hover{color:#fff}
+  .ni-seg button.active{background:#fff;color:#0f766e;box-shadow:0 4px 12px rgba(0,0,0,.14)}
+
+  .ni-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
+  .ni-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-search:focus-within{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
+  .ni-search .material-icons{font-size:19px;color:#94a3b8}
+  .ni-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
+  .ni-count{font-size:12px;font-weight:700;color:#475569;white-space:nowrap}
+
+  /* "Not moved ≥ N days" threshold */
+  .ni-move{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:7px 12px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-move-lbl{font-size:12px;font-weight:700;color:#475569;white-space:nowrap}
+  .ni-move input{width:58px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;font-weight:800;text-align:center;color:#0f766e;outline:none}
+  .ni-move input:focus{border-color:#0d9488;box-shadow:0 0 0 2px rgba(13,148,136,.14)}
+  .ni-xc{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:12.5px;font-weight:700;color:#0f766e;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-xc:hover{border-color:#0d9488;background:#f0fdfa}
+  .ni-xc .material-icons{font-size:17px}
+
+  /* Group By control (dimensions → pivot), styled like OIH vs Stock */
+  .ni-gb{display:inline-flex;align-items:center;gap:8px}
+  .ni-gb-lbl{font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px}
+  .ni-gb-box{position:relative}
+  .ni-gb-btn{display:inline-flex;align-items:center;gap:10px;min-width:160px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:12.5px;font-weight:800;color:#0f766e;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-gb-btn:hover{border-color:#0d9488}
+  .ni-caret{color:#94a3b8;font-size:11px}
+  .ni-gb-panel{position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:250px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.2);display:none;overflow:hidden}
+  .ni-gb-panel.open{display:block}
+  .ni-gb-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eef2f7}
+  .ni-gb-head a{font-size:12px;font-weight:700;color:#0d9488;cursor:pointer}
+  .ni-gb-head a:hover{text-decoration:underline}
+  .ni-gb-list{max-height:280px;overflow:auto;padding:6px}
+  .ni-gb-item{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;font-size:12.5px;font-weight:600;color:#334155;cursor:pointer;user-select:none}
+  .ni-gb-item:hover{background:#f0fdfa}
+  .ni-gb-item.on{background:#ecfdf5}
+  .ni-gb-item input{accent-color:#0d9488;width:15px;height:15px;cursor:pointer;flex-shrink:0}
+  .ni-gb-name{flex:1}
+  .ni-gb-pos{min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;background:#0d9488;border-radius:999px}
+  .ni-gb-item:not(.on) .ni-gb-pos{background:transparent}
+  .ni-gb-foot{padding:10px 14px;border-top:1px solid #eef2f7}
+  .ni-gb-foot button{width:100%;background:#0d9488;color:#fff;border:0;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .ni-gb-foot button:hover{background:#0f766e}
+
+  /* Separate value filters (SKU / Type) */
+  .ni-vfs{display:inline-flex;align-items:center;gap:8px}
+  .ni-vf{position:relative}
+  .ni-vf-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:12.5px;font-weight:700;color:#334155;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-vf-btn:hover{border-color:#0d9488}
+  .ni-vf.on .ni-vf-btn{border-color:#0d9488;color:#0f766e;background:#f0fdfa}
+  .ni-vf-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:800;color:#fff;background:#0d9488;border-radius:999px}
+  .ni-vf-panel{position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:240px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.2);display:none;overflow:hidden}
+  .ni-vf.open .ni-vf-panel{display:block}
+  .ni-vf-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eef2f7}
+  .ni-vf-head a{font-size:12px;font-weight:700;color:#0d9488;cursor:pointer}
+  .ni-vf-head a:hover{text-decoration:underline}
+  .ni-vf-q{width:calc(100% - 16px);margin:8px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12.5px;outline:none;box-sizing:border-box}
+  .ni-vf-q:focus{border-color:#0d9488;box-shadow:0 0 0 2px rgba(13,148,136,.14)}
+  .ni-vf-list{max-height:240px;overflow:auto;padding:0 6px 6px}
+  .ni-vf-foot{padding:10px 14px;border-top:1px solid #eef2f7}
+  .ni-vf-foot button{width:100%;background:#0d9488;color:#fff;border:0;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .ni-vf-foot button:hover{background:#0f766e}
+
+  .ni-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
+  .ni-tw{overflow:auto;max-height:74vh}
+  table.ni-tb{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.ni-tb thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 12px;white-space:nowrap}
+  table.ni-tb thead th.lbl{text-align:left}
+  table.ni-tb td{padding:8px 12px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
+  table.ni-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .ni-name{font-weight:600;color:#0f172a;max-width:320px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
+  .ni-code{color:#0f766e;font-weight:700}
+  .ni-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:6px;background:#ccfbf1;color:#0f766e}
+  .ni-clk{cursor:pointer;color:#0d9488;font-weight:800;text-decoration:underline;text-decoration-color:rgba(13,148,136,.35);text-underline-offset:2px}
+  .ni-clk:hover{color:#0f766e;background:#ccfbf1;border-radius:6px}
+  .ni-days b{font-weight:800}
+  .ni-d-hot{color:#e11d48}.ni-d-warm{color:#d97706}.ni-d-cool{color:#16a34a}
+  .ni-never{color:#94a3b8;font-style:italic}
+  .ni-lb{cursor:pointer;color:#0d9488;font-weight:700;text-decoration:underline;text-decoration-color:rgba(13,148,136,.35);text-underline-offset:2px}
+  .ni-lb:hover{color:#0f766e;background:#ccfbf1;border-radius:6px}
+  .ni-lbinfo{padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+  .ni-lbrow{display:flex;align-items:baseline;gap:14px}
+  .ni-lblbl{min-width:110px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#94a3b8}
+  .ni-lbval{font-size:15px;font-weight:700;color:#0f172a}
+  .v0{color:#cbd5e1}
+  .ni-pc-prem{background:#dcfce7;color:#166534}.ni-pc-comm{background:#fef3c7;color:#92400e}.ni-pc-other{background:#e2e8f0;color:#475569}
+
+  /* Pivot tree rows */
+  .ni-grow{cursor:pointer}
+  .ni-grow td{background:#f0fdfa;border-bottom:1px solid #dcece9}
+  .ni-grow:hover td{background:#ccfbf1}
+  .ni-glbl{font-weight:800;color:#0f766e}
+  .ni-gchev{display:inline-flex;vertical-align:middle;color:#0d9488}
+  .ni-gchev .material-icons{font-size:18px;transition:transform .15s}
+  .ni-gchev.on .material-icons{transform:rotate(90deg)}
+  .ni-gchev-none{display:inline-block;width:18px;vertical-align:middle}
+  .ni-grow.ni-noexp{cursor:default}
+  .ni-gval{vertical-align:middle}
+  .ni-gcnt{margin-left:8px;font-size:10.5px;font-weight:800;color:#0d9488;background:#ccfbf1;border:1px solid #99f6e4;border-radius:999px;padding:1px 8px;vertical-align:middle}
+  .ni-leaf td{background:#fff}
+  .ni-leaf:hover td{background:#f8fafc}
+  .ni-lbl{white-space:nowrap}
+  tr.ni-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:1}
+  .ni-empty{padding:44px;text-align:center;color:#7b8794}
+
+  /* Warehouse drill modal */
+  .ni-mo{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .ni-mo.on{display:flex}
+  .ni-mo-c{background:#fff;border-radius:16px;width:min(620px,96vw);max-height:86vh;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.4);display:flex;flex-direction:column}
+  .ni-mo-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff}
+  .ni-mo-h h3{margin:0;font-size:16px;font-weight:900}
+  .ni-mo-h .ni-mo-meta{font-size:12px;color:#d1fae5;margin-top:3px}
+  .ni-mo-x{width:32px;height:32px;border-radius:9px;border:0;cursor:pointer;font-size:19px;line-height:1;background:rgba(255,255,255,.2);color:#fff;flex-shrink:0}
+  .ni-mo-x:hover{background:rgba(255,255,255,.34)}
+  .ni-mo-b{overflow:auto;padding:4px 0}
+  table.ni-mt{width:100%;border-collapse:collapse;font-size:13px}
+  table.ni-mt th,table.ni-mt td{padding:10px 18px;border-bottom:1px solid #eef2f6;white-space:nowrap}
+  table.ni-mt th{text-align:left;background:#f1f5f9;color:#334155;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
+  table.ni-mt td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.ni-mt tbody tr:hover td{background:#f0fdfa}
+  table.ni-mt tr.ni-tot td{position:static;background:#1e293b;color:#fff}
+  .ni-mo-empty{padding:30px;text-align:center;color:#7b8794}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-wrap">
+  <div class="ni-hero">
+    <div class="ni-hero-row">
+      <div>
+        <h1 class="ni-h1">Finished Goods — Non Moving Stock</h1>
+      </div>
+      <div class="ni-seg" id="niSeg">
+        <button data-schema="jivo_oil" class="active">Jivo Oil</button>
+        <button data-schema="jivo_mart">Jivo Mart</button>
+        <button data-schema="jivo_beverages">Jivo Beverages</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-tools">
+    <div class="ni-move" title="Show only items whose last movement (last billed) was at least this many days ago. Set 0 to show all.">
+      <span class="ni-move-lbl">Not moved &ge;</span>
+      <input type="number" id="niMoveDays" min="0" step="1" value="60" inputmode="numeric">
+      <span class="ni-move-lbl">days</span>
+    </div>
+    <div class="ni-gb">
+      <span class="ni-gb-lbl">Group by</span>
+      <div class="ni-gb-box">
+        <button type="button" class="ni-gb-btn" id="niGbBtn"><span id="niGbLabel">Sub Group</span><span class="ni-caret">&#9662;</span></button>
+        <div class="ni-gb-panel" id="niGbPanel">
+          <div class="ni-gb-head"><a id="niGbAll">Select All</a><a id="niGbClr">Clear All</a></div>
+          <div class="ni-gb-list" id="niGbList"></div>
+          <div class="ni-gb-foot"><button type="button" id="niGbApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="ni-xc" id="niXC" style="display:none"><span class="material-icons">unfold_more</span><span id="niXCLbl">Expand all</span></button>
+    <div class="ni-vfs" id="niWhFilter"></div>
+    <div class="ni-vfs" id="niVFilters"></div>
+    <label class="ni-search">
+      <span class="material-icons">search</span>
+      <input type="text" id="niSearch" placeholder="Search item code, name, variety, SKU…" autocomplete="off">
+    </label>
+    <span class="ni-count" id="niCount"></span>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-tw">
+      <table class="ni-tb">
+        <thead><tr id="niHead"></tr></thead>
+        <tbody id="niBody"><tr><td class="ni-empty" colspan="15">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="ni-mo" id="niModal">
+  <div class="ni-mo-c">
+    <div class="ni-mo-h">
+      <div><h3 id="niModalTitle">Warehouse breakdown</h3><div class="ni-mo-meta" id="niModalMeta"></div></div>
+      <button class="ni-mo-x" id="niModalX" title="Close">&times;</button>
+    </div>
+    <div class="ni-mo-b" id="niModalBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  var DATA_URL  = "{% url 'inventory:non_inventory_data' %}";
+  var DRILL_URL = "{% url 'inventory:non_inventory_drill' %}";
+  function csrf(){ var m=document.querySelector('meta[name=csrf-token]'); return m?m.content:''; }
+
+  var SCHEMA = 'jivo_oil';
+  var ROWS = [];            // current items (one per SKU)
+  var UNIT = 'litres';
+
+  // Dimensions you can Group by (pick an ordered set → the table pivots into subtotals).
+  var DIMS = [
+    {key:'SubGroup', label:'Sub Group'},
+    {key:'ItemName', label:'Item Name'}
+  ];
+  var DIM_MAP = {}; DIMS.forEach(function(d){ DIM_MAP[d.key]=d.label; });
+  function DIM_LABEL(k){ return DIM_MAP[k]||k; }
+
+  // Separate value filters (narrow the items before grouping): SKU and Type.
+  var VFILTERS = [{key:'SKU', label:'SKU'}, {key:'PremComm', label:'Type'}];
+  var vOpts={}, vApplied={}, vStage={};
+  function vv(r,k){ var x=r[k]; return (x==null||x==='') ? '–' : String(x); }
+  function vLabel(v){ return (v==null||v==='–'||v==='') ? '(none)' : v; }
+
+  var order = ['SubGroup'];   // applied Group-by order
+  var chosen = order.slice(); // staged selection while the panel is open
+  var expand = {};            // open/closed override per node path (else default)
+  var curShowItems = false;   // whether 'Item Name' is in the current Group-by (→ show item rows)
+  var moveDays = 60;          // default: only items not moved (last billed) in ≥ this many days; 0 = all
+  var curGroupPaths = [];     // every group node path in the current render (for expand/collapse all)
+  var curExpPaths = [];       // subset that actually has children (expandable)
+  var WAREHOUSES = [];        // warehouse codes present (for the warehouse multi-select)
+  var whsSel = null;          // applied set of selected warehouses (null = all)
+  var whsStage = null;        // staged selection while the warehouse panel is open
+  var whsActive = false;      // true when a strict subset of warehouses is applied
+
+  // 15-column layout: hierarchy label + item detail + measures. Group/total rows span the
+  // detail columns (colspan 11) and fill the 4 measure columns.
+  var HEAD = ['Group / Item','Item Code','Sub Group','Variety','SKU','Type','Prod Date',
+              'Days In Stock','Last Billed','Days · Billed','Month','Qty','Ltr','Boxes','Value'];
+  var LEFT = {0:1,1:1,2:1,3:1,4:1,5:1,6:1,8:1,10:1};   // left-aligned header columns (Month is text)
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function attr(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
+  function numIN(n){ n=Number(n)||0; return Math.round(n).toLocaleString('en-IN'); }
+  function num1(n){ n=Number(n)||0; return (Math.round(n*10)/10).toLocaleString('en-IN'); }
+  function fdate(s){ return s ? String(s).slice(0,10) : ''; }
+  function daysCls(d){ d=Number(d); if(!isFinite(d)) return ''; return d>180?'ni-d-hot':(d>90?'ni-d-warm':'ni-d-cool'); }
+  // Days → "N months + M days" using 30-day months (e.g. 73 → "2 months + 13 days").
+  function monthsFmt(d){
+    d=Number(d); if(!isFinite(d)) return '';
+    var m=Math.floor(d/30), r=d%30, parts=[];
+    if(m>0) parts.push(m+(m===1?' month':' months'));
+    if(r>0 || m===0) parts.push(r+(r===1?' day':' days'));
+    return parts.join(' + ');
+  }
+  function monthCell(d){ var s=monthsFmt(d); return s ? esc(s) : '<span class="v0">—</span>'; }
+  function dval(r,k){ var v=r[k]; return (v==null||v===''||v==='–') ? '(none)' : String(v); }
+
+  // ── Cell helpers (leaf item rows) ──
+  function badgeCell(v){ return (v && v!=='–') ? '<span class="ni-badge">'+esc(v)+'</span>' : '<span class="v0">—</span>'; }
+  function lblCell(v){ return (v && v!=='–') ? esc(v) : '<span class="v0">—</span>'; }
+  function ptypeCell(v){
+    if(!v||v==='–') return '<span class="v0">—</span>';
+    var pc=String(v).toUpperCase(), cl = pc.indexOf('PREM')>=0?'ni-pc-prem':(pc.indexOf('COMM')>=0?'ni-pc-comm':'ni-pc-other');
+    return '<span class="ni-badge '+cl+'">'+esc(v)+'</span>';
+  }
+  function dateCell(v){ return v ? esc(fdate(v)) : '<span class="v0">—</span>'; }
+  function billedCell(r){
+    if(!r.LastBillDate) return '<span class="ni-never">Never billed</span>';
+    return '<span class="ni-lb" data-item="'+attr(r.ItemCode)+'" title="Click to see who it was last billed to">'+esc(fdate(r.LastBillDate))+'</span>';
+  }
+  function numDash(v){ return (v==null||v==='') ? '<span class="v0">—</span>' : numIN(v); }
+  function qtyCell(r,k){
+    var v=r[k]; if(!Number(v)) return '<span class="v0">—</span>';
+    var disp=(k==='Qty')?numIN(v):num1(v);
+    return '<span class="ni-clk" data-item="'+attr(r.ItemCode)+'">'+disp+'</span>';
+  }
+
+  function headHtml(){
+    return HEAD.map(function(h,i){ return '<th class="'+(LEFT[i]?'lbl':'')+'">'+esc(h)+'</th>'; }).join('');
+  }
+
+  // ── Filtering (search only) + grouping ──
+  function getItems(){
+    var rows=ROWS;
+    if(whsActive){                                // drop items with no stock in the picked warehouses
+      rows=rows.filter(function(r){ return (Number(r._rawQty)||0)>0.005; });
+    }
+    if(moveDays>0){                               // only items not moved (last billed) in ≥ moveDays
+      rows=rows.filter(function(r){ var d=Number(r.DaysSinceMoved); return isFinite(d) && d>=moveDays; });
+    }
+    VFILTERS.forEach(function(f){                 // value filters narrow further
+      var s=vApplied[f.key], os=vOpts[f.key]||[];
+      if(s && s.size < os.length){ rows=rows.filter(function(r){ return s.has(vv(r,f.key)); }); }
+    });
+    var q=(document.getElementById('niSearch').value||'').trim().toLowerCase();
+    if(q){ rows=rows.filter(function(r){
+      return ((r.ItemCode||'')+' '+(r.ItemName||'')+' '+(r.SubGroup||'')+' '+(r.Variety||'')+' '+(r.SKU||'')+' '+(r.PremComm||'')).toLowerCase().indexOf(q)!==-1;
+    }); }
+    return rows;
+  }
+  function groupItems(items, dims){
+    if(!dims || !dims.length) return null;
+    var k=dims[0], map={}, keys=[];
+    items.forEach(function(r){ var v=dval(r,k); if(!map[v]){ map[v]=[]; keys.push(v); } map[v].push(r); });
+    return {key:k, groups: keys.map(function(v){
+      return {value:v, items:map[v], children: groupItems(map[v], dims.slice(1))};
+    })};
+  }
+  function agg(items){
+    var q=0,l=0,b=0,v=0;
+    items.forEach(function(r){ q+=Number(r.Qty)||0; l+=Number(r.Litres)||0; b+=Number(r.Boxes)||0; v+=Number(r.Value)||0; });
+    return {q:q,l:l,b:b,v:v,n:items.length};
+  }
+  function maxProd(items){ var m=''; items.forEach(function(r){ var p=r.ProdDate||''; if(p>m) m=p; }); return m; }
+  function byProdDesc(a,b){ var pa=a.ProdDate||'', pb=b.ProdDate||''; return pa<pb?1:(pa>pb?-1:0); }
+  function sortGroups(gs){
+    return gs.slice().sort(function(A,B){
+      var pa=maxProd(A.items), pb=maxProd(B.items);
+      if(pa<pb) return 1; if(pa>pb) return -1; return B.items.length-A.items.length;
+    });
+  }
+
+  function groupRow(value, depth, path, a, open, hasChildren){
+    var chev = hasChildren
+      ? '<span class="ni-gchev'+(open?' on':'')+'"><span class="material-icons">chevron_right</span></span>'
+      : '<span class="ni-gchev-none"></span>';
+    return '<tr class="ni-grow'+(hasChildren?'':' ni-noexp')+'"'+(hasChildren?' data-exp="1"':'')+' data-path="'+attr(path)+'">'+
+      '<td class="ni-lbl ni-glbl" colspan="11" style="padding-left:'+(10+depth*18)+'px">'+
+        chev+
+        '<span class="ni-gval">'+esc(value)+'</span>'+
+        '<span class="ni-gcnt">'+a.n+(a.n===1?' item':' items')+'</span></td>'+
+      '<td class="num">'+numIN(a.q)+'</td><td class="num">'+num1(a.l)+'</td>'+
+      '<td class="num">'+num1(a.b)+'</td><td class="num">'+numIN(a.v)+'</td>'+
+    '</tr>';
+  }
+  function leafRow(r, depth){
+    return '<tr class="ni-leaf">'+
+      '<td class="ni-lbl" style="padding-left:'+(14+depth*18)+'px"><span class="ni-name" title="'+attr(r.ItemName)+'">'+esc(r.ItemName)+'</span></td>'+
+      '<td class="ni-code">'+esc(r.ItemCode)+'</td>'+
+      '<td>'+badgeCell(r.SubGroup)+'</td>'+
+      '<td>'+lblCell(r.Variety)+'</td>'+
+      '<td>'+lblCell(r.SKU)+'</td>'+
+      '<td>'+ptypeCell(r.PremComm)+'</td>'+
+      '<td>'+dateCell(r.ProdDate)+'</td>'+
+      '<td class="num">'+numDash(r.DaysInStock)+'</td>'+
+      '<td>'+billedCell(r)+'</td>'+
+      '<td class="num ni-days '+daysCls(r.DaysSinceBilled)+'"><b>'+numDash(r.DaysSinceBilled)+'</b></td>'+
+      '<td>'+monthCell(r.DaysInStock)+'</td>'+
+      '<td class="num">'+qtyCell(r,'Qty')+'</td>'+
+      '<td class="num">'+qtyCell(r,'Litres')+'</td>'+
+      '<td class="num">'+qtyCell(r,'Boxes')+'</td>'+
+      '<td class="num">'+numIN(r.Value)+'</td>'+
+    '</tr>';
+  }
+  // Deepest groups render the actual item rows ONLY when 'Item Name' is in the Group-by
+  // (showItems). When shown they default to expanded, so picking Item Name reveals the items.
+  function walk(groups, depth, parentPath, showItems, out){
+    sortGroups(groups).forEach(function(g){
+      var path=parentPath+'¦'+g.value, a=agg(g.items);
+      var hasChildren = g.children ? true : showItems;
+      var open = (path in expand) ? expand[path] : showItems;
+      out.push(groupRow(g.value, depth, path, a, open, hasChildren));
+      if(open && hasChildren){
+        if(g.children) walk(g.children.groups, depth+1, path, showItems, out);
+        else g.items.slice().sort(byProdDesc).forEach(function(r){ out.push(leafRow(r, depth+1)); });
+      }
+    });
+  }
+
+  // Collect every group path (and the expandable subset) so Expand/Collapse-all can act on all
+  // nodes — including ones inside currently-collapsed branches that walk() never reaches.
+  function collectPaths(groups, parent, showItems, allOut, expOut){
+    groups.forEach(function(g){
+      var path=parent+'¦'+g.value;
+      allOut.push(path);
+      if(g.children || showItems) expOut.push(path);   // has sub-groups, or item leaves to reveal
+      if(g.children) collectPaths(g.children.groups, path, showItems, allOut, expOut);
+    });
+  }
+  function isOpen(path){ return (path in expand) ? expand[path] : curShowItems; }
+  function updXC(){
+    var xc=document.getElementById('niXC');
+    if(!curExpPaths.length){ xc.style.display='none'; return; }
+    xc.style.display='';
+    var anyClosed = curExpPaths.some(function(p){ return !isOpen(p); });
+    xc.querySelector('.material-icons').textContent = anyClosed ? 'unfold_more' : 'unfold_less';
+    document.getElementById('niXCLbl').textContent = anyClosed ? 'Expand all' : 'Collapse all';
+  }
+
+  function render(){
+    document.getElementById('niHead').innerHTML = headHtml();
+    var body=document.getElementById('niBody');
+    var items=getItems();
+    var groupDims = order.filter(function(k){ return k!=='ItemName'; });   // ItemName is the leaf, not a bucket
+    var showItems = order.indexOf('ItemName')!==-1;
+    curShowItems = showItems; curGroupPaths=[]; curExpPaths=[];
+    document.getElementById('niCount').textContent =
+      items.length+(items.length===1?' item':' items')+(order.length?' · by '+order.map(DIM_LABEL).join(' › '):'');
+    if(!items.length){ body.innerHTML='<tr><td class="ni-empty" colspan="15">No finished goods match the current filters.</td></tr>'; updXC(); return; }
+    var out=[];
+    if(groupDims.length){
+      var tree=groupItems(items, groupDims);
+      collectPaths(tree.groups, '', showItems, curGroupPaths, curExpPaths);
+      walk(tree.groups, 0, '', showItems, out);
+    } else {
+      items.slice().sort(byProdDesc).forEach(function(r){ out.push(leafRow(r,0)); });   // Item Name alone → flat list
+    }
+    var g=agg(items);
+    out.push('<tr class="ni-tot"><td colspan="11">TOTAL · '+g.n+' items</td>'+
+      '<td class="num">'+numIN(g.q)+'</td><td class="num">'+num1(g.l)+'</td>'+
+      '<td class="num">'+num1(g.b)+'</td><td class="num">'+numIN(g.v)+'</td></tr>');
+    body.innerHTML=out.join('');
+    updXC();
+  }
+
+  function load(){
+    var body=document.getElementById('niBody');
+    body.innerHTML='<tr><td class="ni-empty" colspan="15">Loading from SAP… please wait</td></tr>';
+    document.getElementById('niCount').textContent='';
+    expand={};
+    fetch(DATA_URL+'?schema='+encodeURIComponent(SCHEMA), {headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var d=(j&&j.data)||{};
+        ROWS=d.items||[]; UNIT=d.unit||'litres'; WAREHOUSES=d.warehouses||[];
+        ROWS.forEach(function(r){ r._Q0=r.Qty; r._L0=r.Litres; r._B0=r.Boxes; r._V0=r.Value; });  // all-warehouse snapshot
+        buildVFilters();
+        buildWhs();
+        applyWhs();
+        render();
+      })
+      .catch(function(){ body.innerHTML='<tr><td class="ni-empty" colspan="15">Could not load — please try again.</td></tr>'; });
+  }
+
+  // ── Value filters (SKU / Type): checkbox list + Select All / Clear All + Apply ──
+  // A filter with fewer than 2 distinct values is skipped (e.g. Type on beverages).
+  function buildVFilters(){
+    var host=document.getElementById('niVFilters'); host.innerHTML='';
+    VFILTERS.forEach(function(f){
+      var seen={}; ROWS.forEach(function(r){ seen[vv(r,f.key)]=1; });
+      var list=Object.keys(seen).sort(function(a,b){ return String(a).localeCompare(String(b)); });
+      vOpts[f.key]=list; vApplied[f.key]=new Set(list);
+      if(list.length<2) return;
+      var w=document.createElement('div'); w.className='ni-vf'; w.setAttribute('data-key', f.key);
+      w.innerHTML=
+        '<button type="button" class="ni-vf-btn">'+esc(f.label)+
+          '<span class="ni-vf-badge" style="display:none">0</span><span class="ni-caret">&#9662;</span></button>'+
+        '<div class="ni-vf-panel">'+
+          '<div class="ni-vf-head"><a class="ni-vf-all">Select All</a><a class="ni-vf-clr">Clear All</a></div>'+
+          '<input type="text" class="ni-vf-q" placeholder="Search '+esc(f.label)+'…" autocomplete="off">'+
+          '<div class="ni-vf-list"></div>'+
+          '<div class="ni-vf-foot"><button type="button" class="ni-vf-apply">Apply</button></div>'+
+        '</div>';
+      host.appendChild(w);
+    });
+  }
+  function renderVList(w){
+    var key=w.getAttribute('data-key'), stage=vStage[key];
+    w.querySelector('.ni-vf-list').innerHTML = vOpts[key].map(function(v){
+      return '<label class="ni-gb-item'+(stage.has(v)?' on':'')+'"><input type="checkbox" value="'+attr(v)+'"'+(stage.has(v)?' checked':'')+'>'+
+        '<span class="ni-gb-name">'+esc(vLabel(v))+'</span></label>';
+    }).join('');
+  }
+  function updVBadge(w){
+    var key=w.getAttribute('data-key'), b=w.querySelector('.ni-vf-badge');
+    var total=(vOpts[key]||[]).length, n=vApplied[key].size;
+    if(n<total){ b.style.display=''; b.textContent=String(n); w.classList.add('on'); }
+    else { b.style.display='none'; w.classList.remove('on'); }
+  }
+  function closeVPanels(){ document.querySelectorAll('#niVFilters .ni-vf.open').forEach(function(w){ w.classList.remove('open'); }); }
+
+  var niVF=document.getElementById('niVFilters');
+  niVF.addEventListener('click', function(e){
+    e.stopPropagation();
+    var w=e.target.closest('.ni-vf'); if(!w) return;
+    var key=w.getAttribute('data-key');
+    if(e.target.closest('.ni-vf-btn')){
+      var open=!w.classList.contains('open'); closeVPanels(); closeWhPanel(); if(gbPanel) gbPanel.classList.remove('open');
+      if(open){ vStage[key]=new Set(vApplied[key]); renderVList(w); w.classList.add('open'); }
+      return;
+    }
+    if(e.target.closest('.ni-vf-all')){ vStage[key]=new Set(vOpts[key]); renderVList(w); return; }
+    if(e.target.closest('.ni-vf-clr')){ vStage[key]=new Set(); renderVList(w); return; }
+    if(e.target.closest('.ni-vf-apply')){ vApplied[key]=new Set(vStage[key]); updVBadge(w); w.classList.remove('open'); render(); return; }
+  });
+  niVF.addEventListener('change', function(e){
+    var cb=e.target.closest('.ni-vf-list input'); if(!cb) return;
+    var key=e.target.closest('.ni-vf').getAttribute('data-key');
+    if(cb.checked) vStage[key].add(cb.value); else vStage[key].delete(cb.value);
+    var lab=cb.closest('label'); if(lab) lab.classList.toggle('on', cb.checked);
+  });
+  niVF.addEventListener('input', function(e){
+    var qi=e.target.closest('.ni-vf-q'); if(!qi) return;
+    var w=e.target.closest('.ni-vf'), term=qi.value.trim().toLowerCase();
+    w.querySelectorAll('.ni-vf-list label').forEach(function(o){
+      o.style.display = (!term || (o.textContent||'').toLowerCase().indexOf(term)!==-1) ? '' : 'none';
+    });
+  });
+  document.addEventListener('click', closeVPanels);
+
+  // ── Warehouse multi-select (re-aggregates Qty/Ltr/Boxes/Value from the picked warehouses) ──
+  function buildWhs(){
+    var host=document.getElementById('niWhFilter'); host.innerHTML='';
+    if(!WAREHOUSES.length){ whsSel=null; whsActive=false; return; }
+    whsSel=new Set(WAREHOUSES);
+    var w=document.createElement('div'); w.className='ni-vf'; w.setAttribute('data-wh','1');
+    w.innerHTML=
+      '<button type="button" class="ni-vf-btn ni-wh-btn">Warehouse'+
+        '<span class="ni-vf-badge" style="display:none">0</span><span class="ni-caret">&#9662;</span></button>'+
+      '<div class="ni-vf-panel">'+
+        '<div class="ni-vf-head"><a class="ni-wh-all">Select All</a><a class="ni-wh-clr">Clear All</a></div>'+
+        '<div class="ni-vf-list">'+WAREHOUSES.map(function(c){
+          return '<label class="ni-gb-item on"><input type="checkbox" value="'+attr(c)+'" checked><span class="ni-gb-name">'+esc(c)+'</span></label>';
+        }).join('')+'</div>'+
+        '<div class="ni-vf-foot"><button type="button" class="ni-wh-apply">Apply</button></div>'+
+      '</div>';
+    host.appendChild(w);
+  }
+  function updWhBadge(){
+    var w=document.querySelector('#niWhFilter .ni-vf'); if(!w) return;
+    var b=w.querySelector('.ni-vf-badge'), total=WAREHOUSES.length, n=whsSel?whsSel.size:total;
+    if(n<total){ b.style.display=''; b.textContent=String(n); w.classList.add('on'); }
+    else { b.style.display='none'; w.classList.remove('on'); }
+  }
+  // Recompute each row's Qty/Ltr/Boxes/Value for the picked warehouses (or restore the
+  // all-warehouse snapshot when everything is selected). Age columns stay item-level.
+  function applyWhs(){
+    var subset = !!(whsSel && WAREHOUSES.length && whsSel.size < WAREHOUSES.length);
+    whsActive = subset;
+    ROWS.forEach(function(r){
+      var wh=r.wh||{}, raw=0, k;
+      for(k in wh){ if(!subset || whsSel.has(k)) raw += Number(wh[k])||0; }
+      r._rawQty = raw;
+      if(subset){
+        r.Qty = Math.round(raw);
+        r.Litres = Math.round(raw*(Number(r.LitrePer)||0)*100)/100;
+        r.Boxes = (Number(r.BoxPer)>0) ? Math.round(raw/Number(r.BoxPer)*100)/100 : 0;
+        r.Value = Math.round(raw*(Number(r.PricePer)||0));
+      } else {
+        r.Qty=r._Q0; r.Litres=r._L0; r.Boxes=r._B0; r.Value=r._V0;
+      }
+    });
+  }
+  function closeWhPanel(){ var w=document.querySelector('#niWhFilter .ni-vf.open'); if(w) w.classList.remove('open'); }
+
+  var niWh=document.getElementById('niWhFilter');
+  niWh.addEventListener('click', function(e){
+    e.stopPropagation();
+    var w=e.target.closest('.ni-vf'); if(!w) return;
+    if(e.target.closest('.ni-wh-btn')){
+      var open=!w.classList.contains('open'); closeWhPanel(); closeVPanels(); if(gbPanel) gbPanel.classList.remove('open');
+      if(open){
+        whsStage=new Set(whsSel);
+        w.querySelectorAll('.ni-gb-item input').forEach(function(c){ var on=whsStage.has(c.value); c.checked=on; c.closest('label').classList.toggle('on',on); });
+        w.classList.add('open');
+      }
+      return;
+    }
+    if(e.target.closest('.ni-wh-all')){ whsStage=new Set(WAREHOUSES); w.querySelectorAll('.ni-gb-item input').forEach(function(c){ c.checked=true; c.closest('label').classList.add('on'); }); return; }
+    if(e.target.closest('.ni-wh-clr')){ whsStage=new Set(); w.querySelectorAll('.ni-gb-item input').forEach(function(c){ c.checked=false; c.closest('label').classList.remove('on'); }); return; }
+    if(e.target.closest('.ni-wh-apply')){ whsSel=new Set(whsStage||[]); w.classList.remove('open'); updWhBadge(); applyWhs(); render(); return; }
+  });
+  niWh.addEventListener('change', function(e){
+    var cb=e.target.closest('.ni-gb-item input'); if(!cb || !whsStage) return;
+    if(cb.checked) whsStage.add(cb.value); else whsStage.delete(cb.value);
+    cb.closest('label').classList.toggle('on', cb.checked);
+  });
+  document.addEventListener('click', closeWhPanel);
+
+  // ── Group-by dropdown ──
+  function renderGbList(){
+    document.getElementById('niGbList').innerHTML = DIMS.map(function(d){
+      var pos=chosen.indexOf(d.key);
+      return '<label class="ni-gb-item'+(pos!==-1?' on':'')+'"><input type="checkbox" value="'+attr(d.key)+'"'+(pos!==-1?' checked':'')+'>'+
+        '<span class="ni-gb-name">'+esc(d.label)+'</span><span class="ni-gb-pos">'+(pos!==-1?(pos+1):'')+'</span></label>';
+    }).join('');
+  }
+  function updGbLabel(){ document.getElementById('niGbLabel').textContent = order.length ? order.map(DIM_LABEL).join(' › ') : '—'; }
+
+  var gbBtn=document.getElementById('niGbBtn'), gbPanel=document.getElementById('niGbPanel');
+  gbBtn.addEventListener('click', function(e){ e.stopPropagation(); closeVPanels(); closeWhPanel(); chosen=order.slice(); renderGbList(); gbPanel.classList.toggle('open'); });
+  gbPanel.addEventListener('click', function(e){ e.stopPropagation(); });
+  document.addEventListener('click', function(){ gbPanel.classList.remove('open'); });
+  document.getElementById('niGbList').addEventListener('change', function(e){
+    var cb=e.target.closest('input[type=checkbox]'); if(!cb) return;
+    var k=cb.value, i=chosen.indexOf(k);
+    if(cb.checked){ if(i===-1) chosen.push(k); } else if(i!==-1) chosen.splice(i,1);
+    renderGbList();
+  });
+  document.getElementById('niGbAll').addEventListener('click', function(){ chosen=DIMS.map(function(d){return d.key;}); renderGbList(); });
+  document.getElementById('niGbClr').addEventListener('click', function(){ chosen=[]; renderGbList(); });
+  document.getElementById('niGbApply').addEventListener('click', function(){
+    if(!chosen.length) return;                 // must group by at least one dimension
+    order=chosen.slice(); expand={}; updGbLabel(); gbPanel.classList.remove('open'); render();
+  });
+
+  // ── Warehouse breakdown modal (click a leaf's Qty / Ltr / Boxes) ──
+  var modal=document.getElementById('niModal');
+  function openModal(item){
+    var r=ROWS.filter(function(x){return x.ItemCode===item;})[0]||{};
+    document.getElementById('niModalTitle').textContent=(r.ItemName||item);
+    document.getElementById('niModalMeta').textContent=item+' · warehouse-wise stock & production date';
+    var mb=document.getElementById('niModalBody'); mb.innerHTML='<div class="ni-mo-empty">Loading…</div>';
+    modal.classList.add('on');
+    var whsParam = (whsActive && whsSel) ? '&whs='+encodeURIComponent(Array.from(whsSel).join(',')) : '';
+    fetch(DRILL_URL+'?schema='+encodeURIComponent(SCHEMA)+'&item='+encodeURIComponent(item)+whsParam, {headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var rows=(j&&j.data)||[];
+        if(!rows.length){ mb.innerHTML='<div class="ni-mo-empty">No warehouse stock found.</div>'; return; }
+        var tot=0;
+        var html='<table class="ni-mt"><thead><tr><th>WH Code</th><th>Warehouse</th><th class="num">Qty</th><th>Prod Date</th></tr></thead><tbody>';
+        html+=rows.map(function(w){
+          tot+=Number(w.Qty)||0;
+          return '<tr><td class="ni-code">'+esc(w.WhsCode)+'</td><td>'+esc(w.WhsName)+'</td>'+
+            '<td class="num">'+numIN(w.Qty)+'</td><td>'+(w.ProdDate?esc(fdate(w.ProdDate)):'<span class="ni-never">—</span>')+'</td></tr>';
+        }).join('');
+        html+='<tr class="ni-tot"><td colspan="2">TOTAL</td><td class="num">'+numIN(tot)+'</td><td></td></tr></tbody></table>';
+        mb.innerHTML=html;
+      })
+      .catch(function(){ mb.innerHTML='<div class="ni-mo-empty">Could not load the breakdown.</div>'; });
+  }
+  function closeModal(){ modal.classList.remove('on'); }
+  // Click the Last Billed date → who (customer) it was last billed to (from the row; no fetch).
+  function openLastBilled(item){
+    var r=ROWS.filter(function(x){return x.ItemCode===item;})[0]||{};
+    document.getElementById('niModalTitle').textContent=(r.ItemName||item);
+    document.getElementById('niModalMeta').textContent=item+' · last billed';
+    var cust=(r.LastCustomer||'').trim(), code=(r.LastCode||'').trim(), d=r.LastBillDate?fdate(r.LastBillDate):'';
+    var mb=document.getElementById('niModalBody');
+    if(!cust && !d){ mb.innerHTML='<div class="ni-mo-empty">Never billed.</div>'; }
+    else {
+      var lq=Number(r.LastQty)||0;
+      var qtyRows='<div class="ni-lbrow"><span class="ni-lblbl">Qty billed</span><span class="ni-lbval">'+numIN(lq)+'</span></div>';
+      if(Number(r.LitrePer)>0) qtyRows+='<div class="ni-lbrow"><span class="ni-lblbl">Litres</span><span class="ni-lbval">'+num1(lq*Number(r.LitrePer))+'</span></div>';
+      if(Number(r.BoxPer)>0)   qtyRows+='<div class="ni-lbrow"><span class="ni-lblbl">Boxes</span><span class="ni-lbval">'+num1(lq/Number(r.BoxPer))+'</span></div>';
+      mb.innerHTML='<div class="ni-lbinfo">'+
+        '<div class="ni-lbrow"><span class="ni-lblbl">Last billed to</span><span class="ni-lbval">'+esc(cust||'—')+(code?' <span class="ni-code">('+esc(code)+')</span>':'')+'</span></div>'+
+        '<div class="ni-lbrow"><span class="ni-lblbl">On</span><span class="ni-lbval">'+esc(d||'—')+'</span></div>'+
+        ((r.DaysSinceBilled==null||r.DaysSinceBilled==='')?'':'<div class="ni-lbrow"><span class="ni-lblbl">Days ago</span><span class="ni-lbval">'+numIN(r.DaysSinceBilled)+'</span></div>')+
+        qtyRows+
+      '</div>';
+    }
+    modal.classList.add('on');
+  }
+  document.getElementById('niModalX').addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) closeModal(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+
+  // ── Table clicks: leaf drill or group expand/collapse ──
+  document.getElementById('niBody').addEventListener('click', function(e){
+    var s=e.target.closest('.ni-clk'); if(s){ openModal(s.getAttribute('data-item')); return; }
+    var lb=e.target.closest('.ni-lb'); if(lb){ openLastBilled(lb.getAttribute('data-item')); return; }
+    var g=e.target.closest('.ni-grow[data-exp]'); if(g){
+      var p=g.getAttribute('data-path');
+      expand[p] = !((p in expand) ? expand[p] : curShowItems);
+      render();
+    }
+  });
+
+  // ── Company toggle + search ──
+  document.getElementById('niSeg').addEventListener('click', function(e){
+    var b=e.target.closest('button[data-schema]'); if(!b || b.classList.contains('active')) return;
+    this.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    SCHEMA=b.getAttribute('data-schema'); load();
+  });
+  document.getElementById('niSearch').addEventListener('input', render);
+  document.getElementById('niMoveDays').addEventListener('input', function(){
+    var v=parseInt(this.value,10); moveDays=(isFinite(v)&&v>0)?v:0; render();
+  });
+  document.getElementById('niXC').addEventListener('click', function(){
+    var anyClosed = curExpPaths.some(function(p){ return !isOpen(p); });
+    curGroupPaths.forEach(function(p){ expand[p]=anyClosed; });   // any closed → expand all, else collapse all
+    render();
+  });
+
+  updGbLabel();
+  load();
+})();
+</script>
+{% endblock %}

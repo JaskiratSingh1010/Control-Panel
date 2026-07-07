@@ -80,7 +80,7 @@ def build_view_xlsx(schema="jivo_oil"):
         put(row, gt_col, gtotal, number=True)
 
     # Header band (the pivot starts at row 3; rows 1-2 are intentionally blank).
-    put(3, 1, "Sum of Oil Liter")
+    put(3, 1, "Sum of Boxes" if schema == "jivo_beverages" else "Sum of Oil Liter")
     if whs:
         put(3, n_lead + 1, "Godown")
     for i, h in enumerate(["Sub Group", "VAREITY", "ItemCode", "Item Name", "SKU"]):

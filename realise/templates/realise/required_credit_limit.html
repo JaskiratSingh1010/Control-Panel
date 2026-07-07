@@ -350,7 +350,11 @@
                                     : ('Types: ' + TYPE_FILTER.join(', '));
   }
   function asmSelected(name){ return ASM_FILTER.indexOf(name) !== -1; }
-  function asmGroups(){ return ASM_FILTER.length ? ASMS.filter(function(g){return asmSelected(g.asm);}) : ASMS; }
+  function groupVisible(g){ return !ASM_FILTER.length || asmSelected(g.asm); }
+  function asmGroups(){ return ASMS.filter(groupVisible); }
+  // A party with dues but no live order (backend `no_open_order`): grouped under its real ASM,
+  // but it has zero Order-in-Hand, so it's kept out of the open-order KPI counts.
+  function hasOpenOrder(r){ return !(r && r.no_open_order); }
 
   // Type filter: P = premium-only, C = commodity-only, P+C = both. Empty selection = every row;
   // a row shows when its type is among the selected types (multi-select).
@@ -384,7 +388,9 @@
     asmGroups().forEach(function(g){
       var gv = groupView(g);
       if(!gv.rows.length) return;
-      asmCount++; parties += gv.rows.length; lit += gv.lit; val += gv.val;
+      // OIH KPIs count only parties that actually have an open order; dues-only parties add 0 litres/value.
+      var openParties = gv.rows.filter(hasOpenOrder).length;
+      if(openParties){ asmCount++; parties += openParties; lit += gv.lit; val += gv.val; }
     });
     var cards = [
       {c:'k-ltr',ic:'water_drop',l:'Order-in-Hand Litres',v:Math.round(lit).toLocaleString('en-IN')+' L',
@@ -440,7 +446,7 @@
     var html = '';
     var grandL = 0, grandV = 0, grandLed = 0, grandOut = 0, grandReq = 0, grandPay = 0, grandRem = 0;
     ASMS.forEach(function(g,gi){
-      if(ASM_FILTER.length && !asmSelected(g.asm)) return;   // hide non-selected ASMs (gi stays original)
+      if(!groupVisible(g)) return;   // hide non-selected ASMs (gi stays original)
       var gv = groupView(g);
       if(!gv.rows.length) return;                       // no rows for this Type filter
       grandL += gv.lit; grandV += gv.val; grandLed += gv.led; grandOut += gv.out; grandReq += gv.req;

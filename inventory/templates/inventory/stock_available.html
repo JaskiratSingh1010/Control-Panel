@@ -81,7 +81,7 @@
   <div class="sa-topbar">
     <div>
       <h1 class="sa-h1">Stock Available</h1>
-      <p class="sa-psub">Finished-goods stock by product &amp; warehouse — live (In − Out across GP-FG / BH-FG / BH-PF / BH-EC / BH-FU)</p>
+      <p class="sa-psub" id="saSub">Finished-goods stock by product &amp; warehouse — live (In − Out across GP-FG / BH-FG / BH-PF / BH-EC / BH-FU)</p>
     </div>
     <div class="sa-toggles">
       <button type="button" class="sa-export" id="saExport" title="Download the Inventory Audit Report (View pivot) for the current company">
@@ -91,12 +91,10 @@
       <div class="sa-seg db" id="saDb">
         <button data-db="jivo_oil" class="active">Jivo Oil</button>
         <button data-db="jivo_mart">Jivo Mart</button>
+        <button data-db="jivo_beverages">Jivo Beverages</button>
       </div>
-      <div class="sa-seg type" id="saType">
-        <button data-type="" class="active">All</button>
-        <button data-type="PREMIUM">Premium</button>
-        <button data-type="COMMODITY">Commodity</button>
-      </div>
+      <!-- Type buttons are built from the data (Premium/Commodity for oils; DRINKS/WATER/… for beverages). -->
+      <div class="sa-seg type" id="saType"></div>
     </div>
   </div>
 
@@ -144,7 +142,42 @@
     'COMMODITY|COTTON SEED':'linear-gradient(135deg,#0f766e,#13b07e)'
   };
   var FALLBACK_GRADS=['linear-gradient(135deg,#6366f1,#8b5cf6)','linear-gradient(135deg,#0ea5e9,#06b6d4)','linear-gradient(135deg,#10b981,#14b8a6)','linear-gradient(135deg,#f59e0b,#f97316)'];
-  function gradFor(p,i){return GRAD_MAP[p.type+'|'+p.sub_group]||FALLBACK_GRADS[i%FALLBACK_GRADS.length];}
+
+  // Beverage cards are coloured to match the flavour (mango→orange, apple→green,
+  // blueberry→blue, cola→caramel, water→blue …). Matched by substring on the card name
+  // so sugar-free / blast / healthy variants inherit the base flavour colour. Ordered
+  // specific → general (e.g. MINERAL WATER before WATER).
+  var BEV_FLAVORS=[
+    ['MINERAL WATER','linear-gradient(135deg,#1d7fd4,#38bdf8)'],
+    ['TONIC',        'linear-gradient(135deg,#0891b2,#22d3ee)'],
+    ['SODA',         'linear-gradient(135deg,#0284c7,#7dd3fc)'],
+    ['MANGO',        'linear-gradient(135deg,#f59e0b,#fcd34d)'],
+    ['ORANGE',       'linear-gradient(135deg,#ea580c,#fb923c)'],
+    ['APPLE',        'linear-gradient(135deg,#16a34a,#4ade80)'],
+    ['BLUEBERRY',    'linear-gradient(135deg,#4f46e5,#818cf8)'],
+    ['LEMON',        'linear-gradient(135deg,#ca8a04,#facc15)'],
+    ['SHIKANJI',     'linear-gradient(135deg,#65a30d,#bef264)'],
+    ['GINGER',       'linear-gradient(135deg,#b45309,#f59e0b)'],
+    ['COLA',         'linear-gradient(135deg,#5b2c06,#92400e)'],
+    ['MOJITO',       'linear-gradient(135deg,#059669,#34d399)'],
+    ['ROSE',         'linear-gradient(135deg,#db2777,#f472b6)'],
+    ['JEERA',        'linear-gradient(135deg,#8a5a2b,#c08a4a)'],
+    ['ENERGY',       'linear-gradient(135deg,#dc2626,#f97316)'],
+    ['COFFEE',       'linear-gradient(135deg,#4b2e2e,#7c4a12)'],
+    ['WATER',        'linear-gradient(135deg,#1d7fd4,#38bdf8)'],
+    ['IMMUNITY',     'linear-gradient(135deg,#ea580c,#f59e0b)'],
+    ['GUMMY',        'linear-gradient(135deg,#db2777,#f59e0b)'],
+    ['COMBO',        'linear-gradient(135deg,#9333ea,#ec4899)'],
+    ['GIFT',         'linear-gradient(135deg,#9333ea,#ec4899)'],
+    ['POWDER',       'linear-gradient(135deg,#0d9488,#2dd4bf)'],
+    ['DRINKS',       'linear-gradient(135deg,#6366f1,#8b5cf6)']
+  ];
+  function bevFlavorGrad(name){
+    var s=String(name||'').toUpperCase();
+    for(var k=0;k<BEV_FLAVORS.length;k++){ if(s.indexOf(BEV_FLAVORS[k][0])!==-1)return BEV_FLAVORS[k][1]; }
+    return '';
+  }
+  function gradFor(p,i){return GRAD_MAP[p.type+'|'+p.sub_group]||bevFlavorGrad(p.sub_group)||FALLBACK_GRADS[i%FALLBACK_GRADS.length];}
 
   // Faint product line-art on the right of each card (approximating the mockup artwork).
   var MOTIFS={
@@ -196,14 +229,22 @@
       +'<path d="M30 100C30 64 50 40 92 30C90 70 64 92 32 92Z"/>'
       +'<path d="M34 96C50 74 70 58 88 36" stroke-width="1.5"/>'
       +'<g stroke-width="1.1"><path d="M50 82l-9-9M62 70l-9-11M74 58l-7-11M52 84l13-2M64 72l13-2M76 60l12-3"/></g>'
+      +'</svg>',
+    bottle:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      +'<path d="M52 20h16v10c0 4 6 8 6 16v50a6 6 0 0 1-6 6H52a6 6 0 0 1-6-6V46c0-8 6-12 6-16V20Z"/>'
+      +'<path d="M46 56h28" stroke-width="1.4"/>'
+      +'<rect x="50" y="64" width="20" height="30" rx="3" stroke-width="1.2"/>'
+      +'<circle cx="88" cy="40" r="4" stroke-width="1.2"/><circle cx="96" cy="54" r="2.6" stroke-width="1.2"/>'
       +'</svg>'
   };
   var MOTIF_MAP={
     'OLIVE':'olive','SLICED OLIVE':'olive','EXTRA VIRGIN OLIVE':'olive','COCONUT':'coconut',
     'CANOLA':'seeds','YELLOW MUSTARD':'seeds','MUSTARD':'seeds','RICE BRAN':'seeds','SESAME':'seeds',
-    'SUNFLOWER':'sunflower','GROUNDNUT':'peanut','GHEE':'drops','BLENDED':'drops','SOYABEAN':'leaf','COTTON SEED':'leaf'
+    'SUNFLOWER':'sunflower','GROUNDNUT':'peanut','GHEE':'drops','BLENDED':'drops','SOYABEAN':'leaf','COTTON SEED':'leaf',
+    // Beverage families (matched on the card's type) use a bottle motif.
+    'DRINKS':'bottle','WATER':'bottle','CAPSULES':'bottle','POWDER':'bottle','GIFT PACK':'bottle'
   };
-  function motifFor(p){return MOTIFS[MOTIF_MAP[p.sub_group]||'seeds']||'';}
+  function motifFor(p){return MOTIFS[MOTIF_MAP[p.sub_group]||MOTIF_MAP[p.type]||'seeds']||'';}
 
   var DATA={warehouses:[],products:[],items:[]};
   var db='jivo_oil', typeF='', skuF='', selected=null, selectedGrad='';
@@ -213,6 +254,9 @@
 
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  // Headline-metric unit — litres for oils, boxes for Jivo Beverages (flagged in the payload).
+  function unitShort(){return (DATA&&DATA.unit)||'L';}
+  function unitLong(){return (DATA&&DATA.unit_label)||'Litres';}
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
 
   function load(){
@@ -220,7 +264,7 @@
     grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Loading…</div>';
     fetch('/inventory/stock-available/api/data/?schema='+encodeURIComponent(db),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{data:{}};})
-      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; renderSaKpis(); renderCards(); })
+      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; renderSub(); renderTypeToggle(); renderSaKpis(); renderCards(); })
       .catch(function(){grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Could not load stock.</div>';});
   }
 
@@ -236,30 +280,68 @@
         +'<div class="sa-motif">'+motifFor(p)+'</div>'
         +'<span class="sa-badge">'+esc(p.type)+'</span>'
         +'<h3>'+esc(p.sub_group)+'</h3>'
-        +'<div class="sa-qty">'+num(p.litres)+'<span class="sa-unit"> L</span></div>'
+        +'<div class="sa-qty">'+num(p.litres)+'<span class="sa-unit"> '+esc(unitShort())+'</span></div>'
         +'<div class="sa-sub">'+num(p.qty)+' qty · '+(p.sku_count||0)+' SKUs</div>'
         +'</div>';
     }).join('');
     if(selected)openTable();
   }
 
-  // Three summary KPIs: Total / Premium / Commodity litres (computed from all products).
+  function titleCase(s){return String(s||'').toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();});}
+
+  // Litres per type, and the display order for the type toggle + KPIs. Oils resolve to
+  // [PREMIUM, COMMODITY] (unchanged); other companies (beverages: DRINKS/WATER/…) fall
+  // back to biggest-litres-first so the toggle/KPIs adapt to whatever the data contains.
+  function typeLitres(){
+    var m={}; (DATA.products||[]).forEach(function(p){ m[p.type]=(m[p.type]||0)+(Number(p.litres)||0); }); return m;
+  }
+  function orderedTypes(){
+    var tl=typeLitres(), rank={'PREMIUM':0,'COMMODITY':1};
+    return Object.keys(tl).sort(function(a,b){
+      var ra=(a in rank)?rank[a]:2, rb=(b in rank)?rank[b]:2;
+      if(ra!==rb)return ra-rb;
+      if(tl[b]!==tl[a])return tl[b]-tl[a];
+      return a<b?-1:a>b?1:0;
+    });
+  }
+
+  // Summary KPIs: Total litres + one card per type that is measured in litres. Oils get
+  // Total / Premium / Commodity exactly as before; beverages get Total / Water / Drinks
+  // (pcs-only families like Capsules/Powder are skipped here but still filterable below).
   function renderSaKpis(){
     var box=document.getElementById('saKpis'); if(!box)return;
-    var tot=0,prem=0,comm=0;
-    (DATA.products||[]).forEach(function(p){
-      var l=Number(p.litres)||0; tot+=l;
-      if(p.type==='PREMIUM')prem+=l; else if(p.type==='COMMODITY')comm+=l;
+    var tl=typeLitres(), tot=0; Object.keys(tl).forEach(function(t){tot+=tl[t];});
+    var palette=['linear-gradient(135deg,#0c7a6b,#3aa05a)','linear-gradient(135deg,#7c52e6,#a78bfa)','linear-gradient(135deg,#0b94a6,#16b89c)','linear-gradient(135deg,#f59e0b,#fb8c3c)','linear-gradient(135deg,#2563eb,#1e40af)'];
+    var cards=[{l:'Total '+unitLong(),v:tot,c:'sak-tot',s:''}], pi=0;
+    // Keep the band to one row (Total + top 2 metric types): Premium/Commodity for oils,
+    // Water/Drinks for beverages. Smaller families stay reachable via the type toggle.
+    orderedTypes().filter(function(t){return (tl[t]||0)>0;}).slice(0,2).forEach(function(t){
+      var c='',s='';
+      if(t==='PREMIUM')c='sak-prem'; else if(t==='COMMODITY')c='sak-comm'; else {s=bevFlavorGrad(t)||palette[pi%palette.length];pi++;}
+      cards.push({l:titleCase(t)+' '+unitLong(),v:tl[t],c:c,s:s});
     });
-    var cards=[
-      {l:'Total Litres',v:tot,c:'sak-tot'},
-      {l:'Premium Litres',v:prem,c:'sak-prem'},
-      {l:'Commodity Litres',v:comm,c:'sak-comm'}
-    ];
     box.innerHTML=cards.map(function(k){
-      return '<div class="sa-kpi '+k.c+'"><div class="sa-kpi-l">'+k.l+'</div>'
-        +'<div class="sa-kpi-v">'+num(k.v)+'<span class="sa-unit"> L</span></div></div>';
+      var cls='sa-kpi'+(k.c?(' '+k.c):''), style=k.s?(' style="background:'+k.s+'"'):'';
+      return '<div class="'+cls+'"'+style+'><div class="sa-kpi-l">'+esc(k.l)+'</div>'
+        +'<div class="sa-kpi-v">'+num(k.v)+'<span class="sa-unit"> '+esc(unitShort())+'</span></div></div>';
     }).join('');
+  }
+
+  // Build the All / <type> filter buttons from the data (delegated click handler below).
+  function renderTypeToggle(){
+    var box=document.getElementById('saType'); if(!box)return;
+    var html='<button data-type=""'+(typeF===''?' class="active"':'')+'>All</button>';
+    orderedTypes().forEach(function(t){
+      html+='<button data-type="'+esc(t)+'"'+(typeF===t?' class="active"':'')+'>'+esc(titleCase(t))+'</button>';
+    });
+    box.innerHTML=html;
+  }
+
+  // Subheading reflects the active company's warehouses (they differ per company).
+  function renderSub(){
+    var el=document.getElementById('saSub'); if(!el)return;
+    var whs=DATA.warehouses||[];
+    el.textContent='Finished-goods stock by product & warehouse — live (In − Out across '+(whs.length?whs.join(' / '):'—')+')';
   }
 
   // Drop the table panel into the grid right after the LAST card of the clicked row.
@@ -330,7 +412,7 @@
   document.getElementById('saSku').addEventListener('change',function(){ skuF=this.value; renderTable(); });
   document.getElementById('saDb').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
-    db=b.getAttribute('data-db');
+    db=b.getAttribute('data-db'); typeF='';   // reset the filter — types differ per company
     [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
     load();
   });

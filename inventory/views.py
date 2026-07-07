@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
 from core.decorators import permission_flag_required
-from .services import beverages, oils
+from .services import beverages, oils, reconciliation
 from .services.chat import chat
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,111 @@ def stock_available_export(request):
         content,
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     fname = 'Inventory Audit Report %s.xlsx' % date.today().strftime('%d.%m.%Y')
+    resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    return resp
+
+
+@permission_flag_required('can_non_inventory')
+def non_inventory(request):
+    """Standalone Finished-Goods 'Non-Inventory' report — in-stock FG as a non-moving aging
+    view (production age, last billed, days idle) with an oils/beverages toggle. Own permission."""
+    return render(request, 'inventory/non_inventory.html', {'sidebar_active': 'non_inventory'})
+
+
+@permission_flag_required('can_non_inventory', json_response=True)
+@require_http_methods(['GET'])
+def non_inventory_data(request):
+    schema = request.GET.get('schema', 'jivo_oil')
+    try:
+        data = oils.get_non_inventory(schema=schema)
+    except Exception:
+        logger.exception('[inventory] non-inventory fetch failed')
+        data = {'items': [], 'unit': 'litres', 'schema': schema}
+    return JsonResponse({'data': data})
+
+
+@permission_flag_required('can_non_inventory', json_response=True)
+@require_http_methods(['GET'])
+def non_inventory_drill(request):
+    """Warehouse breakdown behind one item's stock (name+code, qty, production date)."""
+    schema = request.GET.get('schema', 'jivo_oil')
+    item = request.GET.get('item', '')
+    whs = request.GET.get('whs', '')
+    try:
+        rows = oils.get_non_inventory_drill(item=item, schema=schema, whs=whs)
+    except Exception:
+        logger.exception('[inventory] non-inventory drill failed')
+        rows = []
+    return JsonResponse({'data': rows})
+
+
+def _valid_date(s):
+    """Return 'YYYY-MM-DD' if s parses as such, else None (so the service uses its default)."""
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(str(s)[:10]).strftime('%Y-%m-%d')
+    except ValueError:
+        return None
+
+
+@permission_flag_required('can_reconciliation')
+def reconciliation_page(request):
+    """Standalone Jivo Wellness–Mart billing reconciliation tab (own permission)."""
+    return render(request, 'inventory/reconciliation.html', {'sidebar_active': 'reconciliation'})
+
+
+@permission_flag_required('can_reconciliation', json_response=True)
+@require_http_methods(['GET'])
+def reconciliation_data(request):
+    date_from = _valid_date(request.GET.get('date_from'))
+    date_to = _valid_date(request.GET.get('date_to'))
+    schema = 'beverages' if request.GET.get('schema') == 'beverages' else 'oil'
+    try:
+        data = reconciliation.get_reconciliation(date_from=date_from, date_to=date_to, schema=schema)
+    except Exception:
+        logger.exception('[inventory] reconciliation fetch failed')
+        data = {'summary': {}, 'chains': [],
+                'date_from': date_from, 'date_to': date_to, 'tolerance': reconciliation.TOLERANCE}
+    return JsonResponse({'data': data})
+
+
+@permission_flag_required('can_reconciliation', json_response=True)
+@require_http_methods(['GET'])
+def reconciliation_ledgers(request):
+    """Mart & Wellness BP ledgers (pivoted by ORIGIN) for the reconciliation 'Ledgers' tab."""
+    date_from = _valid_date(request.GET.get('date_from'))
+    date_to = _valid_date(request.GET.get('date_to'))
+    schema = 'beverages' if request.GET.get('schema') == 'beverages' else 'oil'
+    try:
+        data = reconciliation.get_ledgers(date_from=date_from, date_to=date_to, schema=schema)
+    except Exception:
+        logger.exception('[inventory] reconciliation ledgers fetch failed')
+        data = {'date_from': date_from, 'date_to': date_to, 'company': schema,
+                'mart': {'rows': [], 'total': {}}, 'wellness': {'rows': [], 'total': {}},
+                'error': 'Could not load ledgers.'}
+    return JsonResponse({'data': data})
+
+
+@permission_flag_required('can_reconciliation')
+@require_http_methods(['GET'])
+def reconciliation_export(request):
+    """Download the current reconciliation (broken chains) as .xlsx."""
+    from .services.reconciliation_export import build_reconciliation_xlsx
+    date_from = _valid_date(request.GET.get('date_from'))
+    date_to = _valid_date(request.GET.get('date_to'))
+    only = request.GET.get('only', 'broken')
+    schema = 'beverages' if request.GET.get('schema') == 'beverages' else 'oil'
+    try:
+        content = build_reconciliation_xlsx(date_from=date_from, date_to=date_to, only=only, schema=schema)
+    except Exception:
+        logger.exception('[inventory] reconciliation export failed')
+        return HttpResponse('Could not build the export.', status=500)
+    resp = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    company = 'Beverages' if schema == 'beverages' else 'Oil'
+    fname = 'Wellness-Mart Reconciliation %s %s.xlsx' % (company, date.today().strftime('%d.%m.%Y'))
     resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
     return resp
 
@@ -139,6 +244,40 @@ def production_warehouses(request):
         logger.exception('[inventory] warehouses list failed')
         return JsonResponse({'status': 'error', 'data': []})
     return JsonResponse({'status': 'ok', 'data': data})
+
+
+@permission_flag_required('can_daily_production')
+def daily_production(request):
+    """Daily Production Transaction: what's being produced each day. SAP standard work orders
+    (OWOR, Type='S'), drillable by date / variety / item / warehouse / user, with planned vs
+    completed quantity and completed Litres / Boxes."""
+    return render(request, 'inventory/daily_production.html', {'sidebar_active': 'daily_production'})
+
+
+@permission_flag_required('can_daily_production', json_response=True)
+@require_http_methods(['GET'])
+def daily_production_data(request):
+    """Work-order rows for a ?start=YYYY-MM-DD&end=YYYY-MM-DD range (default: current month to
+    date). The client pivots + filters by warehouse (default BH-PF)."""
+    from datetime import datetime
+    from .services.production import get_daily_production
+
+    def _pd(value, default):
+        try:
+            return datetime.strptime(str(value or '').strip(), '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return default
+
+    today = date.today()
+    start = _pd(request.GET.get('start'), today.replace(day=1))
+    end = _pd(request.GET.get('end'), today)
+    try:
+        data = get_daily_production(start, end)
+    except Exception:
+        logger.exception('[inventory] daily-production fetch failed')
+        return JsonResponse({'status': 'error', 'error': 'Could not read production orders from SAP.',
+                             'rows': [], 'warehouses': []})
+    return JsonResponse({'status': 'ok', **data})
 
 
 @permission_flag_required('inventory_can_edit', json_response=True)

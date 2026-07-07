@@ -27,6 +27,71 @@ def _num(v):
         return 0.0
 
 
+# OWOR.Status DB codes → labels (SAP B1 production-order statuses).
+_WO_STATUS = {'P': 'Planned', 'R': 'Released', 'L': 'Closed', 'C': 'Cancelled'}
+
+
+def get_daily_production(start_date, end_date):
+    """Daily production transactions from SAP standard work orders (OWOR, Type='S'). One row per
+    work order created in [start_date, end_date] (by CreateDate) across every production warehouse,
+    with the finished-good item + its variety (OITM.U_Sub_Group), planned vs completed quantity,
+    the completed volume as Litres (CmpltQty × SalPackUn) and Boxes (CmpltQty / SalFactor2), the
+    order status and the user who created it (OUSR.U_NAME). The client pivots/filters these (the
+    warehouse filter defaults to BH-PF, the main production godown). Returns
+    {rows, warehouses, start, end[, error]}."""
+    S = SAP_SCHEMA
+    sql = f'''
+        SELECT A."DocNum"                                        AS "DOCNUM",
+               TO_VARCHAR(CAST(A."CreateDate" AS DATE), 'YYYY-MM-DD') AS "PDATE",
+               A."ItemCode"                                      AS "ITEMCODE",
+               COALESCE(TRIM(O."ItemName"), '')                  AS "ITEMNAME",
+               COALESCE(TRIM(O."U_Sub_Group"), '')               AS "VARIETY",
+               A."Warehouse"                                     AS "WHS",
+               A."Status"                                        AS "STATUS",
+               COALESCE(A."PlannedQty", 0)                       AS "PLANNED",
+               COALESCE(A."CmpltQty", 0)                         AS "CMPLT",
+               COALESCE(A."CmpltQty", 0) * COALESCE(O."SalPackUn", 0)   AS "LITRES",
+               COALESCE(A."CmpltQty", 0) / NULLIF(O."SalFactor2", 0)    AS "BOXES",
+               COALESCE(TRIM(B."U_NAME"), '')                    AS "USR"
+        FROM "{S}"."OWOR" A
+        INNER JOIN "{S}"."OITM" O ON O."ItemCode" = A."ItemCode"
+        LEFT JOIN "{S}"."OUSR" B ON B."INTERNAL_K" = A."UserSign"
+        WHERE CAST(A."CreateDate" AS DATE) BETWEEN ? AND ?
+          AND A."Type" = 'S'
+        ORDER BY A."CreateDate" DESC, A."DocNum" DESC
+    '''
+    try:
+        raw = sap_connector.execute_query(sql, (start_date, end_date))
+    except Exception:
+        logger.exception('[inventory] daily-production fetch failed')
+        return {'rows': [], 'warehouses': [], 'start': str(start_date), 'end': str(end_date),
+                'error': 'Could not read production orders from SAP.'}
+    rows, whs = [], set()
+    for r in raw:
+        w = str(r.get('WHS') or '').strip()
+        if w:
+            whs.add(w)
+        code = str(r.get('ITEMCODE') or '').strip()
+        nm = str(r.get('ITEMNAME') or '').strip()
+        rows.append({
+            'doc': str(r.get('DOCNUM') or '').strip(),
+            'date': str(r.get('PDATE') or '').strip(),
+            'item_code': code,
+            'item_name': ('%s — %s' % (code, nm)) if (code and nm) else (nm or code or '—'),
+            'variety': (str(r.get('VARIETY') or '').strip() or '—'),
+            'warehouse': w,
+            'status': _WO_STATUS.get(str(r.get('STATUS') or '').strip().upper(),
+                                     str(r.get('STATUS') or '').strip()),
+            'planned': _num(r.get('PLANNED')),
+            'completed': _num(r.get('CMPLT')),
+            'litres': round(_num(r.get('LITRES')), 2),
+            'boxes': round(_num(r.get('BOXES')), 2),
+            'user': (str(r.get('USR') or '').strip() or '—'),
+        })
+    return {'rows': rows, 'warehouses': sorted(whs),
+            'start': str(start_date), 'end': str(end_date)}
+
+
 def get_plan_feasibility(items, warehouses=None):
     """Aggregated production plan: items = [{'fg_code', 'qty'}, ...]. Explodes every FG's
     BOM and SUMS each material's requirement across all FGs (shared RM/PM merged), then

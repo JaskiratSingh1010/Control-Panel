@@ -1,0 +1,213 @@
+{% extends "core/base.html" %}
+{% block title %}Sales Document Flow — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:#f6f7f9 !important}
+  .sf-wrap{max-width:1400px;margin:0 auto}
+  .sf-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
+  .sf-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+
+  .sf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+  .sf-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.12)}
+  .sf-kpi .sf-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;opacity:.92;display:flex;align-items:center;gap:7px}
+  .sf-kpi .sf-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1}
+  .sf-kpi .sf-kpi-m{font-size:12px;font-weight:600;opacity:.9;margin-top:6px}
+  .sf-kpi .material-icons.sf-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;opacity:.16}
+  .k-inv{background:linear-gradient(135deg,#4f46e5,#3730a3)}
+  .k-ltr{background:linear-gradient(135deg,#0d9488,#0f766e)}
+  .k-prt{background:linear-gradient(135deg,#0891b2,#0e7490)}
+  .k-qt{background:linear-gradient(135deg,#d97706,#b45309)}
+
+  .sf-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .sf-fld{display:flex;flex-direction:column;gap:5px}
+  .sf-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .sf-bar input[type=date],.sf-bar input[type=search]{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .sf-bar input[type=search]{min-width:230px}
+  .sf-bar input[type=search]:focus,.sf-bar input[type=date]:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .sf-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .sf-fetch:hover{background:#c2410c}
+  .sf-yday{background:#eef2f7;border:0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#334155;cursor:pointer;font-family:inherit}
+  .sf-yday:hover{background:#e2e8f0}
+  .sf-seg{display:inline-flex;background:#eef2f7;border-radius:10px;padding:3px}
+  .sf-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .sf-seg button.active{background:#2563eb;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.3)}
+
+  .sf-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .sf-count{font-size:12px;color:#64748b;font-weight:700;padding:8px 14px}
+  .sf-table-wrap{overflow:auto;max-height:72vh}
+  table.sf-table{width:100%;min-width:900px;border-collapse:collapse;font-size:13px}
+  table.sf-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:12px 16px;white-space:nowrap;cursor:pointer;user-select:none}
+  table.sf-table thead th.num{text-align:right}
+  table.sf-table thead th .sf-ar{opacity:.5;font-size:9px;margin-left:4px}
+  table.sf-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:#334155;white-space:nowrap}
+  table.sf-table tbody td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:#0f172a}
+  table.sf-table tbody td.doc{font-variant-numeric:tabular-nums;color:#1e40af;font-weight:600}
+  table.sf-table tbody td.party{font-weight:700;color:#0f172a}
+  table.sf-table tbody tr:nth-child(even) td{background:#fafcff}
+  table.sf-table tbody tr:hover td{background:#f1f5ff}
+  .sf-v0{color:#cbd5e1}
+  table.sf-table tbody tr.sf-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
+  .sf-empty{padding:40px;text-align:center;color:#7b8794}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sf-wrap">
+  <div>
+    <h1 class="sf-h1">Sales Document Flow</h1>
+    <p class="sf-psub">Yesterday's sales traced end-to-end — each party's Sales Quotation → Sales Order → Invoice, with the invoiced litres. Blank quotation/order means the document was raised directly.</p>
+  </div>
+
+  <div class="sf-kpis" id="sfKpis"></div>
+
+  <div class="sf-bar">
+    <div class="sf-fld"><span class="sf-lbl">Company</span>
+      <div class="sf-seg" id="sfCompany">
+        <button type="button" data-co="oil" class="active">Oil</button>
+        <button type="button" data-co="beverages">Beverages</button>
+      </div>
+    </div>
+    <div class="sf-fld"><span class="sf-lbl">From</span><input type="date" id="sfStart"></div>
+    <div class="sf-fld"><span class="sf-lbl">To</span><input type="date" id="sfEnd"></div>
+    <button class="sf-yday" id="sfYday" title="Reset to yesterday">Yesterday</button>
+    <button class="sf-fetch" id="sfFetch">&#9654; Fetch</button>
+    <div class="sf-fld"><span class="sf-lbl">Search</span>
+      <input type="search" id="sfSearch" placeholder="Party / quotation / order / invoice…" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="sf-table-card">
+    <div class="sf-count" id="sfCount"></div>
+    <div class="sf-table-wrap">
+      <table class="sf-table">
+        <thead id="sfHead"></thead>
+        <tbody id="sfBody"><tr><td class="sf-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
+  function abbrQ(n){n=Number(n)||0;var a=Math.abs(n);if(a>=1e5)return (n/1e5).toFixed(2)+' L';if(a>=1e3)return (n/1e3).toFixed(1)+' K';return fN(n);}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+  var COLS=[
+    {k:'date',l:'Date'},
+    {k:'party',l:'Party Name',cls:'party'},
+    {k:'quotation_no',l:'Sales Quotation No.',cls:'doc'},
+    {k:'order_no',l:'Sales Order No.',cls:'doc'},
+    {k:'invoice_no',l:'Invoice No.',cls:'doc'},
+    {k:'qty',l:'LTR',num:true,qty:true},
+  ];
+
+  var rows=[], loaded=false, err=null, searchF='';
+  var company='oil', measure='Litres';
+  var sortKey='invoice_no', sortDir=1;
+  function measureLabel(){return measure==='Boxes'?'Boxes':'LTR';}   // column header for the qty column
+
+  function matches(r){
+    if(!searchF)return true;
+    var hay=(r.party+' '+r.quotation_no+' '+r.order_no+' '+r.invoice_no).toLowerCase();
+    return hay.indexOf(searchF)!==-1;
+  }
+  function activeRows(){
+    var out=rows.filter(matches);
+    out.sort(function(a,b){
+      if(sortKey==='qty')return ((Number(a.qty)||0)-(Number(b.qty)||0))*sortDir;
+      return String(a[sortKey]||'').localeCompare(String(b[sortKey]||''),undefined,{numeric:true})*sortDir;
+    });
+    return out;
+  }
+
+  function renderKpis(a){
+    var inv={},prt={},qt={},lit=0;
+    a.forEach(function(r){if(r.invoice_no)inv[r.invoice_no]=1;if(r.card_code)prt[r.card_code]=1;if(r.quotation_no)qt[r.quotation_no]=1;lit+=Number(r.qty)||0;});
+    var cards=[
+      {c:'k-inv',ic:'receipt',l:'Invoices',v:fN(Object.keys(inv).length),m:'Sales invoices'},
+      {c:'k-ltr',ic:'water_drop',l:'Total '+measure,v:abbrQ(lit),m:'Invoiced volume'},
+      {c:'k-prt',ic:'storefront',l:'Parties',v:fN(Object.keys(prt).length),m:'Customers billed'},
+      {c:'k-qt',ic:'request_quote',l:'Quotations',v:fN(Object.keys(qt).length),m:'Linked quotations'}
+    ];
+    document.getElementById('sfKpis').innerHTML=cards.map(function(k){
+      return '<div class="sf-kpi '+k.c+'"><div class="sf-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="sf-kpi-v">'+k.v+'</div><div class="sf-kpi-m">'+esc(k.m)+'</div>'
+        +'<span class="material-icons sf-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function cell(c,r){
+    var v=r[c.k];
+    if(c.num)return fN(v);
+    if(!String(v||'').trim())return '<span class="sf-v0">—</span>';
+    return esc(v);
+  }
+
+  function render(){
+    var head=document.getElementById('sfHead'), body=document.getElementById('sfBody'), cnt=document.getElementById('sfCount');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="sf-empty">Could not load ('+esc(err)+').</td></tr>';document.getElementById('sfKpis').innerHTML='';cnt.textContent='';return;}
+    if(!loaded){body.innerHTML='<tr><td class="sf-empty">Loading…</td></tr>';return;}
+    var a=activeRows();
+    renderKpis(a);
+    head.innerHTML='<tr>'+COLS.map(function(c){
+      var ar=(sortKey===c.k)?('<span class="sf-ar">'+(sortDir>0?'▲':'▼')+'</span>'):'';
+      return '<th class="'+(c.num?'num':'')+'" data-k="'+c.k+'">'+esc(c.qty?measureLabel():c.l)+ar+'</th>';
+    }).join('')+'</tr>';
+    cnt.textContent=a.length+' rows'+(a.length!==rows.length?(' of '+rows.length):'');
+    if(!a.length){body.innerHTML='<tr><td class="sf-empty" colspan="'+COLS.length+'">No sales for this selection.</td></tr>';return;}
+    var html=a.map(function(r){
+      return '<tr>'+COLS.map(function(c){return '<td class="'+(c.num?'num':(c.cls||''))+'">'+cell(c,r)+'</td>';}).join('')+'</tr>';
+    }).join('');
+    var lit=0; a.forEach(function(r){lit+=Number(r.qty)||0;});
+    html+='<tr class="sf-total"><td>TOTAL</td><td></td><td></td><td></td><td></td><td class="num">'+fN(lit)+'</td></tr>';
+    body.innerHTML=html;
+  }
+
+  function load(){
+    var sd=document.getElementById('sfStart').value, ed=document.getElementById('sfEnd').value;
+    if(!sd||!ed)return;
+    var btn=document.getElementById('sfFetch'); btn.disabled=true; btn.textContent='Loading…';
+    loaded=false; render();
+    fetch('/realise/api/sales-flow/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:sd,end_date:ed,company:company})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ rows=p.rows||[]; measure=p.measure||'Litres'; err=p.status==='error'?(p.error||'error'):null; loaded=true; render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function setYesterday(){
+    var y=new Date(); y.setDate(y.getDate()-1); var s=ymd(y);
+    document.getElementById('sfStart').value=s; document.getElementById('sfEnd').value=s;
+  }
+
+  // Wiring
+  document.getElementById('sfFetch').addEventListener('click',load);
+  document.getElementById('sfCompany').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b||b.getAttribute('data-co')===company)return;
+    company=b.getAttribute('data-co');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    load();
+  });
+  document.getElementById('sfYday').addEventListener('click',function(){setYesterday();load();});
+  document.getElementById('sfStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('sfEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  var searchDeb=debounce(render,120);
+  document.getElementById('sfSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('sfHead').addEventListener('click',function(e){
+    var th=e.target&&e.target.closest?e.target.closest('th[data-k]'):null; if(!th)return;
+    var k=th.getAttribute('data-k'); if(k===sortKey){sortDir=-sortDir;}else{sortKey=k;sortDir=1;} render();
+  });
+
+  setYesterday();
+  load();
+})();
+</script>
+{% endblock %}

@@ -49,9 +49,17 @@ def build_user_permissions(user):
             'can_inventory': False,
             'inventory_can_edit': False,
             'can_stock_available': False,
+            'can_non_inventory': False,
+            'can_reconciliation': False,
             'can_production': False,
             'can_oih_vs_stock': False,
+            'can_daily_production': False,
             'can_compare_sales': False,
+            'can_sales_cn': False,
+            'can_hidden_sales': False,
+            'can_customer_master': False,
+            'can_sales_flow': False,
+            'can_claims': False,
             'can_customer_aging': False,
             'can_required_credit_limit': False,
             'can_sales': False,
@@ -67,9 +75,17 @@ def build_user_permissions(user):
             'can_inventory': True,
             'inventory_can_edit': True,
             'can_stock_available': True,
+            'can_non_inventory': True,
+            'can_reconciliation': True,
             'can_production': True,
             'can_oih_vs_stock': True,
+            'can_daily_production': True,
             'can_compare_sales': True,
+            'can_sales_cn': True,
+            'can_hidden_sales': True,
+            'can_customer_master': True,
+            'can_sales_flow': True,
+            'can_claims': True,
             'can_customer_aging': True,
             'can_required_credit_limit': True,
             'can_sales': True,
@@ -109,36 +125,54 @@ def build_user_permissions(user):
             or user.has_perm('inventory.view_inventory')
             or user.has_perm('inventory.manage_inventory')
         ),
-        # Standalone, independently-shareable report tabs: granted by their dedicated
-        # viewer group, and to anyone with full access to the parent module (inventory
-        # for Production; realise for OIH-vs-Stock / Compare Sales) — same model as
-        # can_stock_available above.
+        # Finished Goods — Non-Inventory (non-moving stock) report. Its own dedicated viewer
+        # group, and it also rides along with Stock Available / full inventory access (same
+        # audience of stock viewers).
+        'can_non_inventory': bool(
+            'non_inventory_viewer' in user_groups
+            or 'stock_viewer' in user_groups
+            or user_groups & INVENTORY_GROUPS
+            or user.has_perm('inventory.view_stock_available')
+            or user.has_perm('inventory.view_inventory')
+            or user.has_perm('inventory.manage_inventory')
+        ),
+        # Jivo Wellness–Mart inter-company billing reconciliation — its own dedicated
+        # viewer group, plus anyone with full inventory access (same model as the pages above).
+        'can_reconciliation': bool(
+            'reconciliation_viewer' in user_groups
+            or user_groups & INVENTORY_GROUPS
+            or user.has_perm('inventory.view_inventory')
+            or user.has_perm('inventory.manage_inventory')
+        ),
+        # Production still follows the inventory module (same as can_stock_available).
         'can_production': bool(
             'production_viewer' in user_groups
             or user_groups & INVENTORY_GROUPS
             or user.has_perm('inventory.view_inventory')
             or user.has_perm('inventory.manage_inventory')
         ),
-        'can_oih_vs_stock': bool(
-            'oih_vs_stock_viewer' in user_groups
-            or user_groups & REALISE_GROUPS
-            or has_app_permission('realise')
+        # Daily Production Transaction — its own dedicated viewer group, and it rides along with
+        # Production Plan / full inventory access (same production audience as can_production).
+        'can_daily_production': bool(
+            'daily_production_viewer' in user_groups
+            or 'production_viewer' in user_groups
+            or user_groups & INVENTORY_GROUPS
+            or user.has_perm('inventory.view_inventory')
+            or user.has_perm('inventory.manage_inventory')
         ),
-        'can_compare_sales': bool(
-            'compare_sales_viewer' in user_groups
-            or user_groups & REALISE_GROUPS
-            or has_app_permission('realise')
-        ),
-        'can_customer_aging': bool(
-            'customer_aging_viewer' in user_groups
-            or user_groups & REALISE_GROUPS
-            or has_app_permission('realise')
-        ),
-        'can_required_credit_limit': bool(
-            'required_credit_viewer' in user_groups
-            or user_groups & REALISE_GROUPS
-            or has_app_permission('realise')
-        ),
+        # The Realise report pages are controlled ONLY by their own per-page viewer group,
+        # NOT auto-granted by a Realise role. This keeps the per-page toggles in User
+        # Management authoritative — a Realise role grants the Sales dashboard (can_realise),
+        # but each report is opt-in. (Superusers still bypass all of this above.)
+        'can_oih_vs_stock': bool('oih_vs_stock_viewer' in user_groups),
+        'can_compare_sales': bool('compare_sales_viewer' in user_groups),
+        'can_sales_cn': bool('sales_cn_viewer' in user_groups),
+        'can_hidden_sales': bool('hidden_sales_viewer' in user_groups),
+        'can_customer_master': bool('customer_master_viewer' in user_groups),
+        'can_sales_flow': bool('sales_flow_viewer' in user_groups),
+        'can_claims': bool('claims_viewer' in user_groups),
+        'can_customer_aging': bool('customer_aging_viewer' in user_groups),
+        'can_required_credit_limit': bool('required_credit_viewer' in user_groups),
         'can_sales': bool(user_groups & MODULE_GROUPS['sales'] or has_app_permission('sales')),
         'can_expenses': bool(user_groups & MODULE_GROUPS['expenses'] or has_app_permission('dashboard')),
         'can_salaries': bool(user_groups & MODULE_GROUPS['salaries'] or has_app_permission('salaries')),
