@@ -120,7 +120,7 @@
     </span>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
-    <button type="button" class="ad-btn" id="adUpload" title="Upload an Excel/CSV to bulk-update by Doc No. A Remarks column sets the note; optional Category + Amount columns allocate the balance into splits (e.g. Doc No | Category | Amount)."><span class="material-icons">upload</span>Upload Excel</button>
+    <button type="button" class="ad-btn" id="adUpload" title="Upload an Excel/CSV to bulk-update by Doc No. The Remark / Category value sets BOTH the note and the on-screen Category, allocating the document's Balance Due to it. Add an Amount column to split one balance across several categories."><span class="material-icons">upload</span>Upload Excel</button>
     <input type="file" id="adUploadFile" accept=".xlsx,.csv" style="display:none">
     <button type="button" class="ad-btn danger" id="adClear" title="Clear all saved remarks for this customer"><span class="material-icons">backspace</span>Clear Remarks</button>
   </div>
@@ -323,17 +323,27 @@
       det.setAttribute('data-rendered','1');
     }
   }
-  // <option> list for the Category dropdown; pre-selects the saved value (case-insensitive).
-  // A saved value outside the vocabulary shows once as "(invalid)" so it isn't hidden, but it
-  // can't be re-chosen — picking any real option replaces it and the server drops it on save.
+  // Category options = the built-in AGING_REMARK_CATEGORIES plus every category already in use on
+  // this customer's documents — so a value set by an Excel upload appears as a real, pickable
+  // option. De-duped case-insensitively, built-ins first.
+  function allCategories(){
+    var seen = {}, out = [];
+    (CATEGORIES||[]).forEach(function(c){ var u=String(c).trim().toUpperCase(); if(u && !seen[u]){ seen[u]=1; out.push(String(c).trim()); } });
+    (ROWS||[]).forEach(function(r){ (r.splits||[]).forEach(function(s){
+      var c=String(s.category||'').trim(), u=c.toUpperCase(); if(c && !seen[u]){ seen[u]=1; out.push(c); } }); });
+    return out;
+  }
+  // <option> list for a split's Category; pre-selects the saved value (case-insensitive) and, if
+  // it isn't already listed, appends it so it still shows selected (free vocabulary).
   function catOptions(val){
     var cur = String(val==null?'':val).trim().toUpperCase(), matched = false;
+    var cats = allCategories();
     var html = '<option value="">— select —</option>';
-    for(var k=0;k<CATEGORIES.length;k++){
-      var c = CATEGORIES[k], sel = c.toUpperCase()===cur; if(sel) matched = true;
+    for(var k=0;k<cats.length;k++){
+      var c = cats[k], sel = c.toUpperCase()===cur; if(sel) matched = true;
       html += '<option value="'+attr(c)+'"'+(sel?' selected':'')+'>'+esc(c)+'</option>';
     }
-    if(cur && !matched) html += '<option value="'+attr(cur)+'" selected>'+esc(cur)+' (invalid)</option>';
+    if(cur && !matched){ var v=String(val).trim(); html += '<option value="'+attr(v)+'" selected>'+esc(v)+'</option>'; }
     return html;
   }
   function renderSplits(i){
@@ -489,10 +499,7 @@
       .then(function(j){
         if(j && j.status==='ok'){
           var msg = 'Updated '+j.updated+' remark(s) across '+j.matched_docs+' document(s) (from '+j.rows+' row(s) read).';
-          if(j.splits){ msg += '\nAllocated split amounts on '+j.splits+' document line(s).'; }
-          if(j.unknown_categories && j.unknown_categories.length){
-            msg += '\n\nThese Category values aren\'t in the standard list, so their amounts were kept but left uncategorised:\n'+j.unknown_categories.join(', ')+'\n\nUse one of: '+CATEGORIES.join(', ');
-          }
+          if(j.splits){ msg += '\nSet the Category & allocated the Balance Due on '+j.splits+' document line(s).'; }
           if(j.unmatched && j.unmatched.length){
             msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open document and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
           }

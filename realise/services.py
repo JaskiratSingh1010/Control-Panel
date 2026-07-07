@@ -4752,8 +4752,9 @@ def save_aging_remark_lines(card_code, row_key, lines):
         if not isinstance(ln, dict):
             continue
         category = str(ln.get('category') or '').strip().upper()[:60]
-        if category and category not in _AGING_REMARK_CATEGORY_SET:
-            category = ''       # only the fixed dropdown vocabulary persists; drop anything else
+        # Categories are stored verbatim (free vocabulary): uploads and manual entry may use any
+        # label. The detail-page dropdown offers the built-in AGING_REMARK_CATEGORIES plus whatever
+        # categories are already in use, and re-selects the saved value.
         remark = str(ln.get('remark') or '').strip()[:255]
         raw = ln.get('amount')
         if isinstance(raw, str):
@@ -4790,40 +4791,27 @@ def clear_aging_remarks(card_code, row_keys=None):
 def bulk_update_aging_remarks(card_code, aging_date, entries):
     """Apply an uploaded sheet to a customer's open documents, matching on Doc No (JDT1.BaseRef)
     as of aging_date. ``entries`` is {doc_no: {'remark': str|None, 'splits': [{category, amount,
-    remark}, ...]}}. For each matched Doc No it sets the document Remark (the explicit Remark
-    column, or — when only splits were given — the joined split categories, so the note reflects
-    them) and, when the sheet carries Category/Amount, REPLACES that document's split breakdown so
-    the Balance Due gets allocated. A Doc No spanning several open lines is applied to each. Blank
-    entries are skipped (left unchanged). Category values outside AGING_REMARK_CATEGORIES are kept
-    as an amount but stored without a category label; they're reported in ``unknown_categories``.
-    Returns {rows, matched_docs, updated, splits, unmatched, unknown_categories}."""
+    remark}, ...]}}, where a split ``amount`` of None means 'allocate this document line's full
+    Balance Due to the category'. For each matched Doc No it sets the document Remark (note) AND
+    replaces its split breakdown — so a single Remark/Category value fills both the note and the
+    on-screen Category with the balance allocated. A Doc No spanning several open lines is applied
+    to each (each line's own Balance Due). Categories are stored verbatim (free vocabulary). Blank
+    entries are skipped. Returns {rows, matched_docs, updated, splits, unmatched}."""
     cc = (card_code or '').strip()
     entries = entries or {}
     if not cc:
-        return {'rows': 0, 'matched_docs': 0, 'updated': 0, 'splits': 0,
-                'unmatched': [], 'unknown_categories': []}
+        return {'rows': 0, 'matched_docs': 0, 'updated': 0, 'splits': 0, 'unmatched': []}
     by_doc = {}
     for r in get_customer_aging_detail(cc, aging_date):
-        by_doc.setdefault(str(r.get('doc_no') or '').strip(), []).append(r.get('row_key'))
-    matched, updated, split_lines, unmatched, unknown = set(), 0, 0, [], set()
+        by_doc.setdefault(str(r.get('doc_no') or '').strip(), []).append(
+            (r.get('row_key'), float(r.get('balance_due') or 0)))
+    matched, updated, split_lines, unmatched = set(), 0, 0, []
     total_rows = 0
     for doc, entry in entries.items():
         doc = str(doc or '').strip()
         splits = entry.get('splits') or []
         remark = (entry.get('remark') or '').strip()
         total_rows += len(splits) + (1 if (remark and not splits) else 0)
-        # doc-level Remark: explicit note, else the split categories joined (so "RTV" etc. shows)
-        if not remark and splits:
-            cats = []
-            for s in splits:
-                c = str(s.get('category') or '').strip()
-                if c and c not in cats:
-                    cats.append(c)
-            remark = ', '.join(cats)
-        for s in splits:                    # flag categories outside the fixed vocabulary
-            c = str(s.get('category') or '').strip().upper()
-            if c and c not in _AGING_REMARK_CATEGORY_SET:
-                unknown.add(c)
         if not doc or (not remark and not splits):
             continue
         keys = by_doc.get(doc)
@@ -4831,11 +4819,14 @@ def bulk_update_aging_remarks(card_code, aging_date, entries):
             unmatched.append(doc)
             continue
         matched.add(doc)
-        for rk in keys:
+        for rk, bal in keys:
             if remark and save_aging_remark(cc, rk, remark):
                 updated += 1
-            if splits:
-                save_aging_remark_lines(cc, rk, splits)
+            if splits:                       # amount None → allocate this line's full Balance Due
+                resolved = [{'category': s.get('category', ''), 'remark': s.get('remark', ''),
+                             'amount': (bal if s.get('amount') is None else s.get('amount'))}
+                            for s in splits]
+                save_aging_remark_lines(cc, rk, resolved)
                 split_lines += 1
     # de-dup unmatched, keep order, cap for the response
     seen, uniq = set(), []
@@ -4843,7 +4834,7 @@ def bulk_update_aging_remarks(card_code, aging_date, entries):
         if d not in seen:
             seen.add(d); uniq.append(d)
     return {'rows': total_rows, 'matched_docs': len(matched), 'updated': updated,
-            'splits': split_lines, 'unmatched': uniq[:50], 'unknown_categories': sorted(unknown)[:20]}
+            'splits': split_lines, 'unmatched': uniq[:50]}
 
 
 # ══════════════════════ Claims register ══════════════════════

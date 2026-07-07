@@ -236,12 +236,12 @@ def _extract_doc_entries(table):
     'remark' header, 'category' any 'categ' header, 'amount' an exact 'amount'/'amt' (or a contains
     match that isn't a document-total column like Original/Balance/Total Amount).
 
-    SPLIT mode (creating the RTV/TDS/… splits that drive Allocated/Unallocated) is enabled ONLY
-    when the sheet has a real **Category** column; then a row with a Category or non-zero Amount
-    becomes a split (several rows per Doc → several splits). WITHOUT a Category column the sheet is
-    remark-only — each row's Remark sets that document's note — even if it also carries Original/
-    Balance amount columns (so exported aging sheets aren't mistaken for split sheets). This keeps
-    the old Doc No + Remarks sheet working."""
+    Each document's Remark/Category value becomes BOTH the note AND a split whose category is that
+    value — so uploading a 'Remark / Category' column fills the note and the on-screen Category
+    together. A split's amount is taken from an explicit Amount column when present, else left None
+    = 'allocate the document's full Balance Due' (resolved in bulk_update_aging_remarks). Document-
+    total columns (Original/Balance/Total Amount) are NOT used as the split amount, so an exported
+    aging sheet re-uploaded with categories still allocates the balance, not the original."""
     doc_i = rem_i = cat_i = amt_i = header_idx = None
     for idx, row in enumerate(table):
         cols = [str(c or '').strip().lower() for c in row]
@@ -265,10 +265,12 @@ def _extract_doc_entries(table):
             break
     if header_idx is None:
         return None
-    # Splits (which drive Allocated/Unallocated) are created ONLY when the sheet has a real
-    # Category column. A sheet with just Doc No + Remarks — even one that also carries Original/
-    # Balance amount columns from an export — is treated as remark-only and sets the note.
-    split_mode = cat_i is not None
+    # The note (AgingRemark) comes from the Remarks column, falling back to Category; the split
+    # CATEGORY comes from the Category column, falling back to Remarks. So a single "Remark /
+    # Category" column drives BOTH the note and the on-screen Category. With no explicit Amount
+    # column a split's amount is left None = "allocate the document's full Balance Due".
+    note_i = rem_i if rem_i is not None else cat_i
+    cat_src = cat_i if cat_i is not None else rem_i
 
     def cell(row, i):
         return '' if i is None or i >= len(row) or row[i] is None else str(row[i]).strip()
@@ -279,13 +281,13 @@ def _extract_doc_entries(table):
         if not doc:
             continue
         entry = out.setdefault(doc, {'remark': None, 'splits': []})
-        cat = cell(row, cat_i)
-        rem = cell(row, rem_i)
-        amt = _parse_amount(row[amt_i]) if (amt_i is not None and amt_i < len(row)) else 0.0
-        if split_mode and (cat or abs(amt) >= 0.005):   # a Category/Amount row → a split
-            entry['splits'].append({'category': cat, 'amount': amt, 'remark': rem})
-        elif rem:                                        # otherwise the Remark sets the note
-            entry['remark'] = rem
+        note = cell(row, note_i)
+        catv = cell(row, cat_src)
+        if note:
+            entry['remark'] = note
+        if catv:                                          # the value → a split (its category label)
+            amt = None if amt_i is None else _parse_amount(row[amt_i] if amt_i < len(row) else '')
+            entry['splits'].append({'category': catv, 'amount': amt, 'remark': ''})
     return out
 
 
