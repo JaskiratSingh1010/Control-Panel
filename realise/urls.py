@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/aging-due-days/',      views.api_aging_due_days,      name='api_aging_due_days'),
     path('api/aging-remark-lines/',  views.api_aging_remark_lines,  name='api_aging_remark_lines'),
     path('api/aging-remark-upload/', views.api_aging_remark_upload, name='api_aging_remark_upload'),
+    path('api/aging-remark-upload-beverages/', views.api_aging_remark_upload_beverages, name='api_aging_remark_upload_beverages'),
     path('api/aging-remark-clear/',  views.api_aging_remark_clear,  name='api_aging_remark_clear'),
     path('api/export-xlsx/',         views.api_export_xlsx,         name='api_export_xlsx'),
     path('api/export-aging-detail/', views.api_export_aging_detail, name='api_export_aging_detail'),

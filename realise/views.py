@@ -334,6 +334,24 @@ def api_aging_remark_upload(request):
 
 @permission_flag_required('can_customer_aging', json_response=True)
 @require_http_methods(['POST'])
+def api_aging_remark_upload_beverages(request):
+    """Bulk-update Beverages open-invoice Remarks from an uploaded .xlsx/.csv, matching on Doc No
+    (no customer needed — the code for each Doc No is resolved from the beverages aging rows).
+    multipart: file=<xlsx/csv>, as_of=YYYY-MM-DD."""
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'status': 'error', 'error': 'file is required'}, status=400)
+    try:
+        doc_remarks = _parse_remark_upload(upload)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
+    result = services.bulk_update_beverages_remarks(_parse_as_of(request.POST.get('as_of')), doc_remarks)
+    status = 'error' if result.get('error') else 'ok'
+    return JsonResponse({'status': status, **result})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
 def api_aging_remark_clear(request):
     """Clear all saved per-document Remarks for one customer (split breakdowns are kept).
     Body: {code:<CardCode>}."""

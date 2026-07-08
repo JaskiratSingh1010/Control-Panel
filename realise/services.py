@@ -4837,6 +4837,51 @@ def bulk_update_aging_remarks(card_code, aging_date, entries):
             'splits': split_lines, 'unmatched': uniq[:50]}
 
 
+def bulk_update_beverages_remarks(aging_date, entries):
+    """Bulk-set the Beverages open-invoice Remarks from an uploaded {doc_no: {'remark', 'splits'}}
+    set, matching on Doc No. Beverages remarks are AgingRemark rows keyed by (customer code,
+    'BEVDOC:'+DocNo) — see get_customer_aging_beverages / [[oih-reco-beverages-toggle]] — so the
+    customer code for each Doc No is resolved from the current beverages aging rows. A Doc No that
+    is on more than one customer's open book is set on each. Blank remarks are skipped. Returns
+    {rows, matched_docs, updated, unmatched}."""
+    entries = entries or {}
+    try:
+        rows = get_customer_aging_beverages(aging_date).get('rows', [])
+    except Exception as exc:
+        logger.error('[BEV-AGING] remark upload lookup failed: %s', exc)
+        return {'rows': 0, 'matched_docs': 0, 'updated': 0, 'unmatched': [],
+                'error': 'Could not read beverages invoices from SAP.'}
+    by_doc = {}
+    for r in rows:
+        d = str(r.get('doc') or '').strip()
+        code = str(r.get('code') or '').strip()
+        if d and code:
+            by_doc.setdefault(d, set()).add(code)
+    matched, updated, unmatched, total = set(), 0, [], 0
+    for doc, entry in entries.items():
+        doc = str(doc or '').strip()
+        remark = (entry.get('remark') or '').strip()
+        if not remark:                         # fall back to a Category column if that's all there was
+            sp = entry.get('splits') or []
+            remark = str(sp[0].get('category') or '').strip() if sp else ''
+        total += 1
+        if not doc or not remark:
+            continue
+        codes = by_doc.get(doc)
+        if not codes:
+            unmatched.append(doc)
+            continue
+        matched.add(doc)
+        for code in codes:
+            if save_aging_remark(code, 'BEVDOC:' + doc, remark):
+                updated += 1
+    seen, uniq = set(), []
+    for d in unmatched:
+        if d not in seen:
+            seen.add(d); uniq.append(d)
+    return {'rows': total, 'matched_docs': len(matched), 'updated': updated, 'unmatched': uniq[:50]}
+
+
 # ══════════════════════ Claims register ══════════════════════
 # A manually-maintained claim register (see the Claim model). Nothing here is read from SAP as
 # report data — SAP only feeds the entry pickers: customers (party → main group) and product/item

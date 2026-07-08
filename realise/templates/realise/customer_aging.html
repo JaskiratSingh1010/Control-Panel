@@ -271,6 +271,8 @@
     <button type="button" class="ag-btn" id="agCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
     <button type="button" class="ag-btn" id="agExport"><span class="material-icons">download</span>Export Excel</button>
     <button type="button" class="ag-btn" id="agExportDetail" title="Every open document + remarks for the filtered parties, in one file"><span class="material-icons">description</span><span id="agExportDetailLbl">Export Detail</span></button>
+    <button type="button" class="ag-btn" id="agUploadBev" title="Bulk-update Beverages remarks from an Excel/CSV, matched by Doc No (columns: Doc No | Remarks)" style="display:none"><span class="material-icons">upload</span>Upload Remarks</button>
+    <input type="file" id="agUploadBevFile" accept=".xlsx,.csv" style="display:none">
     <div class="ag-legend" id="agLegend"></div>
   </div>
 
@@ -345,8 +347,10 @@
   var OIL_DATA = DATA;                 // keep the oil payload to restore on toggle-back
   var company = 'oil';
   var BEV_URL = "{% url 'realise:api_customer_aging_beverages' %}";
+  var UPLOAD_BEV_URL = "{% url 'realise:api_aging_remark_upload_beverages' %}";
   var RAW_BEV = null, RAW_BEV_ASOF = null, BEV_ERR = null;
   var BEV_DAYS = [];                   // distinct InDaysDifference values (ascending)
+  var BEV_DOCS_BY_CODE = {};           // customer code → joined doc-nos, for the main-search Doc No match
   var selectedDays = null;             // null = all; else {day:true} of INCLUDED days
   var BUCKET_KEYS = BUCKETS.map(function(b){return b.key;});
 
@@ -359,9 +363,10 @@
   // Pivot the raw beverages invoices (honouring the day multi-select) into the shared
   // {groups:[{format=SalesPerson, customers:[...]}], total} shape the renderer expects.
   function buildBev(){
-    var gmap={}, total=emptyB();
+    var gmap={}, total=emptyB(); BEV_DOCS_BY_CODE={};
     (RAW_BEV||[]).forEach(function(r){
       if(!dayIncluded(r.days)) return;
+      if(r.doc!=null && r.doc!=='') BEV_DOCS_BY_CODE[r.code]=(BEV_DOCS_BY_CODE[r.code]||'')+String(r.doc).toLowerCase()+' ';
       var g=gmap[r.sp]; if(!g){ g=gmap[r.sp]={format:r.sp, _cust:{}, customers:[]}; var e=emptyB(); for(var k in e)g[k]=e[k]; }
       var c=g._cust[r.code];
       if(!c){ c=g._cust[r.code]={code:r.code, name:r.name, outstanding:r.outstanding, original:0, balance_due:0};
@@ -411,9 +416,11 @@
 
   function updateCompanyUI(){
     var bev = company==='bev';
+    document.getElementById('agSearch').placeholder = bev ? 'Search customer or doc no…' : 'Search customer or format…';
     document.getElementById('agDays').style.display = bev ? '' : 'none';
     document.getElementById('agRem').style.display  = bev ? 'none' : '';
     document.getElementById('agExportDetail').style.display = bev ? 'none' : '';
+    document.getElementById('agUploadBev').style.display = bev ? '' : 'none';
     document.getElementById('agFmtLabel').textContent =
       selectedFormats.length ? selectedFormats.length+(bev?' sales person':' format')+(selectedFormats.length>1?'s':'')
                              : (bev?'All sales persons':'All formats');
@@ -454,7 +461,11 @@
     GROUPS.forEach(function(g){
       if(useFmt && selectedFormats.indexOf(g.format)===-1) return;
       g.customers.forEach(function(c){
-        if(q && (c.name+' '+g.format).toLowerCase().indexOf(q)===-1) return;
+        if(q){
+          var hit = (c.name+' '+g.format).toLowerCase().indexOf(q)!==-1;
+          if(!hit && company==='bev'){ var d=BEV_DOCS_BY_CODE[c.code]; hit=!!d && d.indexOf(q)!==-1; }
+          if(!hit) return;
+        }
         if(!remarkPass(c.code)) return;
         var bd = Number(c.balance_due)||0;
         if(signSel==='pos' && !(bd>0)) return;
@@ -601,7 +612,14 @@
 
   // Does a customer row pass the search + Balance-Due sign + numeric condition filters?
   function custPasses(r,q){
-    if(q && r.getAttribute('data-name').indexOf(q)===-1) return false;
+    if(q){
+      var hit = (r.getAttribute('data-name')||'').indexOf(q)!==-1;
+      if(!hit && company==='bev'){                       // Beverages: also match by open-invoice Doc No
+        var d = BEV_DOCS_BY_CODE[r.getAttribute('data-code')];
+        hit = !!d && d.indexOf(q)!==-1;
+      }
+      if(!hit) return false;
+    }
     if(!remarkPass(r.getAttribute('data-code'))) return false;
     var bd = Number(r.getAttribute('data-bd'))||0;
     if(signSel==='pos' && !(bd>0)) return false;
@@ -931,6 +949,31 @@
       document.getElementById('agRemLabel').textContent='All remarks';
       if(c==='oil'){ restoreOil(); rerenderAll(); } else { loadBev(); }
     });
+
+    // Beverages: bulk-update open-invoice remarks from an Excel/CSV, matched by Doc No.
+    var upBtn = document.getElementById('agUploadBev'), upFile = document.getElementById('agUploadBevFile');
+    if(upBtn && upFile){
+      upBtn.addEventListener('click', function(){ upFile.click(); });
+      upFile.addEventListener('change', function(){
+        var f = this.files && this.files[0]; if(!f) return;
+        var fd = new FormData(); fd.append('file', f); fd.append('as_of', ASOF||'');
+        upBtn.disabled = true;
+        fetch(UPLOAD_BEV_URL, {method:'POST', headers:{'X-CSRFToken':csrf()}, body:fd})
+          .then(function(r){ return r.json(); })
+          .then(function(j){
+            if(j && j.status==='ok'){
+              var msg = 'Updated '+j.updated+' remark(s) across '+j.matched_docs+' Doc No(s) (from '+j.rows+' row(s) read).';
+              if(j.unmatched && j.unmatched.length){
+                msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open beverages invoice and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
+              }
+              alert(msg);
+              RAW_BEV=null; loadBev();          // refetch so the updated remarks show
+            } else { alert('Upload failed: '+((j&&j.error)||'unknown error')); }
+          })
+          .catch(function(){ alert('Upload failed — please try again.'); })
+          .then(function(){ upBtn.disabled=false; upFile.value=''; });   // allow re-selecting the same file
+      });
+    }
 
     document.getElementById('agBody').addEventListener('click',function(e){
       var raw = e.target.closest && e.target.closest('.ag-rawbtn, .ag-rawlink');
