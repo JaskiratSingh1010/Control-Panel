@@ -1389,12 +1389,16 @@
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     var hdr=drillBy.map(pivDimLabel).concat(['Remarks','Count','Doc Total','Balance Due','Original Outstanding','Diff']).concat(BUCKETS.map(function(b){return b.label;}));
     var lines=[hdr.map(cell).join(',')];
-    // Original Outstanding + Diff are per-customer figures → export them only on the top-level
-    // "main total" line (depth 0) and the Grand Total; leave them blank on drilled-down sub-rows.
-    function meas(n, depth){
-      var showOut = depth===0;
-      return [n.count, Math.round(n.total), Math.round(n.bal),
-              showOut?Math.round(n.outstanding):'', showOut?Math.round(n.bal-n.outstanding):'']
+    // Balance Due, Original Outstanding + Diff are blanked on Doc No rows: Original Outstanding is
+    // a per-customer ledger balance repeated on each of a customer's invoices (summing doc rows
+    // would double-count it), and its Balance Due belongs on the customer line — so these three
+    // export on Customer / Sales Person (any non-doc) rows and the Grand Total, but not per Doc No.
+    function meas(n, dimKey){
+      var hide = dimKey==='doc';
+      return [n.count, Math.round(n.total),
+              hide?'':Math.round(n.bal),
+              hide?'':Math.round(n.outstanding),
+              hide?'':Math.round(n.bal-n.outstanding)]
              .concat(BUCKET_KEYS.map(function(k){return Math.round(n[k]);}));
     }
     (function walk(node, depth, labels){
@@ -1402,12 +1406,12 @@
       node._order.forEach(function(kv){
         var kid=node._kids[kv], lab=labels.concat([kv]), dim=[];
         for(var i=0;i<drillBy.length;i++) dim.push(i<lab.length?lab[i]:'');
-        lines.push(dim.concat([pivRemarkFull(kid)]).concat(meas(kid, depth)).map(cell).join(','));
+        lines.push(dim.concat([pivRemarkFull(kid)]).concat(meas(kid, drillBy[depth])).map(cell).join(','));
         if(depth+1<drillBy.length) walk(kid, depth+1, lab);
       });
     })(root,0,[]);
     var tot=[]; for(var i=0;i<drillBy.length;i++) tot.push(i===0?'Grand Total':'');
-    lines.push(tot.concat(['']).concat(meas(root, 0)).map(cell).join(','));
+    lines.push(tot.concat(['']).concat(meas(root, null)).map(cell).join(','));
     var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob), a=document.createElement('a');
     a.href=url; a.download=arCfg().name+'_Raw_Pivot.csv'; a.click();
