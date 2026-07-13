@@ -3,67 +3,74 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:#f6f7f9 !important}
+  .cp-main{background:var(--rz-bg) !important}
   .cs-wrap{max-width:1500px;margin:0 auto}
-  .cs-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
-  .cs-psub{margin:6px 0 0;font-size:13px;color:#94a3b8}
+  .cs-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .cs-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
 
   /* Toolbar */
-  .cs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:16px 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .cs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:16px 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
   .cs-fld{display:flex;flex-direction:column;gap:5px}
-  .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
-  .cs-bar input[type=number],.cs-bar input[type=search],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .cs-bar input[type=number],.cs-bar input[type=search],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .cs-bar input[type=number]{width:90px}
   .cs-bar input[type=search]{min-width:190px}
-  .cs-bar input[type=search]:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-  .cs-fetch{background:#ea580c;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .cs-fetch:hover{background:#c2410c}
+  .cs-bar input[type=search]::placeholder{color:var(--rz-faint)}
+  .cs-bar input[type=number]:focus,.cs-bar input[type=search]:focus,.cs-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .cs-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .cs-fetch:hover{background:var(--rz-indigo-deep)}
   /* Compare segmented control */
-  .cs-seg{display:inline-flex;background:#eef2f7;border-radius:10px;padding:3px}
-  .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;padding:7px 14px;border-radius:8px;cursor:pointer}
-  .cs-seg button.active{background:#2563eb;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.3)}
+  .cs-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
+  .cs-seg button.active{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
 
   /* Dropdown panels (Main Group + Drill By) — shared with the Realise theme */
   .com-drill-box{position:relative}
-  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
-  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
-  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:260px;max-height:320px;overflow:auto;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:260px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
   .com-drill-panel.open{display:block}
   .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6;position:sticky;top:0;background:#fff}
-  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
   .com-dp-list{padding:4px 0}
   .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
   .com-dp-item:hover{background:#f4f7fb}
   .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
-  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
-  .com-dp-item .com-dp-sub{font-size:10px;color:#94a3b8;font-weight:600}
-  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:var(--rz-body)}
+  .com-dp-item .com-dp-sub{font-size:10px;color:var(--rz-faint);font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--rz-indigo);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
   .com-dp-item.checked .com-pos{display:inline-flex}
   .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6;position:sticky;bottom:0;background:#fff}
-  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .com-dp-foot button{width:100%;background:var(--rz-indigo);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  /* Item-first refine bar: Product (U_Sub_Group) + SKU (U_SKU) multi-select filters. */
+  .cd-refine{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;position:relative;z-index:60}
+  .cd-refine.show{display:flex}
+  .cd-refine .ir-cap{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--rz-muted);text-transform:uppercase}
+  .cd-refine .com-drill-btn{min-width:150px;padding:7px 10px}
+  .cd-refine .com-drill-panel{left:0;width:220px;max-height:340px;overflow:auto;z-index:120}
 
   /* Pivot table */
-  .cs-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .cs-table-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .cs-table-wrap{overflow:auto;max-height:74vh}
   table.cs-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
-  table.cs-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap}
+  table.cs-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.cs-table thead th.gc-name{text-align:left;left:0;z-index:3}
-  table.cs-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:#334155;text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;white-space:nowrap}
-  table.cs-table tbody td.gc-name{text-align:left;color:#0f172a;font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
+  table.cs-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:var(--rz-body);text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;white-space:nowrap}
+  table.cs-table tbody td.gc-name{text-align:left;color:var(--rz-ink);font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
   table.cs-table tbody tr:nth-child(even) td.gc-name{background:#fafcff}
   table.cs-table tbody tr:hover td{background:#f1f5ff}
   table.cs-table tbody tr:hover td.gc-name{background:#eef3ff}
-  .cs-grand{background:#f1f5fb;font-weight:800;color:#0f172a}
-  table.cs-table thead th.cs-grand{background:#0f172a;color:#fff}
-  table.cs-table tbody tr.cs-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
-  table.cs-table tbody tr.cs-total td.gc-name{background:#1f3a5f;color:#fff}
-  .cs-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .cs-grand{background:var(--rz-total-bg);font-weight:800;color:var(--rz-ink)}
+  table.cs-table thead th.cs-grand{background:var(--rz-head-bg);color:var(--rz-head-ink)}
+  table.cs-table tbody tr.cs-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
+  table.cs-table tbody tr.cs-total td.gc-name{background:var(--rz-total-bg);color:var(--rz-ink)}
+  .cs-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
   .cs-tw.open{transform:rotate(90deg)}
   .cs-tw-empty{display:inline-block;width:13px;margin-right:7px}
-  .cs-r{font-size:11px;color:#0c7a6b;font-weight:700;margin-top:1px}      /* realise line in 'Both' */
-  table.cs-table tbody tr.cs-total .cs-r{color:#6ee7b7}
-  .cs-empty{padding:40px;text-align:center;color:#7b8794}
-  .cs-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:#e2e8f0;color:#475569;margin-right:8px;vertical-align:middle}
+  .cs-r{font-size:11px;color:#0d9488;font-weight:700;margin-top:1px}      /* realise line in 'Both' */
+  table.cs-table tbody tr.cs-total .cs-r{color:#0d9488}
+  .cs-empty{padding:40px;text-align:center;color:var(--rz-muted)}
+  .cs-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--rz-soft);color:var(--rz-indigo-deep);margin-right:8px;vertical-align:middle}
 </style>
 {% endblock %}
 
@@ -120,6 +127,8 @@
       </div>
     </div>
   </div>
+
+  <div class="cd-refine" id="csRefine"></div>
 
   <div class="cs-table-card">
     <div class="cs-table-wrap">
@@ -225,22 +234,94 @@
     return html;
   }
 
+  /* ── Item-first refine filters ──────────────────────────────────────────────
+     When the FIRST drill dimension is the Item, expose two multi-select dropdowns —
+     Product (U_Sub_Group) and SKU (U_SKU pack size) — that narrow the rows before the
+     pivot is built. Selections auto-clear when Item is no longer first.
+     opts: {mountId, itemKey, prodField, skuField, getRows, getOrder, onChange}. */
+  function makeItemRefine(opts){
+    var selProd={}, selSku={}, sig='', built=false;
+    function norm(v){return String(v==null?'':v).trim().toUpperCase()||'—';}
+    function fP(){return typeof opts.prodField==='function'?opts.prodField():opts.prodField;}
+    function fS(){return typeof opts.skuField==='function'?opts.skuField():opts.skuField;}
+    function firstIsItem(){var o=opts.getOrder()||[];return o.length>0 && o[0]===opts.itemKey;}
+    function distinct(field){var seen={},rs=opts.getRows()||[];for(var i=0;i<rs.length;i++)seen[norm(rs[i][field])]=1;return Object.keys(seen).sort();}
+    function filterRows(rs){
+      if(!firstIsItem())return rs;
+      var hp=Object.keys(selProd).length, hs=Object.keys(selSku).length;
+      if(!hp&&!hs)return rs;
+      var pf=fP(), sf=fS();
+      return (rs||[]).filter(function(r){return (!hp||selProd[norm(r[pf])])&&(!hs||selSku[norm(r[sf])]);});
+    }
+    function lbl(name,sel){var n=Object.keys(sel).length;return n?name+' ('+n+')':name;}
+    function syncChecks(list,sel){list.querySelectorAll('.com-dp-item').forEach(function(it){var v=it.querySelector('.com-dp-name').textContent;var on=!!sel[v];it.querySelector('input').checked=on;it.classList.toggle('checked',on);});}
+    function buildOne(name,field,sel){
+      var vals=distinct(field);
+      var box=document.createElement('div');box.className='com-drill-box';
+      var btn=document.createElement('button');btn.type='button';btn.className='com-drill-btn ir-btn';
+      btn.innerHTML='<span class="ir-lbl"></span><span class="com-caret">&#9662;</span>';
+      btn.querySelector('.ir-lbl').textContent=lbl(name,sel);
+      var panel=document.createElement('div');panel.className='com-drill-panel';
+      var head=document.createElement('div');head.className='com-dp-head';
+      var aAll=document.createElement('a');aAll.textContent='Select All';
+      var aClr=document.createElement('a');aClr.textContent='Clear All';
+      head.appendChild(aAll);head.appendChild(aClr);
+      var list=document.createElement('div');list.className='com-dp-list';
+      vals.forEach(function(v){
+        var it=document.createElement('label');it.className='com-dp-item'+(sel[v]?' checked':'');
+        it.innerHTML='<input type="checkbox" '+(sel[v]?'checked':'')+'><span class="com-dp-name">'+esc(v)+'</span>';
+        it.querySelector('input').addEventListener('change',function(){
+          if(this.checked)sel[v]=1;else delete sel[v];
+          it.classList.toggle('checked',this.checked);
+          btn.querySelector('.ir-lbl').textContent=lbl(name,sel);
+          opts.onChange&&opts.onChange();
+        });
+        list.appendChild(it);
+      });
+      aAll.addEventListener('click',function(e){e.stopPropagation();vals.forEach(function(v){sel[v]=1;});syncChecks(list,sel);btn.querySelector('.ir-lbl').textContent=lbl(name,sel);opts.onChange&&opts.onChange();});
+      aClr.addEventListener('click',function(e){e.stopPropagation();Object.keys(sel).forEach(function(k){delete sel[k];});syncChecks(list,sel);btn.querySelector('.ir-lbl').textContent=lbl(name,sel);opts.onChange&&opts.onChange();});
+      btn.addEventListener('click',function(e){e.stopPropagation();var open=panel.classList.contains('open');var wrap=document.getElementById(opts.mountId);if(wrap)wrap.querySelectorAll('.com-drill-panel').forEach(function(p){p.classList.remove('open');});if(!open){var r=btn.getBoundingClientRect();panel.style.position='fixed';panel.style.top=(r.bottom+6)+'px';panel.style.left=r.left+'px';panel.style.zIndex='4000';panel.classList.add('open');}});
+      panel.addEventListener('click',function(e){e.stopPropagation();});
+      panel.appendChild(head);panel.appendChild(list);
+      box.appendChild(btn);box.appendChild(panel);
+      return box;
+    }
+    function sync(){
+      var wrap=document.getElementById(opts.mountId);if(!wrap)return;
+      if(!firstIsItem()){if(built||wrap.classList.contains('show')){wrap.classList.remove('show');wrap.innerHTML='';selProd={};selSku={};built=false;sig='';}return;}
+      var newSig=(opts.getRows()||[]).length+'|'+distinct(fP()).join(',')+'|'+distinct(fS()).join(',');
+      wrap.classList.add('show');
+      if(built&&newSig===sig)return;
+      sig=newSig;built=true;wrap.innerHTML='';
+      var cap=document.createElement('span');cap.className='ir-cap';cap.textContent='Filter items ›';wrap.appendChild(cap);
+      wrap.appendChild(buildOne('Product',fP(),selProd));
+      wrap.appendChild(buildOne('SKU',fS(),selSku));
+    }
+    function reset(){selProd={};selSku={};built=false;sig='';var wrap=document.getElementById(opts.mountId);if(wrap){wrap.classList.remove('show');wrap.innerHTML='';}}
+    return {sync:sync, filterRows:filterRows, reset:reset};
+  }
+  document.addEventListener('click',function(){document.querySelectorAll('.cd-refine .com-drill-panel.open').forEach(function(p){p.classList.remove('open');});});
+  var csRefine=makeItemRefine({mountId:'csRefine',itemKey:'item',prodField:'u_sub_group',skuField:'sku',
+    getRows:function(){return activeRows().rows;},getOrder:function(){return order;},onChange:render});
+
   function render(){
     document.getElementById('csDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none —';
     var body=document.getElementById('csBody'), head=document.getElementById('csHead');
     if(err){head.innerHTML='';body.innerHTML='<tr><td class="cs-empty">Could not load ('+esc(err)+').</td></tr>';return;}
     if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="cs-empty">Pick a period and click Fetch.</td></tr>';return;}
     var a=activeRows(), months=a.months, dims=order.length?order:['group'];
+    csRefine.sync();
+    var arows=csRefine.filterRows(a.rows);   // + Product/SKU narrowing when Item is first
     var rowLabel=dims.map(function(k){return DIM_LABEL[k];}).join(' › ');
     head.innerHTML='<tr><th class="gc-name">'+esc(rowLabel)+'</th>'
       +months.map(function(mo){return '<th>'+esc(mo.label)+'</th>';}).join('')
       +'<th class="cs-grand">Grand Total</th></tr>';
-    if(!a.rows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+2)+'">No sales in this selection.</td></tr>';return;}
-    var tree=buildTree(a.rows,dims,0,'');
+    if(!arows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+2)+'">No sales in this selection.</td></tr>';return;}
+    var tree=buildTree(arows,dims,0,'');
     var html=treeRows(tree,months,0);
     // Totals row
     var colL={},colR={},gL=0,gR=0;
-    a.rows.forEach(function(r){var L=Number(r.liter)||0,R=Number(r.line_total)||0;colL[r.ym]=(colL[r.ym]||0)+L;colR[r.ym]=(colR[r.ym]||0)+R;gL+=L;gR+=R;});
+    arows.forEach(function(r){var L=Number(r.liter)||0,R=Number(r.line_total)||0;colL[r.ym]=(colL[r.ym]||0)+L;colR[r.ym]=(colR[r.ym]||0)+R;gL+=L;gR+=R;});
     var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0)+'</td>';}).join('');
     html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td></tr>';
     body.innerHTML=html;
@@ -294,7 +375,7 @@
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; rebuildMgList(); render(); if(!err)saveCache(); })
+      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -316,7 +397,7 @@
       var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
       var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
       if(c.months)document.getElementById('csMonths').value=c.months;
-      rows=c.rows; err=null; loaded=true; expanded={}; rebuildMgList(); render(); return true;
+      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); render(); return true;
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 

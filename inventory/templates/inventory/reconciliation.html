@@ -60,6 +60,15 @@
   .rc-chip.active{background:#0f172a;color:#fff;border-color:#0f172a}
   .rc-chip .n{opacity:.7;font-weight:600;margin-left:4px}
 
+  /* Free-text search over the billing chains (PO / vendor / status / any document number). */
+  .rc-searchbar{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #e6eaf1;border-radius:12px;
+    padding:9px 14px;margin:0 0 14px;box-shadow:0 5px 14px rgba(15,23,42,.05)}
+  .rc-searchbar:focus-within{border-color:#26466b;box-shadow:0 0 0 3px rgba(38,70,107,.12)}
+  .rc-searchbar svg{color:#94a3b8;flex:none}
+  .rc-searchbar input{border:0;outline:0;flex:1;font-family:inherit;font-size:13.5px;color:#0f172a;background:transparent}
+  .rc-searchbar .rc-search-x{border:0;background:transparent;color:#94a3b8;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;display:none}
+  .rc-searchbar .rc-search-x:hover{color:#475569}
+
   .rc-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.10);margin-bottom:22px}
   .rc-card-h{padding:12px 18px;font-weight:800;color:#0f172a;font-size:14px;border-bottom:1px solid #eef2f6;display:flex;align-items:center;gap:8px}
   .rc-tw{overflow:auto;max-height:66vh}
@@ -160,6 +169,12 @@
     <button class="rc-drill-clear" id="rcDrillClear" style="display:none">Clear</button>
   </div>
 
+  <div class="rc-searchbar">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="rcSearch" autocomplete="off" placeholder="Search all chains — PO, vendor, status, or any SO / GRPO / A-P / A-R document number…">
+    <button type="button" class="rc-search-x" id="rcSearchClear" title="Clear search">&times;</button>
+  </div>
+
   <div class="rc-card">
     <div class="rc-card-h">Billing chains <span class="rc-detail" id="rcRowCount"></span>
       <span class="rc-detail" style="margin-left:auto;font-weight:600">click any amount to see its document numbers</span></div>
@@ -191,6 +206,7 @@
 (function(){
   var DATA={summary:{},chains:[],tolerance:1};
   var filter='broken';   // status filter: broken | mismatch | incomplete | matched | all
+  var search='';         // free-text query (lower-cased); when set, spans ALL statuses
   var schema='oil';      // seller company: oil | beverages
   // Match driller: pick documents, show rows where they are equal / not equal.
   var NODE_KEYS={po:'po_total',so:'so',grpo:'grpo',ap:'ap',ar:'ar'};
@@ -269,7 +285,7 @@
       var t=L.total||{}; lines.push(['Grand Total',rnd(t.debit),rnd(t.credit),rnd(t.balance)].map(cell).join(','));
       lines.push('');
     });
-    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url; a.download='Wellness-Mart Ledgers '+schema+'.csv'; a.click();
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
@@ -318,6 +334,17 @@
     return x.status!=='MATCHED'; // broken
   }
 
+  // Searchable text for a chain: PO / date / vendor / status / detail + every underlying document
+  // number and date across all nodes — so looking up a single invoice/GRPO/A-P/A-R doc finds its PO.
+  function haystack(x){
+    var parts=[x.po,x.po_date,x.vendor,x.status,x.detail];
+    ['po','so','grpo','ap','ar','delivery'].forEach(function(node){
+      (x[node+'_docs']||[]).forEach(function(d){ parts.push(d.num); parts.push(d.date); });
+    });
+    return parts.join(' ').toLowerCase();
+  }
+  function searchPass(x){ return !search || haystack(x).indexOf(search)!==-1; }
+
   function drillNodes(){var o=[];for(var k in NODE_KEYS){if(drill[k])o.push(k);}return o;}
   // With 2+ documents picked, keep rows where those totals are all equal (eq) or not (neq).
   function drillPass(x){
@@ -326,7 +353,13 @@
     var eq=(present.length===nodes.length) && (Math.max.apply(null,present)-Math.min.apply(null,present))<=tol();
     return drillMode==='eq'?eq:!eq;
   }
-  function passes(x){return statusPass(x)&&drillPass(x);}
+  // A non-empty search finds ANY chain by text, ignoring BOTH the status chip (default "Broken")
+  // AND the match-driller. Searching for a specific PO/doc should surface it no matter what filters
+  // are active — otherwise e.g. an "A/P = A/R" driller silently hides an incomplete PO you searched.
+  function passes(x){
+    if(search) return searchPass(x);
+    return statusPass(x)&&drillPass(x);
+  }
 
   // Amount cell: "off" (red) if it differs from PO total beyond tolerance; clickable to
   // reveal its document numbers; tinted when its column is picked in the driller.
@@ -395,6 +428,16 @@
     var b=e.target.closest('button'); if(!b)return;
     filter=b.getAttribute('data-f'); renderChips(); renderTable();
   });
+
+  // Free-text search over the chains (client-side; spans all statuses while non-empty).
+  var rcSearchInput=document.getElementById('rcSearch'), rcSearchClear=document.getElementById('rcSearchClear');
+  function applySearch(){
+    search=(rcSearchInput.value||'').trim().toLowerCase();
+    rcSearchClear.style.display=search?'block':'none';
+    renderTable();
+  }
+  rcSearchInput.addEventListener('input',applySearch);
+  rcSearchClear.addEventListener('click',function(){ rcSearchInput.value=''; applySearch(); rcSearchInput.focus(); });
   document.getElementById('rcDrill').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
     var n=b.getAttribute('data-node'); drill[n]=!drill[n]; renderDrill(); renderTable();
@@ -438,7 +481,11 @@
   document.getElementById('rcExport').addEventListener('click',function(){
     if(activeTab==='ledger'){ exportLedgersCSV(); return; }
     var only=(filter==='matched'||filter==='all')?'all':'broken';
-    window.location.href='/inventory/reconciliation/export/?'+qs()+'&only='+only;
+    // The chains export ALWAYS combines both seller companies (schema=both), so a PO split across
+    // Oil + Beverages reconciles in one sheet instead of showing a false spread on either toggle.
+    var f=document.getElementById('rcFrom').value, t=document.getElementById('rcTo').value;
+    var p=['schema=both','only='+only]; if(f)p.push('date_from='+f); if(t)p.push('date_to='+t);
+    window.location.href='/inventory/reconciliation/export/?'+p.join('&');
   });
 
   load();

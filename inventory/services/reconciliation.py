@@ -26,6 +26,7 @@ A chain is:
 Only non-matched chains are "broken" and shown by default.
 """
 
+import re
 from datetime import date, timedelta
 
 from core.sap_connector import get_connection
@@ -56,8 +57,8 @@ def _refkey(col):
     return "SUBSTR_REGEXPR('[0-9]+' IN TRIM(%s))" % col
 
 SO_KEY = _refkey('S."NumAtCard"')   # Wellness SO's PO ref
-AR_KEY = _refkey('I."NumAtCard"')   # A/R invoice's own PO ref (used when it isn't copied from a SO)
-DL_KEY = _refkey('D."NumAtCard"')   # Delivery's own PO ref
+AR_KEY = _refkey('I."NumAtCard"')   # A/R invoice's own PO ref (used when the SO ref doesn't name the PO — blank SO ref or a directly-raised invoice)
+DL_KEY = _refkey('D."NumAtCard"')   # Delivery's own PO ref (same fallback as AR_KEY)
 
 DEFAULT_MONTHS = 3
 TOLERANCE = 1.0   # rupees; differences at or below this are treated as rounding
@@ -123,7 +124,8 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
         pos = _rows(cur, f"""
             SELECT P."DocEntry" AS "Entry", P."DocNum" AS "PONum",
                    TO_VARCHAR(P."DocDate",'YYYY-MM-DD') AS "PODate",
-                   P."DocTotal" AS "POTotal", C."CardName" AS "Vendor"
+                   P."DocTotal" AS "POTotal", C."CardName" AS "Vendor",
+                   P."NumAtCard" AS "PORef"
             FROM {MART}.OPOR P JOIN {MART}.OCRD C ON P."CardCode"=C."CardCode"
             WHERE {MART_VENDOR_IS_WELLNESS} AND P."CANCELED"='N'
               AND P."DocDate" BETWEEN '{d_from}' AND '{d_to}'
@@ -151,31 +153,54 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
               AND {SO_KEY} IN ({ponums})
             GROUP BY {SO_KEY}, S."DocNum", S."DocDate" """)
 
-        # 3) Wellness A/R invoices. Allocate to the PO via the SO they copy from (INV1.BaseType=17);
-        #    LEFT JOIN so an invoice raised DIRECTLY (not copied from a SO — the billing team then
-        #    types the dotted PO number into the invoice's own NumAtCard) still links via AR_KEY.
-        #    Scoped to Mart customers so a stray digit-run can't pull in an unrelated invoice.
+        # 3) Wellness A/R invoices. Allocate to the PO by the SO's PO ref when that ref actually
+        #    names a PO in the anchor list (INV1.BaseType=17 → ORDR.NumAtCard); OTHERWISE by the
+        #    invoice's OWN NumAtCard. The billing team very often leaves the SO's NumAtCard blank and
+        #    types the (dotted) PO onto the A/R invoice itself — so an invoice that copies from such
+        #    an SO must STILL fall back to its own ref. The earlier `S.DocEntry IS NULL` guard only
+        #    allowed that fallback for invoices raised with NO sales order at all, silently dropping
+        #    these as a false "Missing A/R" (verified: e.g. INV 626050312 → SO with blank ref, PO on
+        #    the invoice). Scoped to Mart customers so a stray digit-run can't pull an unrelated one.
+        ar_key = f"CASE WHEN {SO_KEY} IN ({ponums}) THEN {SO_KEY} ELSE {AR_KEY} END"
         ar = _agg_docs(cur, f"""
-            SELECT COALESCE({SO_KEY}, {AR_KEY}) AS "K", I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
+            SELECT {ar_key} AS "K", I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
                    ROUND(SUM(L."GTotal"),2) AS "Amt"
             FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
             JOIN {WELL}.OCRD C ON I."CardCode"=C."CardCode"
             LEFT JOIN {WELL}.ORDR S ON L."BaseType"=17 AND L."BaseEntry"=S."DocEntry"
             WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART}
-              AND ({SO_KEY} IN ({ponums}) OR (S."DocEntry" IS NULL AND {AR_KEY} IN ({ponums})))
-            GROUP BY COALESCE({SO_KEY}, {AR_KEY}), I."DocNum", I."DocDate" """)
+              AND ({SO_KEY} IN ({ponums}) OR {AR_KEY} IN ({ponums}))
+            GROUP BY {ar_key}, I."DocNum", I."DocDate" """)
 
-        # 3b) Delivery/Challan documents (optional node — informational only). Same SO-link-or-own-ref
-        #     allocation as A/R so directly-raised deliveries with a dotted PO ref are still caught.
+        # 3a) Second-chance: A/R invoices that carry the PO ONLY in their Remarks (OINV.Comments),
+        #     with a blank Ref No AND a blank-ref SO — so neither structured key above catches them
+        #     (verified: INV 626050295, Ref='' , Comments='Based On Sales Orders 1726056658.\rPO.
+        #     526224533'). Matched against the exact anchor PO set (whole token), NOT a first-digit-run
+        #     (which would grab the SO#). Bounded to the window + Mart customers; skips already-matched.
+        po_re = _po_token_re(pos)
+        _rescue_by_remarks(cur, f"""
+            SELECT I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
+                   I."Comments" AS "Cmt", ROUND(SUM(L."GTotal"),2) AS "Amt"
+            FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
+            JOIN {WELL}.OCRD C ON I."CardCode"=C."CardCode"
+            WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART}
+              AND COALESCE(I."Comments",'') <> ''
+              AND I."DocDate" BETWEEN '{d_from}' AND '{d_to}'
+            GROUP BY I."DocNum", I."DocDate", I."Comments" """, ar, po_re)
+
+        # 3b) Delivery/Challan documents (optional node — informational only). Same SO-ref-when-it-
+        #     names-a-PO-else-own-ref allocation as A/R, so deliveries copied from a blank-ref SO (or
+        #     raised directly) with a dotted PO ref are still caught.
+        dl_key = f"CASE WHEN {SO_KEY} IN ({ponums}) THEN {SO_KEY} ELSE {DL_KEY} END"
         dl = _agg_docs(cur, f"""
-            SELECT COALESCE({SO_KEY}, {DL_KEY}) AS "K", D."DocNum" AS "Num", TO_VARCHAR(D."DocDate",'YYYY-MM-DD') AS "Dt",
+            SELECT {dl_key} AS "K", D."DocNum" AS "Num", TO_VARCHAR(D."DocDate",'YYYY-MM-DD') AS "Dt",
                    ROUND(SUM(L."GTotal"),2) AS "Amt"
             FROM {WELL}.ODLN D JOIN {WELL}.DLN1 L ON D."DocEntry"=L."DocEntry"
             JOIN {WELL}.OCRD C ON D."CardCode"=C."CardCode"
             LEFT JOIN {WELL}.ORDR S ON L."BaseType"=17 AND L."BaseEntry"=S."DocEntry"
             WHERE D."CANCELED"='N' AND {WELL_CUST_IS_MART}
-              AND ({SO_KEY} IN ({ponums}) OR (S."DocEntry" IS NULL AND {DL_KEY} IN ({ponums})))
-            GROUP BY COALESCE({SO_KEY}, {DL_KEY}), D."DocNum", D."DocDate" """)
+              AND ({SO_KEY} IN ({ponums}) OR {DL_KEY} IN ({ponums}))
+            GROUP BY {dl_key}, D."DocNum", D."DocDate" """)
 
         # 4) Mart GRPO documents, allocated to the PO by base reference (PDN1.BaseType=22).
         grpo = _agg_docs(cur, f"""
@@ -195,6 +220,54 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
             WHERE H."CANCELED"='N' AND A."BaseType"=20 AND G."BaseType"=22
               AND G."BaseEntry" IN ({entries})
             GROUP BY G."BaseEntry", H."DocNum", H."DocDate" """)
+
+        # 5a) Last-resort A/R match (needs `ap`): invoices with NO PO anywhere (blank Ref, no PO in
+        #     Remarks) that copy from an SO shared across POs — attach by a UNIQUE A/P-amount match
+        #     among the POs that SO's other invoices name. See _rescue_by_so_amount for the guard.
+        ponum_set = {str(p["PONum"]) for p in pos}
+        _rescue_by_so_amount(cur, f"""
+            SELECT I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
+                   L."BaseEntry" AS "SOE", {AR_KEY} AS "Own", I."Comments" AS "Cmt",
+                   ROUND(SUM(L."GTotal"),2) AS "Amt"
+            FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
+            JOIN {WELL}.OCRD C ON I."CardCode"=C."CardCode"
+            WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART}
+              AND L."BaseType"=17 AND I."DocDate" BETWEEN '{d_from}' AND '{d_to}'
+            GROUP BY I."DocNum", I."DocDate", L."BaseEntry", {AR_KEY}, I."Comments" """,
+            pos, ponum_set, po_re, ar, ap)
+
+        # 5b) Absolute last resort (needs `ap`): A/R invoices that reference the PO NOWHERE and don't
+        #     sit on its SO — attach by a GLOBALLY-UNIQUE exact A/P amount only (see the helper; a
+        #     colliding amount is never guessed). Verified: PO 426224515 → 626040245 + 626040246.
+        _rescue_by_unique_amount(cur, f"""
+            SELECT I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
+                   ROUND(SUM(L."GTotal"),2) AS "Amt"
+            FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
+            JOIN {WELL}.OCRD C ON I."CardCode"=C."CardCode"
+            WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART}
+              AND I."DocDate" BETWEEN '{d_from}' AND '{d_to}'
+            GROUP BY I."DocNum", I."DocDate" """, pos, ar, ap)
+
+        # 5c) Reverse cross-company link — runs LAST so the buyer's own record is authoritative. Some
+        #     Mart POs (and their GRPO/A-P) put the WELLNESS A/R invoice number in their OWN NumAtCard
+        #     instead of Wellness's SO carrying the Mart PO. Extract every 8+ digit run from each PO
+        #     ref; the SQL keeps only real Mart-customer A/R DocNums (junk can't false-match). Attaches
+        #     an unmatched invoice, and OVERRIDES the invoice's own (mistyped) ref by stealing it to the
+        #     naming PO when that PO is owed the amount — verified 626224566←626050745, 526224556←626058189
+        #     (stolen from the ₹55-lakh PO 526224557 the invoice's ref mistyped 556→557).
+        ar_ref_to_po = {}
+        for p in pos:
+            for tok in re.findall(r'\d{8,}', str(p.get("PORef") or "")):
+                ar_ref_to_po.setdefault(tok, set()).add(str(p["PONum"]))
+        if ar_ref_to_po:
+            inv_in = ",".join("'%s'" % n for n in ar_ref_to_po)
+            _rescue_by_po_ref(cur, f"""
+                SELECT I."DocNum" AS "Num", TO_VARCHAR(I."DocDate",'YYYY-MM-DD') AS "Dt",
+                       ROUND(SUM(L."GTotal"),2) AS "Amt"
+                FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
+                JOIN {WELL}.OCRD C ON I."CardCode"=C."CardCode"
+                WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART} AND I."DocNum" IN ({inv_in})
+                GROUP BY I."DocNum", I."DocDate" """, ar_ref_to_po, ar, ap, pos)
 
         cur.close()
     finally:
@@ -235,6 +308,212 @@ def _agg_docs(cur, sql):
         out.setdefault(str(k).strip(), []).append(
             {"num": str(r.get("Num")), "date": r.get("Dt"), "amt": _num(r.get("Amt"))})
     return out
+
+
+def _po_token_re(pos):
+    """A regex matching ANY anchor PO number as a whole token (digit boundaries), or None.
+    Used to find a PO written in a document's free-text Remarks. Boundaries stop a PO from
+    matching inside a longer number — e.g. the auto 'Based On Sales Orders <10-digit SO>' text
+    whose first digit-run is the SO, not the PO (so a first-digit-run extraction would misfire)."""
+    nums = sorted({str(p["PONum"]) for p in pos}, key=len, reverse=True)
+    if not nums:
+        return None
+    return re.compile(r'(?<!\d)(?:%s)(?!\d)' % '|'.join(re.escape(n) for n in nums))
+
+
+def _rescue_by_remarks(cur, sql, store, po_re):
+    """Second-chance match for documents that carry the PO ONLY in their free-text Remarks
+    (e.g. a blank Ref No with 'PO. 526224533' typed into OINV.Comments), not in the Ref No.
+    ``sql`` returns candidate docs {Num, Dt, Cmt, Amt}; a candidate whose DocNum isn't already
+    matched and whose Comments names an anchor PO (whole-token, via ``po_re``) is appended to
+    ``store`` under that PO. Mutates ``store`` in place; no-op if po_re is None."""
+    if po_re is None:
+        return
+    taken = {d["num"] for docs in store.values() for d in docs}
+    for r in _rows(cur, sql):
+        num = str(r.get("Num"))
+        if num in taken:
+            continue
+        m = po_re.search(str(r.get("Cmt") or ""))
+        if not m:
+            continue
+        po = m.group(0)
+        store.setdefault(po, []).append({"num": num, "date": r.get("Dt"), "amt": _num(r.get("Amt"))})
+        taken.add(num)
+
+
+def _rescue_by_po_ref(cur, sql, ar_ref_to_po, ar, ap, pos):
+    """Reverse cross-company link + authoritative override — runs LAST so the buyer's own record
+    wins. Some Mart POs carry the WELLNESS A/R invoice number in their OWN NumAtCard (and the GRPO/
+    A-P copy it) instead of Wellness's SO carrying the Mart PO number. ``ar_ref_to_po`` = {invoice
+    DocNum: {po}} from the POs' refs; ``sql`` returns those invoices {Num, Dt, Amt}. The SQL scopes
+    to real Mart-customer A/R DocNums so a junk ref can't invent a match. For each invoice named by
+    exactly one PO:
+      • unmatched            → attach to that PO;
+      • already on ANOTHER PO → STEAL it to the naming PO, but ONLY when that PO genuinely expects
+        the amount (has an unclaimed A/P line ≈ it). This overrides the invoice's OWN (mistyped)
+        ref, while the amount guard stops a stray PO ref from hijacking a legitimate match.
+    Mutates ``ar``; returns count. Verified: 626224566 ← 626050745 (attach); 526224556 ← 626058189
+    stolen from the ₹55-lakh PO 526224557 whose ref the invoice mistyped 556→557 (₹20,286 confirms)."""
+    po_by_entry = {str(p["Entry"]): str(p["PONum"]) for p in pos}
+    ap_rem = {}                              # unclaimed A/P amounts per PO (nearest rupee)
+    for entry, docs in ap.items():
+        pn = po_by_entry.get(str(entry))
+        if pn:
+            ap_rem.setdefault(pn, []).extend(round(_num(d["amt"])) for d in docs)
+
+    def _take(lst, amt):
+        for i, a in enumerate(lst):
+            if abs(a - amt) <= TOLERANCE:
+                del lst[i]
+                return True
+        return False
+
+    where = {}                               # invoice DocNum → PO it currently sits on
+    for pn, docs in ar.items():
+        for d in docs:
+            where[d["num"]] = pn
+    for pn, docs in ar.items():              # remove amounts already explained by a matched A/R
+        lst = ap_rem.get(pn)
+        if lst:
+            for d in docs:
+                _take(lst, round(_num(d["amt"])))
+
+    n = 0
+    for r in _rows(cur, sql):
+        num = str(r.get("Num")); amt = round(_num(r.get("Amt")))
+        pos_for = ar_ref_to_po.get(num)
+        if not pos_for or len(pos_for) != 1:
+            continue
+        target = next(iter(pos_for))
+        cur_po = where.get(num)
+        if cur_po == target:
+            continue
+        doc = {"num": num, "date": r.get("Dt"), "amt": _num(r.get("Amt"))}
+        if cur_po is None:                              # unmatched → attach to the naming PO
+            ar.setdefault(target, []).append(doc)
+            where[num] = target; n += 1
+        elif _take(ap_rem.get(target, []), amt):        # conflict → steal only if target is owed it
+            ar[cur_po] = [d for d in ar[cur_po] if d["num"] != num]
+            ar.setdefault(target, []).append(doc)
+            where[num] = target; n += 1
+    return n
+
+
+def _rescue_by_so_amount(cur, sql, pos, ponum_set, po_re, ar, ap):
+    """Last-resort match for A/R invoices that carry NO PO anywhere (blank Ref, no PO in Remarks)
+    and copy from a Sales Order SHARED across several POs — so only the amount identifies them.
+    ``sql`` returns per-(invoice, SO) rows {Num, Dt, SOE, Own, Cmt, Amt}. Steps: (1) learn each
+    SO's PO set from its siblings that DO carry a PO (own ref in the anchor set, or a PO in
+    Remarks); (2) for each ref-less orphan on such an SO, attach it to the candidate PO whose
+    still-unmatched A/P line amount UNIQUELY equals the invoice (within TOLERANCE). Ambiguous (two
+    candidate POs) or no A/P match → left unmatched. Mutates ``ar``; returns the count attached.
+    Verified: INV 626050290 (blank ref) → PO 526224532 via its ₹26,86,425 A/P line (the other PO
+    on SO 1726056657, 526224523, has no A/P of that amount, so it's unambiguous)."""
+    # Remaining A/P doc amounts per PO, minus those already covered by a matched A/R (within tol),
+    # so an orphan can only claim an A/P line no existing A/R already explains — and two orphans
+    # can't both grab the same A/P line.
+    po_by_entry = {str(p["Entry"]): str(p["PONum"]) for p in pos}
+    ap_rem = {}
+    for entry, docs in ap.items():
+        pn = po_by_entry.get(str(entry))
+        if pn:
+            ap_rem.setdefault(pn, []).extend(round(_num(d["amt"]), 2) for d in docs)
+
+    def _take(lst, amt):
+        for i, a in enumerate(lst):
+            if abs(a - amt) <= TOLERANCE:
+                del lst[i]
+                return True
+        return False
+
+    for pn, docs in ar.items():
+        lst = ap_rem.get(pn)
+        if lst:
+            for d in docs:
+                _take(lst, round(_num(d["amt"]), 2))
+
+    matched_nums = {d["num"] for docs in ar.values() for d in docs}
+    so_pos, orphans = {}, []
+    for r in _rows(cur, sql):
+        soe = str(r.get("SOE"))
+        own = str(r.get("Own") or "").strip()
+        po = own if own in ponum_set else None
+        if po is None and po_re is not None:
+            m = po_re.search(str(r.get("Cmt") or ""))
+            po = m.group(0) if m else None
+        if po:
+            so_pos.setdefault(soe, set()).add(po)
+        elif str(r.get("Num")) not in matched_nums:
+            orphans.append({"num": str(r.get("Num")), "date": r.get("Dt"),
+                            "amt": _num(r.get("Amt")), "soe": soe})
+
+    n = 0
+    for orp in sorted(orphans, key=lambda o: o["num"]):
+        cands = so_pos.get(orp["soe"])
+        if not cands:
+            continue
+        amt = round(orp["amt"], 2)
+        hits = [pn for pn in cands if any(abs(a - amt) <= TOLERANCE for a in ap_rem.get(pn, []))]
+        if len(hits) == 1:
+            pn = hits[0]
+            ar.setdefault(pn, []).append({"num": orp["num"], "date": orp["date"], "amt": orp["amt"]})
+            _take(ap_rem[pn], amt)
+            n += 1
+    return n
+
+
+def _rescue_by_unique_amount(cur, sql, pos, ar, ap):
+    """Very last resort for A/R invoices that reference the PO NOWHERE (blank Ref, no PO in Remarks)
+    and don't even sit on the PO's SO — linkable ONLY by amount. ``sql`` returns EVERY JIVO MART A/R
+    invoice in the window {Num, Dt, Amt}. We attach an unmatched invoice to a PO's still-unclaimed
+    A/P line ONLY when that exact rupee amount is GLOBALLY UNIQUE: it appears on exactly one unmatched
+    invoice AND one unclaimed A/P line across the whole dataset. A colliding amount (two invoices, or
+    two POs owing it) is left unmatched, never guessed. Mutates ``ar``; returns count.
+    Verified: PO 426224515 → 626040245 (₹13,68,500) + 626040246 (₹2,42,375), both blank-ref, on an
+    unrelated SO 1726046633 — each amount uniquely matches one of the PO's A/P lines."""
+    po_by_entry = {str(p["Entry"]): str(p["PONum"]) for p in pos}
+    # Unclaimed A/P lines per PO (nearest rupee), minus amounts already covered by a matched A/R.
+    ap_rem = {}
+    for entry, docs in ap.items():
+        pn = po_by_entry.get(str(entry))
+        if pn:
+            ap_rem.setdefault(pn, []).extend(round(_num(d["amt"])) for d in docs)
+
+    def _take(lst, amt):
+        for i, a in enumerate(lst):
+            if abs(a - amt) <= TOLERANCE:
+                del lst[i]
+                return True
+        return False
+
+    for pn, docs in ar.items():
+        lst = ap_rem.get(pn)
+        if lst:
+            for d in docs:
+                _take(lst, round(_num(d["amt"])))
+
+    ap_amount_po = {}                       # amount → [PO, ...] still owed exactly that amount
+    for pn, lst in ap_rem.items():
+        for a in lst:
+            ap_amount_po.setdefault(a, []).append(pn)
+
+    matched_nums = {d["num"] for docs in ar.values() for d in docs}
+    orphans = {}                            # amount → [unmatched invoice, ...]
+    for r in _rows(cur, sql):
+        num = str(r.get("Num"))
+        if num in matched_nums:
+            continue
+        orphans.setdefault(round(_num(r.get("Amt"))), []).append(
+            {"num": num, "date": r.get("Dt"), "amt": _num(r.get("Amt"))})
+
+    n = 0
+    for amt, invs in orphans.items():
+        pos_owed = ap_amount_po.get(amt)
+        if len(invs) == 1 and pos_owed and len(pos_owed) == 1:   # unique on BOTH sides
+            ar.setdefault(pos_owed[0], []).append(invs[0])
+            n += 1
+    return n
 
 
 def _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl):
@@ -285,6 +564,57 @@ def _summary(chains):
             s["incomplete"] += 1
     s["mismatch_value"] = round(s["mismatch_value"], 2)
     return s
+
+
+# ── Combined (Oil + Beverages) reconciliation ───────────────────────────────
+# One Mart PO can be fulfilled by BOTH seller companies (Wellness-Oil AND Beverages): the GRPO /
+# A-P (Mart side) carry the FULL amount, but the SO / A-R split across the two seller schemas.
+# Reconciling one company at a time then shows a false spread equal to the OTHER company's A-R
+# (e.g. PO 526224543: Oil A-R ₹1,08,699 + Beverages A-R ₹31,384 = the ₹1,40,083 GRPO/A-P). This
+# merges both runs by PO — SUMMING the seller-side nodes (SO / A-R / Delivery), keeping the shared
+# Mart nodes (PO / GRPO / A-P) once — and re-classifies, so a cross-company PO reconciles. Each
+# SO/A-R/Delivery doc is tagged with its company ('Oil' / 'Bev') for a traceable export.
+def _tag_docs(docs, co):
+    return [dict(d, co=co) for d in (docs or [])]
+
+
+def get_reconciliation_combined(date_from=None, date_to=None):
+    oil = get_reconciliation(date_from, date_to, schema="oil")
+    bev = get_reconciliation(date_from, date_to, schema="beverages")
+
+    merged = {}
+    for c in oil.get("chains", []):
+        d = dict(c)
+        for node in ("so", "ar", "delivery"):
+            d[node + "_docs"] = _tag_docs(c.get(node + "_docs"), "Oil")
+        merged[str(c["po"])] = d
+    for c in bev.get("chains", []):
+        key = str(c["po"])
+        dst = merged.get(key)
+        if dst is None:                         # PO only in the beverages run (same anchor, so rare)
+            d = dict(c)
+            for node in ("so", "ar", "delivery"):
+                d[node + "_docs"] = _tag_docs(c.get(node + "_docs"), "Bev")
+            merged[key] = d
+            continue
+        for node in ("so", "ar", "delivery"):   # seller-side: ADD the beverages contribution
+            sd = _tag_docs(c.get(node + "_docs"), "Bev")
+            if not sd:
+                continue
+            dst[node + "_docs"] = (dst.get(node + "_docs") or []) + sd
+            dst[node + "_cnt"] = (dst.get(node + "_cnt") or 0) + len(sd)
+            dst[node] = round((dst.get(node) or 0) + (c.get(node) or 0), 2)
+        # PO / GRPO / A-P are Mart-side and identical in both runs — keep the oil copy as-is.
+
+    chains = []
+    for c in merged.values():
+        node = {"so": c.get("so"), "grpo": c.get("grpo"), "ap": c.get("ap"), "ar": c.get("ar")}
+        c["status"], c["detail"] = _classify(_num(c.get("po_total")), node)
+        chains.append(c)
+    chains.sort(key=lambda c: (str(c.get("po_date") or ""), str(c.get("po"))), reverse=True)
+    return {"date_from": oil.get("date_from"), "date_to": oil.get("date_to"),
+            "tolerance": TOLERANCE, "summary": _summary(chains), "chains": chains,
+            "company": "both"}
 
 
 # ── BP ledgers (Mart / Wellness) — the second reconciliation tab ─────────────

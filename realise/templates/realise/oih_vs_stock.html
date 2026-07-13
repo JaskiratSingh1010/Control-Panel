@@ -3,76 +3,83 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:#f6f7f9 !important}
+  .cp-main{background:var(--rz-bg) !important}
   .ois-wrap{max-width:1120px;margin:0 auto}
   .ois-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
-  .ois-h1{font-size:30px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px}
-  .ois-psub{margin:6px 0 0;font-size:13px;color:#94a3b8;max-width:640px}
+  .ois-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .ois-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted);max-width:640px}
   .ois-drill{display:flex;align-items:center;gap:10px;padding-top:6px;flex-wrap:wrap}
-  .ois-drill-lbl{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b}
+  .ois-drill-lbl{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   /* Oil / Beverages company toggle — swaps the whole report between companies. */
-  .ois-cof{display:inline-flex;border:1px solid #cdb8e6;border-radius:10px;overflow:hidden;background:#fff}
-  .ois-cf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:800;padding:8px 14px;cursor:pointer}
+  .ois-cof{display:inline-flex;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff}
+  .ois-cf{border:0;border-left:1px solid #eef2f6;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:800;padding:8px 14px;cursor:pointer}
   .ois-cf:first-child{border-left:0}
-  .ois-cf:hover:not(.on){background:#f6f2fc}
-  .ois-cf.on{background:#7c3aed;color:#fff}
+  .ois-cf:hover:not(.on){background:var(--rz-soft)}
+  .ois-cf.on{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:inset 0 0 0 1px var(--rz-soft-brd)}
   /* Premium / Commodity filter — segmented control beside the Group-by driller. */
-  .ois-typef{display:inline-flex;border:1px solid #d9e5ee;border-radius:10px;overflow:hidden;background:#fff}
-  .ois-tf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;cursor:pointer}
+  .ois-typef{display:inline-flex;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff}
+  .ois-tf{border:0;border-left:1px solid #eef2f6;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;cursor:pointer}
   .ois-tf:first-child{border-left:0}
-  .ois-tf:hover:not(.on){background:#f4f7fb}
-  .ois-tf.on{background:#2563eb;color:#fff}
+  .ois-tf:hover:not(.on){background:var(--rz-soft)}
+  .ois-tf.on{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:inset 0 0 0 1px var(--rz-soft-brd)}
   /* Export Excel button */
-  .ois-exp{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;border-radius:10px;cursor:pointer}
-  .ois-exp:hover{background:#eef4ff;border-color:#bcd4f5}
+  .ois-exp{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;border-radius:10px;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ois-exp:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
   .ois-exp:disabled{opacity:.55;cursor:default}
   .ois-exp .material-icons{font-size:16px}
 
   /* Dynamic driller — same look as the Realise dashboard's Group-by control. */
   .com-drill-box{position:relative}
-  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:190px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:#2563eb;font-weight:700;font-size:12px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit}
-  .com-drill-btn .com-caret{color:#64748b;font-size:10px}
-  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;width:240px;background:#fff;border:1px solid #d9e5ee;border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:190px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:40;width:240px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
   .com-drill-panel.open{display:block}
   .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6}
-  .com-dp-head a{color:#2563eb;font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
   .com-dp-list{padding:4px 0}
   .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
-  .com-dp-item:hover{background:#f4f7fb}
+  .com-dp-item:hover{background:var(--rz-soft)}
   .com-dp-item input{width:16px;height:16px;cursor:pointer}
-  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:#1f2937}
-  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:#2563eb;color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:var(--rz-body)}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--rz-indigo);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
   .com-dp-item.checked .com-pos{display:inline-flex}
   .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6}
-  .com-dp-foot button{width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .com-dp-foot button{width:100%;background:var(--rz-indigo-deep);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  /* Item-first refine bar: Product (U_Sub_Group) + SKU (U_SKU) multi-select filters. */
+  .cd-refine{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 0;position:relative;z-index:60}
+  .cd-refine.show{display:flex}
+  .cd-refine .ir-cap{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--rz-muted);text-transform:uppercase}
+  .cd-refine .com-drill-btn{min-width:150px;padding:7px 10px}
+  .cd-refine .com-drill-panel{left:0;right:auto;width:220px;max-height:340px;overflow:auto;z-index:120}
 
   /* KPI strip */
   .ois-kpis{display:flex;gap:14px;margin:18px 0 16px;flex-wrap:wrap}
-  .ois-kpi{flex:1;min-width:200px;background:#fff;border:1px solid #e2e8f0;border-left-width:4px;border-radius:14px;padding:15px 20px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
-  .ois-kpi.oih{border-left-color:#ea580c}
-  .ois-kpi.stock{border-left-color:#0c7a6b}
-  .ois-kpi.req{border-left-color:#2563eb}
-  .ois-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b}
-  .ois-kpi-v{font-size:28px;font-weight:800;color:#0f172a;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .ois-kpi{position:relative;overflow:hidden;flex:1;min-width:200px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:15px 20px;box-shadow:var(--rz-shadow);color:var(--rz-ink)}
+  .ois-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .ois-kpi.oih{--kpi-acc:var(--rz-acc-amber)}
+  .ois-kpi.stock{--kpi-acc:var(--rz-acc-teal)}
+  .ois-kpi.req{--kpi-acc:var(--rz-acc-indigo)}
+  .ois-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted)}
+  .ois-kpi-v{font-size:28px;font-weight:800;color:var(--rz-ink);line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
 
   /* Tree table */
-  .ois-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+  .ois-table-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .ois-table-wrap{overflow:auto;max-height:70vh}
   table.ois-table{width:100%;border-collapse:collapse;font-size:13px}
-  table.ois-table thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:left;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px}
+  table.ois-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:left;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;border-bottom:1px solid var(--rz-line)}
   table.ois-table th.num,table.ois-table td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  table.ois-table tbody td{padding:10px 16px;border-bottom:1px solid #eef2f6;color:#334155;white-space:nowrap}
+  table.ois-table tbody td{padding:10px 16px;border-bottom:1px solid #eef2f6;color:var(--rz-body);white-space:nowrap}
   table.ois-table tbody tr:nth-child(even) td{background:#fafcff}
-  table.ois-table tbody tr:hover td{background:#f1f5ff}
-  table.ois-table tbody tr.ois-total td{background:#1f3a5f;color:#fff;font-weight:800;position:sticky;bottom:0}
-  .ois-empty{padding:36px;text-align:center;color:#7b8794}
-  .ois-tw{display:inline-block;width:13px;font-size:9px;color:#64748b;margin-right:8px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  table.ois-table tbody tr:hover td{background:var(--rz-soft)}
+  table.ois-table tbody tr.ois-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
+  .ois-empty{padding:36px;text-align:center;color:var(--rz-faint)}
+  .ois-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:8px;cursor:pointer;transition:transform .12s;vertical-align:middle}
   .ois-tw.open{transform:rotate(90deg)}
   .ois-tw-empty{display:inline-block;width:13px;margin-right:8px}
   .ois-short{color:#dc2626;font-weight:700}    /* OIH > stock → must produce/procure */
-  .ois-surplus{color:#0c7a6b}                    /* stock covers OIH → surplus */
-  table.ois-table tbody tr.ois-total td.ois-short{color:#fca5a5}
-  table.ois-table tbody tr.ois-total td.ois-surplus{color:#6ee7b7}
+  .ois-surplus{color:#0d9488}                    /* stock covers OIH → surplus */
+  table.ois-table tbody tr.ois-total td.ois-short{color:var(--rz-neg)}
+  table.ois-table tbody tr.ois-total td.ois-surplus{color:var(--rz-pos)}
 </style>
 {% endblock %}
 
@@ -124,6 +131,8 @@
     <div class="ois-kpi stock"><div class="ois-kpi-l" id="oisKpiStockL">Total Stock Avl (L)</div><div class="ois-kpi-v" id="oisKpiStock">&mdash;</div></div>
     <div class="ois-kpi req"><div class="ois-kpi-l" id="oisKpiReqL">Total Required (L)</div><div class="ois-kpi-v" id="oisKpiReq">&mdash;</div></div>
   </div>
+
+  <div class="cd-refine" id="oisRefine"></div>
 
   <div class="ois-table-card">
     <div class="ois-table-wrap">
@@ -241,6 +250,78 @@
     return html;
   }
 
+  /* ── Item-first refine filters ──────────────────────────────────────────────
+     When the FIRST drill dimension is the Item, expose two multi-select dropdowns —
+     Product (U_Sub_Group / Variety) and SKU (U_SKU pack size) — that narrow the rows
+     before the tree is built. Selections auto-clear when Item is no longer first.
+     opts: {mountId, itemKey, prodField, skuField, getRows, getOrder, onChange}. */
+  function makeItemRefine(opts){
+    var selProd={}, selSku={}, sig='', built=false;
+    function norm(v){return String(v==null?'':v).trim().toUpperCase()||'—';}
+    function fP(){return typeof opts.prodField==='function'?opts.prodField():opts.prodField;}
+    function fS(){return typeof opts.skuField==='function'?opts.skuField():opts.skuField;}
+    function firstIsItem(){var o=opts.getOrder()||[];return o.length>0 && o[0]===opts.itemKey;}
+    function distinct(field){var seen={},rs=opts.getRows()||[];for(var i=0;i<rs.length;i++)seen[norm(rs[i][field])]=1;return Object.keys(seen).sort();}
+    function filterRows(rs){
+      if(!firstIsItem())return rs;
+      var hp=Object.keys(selProd).length, hs=Object.keys(selSku).length;
+      if(!hp&&!hs)return rs;
+      var pf=fP(), sf=fS();
+      return (rs||[]).filter(function(r){return (!hp||selProd[norm(r[pf])])&&(!hs||selSku[norm(r[sf])]);});
+    }
+    function lbl(name,sel){var n=Object.keys(sel).length;return n?name+' ('+n+')':name;}
+    function syncChecks(list,sel){list.querySelectorAll('.com-dp-item').forEach(function(it){var v=it.querySelector('.com-dp-name').textContent;var on=!!sel[v];it.querySelector('input').checked=on;it.classList.toggle('checked',on);});}
+    function buildOne(name,field,sel){
+      var vals=distinct(field);
+      var box=document.createElement('div');box.className='com-drill-box';
+      var btn=document.createElement('button');btn.type='button';btn.className='com-drill-btn ir-btn';
+      btn.innerHTML='<span class="ir-lbl"></span><span class="com-caret">&#9662;</span>';
+      btn.querySelector('.ir-lbl').textContent=lbl(name,sel);
+      var panel=document.createElement('div');panel.className='com-drill-panel';
+      var head=document.createElement('div');head.className='com-dp-head';
+      var aAll=document.createElement('a');aAll.textContent='Select All';
+      var aClr=document.createElement('a');aClr.textContent='Clear All';
+      head.appendChild(aAll);head.appendChild(aClr);
+      var list=document.createElement('div');list.className='com-dp-list';
+      vals.forEach(function(v){
+        var it=document.createElement('label');it.className='com-dp-item'+(sel[v]?' checked':'');
+        it.innerHTML='<input type="checkbox" '+(sel[v]?'checked':'')+'><span class="com-dp-name">'+esc(v)+'</span>';
+        it.querySelector('input').addEventListener('change',function(){
+          if(this.checked)sel[v]=1;else delete sel[v];
+          it.classList.toggle('checked',this.checked);
+          btn.querySelector('.ir-lbl').textContent=lbl(name,sel);
+          opts.onChange&&opts.onChange();
+        });
+        list.appendChild(it);
+      });
+      aAll.addEventListener('click',function(e){e.stopPropagation();vals.forEach(function(v){sel[v]=1;});syncChecks(list,sel);btn.querySelector('.ir-lbl').textContent=lbl(name,sel);opts.onChange&&opts.onChange();});
+      aClr.addEventListener('click',function(e){e.stopPropagation();Object.keys(sel).forEach(function(k){delete sel[k];});syncChecks(list,sel);btn.querySelector('.ir-lbl').textContent=lbl(name,sel);opts.onChange&&opts.onChange();});
+      btn.addEventListener('click',function(e){e.stopPropagation();var open=panel.classList.contains('open');var wrap=document.getElementById(opts.mountId);if(wrap)wrap.querySelectorAll('.com-drill-panel').forEach(function(p){p.classList.remove('open');});if(!open){var r=btn.getBoundingClientRect();panel.style.position='fixed';panel.style.top=(r.bottom+6)+'px';panel.style.left=r.left+'px';panel.style.zIndex='4000';panel.classList.add('open');}});
+      panel.addEventListener('click',function(e){e.stopPropagation();});
+      panel.appendChild(head);panel.appendChild(list);
+      box.appendChild(btn);box.appendChild(panel);
+      return box;
+    }
+    function sync(){
+      var wrap=document.getElementById(opts.mountId);if(!wrap)return;
+      if(!firstIsItem()){if(built||wrap.classList.contains('show')){wrap.classList.remove('show');wrap.innerHTML='';selProd={};selSku={};built=false;sig='';}return;}
+      var newSig=(opts.getRows()||[]).length+'|'+distinct(fP()).join(',')+'|'+distinct(fS()).join(',');
+      wrap.classList.add('show');
+      if(built&&newSig===sig)return;
+      sig=newSig;built=true;wrap.innerHTML='';
+      var cap=document.createElement('span');cap.className='ir-cap';cap.textContent='Filter items ›';wrap.appendChild(cap);
+      wrap.appendChild(buildOne('Product',fP(),selProd));
+      wrap.appendChild(buildOne('SKU',fS(),selSku));
+    }
+    function reset(){selProd={};selSku={};built=false;sig='';var wrap=document.getElementById(opts.mountId);if(wrap){wrap.classList.remove('show');wrap.innerHTML='';}}
+    return {sync:sync, filterRows:filterRows, reset:reset};
+  }
+  document.addEventListener('click',function(){document.querySelectorAll('.cd-refine .com-drill-panel.open').forEach(function(p){p.classList.remove('open');});});
+  function refineBase(){return rows.filter(rowIn);}   // rows within the active Premium/Commodity filter
+  var refine=makeItemRefine({mountId:'oisRefine',itemKey:'item',
+    prodField:function(){return company==='bev'?'variety':'sub_group';},skuField:'sku',
+    getRows:refineBase,getOrder:function(){return order;},onChange:render});
+
   function render(){
     var label=order.map(function(k){return DIM_NAME[k]||k;}).join(' › ')||'Dimension';
     document.getElementById('oisDrillLabel').textContent=label;
@@ -255,7 +336,8 @@
     document.getElementById('oisHReq').textContent='Required ('+u+')';
     var body=document.getElementById('oisBody');
     // Order-independent totals, scoped to the current Premium/Commodity filter.
-    var fr=rows.filter(rowIn);
+    refine.sync();
+    var fr=refine.filterRows(rows.filter(rowIn));   // + Product/SKU narrowing when Item is first
     var tOih=0; for(var i=0;i<fr.length;i++)tOih+=rowOih(fr[i]);
     var allItems={}; for(var j=0;j<fr.length;j++){if(fr[j].item)allItems[fr[j].item]=1;}
     var tStock=0; for(var it in allItems)tStock+=itemStockTotal(it);
@@ -279,7 +361,7 @@
   // spread across one column per dimension, then OIH / Stock / Required, then a TOTAL row.
   function buildSheet(){
     var dims=order.slice(), dimLabels=dims.map(function(k){return DIM_NAME[k]||k;});
-    var fr=rows.filter(rowIn), tree=buildTree(fr,0), body=[];
+    var fr=refine.filterRows(rows.filter(rowIn)), tree=buildTree(fr,0), body=[];
     (function walk(nodes,ancestors){
       for(var i=0;i<nodes.length;i++){var n=nodes[i], path=ancestors.concat([n.name]);
         var cells=dims.map(function(_,ci){return ci<path.length?path[ci]:'';});
@@ -303,7 +385,7 @@
     var lines=[S.headers.map(cell).join(',')];
     S.body.forEach(function(r){lines.push(r.map(cell).join(','));});
     lines.push(S.totals.map(cell).join(','));
-    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
     a.href=url; a.download=exportFilename('csv'); a.click();
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
@@ -489,6 +571,7 @@
     var b=e.target&&e.target.closest?e.target.closest('.ois-cf'):null; if(!b)return;
     var c=b.getAttribute('data-co'); if(c===company)return;
     Array.prototype.forEach.call(this.querySelectorAll('.ois-cf'),function(x){x.classList.toggle('on',x===b);});
+    refine.reset();
     setCompany(c);
   });
 

@@ -1,7 +1,7 @@
 """Excel export for the Jivo Wellness–Mart reconciliation — the PO chains with their five
 document totals, each paired with its underlying SAP document numbers, plus the status."""
 
-from .reconciliation import get_reconciliation
+from .reconciliation import get_reconciliation, get_reconciliation_combined
 
 
 def build_reconciliation_xlsx(date_from=None, date_to=None, only="broken", schema="oil"):
@@ -9,11 +9,17 @@ def build_reconciliation_xlsx(date_from=None, date_to=None, only="broken", schem
     from openpyxl.styles import Font, Alignment, PatternFill
     from openpyxl.utils import get_column_letter
 
-    data = get_reconciliation(date_from=date_from, date_to=date_to, schema=schema)
+    # schema='both' merges Oil + Beverages so a PO split across both seller companies reconciles
+    # in one sheet (its SO/A-R doc numbers are tagged with the company they came from).
+    combined = (schema == "both")
+    if combined:
+        data = get_reconciliation_combined(date_from=date_from, date_to=date_to)
+    else:
+        data = get_reconciliation(date_from=date_from, date_to=date_to, schema=schema)
     chains = data.get("chains", [])
     if only == "broken":
         chains = [c for c in chains if c.get("status") != "MATCHED"]
-    company = "Beverages" if schema == "beverages" else "Oil"
+    company = "Oil + Beverages" if combined else ("Beverages" if schema == "beverages" else "Oil")
 
     head_font = Font(name="Calibri", size=10, bold=True, color="FFFFFFFF")
     head_fill = PatternFill("solid", fgColor="FF1E293B")
@@ -42,7 +48,11 @@ def build_reconciliation_xlsx(date_from=None, date_to=None, only="broken", schem
         return None if v is None else round(float(v), 2)
 
     def docnums(docs):
-        return ", ".join(str(d["num"]) for d in (docs or [])) or None
+        # In the combined export each seller-side doc carries a 'co' tag (Oil/Bev) — append it so
+        # every A-R / SO number is traceable to the company that raised it.
+        return ", ".join(
+            str(d["num"]) + ((" (%s)" % d["co"]) if d.get("co") else "")
+            for d in (docs or [])) or None
 
     def docdates(docs):
         # Dates in the same order as the Doc# column, so number ↔ date line up per partial.

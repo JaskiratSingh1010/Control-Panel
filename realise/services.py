@@ -110,6 +110,7 @@ def _fetch_raw(start_date, end_date):
 # Same fetch mechanism as oils, but a different schema/proc and a product-only
 # shape: Variety / Sub-Group / SKU dimensions with Quantity & Boxes metrics.
 BEVERAGES_SCHEMA = 'JIVO_BEVERAGES_HANADB'
+MART_SCHEMA = 'JIVO_MART_HANADB'          # Jivo Mart company — used by the Customer Aging Mart toggle
 _BEV_CACHE = {}
 _BEV_CACHE_TTL = 90   # seconds, same as oils
 
@@ -2065,6 +2066,7 @@ def _open_order_litres_by_group_code_customer():
                COALESCE(TRIM(I."U_Sub_Group"), '')   AS "SUBG",
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
+               COALESCE(TRIM(I."U_SKU"), '')         AS "SKU",
                SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
@@ -2075,7 +2077,8 @@ def _open_order_litres_by_group_code_customer():
         GROUP BY COALESCE(TRIM(C."U_Main_Group"), ''), {_SHIPTO_STATE}, {_SHIPTO_CITY},
                  COALESCE(TRIM(H."CardCode"), ''),
                  COALESCE(TRIM(C."CardName"), ''), COALESCE(TRIM(I."U_Sub_Group"), ''),
-                 COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."ItemName"), '')
+                 COALESCE(TRIM(I."U_TYPE"), ''), COALESCE(TRIM(I."ItemName"), ''),
+                 COALESCE(TRIM(I."U_SKU"), '')
     '''
     try:
         return sap_connector.execute_query(sql)
@@ -2103,6 +2106,7 @@ def get_order_in_hand_rows():
             'u_type': _normalize_name(d.get('UTYPE')),
             'u_sub_group': _normalize_name(d.get('SUBG')),
             'item_name': _normalize_name(d.get('ITEM')),
+            'sku': _normalize_name(d.get('SKU')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
         })
     return rows
@@ -3692,6 +3696,7 @@ def get_oih_dimension_rows():
                {_SHIPTO_STATE}                        AS "ST",
                COALESCE(TRIM(I."U_Sub_Group"), '—')  AS "SUBG",
                COALESCE(TRIM(I."{col}"), '—')         AS "PACK",
+               COALESCE(TRIM(I."U_SKU"), '—')         AS "SKU",
                COALESCE(TRIM(I."ItemName"), '—')      AS "ITEM",
                COALESCE(TRIM(I."ItemCode"), '')        AS "ICODE",
                COALESCE(TRIM(H."CardCode"), '')        AS "CCODE",
@@ -3708,6 +3713,7 @@ def get_oih_dimension_rows():
         WHERE H."DocStatus" = 'O' AND L."LineStatus" = 'O'
         GROUP BY COALESCE(TRIM(C."U_Main_Group"), '—'), {_SHIPTO_STATE},
                  COALESCE(TRIM(I."U_Sub_Group"), '—'), COALESCE(TRIM(I."{col}"), '—'),
+                 COALESCE(TRIM(I."U_SKU"), '—'),
                  COALESCE(TRIM(I."ItemName"), '—'), COALESCE(TRIM(I."ItemCode"), ''),
                  COALESCE(TRIM(H."CardCode"), ''),
                  COALESCE(TRIM(C."CardName"), '—'), COALESCE(TRIM(I."U_TYPE"), ''), H."DocNum"
@@ -3733,14 +3739,15 @@ def get_oih_dimension_rows():
         so_no = str(r.get('DOCNUM') or '').strip() or '—'
         person = person_for_group_state(grp, st) or '—'   # territory owner for this group+state
         key = (grp, st, _normalize_name(r.get('SUBG')) or '—', _normalize_name(r.get('PACK')) or '—',
-               item_name, _normalize_name(r.get('CUST')) or '—', so_no, person)
+               item_name, _normalize_name(r.get('CUST')) or '—', so_no, person,
+               _normalize_name(r.get('SKU')) or '—')
         cell = agg.setdefault(key, {'premium': 0.0, 'commodity': 0.0,
                                     'premium_pcs': 0.0, 'commodity_pcs': 0.0})
         seg = 'premium' if ut == 'PREMIUM' else 'commodity'
         cell[seg] += float(r.get('QTY') or 0)          # litres = OpenQty * SalPackUn
         cell[seg + '_pcs'] += float(r.get('PCS') or 0)  # raw pieces / quantity
     out = [{'main_group': k[0], 'state': k[1], 'sub_group': k[2], 'packtype': k[3],
-            'item': k[4], 'customer': k[5], 'so_no': k[6], 'sales_person': k[7],
+            'item': k[4], 'customer': k[5], 'so_no': k[6], 'sales_person': k[7], 'sku': k[8],
             'premium': round(v['premium'], 2), 'commodity': round(v['commodity'], 2),
             'premium_pcs': round(v['premium_pcs'], 2), 'commodity_pcs': round(v['commodity_pcs'], 2)}
            for k, v in agg.items()]
@@ -4152,7 +4159,7 @@ def _aging_date_literal(aging_date):
     return "TO_DATE('%s')" % aging_date.strftime('%Y-%m-%d')
 
 
-def _load_aging_rows_sap(aging_date):
+def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_gstin=False):
     """Customer receivables aging as of aging_date via SAP B1's reconciliation logic
     (JDT1 / ITR1 / OITR), translated from B1's own system query to HANA SQL. Returns one
     dict per customer in the same shape as the workbook loader, with Balance Due (ties to
@@ -4160,9 +4167,27 @@ def _load_aging_rows_sap(aging_date):
     and the five posting-date (RefDate) buckets — matching SAP's report, which ages by
     document/posting date. Parts 1/2 reverse reconciliations dated after the aging
     date to reconstruct the historical open balance; part 3 is the never-reconciled-yet
-    open lines."""
-    ag, S = _aging_date_literal(aging_date), SAP_SCHEMA
-    sql = f'''WITH aged AS (
+    open lines.
+
+    `schema` selects the company DB (default oil = SAP_SCHEMA; pass MART_SCHEMA for Jivo Mart).
+    `apply_oil_filters` drops the oil-only internal/non-receivable rows (JIVO WELLNESS branches,
+    FUTURE RETAIL, PURCHASE OIL/EXPORT/TRANSPORT formats) — off for Mart, whose authoritative B1
+    aging includes those parties. Groups by OCRD.U_Main_Group ('format'); on a schema that lacks
+    that UDF the query is retried with a blank format so the report still works.
+    `with_gstin` (Mart) also selects each party's CRD1 GSTIN and tags the row 'segment' =
+    'B2B' when a GSTIN exists else 'B2C', so the client can split each format into B2B/B2C."""
+    ag, S = _aging_date_literal(aging_date), (schema or SAP_SCHEMA)
+
+    # Per-party GSTIN (Mart B2B/B2C split): any CRD1 address carrying a GST reg no marks the
+    # party B2B. The subquery may correlate ONLY on C."CardCode" (which is in the GROUP BY) —
+    # referencing a non-grouped OCRD column (e.g. BillToDef) makes HANA reject the whole grouped
+    # SELECT ("must be in group by clause"), which previously tripped the no-GSTIN fallback.
+    gst_sel = (f''',
+           (SELECT MAX(B2."GSTRegnNo") FROM "{S}"."CRD1" B2 WHERE B2."CardCode"=C."CardCode"
+              AND TRIM(COALESCE(B2."GSTRegnNo",''))<>'') AS "gstin"''' if with_gstin else '')
+
+    def _sql(fmt_sel, fmt_grp):
+        return f'''WITH aged AS (
       SELECT T0."ShortName" AS card, MAX(T0."RefDate") AS bdate,
              -MAX(T0."BalDueCred")-SUM(T1."ReconSum") AS bal, -MAX(T0."Credit") AS orig
       FROM "{S}"."JDT1" T0
@@ -4193,34 +4218,49 @@ def _load_aging_rows_sap(aging_date):
           WHERE U0."TransId"=T0."TransId" AND U0."TransRowId"=T0."Line_ID" AND U1."ReconDate">{ag})
       GROUP BY T0."TransId", T0."Line_ID", T0."ShortName"
     )
-    SELECT C."CardCode" AS "code", C."CardName" AS "name", C."U_Main_Group" AS "format",
+    SELECT C."CardCode" AS "code", C."CardName" AS "name", {fmt_sel} AS "format",
            SUM(a.orig) AS "original", SUM(a.bal) AS "balance_due",
            SUM(CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END) AS "b0_30",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 31 AND 60 THEN a.bal ELSE 0 END) AS "b31_60",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 61 AND 90 THEN a.bal ELSE 0 END) AS "b61_90",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END) AS "b91_120",
-           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag})>120 THEN a.bal ELSE 0 END) AS "b121"
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag})>120 THEN a.bal ELSE 0 END) AS "b121"{gst_sel}
     FROM aged a JOIN "{S}"."OCRD" C ON C."CardCode"=a.card
-    GROUP BY C."CardCode", C."CardName", C."U_Main_Group"
+    GROUP BY C."CardCode", C."CardName"{fmt_grp}
     HAVING SUM(a.bal)<>0
     ORDER BY SUM(a.bal) DESC'''
+
+    def _run():
+        try:
+            return sap_connector.execute_query(_sql('C."U_Main_Group"', ', C."U_Main_Group"'))
+        except Exception:
+            return sap_connector.execute_query(_sql("''", ''))   # schema without the U_Main_Group UDF
+
+    try:
+        raw = _run()
+    except Exception:
+        if not with_gstin:
+            raise
+        gst_sel = ''                       # GST subquery unsupported here — retry without the B2B/B2C tag
+        raw = _run()
     out = []
-    for r in sap_connector.execute_query(sql):
+    for r in raw:
         code = str(r.get('code') or '').strip()
         name = str(r.get('name') or '').strip() or code
         fmt = (str(r.get('format')).strip() if r.get('format') else '') or 'Unclassified'
         balance_due = _aging_num(r.get('balance_due'))
-        # Hide internal / non-receivable rows: JIVO WELLNESS inter-company branches and
-        # FUTURE RETAIL LTD (Modern Trade) by name, and the PURCHASE OIL / EXPORT / TRANSPORT
-        # formats. Also drop any customer whose Balance Due nets to exactly 0.00 — tiny but
-        # real balances (≥ ₹0.01) still show; only a true zero is hidden. Excluded from rows
-        # AND all totals/KPIs (and therefore from the Excel export too).
-        _name_u, _fmt_u = name.upper(), fmt.upper()
-        if ('JIVO WELLNESS' in _name_u or 'FUTURE RETAIL' in _name_u
-                or 'PURCHASE OIL' in _fmt_u or 'EXPORT' in _fmt_u or 'TRANSPORT' in _fmt_u
-                or balance_due == 0):
+        # Always drop a customer whose Balance Due nets to exactly 0.00 (tiny but real balances
+        # ≥ ₹0.01 still show). For OIL, also hide internal / non-receivable rows: JIVO WELLNESS
+        # inter-company branches and FUTURE RETAIL LTD (Modern Trade) by name, and the PURCHASE
+        # OIL / EXPORT / TRANSPORT formats. Mart keeps every party (its B1 aging includes them).
+        if balance_due == 0:
             continue
-        out.append({
+        if apply_oil_filters:
+            _name_u, _fmt_u = name.upper(), fmt.upper()
+            if ('JIVO WELLNESS' in _name_u or 'FUTURE RETAIL' in _name_u
+                    or 'PURCHASE OIL' in _fmt_u or 'EXPORT' in _fmt_u or 'TRANSPORT' in _fmt_u):
+                continue
+        row = {
             'code': code,
             'name': name,
             'format': fmt,
@@ -4231,7 +4271,12 @@ def _load_aging_rows_sap(aging_date):
             'b61_90':  _aging_num(r.get('b61_90')),
             'b91_120': _aging_num(r.get('b91_120')),
             'b121':    _aging_num(r.get('b121')),
-        })
+        }
+        if with_gstin:
+            gstin = str(r.get('gstin') or '').strip()
+            row['gstin'] = gstin
+            row['segment'] = 'B2B' if gstin else 'B2C'   # a GSTIN on file ⇒ registered (B2B)
+        out.append(row)
     return out
 
 
@@ -4308,6 +4353,8 @@ def get_customer_aging(aging_date=None):
 # date, bucketed the same way. We return the RAW per-invoice rows; the client pivots them by
 # Sales Person → Customer, offers a per-day multi-select, and an Excel-like raw drill.
 _bev_aging_cache = {}
+_mart_aging_cache = {}
+_oil_ar_cache = {}       # oil open-invoice RAW DATA (same shape as beverages; separate namespace)
 
 
 def _bev_cell(v):
@@ -4321,55 +4368,80 @@ def _bev_cell(v):
     return str(v).strip()
 
 
-def get_bev_aging_remarks(card_codes):
-    """{(card_code, doc): remark} of manual remarks on the Beverages raw-invoice drill. Stored
-    in AgingRemark with row_key='BEVDOC:<DocNum>' so they never collide with the oil detail
-    page's 'TransId:Line_ID' remarks. All local DB — cheap and independent of the SAP cache."""
+def _ar_remarks_by_prefix(card_codes, prefix):
+    """{(card_code, doc): value} of manual per-invoice entries stored in AgingRemark with
+    row_key='<prefix><DocNum>'. Distinct prefixes keep each A/R company's remarks (and the oil
+    detail page's 'TransId:Line_ID' remarks) from colliding. All local DB — cheap, cache-free."""
     codes = {c for c in (card_codes or []) if c}
     if not codes:
         return {}
-    prefix = 'BEVDOC:'
     out = {}
     for a in AgingRemark.objects.filter(card_code__in=codes, row_key__startswith=prefix):
         out[(a.card_code, a.row_key[len(prefix):])] = a.remark
     return out
 
 
-def _bev_attach_remarks(payload):
-    """Merge current manual remarks onto a (possibly cached) beverages aging payload, so edits
-    show up immediately regardless of the SAP aging cache."""
+def get_bev_aging_remarks(card_codes):
+    """{(card_code, doc): remark} of manual remarks on the Beverages raw-invoice drill
+    (row_key='BEVDOC:<DocNum>')."""
+    return _ar_remarks_by_prefix(card_codes, 'BEVDOC:')
+
+
+def get_bev_actual_sp(card_codes):
+    """{(card_code, doc): actual_sales_person} for the Beverages raw drill (row_key='BEVSP:<DocNum>')."""
+    return _ar_remarks_by_prefix(card_codes, 'BEVSP:')
+
+
+def _ar_attach_remarks(payload, doc_prefix, sp_prefix):
+    """Merge current manual remarks + the user-entered Actual Sales Person onto a (possibly
+    cached) A/R aging payload, so edits show up immediately regardless of the SAP cache. The
+    prefixes select the company's own remark namespace (Beverages vs Mart)."""
     rows = (payload or {}).get('rows') or []
     if rows:
-        rem = get_bev_aging_remarks([r.get('code') for r in rows])
+        codes = [r.get('code') for r in rows]
+        rem = _ar_remarks_by_prefix(codes, doc_prefix)
+        asp = _ar_remarks_by_prefix(codes, sp_prefix)
         for r in rows:
             r['remark'] = rem.get((r.get('code'), r.get('doc')), '')
+            r['actual_sp'] = asp.get((r.get('code'), r.get('doc')), '')
     return payload
 
 
-def get_customer_aging_beverages(aging_date=None):
-    """Open A/R invoice aging for Jivo Beverages (JIVO_BEVERAGES_HANADB). Returns raw invoice
+def _bev_attach_remarks(payload):
+    """Beverages shim over _ar_attach_remarks (kept for any external callers)."""
+    return _ar_attach_remarks(payload, 'BEVDOC:', 'BEVSP:')
+
+
+def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache):
+    """Open A/R invoice aging for one company schema (Beverages / Mart). Returns raw invoice
     rows (Sales Person, Customer, Days, Balance Due, Outstanding, dispatch/bilty fields, …),
     each carrying its manual `remark`. The client pivots by Sales Person → Customer with the
-    shared aging buckets. Cached per aging date for _AGING_TTL seconds (remarks merged fresh)."""
+    shared aging buckets. Cached per (company, aging date) for _AGING_TTL seconds (remarks
+    merged fresh). The dispatch/bilty UDF columns exist on the Beverages OINV but may be absent
+    on other schemas — the query is retried without them so the report still works."""
     if aging_date is None:
         aging_date = date.today()
     key = aging_date.isoformat()
     now = time.time()
-    hit = _bev_aging_cache.get(key)
+    hit = cache.get(key)
     if hit and hit[0] > now:
-        return _bev_attach_remarks(hit[1])
+        return _ar_attach_remarks(hit[1], doc_prefix, sp_prefix)
 
-    ag, B = _aging_date_literal(aging_date), BEVERAGES_SCHEMA
-    sql = f'''
+    ag, B = _aging_date_literal(aging_date), schema
+    # Optional dispatch/bilty custom fields — present on Beverages, retried-without elsewhere.
+    udf = ('''T0."U_Dipatch_Date" AS "dispatch", T0."U_BiltyNumber" AS "bilty",
+               T0."U_BiltyDate" AS "biltydate", T0."U_TransporterName" AS "transporter",
+               T0."U_VechileNom" AS "vehicle", T0."U_DriverName" AS "driver",
+               T0."U_Mob_No" AS "mobile",''')
+
+    def build(extras):
+        return f'''
         SELECT T4."SlpName" AS "sp", T0."CardCode" AS "code", T0."CardName" AS "name",
                T0."DocNum" AS "doc", TO_VARCHAR(T0."DocDate",'YYYY-MM-DD') AS "date",
                DAYS_BETWEEN(T0."DocDate", {ag}) AS "days",
                TO_VARCHAR(T5."LastTransDate",'YYYY-MM-DD') AS "ltd",
                DAYS_BETWEEN(T5."LastTransDate", {ag}) AS "tdd",
-               T0."U_Dipatch_Date" AS "dispatch", T0."U_BiltyNumber" AS "bilty",
-               T0."U_BiltyDate" AS "biltydate", T0."U_TransporterName" AS "transporter",
-               T0."U_VechileNom" AS "vehicle", T0."U_DriverName" AS "driver",
-               T0."U_Mob_No" AS "mobile", T0."DocStatus" AS "status",
+               {extras}T0."DocStatus" AS "status",
                T0."DocTotal" AS "total", (T0."DocTotal" - T0."PaidToDate") AS "bal",
                T3."Balance" AS "outstanding"
         FROM {B}.OINV T0
@@ -4379,14 +4451,18 @@ def get_customer_aging_beverages(aging_date=None):
                    FROM {B}.JDT1 T1 GROUP BY T1."ShortName") T5 ON T0."CardCode" = T5."CardCode"
         WHERE T0."DocType" = 'I' AND T0."DocStatus" = 'O' AND T0."CANCELED" = 'N'
           AND T0."CardCode" NOT IN ('CUSTA000001', 'CUSTA000002', 'CUSTA000003')
+          AND UPPER(TRIM(T0."CardName")) NOT IN ('BLESSING ADVERTISING PVT LTD', 'CASH SALE DL')
           AND T0."DocDate" <= {ag}
         ORDER BY "days" DESC
     '''
     try:
-        raw = sap_connector.execute_query(sql)
-    except Exception as e:
-        logger.exception('[aging-bev] beverages aging query failed')
-        return {'company': 'bev', 'rows': [], 'aging_date': key, 'error': str(e)}
+        raw = sap_connector.execute_query(build(udf))
+    except Exception:
+        try:                                   # schema without the dispatch/bilty UDFs
+            raw = sap_connector.execute_query(build(''))
+        except Exception as e:
+            logger.exception('[aging-ar] %s aging query failed', company)
+            return {'company': company, 'rows': [], 'aging_date': key, 'error': str(e)}
 
     rows = []
     for r in raw or []:
@@ -4412,9 +4488,50 @@ def get_customer_aging_beverages(aging_date=None):
             'bal': _aging_num(r.get('bal')),
             'outstanding': _aging_num(r.get('outstanding')),
         })
-    payload = {'company': 'bev', 'rows': rows, 'aging_date': key, 'error': None}
-    _bev_aging_cache[key] = (now + _AGING_TTL, payload)
-    return _bev_attach_remarks(payload)
+    payload = {'company': company, 'rows': rows, 'aging_date': key, 'error': None}
+    cache[key] = (now + _AGING_TTL, payload)
+    return _ar_attach_remarks(payload, doc_prefix, sp_prefix)
+
+
+def get_customer_aging_beverages(aging_date=None):
+    """Open A/R invoice aging for Jivo Beverages (JIVO_BEVERAGES_HANADB)."""
+    return _customer_aging_ar(aging_date, BEVERAGES_SCHEMA, 'bev', 'BEVDOC:', 'BEVSP:', _bev_aging_cache)
+
+
+def get_customer_aging_oil_ar(aging_date=None):
+    """Open A/R invoice RAW DATA for Jivo Oil (JIVO_OIL_HANADB) — the same open-OINV list the
+    Beverages RAW DATA workspace uses, but for the oil company. Powers the oil RAW DATA drill;
+    it is invoice-grained (open OINV) and is a separate view from the oil aging pivot (which is
+    B1 journal reconciliation), so the two need not tie exactly. Its own OILDOC:/OILSP: remark
+    namespace keeps oil raw-invoice remarks apart from the per-document aging-detail remarks."""
+    return _customer_aging_ar(aging_date, SAP_SCHEMA, 'oil', 'OILDOC:', 'OILSP:', _oil_ar_cache)
+
+
+def get_customer_aging_mart(aging_date=None):
+    """Customer-receivables aging for Jivo Mart (JIVO_MART_HANADB) — the SAME B1 reconciliation
+    engine and payload shape as the oil `get_customer_aging` (so the client renders it with the
+    identical Format→customers pivot). Ties to SAP's Customer Receivables Aging total; unlike oil
+    it keeps ALL parties (no inter-company/format exclusions). Cached per aging date."""
+    if aging_date is None:
+        aging_date = date.today()
+    key = aging_date.isoformat()
+    now = time.time()
+    hit = _mart_aging_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    try:
+        payload = _build_aging_payload(
+            _load_aging_rows_sap(aging_date, schema=MART_SCHEMA, apply_oil_filters=False, with_gstin=True))
+    except Exception as e:
+        logger.exception('[aging-mart] failed to build mart customer aging payload')
+        return {'company': 'mart', 'buckets': AGING_BUCKETS, 'groups': [], 'total': _empty_buckets(),
+                'kpis': {}, 'aging_date': key, 'error': str(e)}
+
+    payload['company'] = 'mart'
+    payload['aging_date'] = key
+    _mart_aging_cache[key] = (now + _AGING_TTL, payload)
+    return payload
 
 
 # ── Customer Aging — per-document DETAIL (drill from a Balance Due) ──────────
@@ -4515,11 +4632,69 @@ def _aging_detail_sql(where_card, ag, S, with_branch):
     ORDER BY a.duedate'''
 
 
-def get_customer_aging_detail(card_code, aging_date=None):
+def get_aging_credit_days(card_code):
+    """{row_key: days_str} of per-invoice credit-period overrides for a customer, stored in
+    AgingRemark with row_key='CREDITDAYS:<TransId:Line_ID>' (reuses the remark store, so no new
+    table). '' / no row = no override → the row falls back to its P/C item-type default."""
+    cc = (card_code or '').strip()
+    if not cc:
+        return {}
+    prefix = 'CREDITDAYS:'
+    return {a.row_key[len(prefix):]: a.remark
+            for a in AgingRemark.objects.filter(card_code=cc, row_key__startswith=prefix)}
+
+
+def get_customer_aging_item_types(card_code, doc_nums):
+    """{DocNum(str): 'P'|'C'|'P+C'|''} classifying each AR invoice by whether its OITM line items
+    are PREMIUM, COMMODITY, or both (after RECLASSIFY_RULES). Drives the per-invoice credit period
+    on the Customer Aging detail page (P→30d, C→7d, P+C→user-entered). {} on SAP error."""
+    cc = (card_code or '').strip()
+    docs = sorted({str(d).strip() for d in (doc_nums or []) if str(d).strip().isdigit()})
+    if not (cc and docs):
+        return {}
+    S = SAP_SCHEMA
+    card_safe = cc.replace("'", "''")
+    in_list = ','.join(docs)                      # digits-only (validated above) → safe to inline
+    sql = ('SELECT H."DocNum" AS "doc", I."U_TYPE" AS "utype", I."U_Sub_Group" AS "usub", '
+           'I."ItemName" AS "iname" '
+           'FROM "%s"."OINV" H '
+           'JOIN "%s"."INV1" L ON L."DocEntry"=H."DocEntry" '
+           'LEFT JOIN "%s"."OITM" I ON I."ItemCode"=L."ItemCode" '
+           'WHERE H."CardCode"=\'%s\' AND H."DocNum" IN (%s)' % (S, S, S, card_safe, in_list))
+    try:
+        rows = sap_connector.execute_query(sql)
+    except Exception:
+        logger.exception('[AGINGDETAIL] item-type classification failed')
+        return {}
+    agg = {}                                       # doc → {'P': bool, 'C': bool}
+    for r in rows or []:
+        doc = str(r.get('doc') or '').strip()
+        ut = str(r.get('utype') or '').strip().upper()
+        us = str(r.get('usub') or '').strip().upper()
+        nm = str(r.get('iname') or '').strip().upper()
+        ut, _us = _reclassify(ut, us, nm)
+        a = agg.setdefault(doc, {'P': False, 'C': False})
+        if ut == 'PREMIUM':
+            a['P'] = True
+        elif ut == 'COMMODITY':
+            a['C'] = True
+    out = {}
+    for doc, a in agg.items():
+        out[doc] = 'P+C' if (a['P'] and a['C']) else ('P' if a['P'] else ('C' if a['C'] else ''))
+    return out
+
+
+def get_customer_aging_detail(card_code, aging_date=None, schema=None, row_key_prefix='', classify=True):
     """Per-document open items for one customer as of aging_date, with saved remarks merged
-    in. row_key ('TransId:Line_ID') ties each row to its stored remark. [] on SAP error."""
+    in. row_key ('<prefix>TransId:Line_ID') ties each row to its stored remark. [] on SAP error.
+
+    `schema` selects the company DB (default oil = SAP_SCHEMA; pass MART_SCHEMA for Jivo Mart).
+    `row_key_prefix` ('MART:' for Mart) keeps a company's per-document remarks/splits/credit-days
+    from colliding with oil's when the two DBs reuse the same CardCode + TransId. `classify` runs
+    the oil-only PREMIUM/COMMODITY item-type tagging — off for Mart."""
     if aging_date is None:
         aging_date = date.today()
+    S = schema or SAP_SCHEMA
     ag = _aging_date_literal(aging_date)
     card_safe = (card_code or '').strip().replace("'", "''")
     if not card_safe:
@@ -4528,7 +4703,7 @@ def get_customer_aging_detail(card_code, aging_date=None):
     rows = None
     for with_branch in (True, False):     # retry without the branch join if it errors
         try:
-            rows = sap_connector.execute_query(_aging_detail_sql(where_card, ag, SAP_SCHEMA, with_branch))
+            rows = sap_connector.execute_query(_aging_detail_sql(where_card, ag, S, with_branch))
             break
         except Exception as exc:
             logger.error('[AGINGDETAIL] fetch failed (branch=%s): %s', with_branch, exc)
@@ -4537,13 +4712,14 @@ def get_customer_aging_detail(card_code, aging_date=None):
         return []
     remarks = get_aging_remarks(card_code)
     splits = get_aging_remark_lines(card_code)
+    credit = get_aging_credit_days(card_code)
     out = []
     for r in rows:
         try:
             ttype = int(r.get('ttype'))
         except (TypeError, ValueError):
             ttype = None
-        row_key = '%s:%s' % (str(r.get('trans') or '').strip(), str(r.get('line') or '').strip())
+        row_key = '%s%s:%s' % (row_key_prefix, str(r.get('trans') or '').strip(), str(r.get('line') or '').strip())
         out.append({
             'row_key': row_key,
             'doc_no': str(r.get('docno') or '').strip(),
@@ -4556,12 +4732,21 @@ def get_customer_aging_detail(card_code, aging_date=None):
             'balance_due': _aging_num(r.get('balance_due')),
             'remark': remarks.get(row_key, ''),
             'splits': splits.get(row_key, []),
+            'credit_override': credit.get(row_key, ''),   # per-invoice credit-period override
+            'item_type': '',                              # 'P' | 'C' | 'P+C' — filled below for invoices
             'b0_30': _aging_num(r.get('b0_30')),
             'b31_60': _aging_num(r.get('b31_60')),
             'b61_90': _aging_num(r.get('b61_90')),
             'b91_120': _aging_num(r.get('b91_120')),
             'b121': _aging_num(r.get('b121')),
         })
+    # Classify AR invoices (type 'IN') by their line-item mix → P / C / P+C (oil only).
+    inv_docs = [r['doc_no'] for r in out if r['type'] == 'IN' and r['doc_no']]
+    if classify and inv_docs:
+        types = get_customer_aging_item_types(card_code, inv_docs)
+        for r in out:
+            if r['type'] == 'IN':
+                r['item_type'] = types.get(r['doc_no'], '')
     return out
 
 
@@ -4837,35 +5022,41 @@ def bulk_update_aging_remarks(card_code, aging_date, entries):
             'splits': split_lines, 'unmatched': uniq[:50]}
 
 
-def bulk_update_beverages_remarks(aging_date, entries):
-    """Bulk-set the Beverages open-invoice Remarks from an uploaded {doc_no: {'remark', 'splits'}}
-    set, matching on Doc No. Beverages remarks are AgingRemark rows keyed by (customer code,
-    'BEVDOC:'+DocNo) — see get_customer_aging_beverages / [[oih-reco-beverages-toggle]] — so the
-    customer code for each Doc No is resolved from the current beverages aging rows. A Doc No that
-    is on more than one customer's open book is set on each. Blank remarks are skipped. Returns
-    {rows, matched_docs, updated, unmatched}."""
+def _bulk_update_ar_remarks(rows_fn, aging_date, doc_prefix, sp_prefix, label, entries):
+    """Bulk-set an A/R company's open-invoice Remarks from an uploaded {doc_no: {'remark',
+    'splits'}} set, matching on Doc No. Remarks are AgingRemark rows keyed by (customer code,
+    '<doc_prefix>'+DocNo) — see _customer_aging_ar / [[oih-reco-beverages-toggle]] — so the
+    customer code for each Doc No is resolved from `rows_fn(aging_date)`'s current aging rows.
+    A Doc No that is on more than one customer's open book is set on each. Blank remarks are
+    skipped.
+
+    When the sheet also carries an 'Actual Sales Person' column (entry['actual_sp']), that value is
+    written to the same doc's Actual Sales Person (AgingRemark '<sp_prefix>'+DocNo) — matching a doc
+    on its actual_sp alone (no remark) still counts. If the column is absent it is simply skipped.
+    Returns {rows, matched_docs, updated, sp_updated, unmatched}."""
     entries = entries or {}
     try:
-        rows = get_customer_aging_beverages(aging_date).get('rows', [])
+        rows = rows_fn(aging_date).get('rows', [])
     except Exception as exc:
-        logger.error('[BEV-AGING] remark upload lookup failed: %s', exc)
+        logger.error('[%s-AGING] remark upload lookup failed: %s', label.upper(), exc)
         return {'rows': 0, 'matched_docs': 0, 'updated': 0, 'unmatched': [],
-                'error': 'Could not read beverages invoices from SAP.'}
+                'error': 'Could not read %s invoices from SAP.' % label}
     by_doc = {}
     for r in rows:
         d = str(r.get('doc') or '').strip()
         code = str(r.get('code') or '').strip()
         if d and code:
             by_doc.setdefault(d, set()).add(code)
-    matched, updated, unmatched, total = set(), 0, [], 0
+    matched, updated, sp_updated, unmatched, total = set(), 0, 0, [], 0
     for doc, entry in entries.items():
         doc = str(doc or '').strip()
         remark = (entry.get('remark') or '').strip()
         if not remark:                         # fall back to a Category column if that's all there was
             sp = entry.get('splits') or []
             remark = str(sp[0].get('category') or '').strip() if sp else ''
+        actual_sp = (entry.get('actual_sp') or '').strip()   # optional Actual Sales Person override
         total += 1
-        if not doc or not remark:
+        if not doc or (not remark and not actual_sp):
             continue
         codes = by_doc.get(doc)
         if not codes:
@@ -4873,13 +5064,28 @@ def bulk_update_beverages_remarks(aging_date, entries):
             continue
         matched.add(doc)
         for code in codes:
-            if save_aging_remark(code, 'BEVDOC:' + doc, remark):
+            if remark and save_aging_remark(code, doc_prefix + doc, remark):
                 updated += 1
+            if actual_sp and save_aging_remark(code, sp_prefix + doc, actual_sp):
+                sp_updated += 1
     seen, uniq = set(), []
     for d in unmatched:
         if d not in seen:
             seen.add(d); uniq.append(d)
-    return {'rows': total, 'matched_docs': len(matched), 'updated': updated, 'unmatched': uniq[:50]}
+    return {'rows': total, 'matched_docs': len(matched), 'updated': updated,
+            'sp_updated': sp_updated, 'unmatched': uniq[:50]}
+
+
+def bulk_update_beverages_remarks(aging_date, entries):
+    """Bulk-update Jivo Beverages open-invoice remarks from an uploaded sheet, matched by Doc No."""
+    return _bulk_update_ar_remarks(get_customer_aging_beverages, aging_date,
+                                   'BEVDOC:', 'BEVSP:', 'beverages', entries)
+
+
+def bulk_update_oil_ar_remarks(aging_date, entries):
+    """Bulk-update Jivo Oil open-invoice RAW DATA remarks from an uploaded sheet, matched by Doc No."""
+    return _bulk_update_ar_remarks(get_customer_aging_oil_ar, aging_date,
+                                   'OILDOC:', 'OILSP:', 'oil', entries)
 
 
 # ══════════════════════ Claims register ══════════════════════

@@ -14,6 +14,41 @@
     *, *::before, *::after { box-sizing: border-box; }
     body { margin: 0; font-family: 'Raleway', sans-serif; background: #f3f4f6; color: #1f2937; }
 
+    /* ── Light & subtle report theme tokens ───────────────────────────────────
+       Shared palette for the Realise/report pages so they all read like the Home
+       dashboard: white cards, thin colour accents, soft shadows, dark-on-light text.
+       Tweak here to re-tone every page at once. */
+    :root {
+      --rz-bg:        #f4f6fb;   /* page background                       */
+      --rz-card:      #ffffff;   /* card / panel surface                  */
+      --rz-card-brd:  #ecebf5;   /* subtle card border                    */
+      --rz-shadow:    0 4px 14px rgba(15,23,42,.05);   /* soft card shadow */
+      --rz-shadow-lg: 0 8px 24px rgba(15,23,42,.07);   /* hero / raised    */
+      --rz-ink:       #0f172a;   /* primary heading / value text          */
+      --rz-body:      #334155;   /* body text                             */
+      --rz-muted:     #64748b;   /* muted labels                          */
+      --rz-faint:     #94a3b8;   /* faint / placeholder                   */
+      --rz-line:      #e5e7eb;   /* hairline / divider                    */
+      --rz-indigo:    #6366f1;   /* primary accent                        */
+      --rz-indigo-deep:#4338ca;  /* accent text on soft bg                */
+      --rz-soft:      #eef2ff;   /* soft accent fill (active chips)       */
+      --rz-soft-brd:  #e0e7ff;   /* soft accent border                    */
+      --rz-head-bg:   #f8fafc;   /* table header background (light)       */
+      --rz-head-ink:  #475569;   /* table header text                     */
+      --rz-total-bg:  #f1f5f9;   /* grand-total row background            */
+      --rz-total-brd: #e2e8f0;   /* grand-total row top border            */
+      --rz-pos:       #16a34a;   /* positive / green                      */
+      --rz-neg:       #e11d48;   /* negative / red                        */
+      --rz-amber:     #d97706;   /* amber accent                          */
+      --rz-teal:      #0d9488;   /* teal accent                           */
+      /* KPI accent bars (thin top strip on white stat cards) */
+      --rz-acc-indigo: linear-gradient(90deg,#6366f1,#7c3aed);
+      --rz-acc-green:  linear-gradient(90deg,#059669,#16a34a);
+      --rz-acc-red:    linear-gradient(90deg,#e11d48,#f43f5e);
+      --rz-acc-amber:  linear-gradient(90deg,#d97706,#f59e0b);
+      --rz-acc-teal:   linear-gradient(90deg,#0d9488,#14b8a6);
+    }
+
     /* ── Topbar ── */
     .cp-topbar { display: flex; align-items: center; gap: 24px; padding: 0 20px; background: #ffffff; border-bottom: 1px solid #e5e7eb; height: 56px; position: sticky; top: 0; z-index: 100; }
     .cp-topbar-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }

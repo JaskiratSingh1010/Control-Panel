@@ -3,19 +3,22 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:#f4f6fb !important}
+  .cp-main{background:var(--rz-bg) !important}
   .ad-wrap{max-width:1500px;margin:0 auto}
 
   .ad-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 24px;margin-bottom:16px;
-    background:linear-gradient(120deg,#4f46e5,#6366f1 50%,#7c3aed);box-shadow:0 14px 34px rgba(79,70,229,.3)}
+    background:linear-gradient(120deg,#ffffff 0%,#fbfbff 55%,#f4f1ff 100%);
+    border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow-lg)}
+  .ad-hero::after{content:"";position:absolute;right:-50px;top:-50px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(124,58,237,.10),transparent 70%)}
   .ad-hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;z-index:1}
-  .ad-h1{font-size:23px;font-weight:900;color:#fff;margin:0;display:flex;align-items:center;gap:10px}
-  .ad-h1 .ad-code{font-size:12px;font-weight:700;color:#e0e7ff;background:rgba(255,255,255,.16);padding:3px 10px;border-radius:999px}
-  .ad-sub{margin:6px 0 0;font-size:12.5px;color:#e0e7ff}
-  .ad-back{display:inline-flex;align-items:center;gap:6px;color:#fff;text-decoration:none;background:rgba(255,255,255,.16);
-    border:1px solid rgba(255,255,255,.28);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700}
-  .ad-back:hover{background:rgba(255,255,255,.26)}
-  .ad-back .material-icons{font-size:17px}
+  .ad-h1{font-size:23px;font-weight:800;color:var(--rz-ink);margin:0;display:flex;align-items:center;gap:10px}
+  .ad-h1 .ad-code{font-size:12px;font-weight:700;color:var(--rz-indigo-deep);background:var(--rz-soft);border:1px solid var(--rz-soft-brd);padding:3px 10px;border-radius:999px}
+  .ad-sub{margin:6px 0 0;font-size:12.5px;color:var(--rz-muted)}
+  .ad-back{display:inline-flex;align-items:center;gap:6px;color:var(--rz-indigo-deep);text-decoration:none;background:var(--rz-soft);
+    border:1px solid var(--rz-soft-brd);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700}
+  .ad-back:hover{background:#e0e7ff}
+  .ad-back .material-icons{font-size:17px;color:var(--rz-indigo)}
 
   .ad-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
   .ad-search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
@@ -26,21 +29,32 @@
   .ad-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#4338ca;
     font-family:inherit;font-size:13px;font-weight:700;padding:9px 16px;border-radius:11px;cursor:pointer}
   .ad-btn:hover{background:#eef2ff;border-color:#c7d2fe}
-  .ad-btn.primary{background:#4338ca;color:#fff;border-color:#4338ca}
-  .ad-btn.primary:hover{background:#3730a3}
+  .ad-btn.primary{background:var(--rz-soft);color:var(--rz-indigo-deep);border-color:var(--rz-soft-brd);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .ad-btn.primary:hover{background:#e0e7ff;border-color:#c7d2fe}
   .ad-btn.danger{color:#dc2626}
   .ad-btn.danger:hover{background:#fef2f2;border-color:#fecaca}
   .ad-btn .material-icons{font-size:17px}
 
-  .ad-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
+  .ad-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .ad-tw{overflow:auto;max-height:74vh}
   table.ad-tb{width:100%;border-collapse:collapse;font-size:12.5px}
-  table.ad-tb thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;
-    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 13px;white-space:nowrap}
+  table.ad-tb thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 13px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.ad-tb thead th.lbl{text-align:left}
+  table.ad-tb thead th.sortable{cursor:pointer;user-select:none}
+  table.ad-tb thead th.sortable:hover{background:#eef2f6}
+  table.ad-tb thead th .ar{font-size:9px;margin-left:4px;opacity:.75}
   table.ad-tb td{padding:9px 13px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
   table.ad-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
   table.ad-tb tbody tr:hover td{background:#f8fafc}
+  /* Item-type badge (P / C / P+C) and per-invoice credit-period input */
+  .ad-pc{display:inline-block;min-width:34px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:999px;border:1px solid transparent}
+  .ad-pc.p{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+  .ad-pc.c{background:#fef3c7;color:#92400e;border-color:#fde68a}
+  .ad-pc.pc{background:#e0e7ff;color:#3730a3;border-color:#c7d2fe}
+  .ad-pc.none{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
+  .ad-cd{width:70px;text-align:center;border:1px solid #e2e8f0;border-radius:7px;padding:5px 6px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
+  .ad-cd:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .ad-rmk{width:100%;min-width:150px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
   .ad-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .ad-rmk.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
@@ -63,8 +77,8 @@
   .neg{color:#e11d48;font-weight:700}
   .v0{color:#cbd5e1}
   .bal{font-weight:800;color:#0f172a}
-  tr.ad-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:1}
-  tr.ad-tot .neg{color:#fda4af}
+  tr.ad-tot td{position:sticky;bottom:0;background:var(--rz-total-bg);color:var(--rz-ink);font-weight:900;border-top:2px solid var(--rz-total-brd);z-index:1}
+  tr.ad-tot .neg{color:var(--rz-neg)}
   td.bk0{background:#f0fdf4}td.bk1{background:#f0fdfa}td.bk2{background:#fffbeb}td.bk3{background:#fff7ed}td.bk4{background:#fef2f2}
   .ad-empty{padding:40px;text-align:center;color:#7b8794}
 
@@ -113,10 +127,10 @@
       <span class="material-icons">search</span>
       <input type="text" id="adSearch" placeholder="Search doc no, remark, branch…" autocomplete="off">
     </label>
-    <span class="ad-days" title="Documents within this many days of their posting date are auto-marked NOT DUE (Remarks locked). Once that many days pass, they turn OVERDUE and the Remarks cell becomes editable. Set 0 to turn this off.">
-      <label for="adDays">NOT DUE within</label>
+    <span class="ad-days" title="Default credit period for rows with NO P/C item type (credit notes, JEs, etc.). Invoices use their own per-invoice credit period (P=30, C=7, P+C=you set it). Within the period a document is NOT DUE (Remarks locked); past it, OVERDUE and editable. Set 0 to turn the fallback off.">
+      <label for="adDays">Credit Period</label>
       <input type="number" id="adDays" min="0" step="1" inputmode="numeric" placeholder="0">
-      <span class="ad-days-hint">days &rarr; then OVERDUE</span>
+      <span class="ad-days-hint">days (default for non-P/C rows)</span>
     </span>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
@@ -143,6 +157,12 @@
   var DATA = JSON.parse(document.getElementById('detail-data').textContent || '{}');
   var ROWS = DATA.rows || [];
   var CODE = DATA.code || '';
+  var COMPANY = DATA.company || 'oil';
+  // Bulk Upload + Clear hit the oil schema / clear all remarks for this CardCode — not safe for
+  // Mart (its remarks are 'MART:'-prefixed and could share a CardCode with oil). Hide them there.
+  if(COMPANY==='mart'){
+    ['adUpload','adClear'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  }
   // Fixed Category vocabulary (server is the source of truth; see AGING_REMARK_CATEGORIES).
   // The split Category is a dropdown limited to these — no free text is accepted.
   var CATEGORIES = DATA.categories || ['NOT DUE','RTV DEBIT','RTV PICK UP','SHORTAGE','CLAIM','TDS',
@@ -150,9 +170,44 @@
   var CATEGORY_SET = {}; CATEGORIES.forEach(function(c){ CATEGORY_SET[c.toUpperCase()] = 1; });
   var BUCKETS = [{key:'b0_30',label:'0 - 30'},{key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
                  {key:'b91_120',label:'91 - 120'},{key:'b121',label:'121+'}];
+  // Data-view columns (after the expander) — order matches the rendered <td>s. `lbl` = left-aligned
+  // header (text), `num` = numeric sort/right-aligned value. Both flags are independent so Credit
+  // Period can be left-aligned yet sort numerically. Drives BOTH the sortable header and the sorter.
+  var DATA_COLS = [
+    {key:'type',         label:'Type',          lbl:true},
+    {key:'doc_no',       label:'Doc No',        lbl:true},
+    {key:'posting_date', label:'Posting Date',  lbl:true},
+    {key:'due_date',     label:'Due Date',      lbl:true},
+    {key:'item_type',    label:'P/C',           lbl:true},
+    {key:'credit',       label:'Credit Period', lbl:true, num:true},
+    {key:'original',     label:'Original',      num:true},
+    {key:'balance_due',  label:'Balance Due',   num:true},
+    {key:'remark',       label:'Remarks',       lbl:true}
+  ].concat(BUCKETS.map(function(b){ return {key:b.key, label:b.label, num:true}; }))
+   .concat([{key:'branch', label:'Branch', lbl:true}]);
+  // Sort state — null key = document order (as returned by SAP). Pivot has its own sort, default
+  // by Sum of Balance Due desc (matches the pre-sort in buildCategoryPivot).
+  var sort = {key:null, dir:1};
+  var pivotSort = {key:'balance_due', dir:-1};
   var pivot = false;
-  // Per-customer NOT DUE grace window (whole days from posting). 0 = feature off (free text).
+  // Fallback credit period (whole days from posting) for rows with NO P/C item type — e.g. credit
+  // notes / JEs. 0 = off. Invoices use their own per-invoice period (see creditDays below).
   var GRACE = Math.max(0, parseInt(DATA.grace_days, 10) || 0);
+  // Per-invoice credit-period override the user typed (else '' → fall back to the P/C default).
+  ROWS.forEach(function(r){
+    var ov = parseInt(r.credit_override, 10);
+    r._cd = (r.credit_override != null && String(r.credit_override).trim() !== '' && isFinite(ov) && ov >= 0) ? ov : null;
+  });
+  // Default credit period from the invoice's item mix: Premium → 30, Commodity → 7, both → none
+  // (user fills it), and no P/C type → the customer-wide fallback (GRACE).
+  function typeDefault(r){
+    if(r.item_type==='P')   return 30;
+    if(r.item_type==='C')   return 7;
+    if(r.item_type==='P+C') return null;
+    return GRACE>0 ? GRACE : null;
+  }
+  // Effective credit period for a row: the user's override if set, else the type default.
+  function creditDays(r){ return (r._cd!=null) ? r._cd : typeDefault(r); }
   var SAVE_URL = "{% url 'realise:api_aging_remark' %}";
   var SAVE_DAYS_URL = "{% url 'realise:api_aging_due_days' %}";
   var SAVE_LINES_URL = "{% url 'realise:api_aging_remark_lines' %}";
@@ -178,10 +233,11 @@
   // becomes editable, defaulting to 'OVERDUE'. GRACE<=0 or an unknown posting date → no
   // auto-status, so the Remarks column is plain free text.
   function statusOf(r){
-    if(GRACE<=0) return '';
+    var cd = creditDays(r);
+    if(cd==null) return '';            // no window (P+C unfilled, or untyped with fallback off)
     var a = r.age_days;
     if(a==null) return '';
-    return a < GRACE ? 'notdue' : 'overdue';
+    return a < cd ? 'notdue' : 'overdue';
   }
   // A document is partly paid when some of its original value has been settled but a balance
   // still remains (fully-paid documents drop off the list entirely). original & balance_due
@@ -207,31 +263,66 @@
   document.getElementById('adAsOf').textContent = DATA.aging_date||'';
 
   // ── Data view ──
+  // Item-type badge: Premium / Commodity / both; blank (—) for non-invoice or unclassified docs.
+  function pcBadge(t){
+    if(t==='P')   return '<span class="ad-pc p">P</span>';
+    if(t==='C')   return '<span class="ad-pc c">C</span>';
+    if(t==='P+C') return '<span class="ad-pc pc">P+C</span>';
+    return '<span class="ad-pc none">—</span>';
+  }
   function renderDataHead(){
-    var th = '<th class="lbl"></th><th class="lbl">Type</th><th class="lbl">Doc No</th><th class="lbl">Posting Date</th>'+
-      '<th class="lbl">Due Date</th><th>Original</th><th>Balance Due</th><th class="lbl">Remarks</th>';
-    BUCKETS.forEach(function(b){ th += '<th>'+esc(b.label)+'</th>'; });
-    th += '<th class="lbl">Branch</th>';
+    var th = '<th class="lbl"></th>';                     // expander column — not sortable
+    DATA_COLS.forEach(function(c){
+      var ar = sort.key===c.key ? (sort.dir<0?'▼':'▲') : '';
+      th += '<th class="'+(c.lbl?'lbl ':'')+'sortable" data-sk="'+c.key+'">'+esc(c.label)+
+            '<span class="ar">'+ar+'</span></th>';
+    });
     document.getElementById('adHead').innerHTML = th;
+  }
+  // Sort value for a data column. Credit Period uses the effective days (null → -1 so 'no window'
+  // rows sink); Remarks uses the effective (auto NOT DUE / OVERDUE) text; everything else the raw
+  // field. Numeric columns are compared as numbers, text with a numeric-aware locale compare (so
+  // Doc No sorts naturally). Returns the raw value; the comparator decides how to compare.
+  function dataSortVal(r, key){
+    if(key==='credit'){ var c=creditDays(r); return c==null ? -1 : c; }
+    if(key==='remark') return effRemark(r);
+    return r[key]==null ? '' : r[key];
+  }
+  // Sort a permutation of row indices (not ROWS itself) so the split-detail rows, which reference
+  // ROWS[i] by their original index, stay valid after sorting.
+  function sortedIndices(){
+    var idx = ROWS.map(function(_, i){ return i; });
+    if(!sort.key) return idx;
+    var col = null;
+    for(var k=0;k<DATA_COLS.length;k++){ if(DATA_COLS[k].key===sort.key){ col=DATA_COLS[k]; break; } }
+    if(!col) return idx;
+    var dir = sort.dir;
+    idx.sort(function(ia, ib){
+      var a = dataSortVal(ROWS[ia], col.key), b = dataSortVal(ROWS[ib], col.key);
+      if(col.num) return ((Number(a)||0) - (Number(b)||0)) * dir;
+      return String(a).localeCompare(String(b), undefined, {numeric:true}) * dir;
+    });
+    return idx;
   }
   function renderData(){
     renderDataHead();
     var body = document.getElementById('adBody');
-    if(!ROWS.length){ body.innerHTML='<tr><td class="ad-empty" colspan="14">No open documents for this customer.</td></tr>'; return; }
+    if(!ROWS.length){ body.innerHTML='<tr><td class="ad-empty" colspan="16">No open documents for this customer.</td></tr>'; return; }
     var t={original:0,balance_due:0}; BUCKETS.forEach(function(b){t[b.key]=0;});
-    var html = ROWS.map(function(r,i){
+    var html = sortedIndices().map(function(i){
+      var r = ROWS[i];
       t.original+=Number(r.original)||0; t.balance_due+=Number(r.balance_due)||0;
       BUCKETS.forEach(function(b){ t[b.key]+=Number(r[b.key])||0; });
-      var hay = ((r.doc_no||'')+' '+effRemark(r)+' '+(r.branch||'')+' '+(r.type||'')).toLowerCase();
+      var hay = ((r.doc_no||'')+' '+effRemark(r)+' '+(r.branch||'')+' '+(r.type||'')+' '+(r.item_type||'')).toLowerCase();
       var n = splitCount(r.splits);
       var st = statusOf(r), rmkCell;
       if(st==='notdue' && lockedNotDue(r)){
         rmkCell = '<input class="ad-rmk locked notdue" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
-          'value="NOT DUE" readonly title="Auto: within the '+GRACE+'-day grace of posting — locked until you change the days">';
+          'value="NOT DUE" readonly title="Auto: within the '+creditDays(r)+'-day credit period — locked until it is exceeded or you change the days">';
       } else if(st==='notdue'){
         var nv = ((r.remark||'').trim()) || 'NOT DUE';
         rmkCell = '<input class="ad-rmk notdue-edit" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
-          'value="'+attr(nv)+'" placeholder="NOT DUE" title="Partly paid within grace — editable">';
+          'value="'+attr(nv)+'" placeholder="NOT DUE" title="Partly paid within credit period — editable">';
       } else if(st==='overdue'){
         var ov = ((r.remark||'').trim()) || 'OVERDUE';
         rmkCell = '<input class="ad-rmk overdue" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
@@ -240,19 +331,23 @@
         rmkCell = '<input class="ad-rmk" type="text" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
           'value="'+attr(r.remark)+'" placeholder="Add remark…">';
       }
+      var cd = creditDays(r);
+      var cdInput = '<input class="ad-cd" type="number" min="0" step="1" inputmode="numeric" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
+        'value="'+(cd==null?'':cd)+'" placeholder="'+(r.item_type==='P+C'?'set days':'days')+'" title="Credit period (days from posting) for this invoice">';
       return '<tr data-i="'+i+'" data-hay="'+attr(hay)+'">'+
         '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><span class="material-icons">chevron_right</span></button>'+
           '<span class="ad-cnt"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></td>'+
         '<td>'+esc(r.type)+'</td><td>'+esc(r.doc_no)+'</td><td>'+esc(r.posting_date)+'</td><td>'+esc(r.due_date)+'</td>'+
+        '<td>'+pcBadge(r.item_type)+'</td><td>'+cdInput+'</td>'+
         '<td class="num">'+money(r.original)+'</td><td class="num bal">'+money(r.balance_due)+'</td>'+
         '<td>'+rmkCell+'</td>'+
         BUCKETS.map(function(b,bi){return '<td class="num bk'+bi+'">'+money(r[b.key])+'</td>';}).join('')+
         '<td>'+esc(r.branch)+'</td>'+
       '</tr>'+
       '<tr class="ad-det" data-det="'+i+'" style="display:none"><td></td>'+
-        '<td class="ad-detcell" colspan="13"><div class="sp-wrap" data-i="'+i+'"></div></td></tr>';
+        '<td class="ad-detcell" colspan="15"><div class="sp-wrap" data-i="'+i+'"></div></td></tr>';
     }).join('');
-    html += '<tr class="ad-tot"><td></td><td>TOTAL</td><td></td><td></td><td></td>'+
+    html += '<tr class="ad-tot"><td></td><td>TOTAL</td><td></td><td></td><td></td><td></td><td></td>'+
       '<td class="num">'+money(t.original)+'</td><td class="num">'+money(t.balance_due)+'</td><td></td>'+
       BUCKETS.map(function(b){return '<td class="num">'+money(t[b.key])+'</td>';}).join('')+
       '<td></td></tr>';
@@ -293,12 +388,24 @@
     return {order:order, map:map, gt:gt};
   }
   function renderPivot(){
-    var head = '<th class="lbl">Remark / Category (Row Labels)</th><th>Sum of Balance Due</th>';
-    BUCKETS.forEach(function(b){ head += '<th>Sum of '+esc(b.label)+'</th>'; });
+    var pcols = [{key:'label', label:'Remark / Category (Row Labels)', lbl:true},
+                 {key:'balance_due', label:'Sum of Balance Due', num:true}]
+                .concat(BUCKETS.map(function(b){ return {key:b.key, label:'Sum of '+b.label, num:true}; }));
+    var head = pcols.map(function(c){
+      var ar = pivotSort.key===c.key ? (pivotSort.dir<0?'▼':'▲') : '';
+      return '<th class="'+(c.lbl?'lbl ':'')+'sortable" data-sk="'+c.key+'">'+esc(c.label)+
+             '<span class="ar">'+ar+'</span></th>';
+    }).join('');
     document.getElementById('adHead').innerHTML = head;
     var body = document.getElementById('adBody');
     var P = buildCategoryPivot();
     if(!P.order.length){ body.innerHTML='<tr><td class="ad-empty" colspan="'+(2+BUCKETS.length)+'">No data to pivot.</td></tr>'; return; }
+    // Re-order rows by the clicked pivot column (label = numeric-aware text; else the summed value).
+    var ps = pivotSort;
+    P.order.sort(function(a,b){
+      if(ps.key==='label') return String(a).localeCompare(String(b), undefined, {numeric:true}) * ps.dir;
+      return ((P.map[a][ps.key]||0) - (P.map[b][ps.key]||0)) * ps.dir;
+    });
     var html = P.order.map(function(k){
       return '<tr><td class="lbl" style="font-weight:700;color:#1f2937">'+esc(k)+'</td>'+
         '<td class="num bal">'+money(P.map[k].balance_due)+'</td>'+
@@ -408,6 +515,17 @@
         .catch(function(){});
     }, 450);
   }
+  // Per-invoice credit period: persist the override (empty clears → back to the P/C default) and
+  // re-render so every row's NOT DUE / OVERDUE reflects its own credit period.
+  function saveCreditDays(inp){
+    var key = inp.getAttribute('data-key'), i = +inp.getAttribute('data-i');
+    var raw = (inp.value||'').trim(), ov = parseInt(raw,10);
+    ov = (raw!=='' && isFinite(ov) && ov>=0) ? ov : null;
+    if(i>=0 && ROWS[i]) ROWS[i]._cd = ov;
+    fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({code:CODE, row_key:'CREDITDAYS:'+key, remark:(ov==null?'':String(ov))})}).catch(function(){});
+    renderData(); if(!pivot) filterData();
+  }
 
   function filterData(){
     if(pivot) return;
@@ -435,7 +553,7 @@
       lines.push(['Type','Doc No','Posting Date','Due Date','Original','Balance Due','Remarks'].concat(BUCKETS.map(function(b){return b.label;})).concat(['Branch']).map(cell).join(','));
       ROWS.forEach(function(r){lines.push([r.type,r.doc_no,r.posting_date,r.due_date,rnd(r.original),rnd(r.balance_due),effRemark(r)].concat(BUCKETS.map(function(b){return rnd(r[b.key]);})).concat([r.branch]).map(cell).join(','));});
     }
-    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;a.download=(DATA.name||CODE||'Aging')+(pivot?'_pivot':'_detail')+'.csv';a.click();
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
@@ -525,6 +643,24 @@
       })
       .catch(function(){ alert('Clear failed — please try again.'); btn.disabled = false; });
   });
+  // ── Click a column header to sort (data & pivot views) ──
+  // Default direction: numeric columns descend first, text ascends. Re-click the same column to
+  // flip. Data-view re-render re-applies the active search filter.
+  document.getElementById('adHead').addEventListener('click', function(e){
+    var th = e.target.closest && e.target.closest('th[data-sk]'); if(!th) return;
+    var k = th.getAttribute('data-sk');
+    if(pivot){
+      if(pivotSort.key===k) pivotSort.dir = -pivotSort.dir;
+      else pivotSort = {key:k, dir:(k==='label')?1:-1};
+      renderPivot();
+    } else {
+      var col = null;
+      for(var i=0;i<DATA_COLS.length;i++){ if(DATA_COLS[i].key===k){ col=DATA_COLS[i]; break; } }
+      if(sort.key===k) sort.dir = -sort.dir;
+      else sort = {key:k, dir:(col && col.num) ? -1 : 1};
+      renderData(); filterData();
+    }
+  });
   document.getElementById('adSearch').addEventListener('input', filterData);
   document.getElementById('adBody').addEventListener('input', function(e){
     var t = e.target;
@@ -540,7 +676,9 @@
   // A <select> reliably fires 'change' (not all browsers fire 'input' on it), so mirror the
   // Category save here. Guarded to sp-cat only, so it never double-handles the text inputs.
   document.getElementById('adBody').addEventListener('change', function(e){
-    var t = e.target; if(!t.classList || !t.classList.contains('sp-cat')) return;
+    var t = e.target;
+    var cd = t.closest && t.closest('input.ad-cd'); if(cd){ saveCreditDays(cd); return; }
+    if(!t.classList || !t.classList.contains('sp-cat')) return;
     var line = t.closest('.sp-line'), wrap = t.closest('.sp-wrap'); if(!line || !wrap) return;
     var i = +wrap.getAttribute('data-i'), j = +line.getAttribute('data-j');
     var sp = (ROWS[i].splits||[])[j]; if(!sp) return;

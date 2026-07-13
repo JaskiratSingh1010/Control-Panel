@@ -161,21 +161,24 @@ def reconciliation_ledgers(request):
 @permission_flag_required('can_reconciliation')
 @require_http_methods(['GET'])
 def reconciliation_export(request):
-    """Download the current reconciliation (broken chains) as .xlsx."""
+    """Download the reconciliation (broken chains) as .xlsx. ALWAYS combines both seller companies
+    (Oil + Beverages) so a PO split across both reconciles in one sheet instead of showing a false
+    spread; each SO/A-R doc number is tagged with its company. (The on-screen tab stays per-company
+    via the toggle.) The schema is forced to 'both' regardless of the request, so a stale page that
+    still sends ?schema=oil can't accidentally produce a single-company export."""
     from .services.reconciliation_export import build_reconciliation_xlsx
     date_from = _valid_date(request.GET.get('date_from'))
     date_to = _valid_date(request.GET.get('date_to'))
     only = request.GET.get('only', 'broken')
-    schema = 'beverages' if request.GET.get('schema') == 'beverages' else 'oil'
     try:
-        content = build_reconciliation_xlsx(date_from=date_from, date_to=date_to, only=only, schema=schema)
+        content = build_reconciliation_xlsx(date_from=date_from, date_to=date_to, only=only, schema='both')
     except Exception:
         logger.exception('[inventory] reconciliation export failed')
         return HttpResponse('Could not build the export.', status=500)
     resp = HttpResponse(
         content,
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    company = 'Beverages' if schema == 'beverages' else 'Oil'
+    company = 'Oil+Beverages'
     fname = 'Wellness-Mart Reconciliation %s %s.xlsx' % (company, date.today().strftime('%d.%m.%Y'))
     resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
     return resp

@@ -135,12 +135,20 @@ def customer_aging_detail(request):
         aging_date = today
     code = (request.GET.get('code') or '').strip()
     name = (request.GET.get('name') or '').strip() or code
+    # Company: 'oil' (default) uses SAP_SCHEMA; 'mart' swaps to MART_SCHEMA and prefixes stored
+    # remarks with 'MART:' so they never collide with oil's for the same CardCode/TransId.
+    is_mart = (request.GET.get('company') or '').strip().lower() == 'mart'
+    schema = services.MART_SCHEMA if is_mart else None
+    rk_prefix = 'MART:' if is_mart else ''
     return render(request, 'realise/customer_aging_detail.html', {
         'sidebar_active': 'customer_aging',
         'detail_payload': {'code': code, 'name': name, 'aging_date': aging_date.isoformat(),
+                           'company': 'mart' if is_mart else 'oil',
                            'categories': services.AGING_REMARK_CATEGORIES,
                            'grace_days': services.get_aging_grace_days(code) if code else 0,
-                           'rows': services.get_customer_aging_detail(code, aging_date) if code else []},
+                           'rows': services.get_customer_aging_detail(
+                               code, aging_date, schema=schema, row_key_prefix=rk_prefix,
+                               classify=not is_mart) if code else []},
         'aging_date': aging_date.isoformat(),
         'aging_today': today.isoformat(),
     })
@@ -161,6 +169,38 @@ def api_customer_aging_beverages(request):
     if aging_date > today:
         aging_date = today
     return JsonResponse({'status': 'ok', **services.get_customer_aging_beverages(aging_date)})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['GET'])
+def api_customer_aging_oil_ar(request):
+    """Oil open-invoice RAW DATA rows (same shape as the Beverages endpoint) that back the oil
+    RAW DATA workspace on Customer Aging. ?as_of=YYYY-MM-DD (default today)."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:
+        aging_date = today
+    return JsonResponse({'status': 'ok', **services.get_customer_aging_oil_ar(aging_date)})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['GET'])
+def api_customer_aging_mart(request):
+    """Raw open-invoice aging rows for the Jivo Mart company, for the Mart toggle on Customer
+    Aging. Same shape/behaviour as the Beverages endpoint. ?as_of=YYYY-MM-DD (default today)."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:
+        aging_date = today
+    return JsonResponse({'status': 'ok', **services.get_customer_aging_mart(aging_date)})
 
 
 @permission_flag_required('can_customer_aging', json_response=True)
@@ -241,8 +281,12 @@ def _extract_doc_entries(table):
     together. A split's amount is taken from an explicit Amount column when present, else left None
     = 'allocate the document's full Balance Due' (resolved in bulk_update_aging_remarks). Document-
     total columns (Original/Balance/Total Amount) are NOT used as the split amount, so an exported
-    aging sheet re-uploaded with categories still allocates the balance, not the original."""
-    doc_i = rem_i = cat_i = amt_i = header_idx = None
+    aging sheet re-uploaded with categories still allocates the balance, not the original.
+
+    An optional 'Actual Sales Person' column (Beverages raw drill) is captured per doc as
+    entry['actual_sp'] when present, so a remark upload can also re-assign the actual sales
+    person; if the column is absent it is simply skipped (no actual_sp key set)."""
+    doc_i = rem_i = cat_i = amt_i = asp_i = header_idx = None
     for idx, row in enumerate(table):
         cols = [str(c or '').strip().lower() for c in row]
         d = next((j for j, c in enumerate(cols) if 'doc' in c and 'date' not in c), None)
@@ -250,6 +294,9 @@ def _extract_doc_entries(table):
             continue
         r = next((j for j, c in enumerate(cols) if 'remark' in c), None)
         cat = next((j for j, c in enumerate(cols) if 'categ' in c), None)
+        # Optional 'Actual Sales Person' override column — matched on 'actual' + sales/sp/person.
+        asp = next((j for j, c in enumerate(cols)
+                    if 'actual' in c and ('sales' in c or 'sp' in c or 'person' in c)), None)
         # Amount: prefer an exact split-amount header; else a contains-match that is NOT a
         # document-total column (Original/Balance/Total/Gross Amount) — so an EXPORTED aging
         # sheet (which carries Original/Balance amounts) is never mistaken for a split sheet.
@@ -261,7 +308,7 @@ def _extract_doc_entries(table):
         # A real header row = a Doc column plus a Remark or a Category column. An Amount column
         # ALONE does not make it a header (exported sheets carry Original/Balance amounts).
         if r is not None or cat is not None:
-            doc_i, rem_i, cat_i, amt_i, header_idx = d, r, cat, amt, idx
+            doc_i, rem_i, cat_i, amt_i, asp_i, header_idx = d, r, cat, amt, asp, idx
             break
     if header_idx is None:
         return None
@@ -283,8 +330,11 @@ def _extract_doc_entries(table):
         entry = out.setdefault(doc, {'remark': None, 'splits': []})
         note = cell(row, note_i)
         catv = cell(row, cat_src)
+        asp = cell(row, asp_i)                            # optional Actual Sales Person override
         if note:
             entry['remark'] = note
+        if asp:
+            entry['actual_sp'] = asp
         if catv:                                          # the value → a split (its category label)
             amt = None if amt_i is None else _parse_amount(row[amt_i] if amt_i < len(row) else '')
             entry['splits'].append({'category': catv, 'amount': amt, 'remark': ''})
@@ -346,6 +396,23 @@ def api_aging_remark_upload_beverages(request):
     except Exception as exc:
         return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
     result = services.bulk_update_beverages_remarks(_parse_as_of(request.POST.get('as_of')), doc_remarks)
+    status = 'error' if result.get('error') else 'ok'
+    return JsonResponse({'status': status, **result})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_upload_oil(request):
+    """Bulk-update Oil RAW DATA open-invoice Remarks from an uploaded .xlsx/.csv, matched on Doc No
+    (the code for each Doc No is resolved from the oil raw-invoice rows). multipart: file, as_of."""
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'status': 'error', 'error': 'file is required'}, status=400)
+    try:
+        doc_remarks = _parse_remark_upload(upload)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
+    result = services.bulk_update_oil_ar_remarks(_parse_as_of(request.POST.get('as_of')), doc_remarks)
     status = 'error' if result.get('error') else 'ok'
     return JsonResponse({'status': status, **result})
 
@@ -563,13 +630,16 @@ def _aggregate_channel_rows(raw_rows):
         card_name = str(row.get('CardName', '') or '').strip().upper()
         item_name = services._item_label(str(row.get('ItemCode', '') or '').strip().upper(),
                                           str(row.get('ItemName', '') or '').strip().upper())
-        key = (u_type, u_sub, u_main, state, sales_person, card_name, item_name)
+        # SKU = OITM.U_SKU (pack size, e.g. '1 LTR' / '500 MLS'), returned by the proc as
+        # "SKU". Carried per row so the Item-first drill can filter by SKU / Product.
+        sku = str(row.get('SKU', '') or '').strip().upper()
+        key = (u_type, u_sub, u_main, state, sales_person, card_name, item_name, sku)
         bucket = agg.get(key)
         if bucket is None:
             bucket = agg[key] = {
                 'u_type': u_type, 'u_sub_group': u_sub, 'u_main_group': u_main,
                 'state': state, 'sales_person': sales_person, 'card_name': card_name,
-                'item_name': item_name,
+                'item_name': item_name, 'sku': sku,
                 'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
@@ -610,14 +680,15 @@ def _aggregate_channel_month_rows(raw_rows):
         item_name = services._item_label(str(row.get('ItemCode', '') or '').strip().upper(),
                                           str(row.get('ItemName', '') or '').strip().upper())
         card_name = str(row.get('CardName', '') or '').strip().upper()
+        sku = str(row.get('SKU', '') or '').strip().upper()   # OITM.U_SKU pack size
         ym = '%s-%02d' % (year, mnum)
-        key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym)
+        key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym, sku)
         bucket = agg.get(key)
         if bucket is None:
             bucket = agg[key] = {
                 'u_type': u_type, 'main_group': u_main, 'state': state,
                 'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
-                'card_name': card_name, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
+                'card_name': card_name, 'sku': sku, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
                 'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)

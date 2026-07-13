@@ -3,38 +3,39 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:#f4f6fb !important}
+  .cp-main{background:var(--rz-bg) !important}
   .ag-wrap{max-width:1240px;margin:0 auto}
 
-  /* ── Header band ── */
-  .ag-hero{position:relative;overflow:hidden;border-radius:20px;padding:24px 28px;margin-bottom:20px;
-    background:linear-gradient(120deg,#4f46e5 0%,#6366f1 45%,#7c3aed 100%);
-    box-shadow:0 18px 40px rgba(79,70,229,.32)}
-  .ag-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
-    background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%)}
+  /* ── Header band (light) ── */
+  .ag-hero{position:relative;overflow:hidden;border-radius:18px;padding:22px 26px;margin-bottom:20px;
+    background:linear-gradient(120deg,#ffffff 0%,#fbfbff 55%,#f4f1ff 100%);
+    border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow-lg)}
+  .ag-hero::after{content:"";position:absolute;right:-50px;top:-50px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(124,58,237,.10),transparent 70%)}
   .ag-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
-  .ag-h1{font-size:28px;font-weight:900;color:#fff;margin:0;letter-spacing:-.5px;display:flex;align-items:center;gap:11px}
-  .ag-h1 .material-icons{font-size:30px;opacity:.92}
-  .ag-sub{margin:8px 0 0;font-size:13px;color:#e0e7ff;max-width:680px;line-height:1.5}
-  .ag-srcpill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.16);color:#fff;
-    border:1px solid rgba(255,255,255,.28);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
-  .ag-srcpill .material-icons{font-size:15px}
+  .ag-h1{font-size:26px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.3px;display:flex;align-items:center;gap:11px}
+  .ag-h1 .material-icons{font-size:28px;color:var(--rz-indigo)}
+  .ag-sub{margin:8px 0 0;font-size:13px;color:var(--rz-muted);max-width:680px;line-height:1.5}
+  .ag-srcpill{display:inline-flex;align-items:center;gap:7px;background:var(--rz-soft);color:var(--rz-indigo-deep);
+    border:1px solid var(--rz-soft-brd);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .ag-srcpill .material-icons{font-size:15px;color:var(--rz-indigo)}
 
-  /* ── KPI cards ── */
+  /* ── KPI cards (white + thin colour accent) ── */
   .ag-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
   @media(max-width:920px){.ag-kpis{grid-template-columns:repeat(2,1fr)}}
-  .ag-kpi{position:relative;overflow:hidden;border-radius:16px;padding:16px 18px;color:#fff;
-    box-shadow:0 10px 26px rgba(15,23,42,.14)}
-  .ag-kpi.k-total{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
-  .ag-kpi.k-cur{background:linear-gradient(135deg,#059669,#16a34a)}
-  .ag-kpi.k-over{background:linear-gradient(135deg,#e11d48,#dc2626)}
-  .ag-kpi.k-top{background:linear-gradient(135deg,#d97706,#f59e0b)}
-  .ag-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.92;
+  .ag-kpi{position:relative;overflow:hidden;border-radius:16px;padding:17px 18px 16px;color:var(--rz-ink);
+    background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
+  .ag-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .ag-kpi.k-total{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
+  .ag-kpi.k-cur{--kpi-acc:var(--rz-acc-green);--kpi-ic:#16a34a}
+  .ag-kpi.k-over{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
+  .ag-kpi.k-top{--kpi-acc:var(--rz-acc-amber);--kpi-ic:#d97706}
+  .ag-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);
     display:flex;align-items:center;gap:6px}
-  .ag-kpi-l .material-icons{font-size:15px}
-  .ag-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  .ag-kpi-m{font-size:11.5px;font-weight:600;opacity:.9;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ag-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;opacity:.16}
+  .ag-kpi-l .material-icons{font-size:15px;color:var(--kpi-ic,#6366f1)}
+  .ag-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;color:var(--rz-ink);font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .ag-kpi-m{font-size:11.5px;font-weight:600;color:var(--rz-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ag-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:74px !important;color:var(--kpi-ic,#6366f1);opacity:.08}
 
   /* ── Toolbar ── */
   .ag-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -66,7 +67,7 @@
   /* Balance-Due sign segmented control */
   .ag-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ag-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#64748b;padding:6px 12px;border-radius:8px;cursor:pointer}
-  .ag-seg button.on{background:#4338ca;color:#fff}
+  .ag-seg button.on{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:inset 0 0 0 1px var(--rz-soft-brd)}
   /* Conditions popup */
   .ag-cond{position:relative}
   .ag-cond.open .ag-cond-pop{display:block}
@@ -86,14 +87,14 @@
   .ag-lg .dot{width:11px;height:11px;border-radius:3px}
 
   /* ── Table ── */
-  .ag-card{background:#fff;border:1px solid #e8edf6;border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.09)}
+  .ag-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:18px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .ag-tw{overflow:auto;max-height:72vh}
   table.ag-tb{width:100%;border-collapse:collapse;font-size:13px}
-  table.ag-tb thead th{position:sticky;top:0;z-index:3;background:#0f172a;color:#fff;text-align:right;
-    font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:13px 15px;white-space:nowrap}
+  table.ag-tb thead th{position:sticky;top:0;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:13px 15px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.ag-tb thead th.lbl{text-align:left}
   table.ag-tb thead th .bk{display:inline-block;border-bottom:3px solid currentColor;padding-bottom:2px}
-  th.b0{color:#34d399}th.b1{color:#2dd4bf}th.b2{color:#fbbf24}th.b3{color:#fb923c}th.b4{color:#f87171}
+  th.b0{color:#059669}th.b1{color:#0d9488}th.b2{color:#d97706}th.b3{color:#ea580c}th.b4{color:#dc2626}
 
   table.ag-tb td{padding:0;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
   table.ag-tb td .cellpad{padding:11px 15px}
@@ -126,15 +127,25 @@
   .neg{color:#e11d48;font-weight:700}  /* credit / negative */
   .bal{font-weight:800;color:#0f172a}
 
+  /* B2B / B2C sub-section header (Mart only) */
+  tr.ag-segrow{display:none}
+  tr.ag-segrow.show{display:table-row}
+  tr.ag-segrow td{background:#f7f8fc;border-bottom:1px solid #eef2f7;font-weight:700;color:#334155}
+  tr.ag-segrow td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .ag-subname{display:flex;align-items:center;gap:9px;padding-left:24px}
+  .ag-subchip{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;letter-spacing:.4px;color:#fff;padding:2px 9px;border-radius:6px}
+  .ag-subchip.b2b{background:#4338ca}.ag-subchip.b2c{background:#0d9488}
+  .sub-cnt{font-size:11px;font-weight:700;color:#94a3b8}
+
   /* distribution bar */
   .ag-bar{display:flex;height:9px;width:120px;border-radius:5px;overflow:hidden;background:#eef2f7}
   .ag-bar span{height:100%}
 
   /* total row */
-  tr.ag-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:2}
+  tr.ag-tot td{position:sticky;bottom:0;background:var(--rz-total-bg);color:var(--rz-ink);font-weight:900;border-top:2px solid var(--rz-total-brd);z-index:2}
   tr.ag-tot td.num{font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  tr.ag-tot .v0{color:#64748b}
-  tr.ag-tot .neg{color:#fda4af}
+  tr.ag-tot .v0{color:var(--rz-faint)}
+  tr.ag-tot .neg{color:var(--rz-neg)}
 
   .ag-empty{padding:40px;text-align:center;color:#7b8794}
   .ag-foot{font-size:11.5px;color:#94a3b8;margin:12px 2px 0;display:flex;gap:6px;align-items:center}
@@ -145,43 +156,88 @@
   .ag-cf{border:0;border-left:1px solid #eef2f6;background:#fff;color:#475569;font-family:inherit;font-size:12px;font-weight:800;padding:9px 15px;cursor:pointer}
   .ag-cf:first-child{border-left:0}
   .ag-cf:hover:not(.on){background:#f6f2fc}
-  .ag-cf.on{background:#7c3aed;color:#fff}
-  /* Raw-invoice drill button on the Beverages Sales-Person rows */
-  .ag-rawbtn{display:inline-flex;align-items:center;gap:4px;margin-left:10px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;
-    font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.3px;padding:3px 9px;border-radius:999px;cursor:pointer}
-  .ag-rawbtn:hover{background:#e0e7ff;border-color:#a5b4fc}
-  .ag-rawbtn .material-icons{font-size:13px}
-
-  /* ── Raw invoices modal (Excel-like) ── */
-  .agrx{display:none;position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.55);padding:3vh 2vw}
+  .ag-cf.on{background:var(--rz-soft);color:var(--rz-indigo-deep)}
+  /* ── RAW DATA workspace (Excel-like) — inline, replaces the aging table ── */
+  .agrx{display:none}
   .agrx.show{display:block}
-  .agrx-panel{display:flex;flex-direction:column;height:94vh;max-width:1500px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 30px 70px rgba(2,6,23,.5)}
-  .agrx-head{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid #eef2f6;background:#0f172a}
-  .agrx-title{font-size:15px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
-  .agrx-search{flex:1;min-width:150px;border:1px solid #334155;background:#1e293b;color:#fff;border-radius:9px;padding:8px 12px;font-family:inherit;font-size:13px;outline:none}
-  .agrx-search::placeholder{color:#94a3b8}
-  .agrx-count{font-size:12px;font-weight:700;color:#cbd5e1;white-space:nowrap}
-  .agrx-btn{border:0;background:#334155;color:#fff;border-radius:9px;padding:8px 13px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
-  .agrx-btn:hover{background:#475569}
-  .agrx-x{border:0;background:transparent;color:#cbd5e1;font-size:20px;font-weight:800;cursor:pointer;line-height:1;padding:4px 8px}
-  .agrx-x:hover{color:#fff}
+  .agrx-panel{display:flex;flex-direction:column;height:72vh;min-height:440px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow-lg)}
+  .agrx-head{display:flex;align-items:center;flex-wrap:wrap;gap:9px 12px;padding:13px 18px;border-bottom:1px solid var(--rz-line);background:var(--rz-head-bg)}
+  .agrx-title{font-size:15px;font-weight:800;color:var(--rz-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+  .agrx-search{flex:1;min-width:150px;border:1px solid #e2e8f0;background:#fff;color:var(--rz-ink);border-radius:9px;padding:8px 12px;font-family:inherit;font-size:13px;outline:none}
+  .agrx-search:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .agrx-search::placeholder{color:var(--rz-faint)}
+  .agrx-count{font-size:12px;font-weight:700;color:var(--rz-muted);white-space:nowrap}
+  .agrx-btn{border:1px solid #e2e8f0;background:#fff;color:var(--rz-indigo-deep);border-radius:9px;padding:8px 13px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .agrx-btn:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
+  .agrx-x{border:0;background:transparent;color:var(--rz-muted);font-size:20px;font-weight:800;cursor:pointer;line-height:1;padding:4px 8px}
+  .agrx-x:hover{color:var(--rz-ink)}
   .agrx-tw{overflow:auto;flex:1}
   table.agrx-tb{border-collapse:collapse;font-size:12.5px;white-space:nowrap;min-width:100%}
-  table.agrx-tb thead th{position:sticky;top:0;z-index:2;background:#1e293b;color:#fff;text-align:left;font-size:10.5px;font-weight:800;
-    letter-spacing:.3px;text-transform:uppercase;padding:9px 12px;cursor:pointer;user-select:none}
+  table.agrx-tb thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:left;font-size:10.5px;font-weight:800;
+    letter-spacing:.3px;text-transform:uppercase;padding:9px 12px;cursor:pointer;user-select:none;border-bottom:1px solid var(--rz-line)}
   table.agrx-tb thead th.num{text-align:right}
   table.agrx-tb thead th .ar{font-size:9px;margin-left:4px;opacity:.7}
-  table.agrx-tb thead tr.agrx-filt th{position:sticky;top:34px;z-index:2;background:#334155;padding:5px 8px;cursor:default}
-  table.agrx-tb thead tr.agrx-filt input{width:100%;box-sizing:border-box;min-width:70px;border:1px solid #475569;background:#0f172a;color:#fff;
+  table.agrx-tb thead tr.agrx-filt th{position:sticky;top:34px;z-index:2;background:#eef1f6;padding:5px 8px;cursor:default}
+  table.agrx-tb thead tr.agrx-filt input{width:100%;box-sizing:border-box;min-width:70px;border:1px solid #d7dce6;background:#fff;color:var(--rz-ink);
     border-radius:6px;padding:4px 7px;font-family:inherit;font-size:11.5px;outline:none}
   table.agrx-tb tbody td{padding:8px 12px;border-bottom:1px solid #eef2f6;color:#334155}
   table.agrx-tb tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.agrx-tb tbody tr:nth-child(even) td{background:#f8fafc}
   table.agrx-tb tbody tr:hover td{background:#eef2ff}
   .agrx-empty{padding:30px;text-align:center;color:#7b8794}
-  .agrx-rmk{width:100%;min-width:160px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-family:inherit;font-size:12px;color:#0f172a;outline:none;background:#fff}
-  .agrx-rmk:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.15)}
-  .agrx-rmk.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
+  .agrx-rmk,.agrx-sp{width:100%;min-width:160px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-family:inherit;font-size:12px;color:#0f172a;outline:none;background:#fff}
+  .agrx-rmk:focus,.agrx-sp:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.15)}
+  .agrx-rmk.saved,.agrx-sp.saved{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.16)}
+
+  /* ── RAW DATA workspace: tabs, panes, drill-by picker, pivot ── */
+  .agrx-tabs{display:inline-flex;background:#eef1f6;border:1px solid #e2e8f0;border-radius:9px;padding:2px;gap:2px}
+  .agrx-tabs button{border:0;background:transparent;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.2px;
+    padding:6px 13px;border-radius:7px;cursor:pointer}
+  .agrx-tabs button.on{background:#fff;color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .agrx-tabs button:not(.on):hover{color:var(--rz-ink)}
+  .agrx-seg{display:inline-flex;align-items:center;background:#eef1f6;border:1px solid #e2e8f0;border-radius:9px;padding:2px;gap:2px}
+  .agrx-seg-lbl{font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--rz-faint);padding:0 6px 0 4px}
+  .agrx-seg button{border:0;background:transparent;color:var(--rz-muted);font-family:inherit;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:7px;cursor:pointer}
+  .agrx-seg button.on{background:#fff;color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .agrx-seg button:not(.on):hover{color:var(--rz-ink)}
+  .agrx-pane{display:none;flex:1;min-height:0;flex-direction:column}
+  .agrx-pane.on{display:flex}
+  /* Drill-by picker (Pivot tab) */
+  .agrx-drill{flex:1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:150px}
+  .agrx-drill .dlbl{font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#94a3b8;white-space:nowrap}
+  .agrx-add{position:relative}
+  .agrx-add>button{display:inline-flex;align-items:center;gap:8px;border:1px solid #e2e8f0;background:#fff;color:var(--rz-body);border-radius:9px;
+    padding:6px 11px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;max-width:340px}
+  .agrx-add>button:hover{border-color:var(--rz-indigo);color:var(--rz-ink)}
+  .agrx-add>button #agDrillLbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .agrx-add .agrx-caret{color:#94a3b8;font-size:11px}
+  .agrx-add-pop{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:5;background:#fff;border:1px solid #e2e8f0;
+    border-radius:10px;box-shadow:0 18px 40px rgba(2,6,23,.32);padding:6px;max-height:320px;overflow:auto;min-width:200px}
+  .agrx-add.open .agrx-add-pop{display:block}
+  .agrx-add-head{display:flex;justify-content:flex-end;padding:2px 6px 6px;border-bottom:1px solid #eef2f6;margin-bottom:4px}
+  .agrx-add-head a{font-size:11.5px;font-weight:800;color:#6366f1;cursor:pointer}
+  .agrx-add-head a:hover{text-decoration:underline}
+  label.agrx-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:#334155;cursor:pointer;white-space:nowrap}
+  label.agrx-opt:hover{background:#eef2ff;color:#4338ca}
+  label.agrx-opt input{margin:0;cursor:pointer}
+  label.agrx-opt .agrx-ord{font-size:10px;font-weight:800;color:#4338ca;background:#e0e7ff;border-radius:999px;padding:1px 6px}
+  /* Pivot table (reuses .agrx-tb look) */
+  table.agrx-piv{border-collapse:collapse;font-size:12.5px;white-space:nowrap;min-width:100%}
+  table.agrx-piv thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:10.5px;font-weight:800;
+    letter-spacing:.3px;text-transform:uppercase;padding:9px 12px;cursor:pointer;user-select:none;border-bottom:1px solid var(--rz-line)}
+  table.agrx-piv thead th.lbl{text-align:left}
+  table.agrx-piv thead th .ar{font-size:9px;margin-left:4px;opacity:.7}
+  table.agrx-piv tbody td{padding:7px 12px;border-bottom:1px solid #eef2f6;color:#334155}
+  table.agrx-piv tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.agrx-piv tbody td.lbl{cursor:default}
+  table.agrx-piv tbody tr.pv-open>td.lbl,table.agrx-piv tbody tr:has(.pv-tw)>td.lbl{cursor:pointer}
+  table.agrx-piv tbody tr:hover td{background:#f6f7fb}
+  .pv-tw{display:inline-block;width:12px;font-size:9px;color:#64748b;transition:transform .12s}
+  .pv-name{font-weight:700;color:#1f2937}
+  .pv-cnt{margin-left:8px;font-size:11px;font-weight:700;color:#7c3aed;background:#f3e8ff;border-radius:999px;padding:1px 7px}
+  table.agrx-piv tbody td.pv-rmk{color:#6d28d9;font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+  table.agrx-piv tbody tr.pv-tot td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;border-top:2px solid var(--rz-total-brd);position:sticky;bottom:0}
+  table.agrx-piv tbody tr.pv-tot td.num{color:var(--rz-ink)}
 </style>
 {% endblock %}
 
@@ -203,6 +259,7 @@
     <div class="ag-cof" id="agCo" title="Switch company">
       <button type="button" class="ag-cf on" data-co="oil">Oil</button>
       <button type="button" class="ag-cf" data-co="bev">Beverages</button>
+      <button type="button" class="ag-cf" data-co="mart">Mart</button>
     </div>
     <label class="ag-asof" title="Aging date — balances as of this date">
       <span class="material-icons">event</span>
@@ -249,6 +306,11 @@
       <button type="button" data-sign="pos">Positive</button>
       <button type="button" data-sign="neg">Negative</button>
     </div>
+    <div class="ag-seg" id="agSeg" title="B2B = has a GSTIN on file · B2C = none (Mart)" style="display:none">
+      <button type="button" data-seg="both" class="on">Both</button>
+      <button type="button" data-seg="b2b">B2B</button>
+      <button type="button" data-seg="b2c">B2C</button>
+    </div>
     <div class="ag-cond" id="agCond">
       <button type="button" class="ag-btn" id="agCondBtn"><span class="material-icons">tune</span><span id="agCondLabel">Conditions</span></button>
       <div class="ag-cond-pop" id="agCondPop">
@@ -271,7 +333,7 @@
     <button type="button" class="ag-btn" id="agCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
     <button type="button" class="ag-btn" id="agExport"><span class="material-icons">download</span>Export Excel</button>
     <button type="button" class="ag-btn" id="agExportDetail" title="Every open document + remarks for the filtered parties, in one file"><span class="material-icons">description</span><span id="agExportDetailLbl">Export Detail</span></button>
-    <button type="button" class="ag-btn" id="agUploadBev" title="Bulk-update Beverages remarks from an Excel/CSV, matched by Doc No (columns: Doc No | Remarks)" style="display:none"><span class="material-icons">upload</span>Upload Remarks</button>
+    <button type="button" class="ag-btn" id="agRawData" title="Full raw open-invoice data — Excel-like table, customizable pivot & remark upload" style="display:none"><span class="material-icons">table_view</span>RAW DATA</button>
     <input type="file" id="agUploadBevFile" accept=".xlsx,.csv" style="display:none">
     <div class="ag-legend" id="agLegend"></div>
   </div>
@@ -291,19 +353,44 @@
       <b>As of</b> date to age to any point in time. Use the Balance‑Due sign filter and
       <b>Conditions</b> to narrow rows by amount.</span>
   </div>
-</div>
 
-<!-- Raw open-invoice drill for a Beverages Sales Person / Customer (Excel-like) -->
-<div class="agrx" id="agRawModal">
+  <!-- RAW DATA workspace (Beverages) — inline; shown in place of the aging table -->
+  <div class="agrx" id="agRawModal">
   <div class="agrx-panel">
     <div class="agrx-head">
-      <div class="agrx-title" id="agRawTitle">Raw invoices</div>
+      <div class="agrx-title" id="agRawTitle">RAW DATA</div>
+      <div class="agrx-tabs" id="agRawTabs">
+        <button type="button" data-tab="table" class="on">Raw Table</button>
+        <button type="button" data-tab="pivot">Pivot</button>
+      </div>
       <input type="text" id="agRawSearch" class="agrx-search" placeholder="Search all columns…" autocomplete="off">
-      <span class="agrx-count" id="agRawCount"></span>
+      <div class="agrx-drill" id="agRawDrill" style="display:none">
+        <span class="dlbl">Drill by</span>
+        <span class="agrx-add" id="agRawDrillAdd">
+          <button type="button" id="agDrillBtn"><span id="agDrillLbl">—</span><span class="agrx-caret">▾</span></button>
+          <div class="agrx-add-pop" id="agRawDrillPop">
+            <div class="agrx-add-head"><a data-act="clear">Clear</a></div>
+            <div id="agDrillList"></div>
+          </div>
+        </span>
+      </div>
+      <span id="agPivTools" style="display:none">
+        <span class="agrx-seg" id="agPivSign" title="Filter by Original Outstanding sign">
+          <span class="agrx-seg-lbl">Outstanding</span>
+          <button type="button" data-sign="both" class="on">Both</button>
+          <button type="button" data-sign="pos">Positive</button>
+          <button type="button" data-sign="neg">Negative</button>
+        </span>
+        <button type="button" class="agrx-btn" id="agPivExpand">Expand all</button>
+        <button type="button" class="agrx-btn" id="agPivCollapse">Collapse all</button>
+      </span>
+      <button type="button" class="agrx-btn" id="agRawUpload" title="Bulk-update remarks from an Excel/CSV, matched by Doc No (columns: Doc No | Remarks)">Upload Remarks</button>
       <button type="button" class="agrx-btn" id="agRawExport">Export CSV</button>
       <button type="button" class="agrx-x" id="agRawClose" title="Close">&times;</button>
     </div>
-    <div class="agrx-tw"><table class="agrx-tb" id="agRawTable"></table></div>
+    <div class="agrx-pane on" id="agRawPaneTable"><div class="agrx-tw"><table class="agrx-tb" id="agRawTable"></table></div></div>
+    <div class="agrx-pane" id="agRawPanePivot"><div class="agrx-tw"><table class="agrx-piv" id="agPivTable"></table></div></div>
+  </div>
   </div>
 </div>
 {% endblock %}
@@ -321,6 +408,7 @@
   var KPI     = DATA.kpis || {};
   var selectedFormats = [];   // [] = all formats; else only these show
   var signSel = 'both';       // 'both' | 'pos' | 'neg' — Balance Due sign filter
+  var segSel  = 'both';       // 'both' | 'b2b' | 'b2c' — Mart B2B/B2C (GSTIN) segment filter
   var cond = {op:'', a:0, b:0};   // numeric Balance Due condition (gte / lte / between)
   var DETAIL_URL = "{% url 'realise:customer_aging_detail' %}";
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
@@ -336,19 +424,38 @@
     for(var i=0;i<toks.length;i++){ if(selectedRemarks.indexOf(toks[i])!==-1) return true; }
     return false;
   }
+  // Mart B2B/B2C segment filter. isB2B is a boolean (customer has a GSTIN on file).
+  // Only constrains when we're on Mart and a specific segment is chosen.
+  function segPass(isB2B){
+    if(company!=='mart' || segSel==='both') return true;
+    return segSel==='b2b' ? !!isB2B : !isB2B;
+  }
   var ASOF = DATA.aging_date || '';
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
   var COLORS  = BUCKETS.map(function(b){return b.color;});
   var NCOL    = 3 + BUCKETS.length;   // label + original + balance + buckets
 
-  // ── Oil / Beverages company switch ──────────────────────────────────────────
-  // Oil = the embedded B1 pivot (OIL_DATA). Beverages = open A/R invoices fetched on demand,
-  // pivoted client-side (Sales Person → Customer) so the per-day multi-select can re-aggregate.
+  // ── Oil / Beverages / Mart company switch ───────────────────────────────────
+  // Oil  = the embedded B1 reconciliation pivot (OIL_DATA).
+  // Mart = the SAME B1 aging, computed against JIVO_MART_HANADB and fetched on demand, then
+  //        rendered with the identical Format→customers pivot (ties to SAP's receivables total).
+  // Beverages = open A/R invoices fetched on demand, pivoted client-side (Sales Person → Customer)
+  //        with a per-day multi-select + raw drill. Only Beverages uses the "A/R" paths (isAR()).
   var OIL_DATA = DATA;                 // keep the oil payload to restore on toggle-back
   var company = 'oil';
-  var BEV_URL = "{% url 'realise:api_customer_aging_beverages' %}";
-  var UPLOAD_BEV_URL = "{% url 'realise:api_aging_remark_upload_beverages' %}";
-  var RAW_BEV = null, RAW_BEV_ASOF = null, BEV_ERR = null;
+  var CO_CFG = {
+    // Oil keeps its B1 pivot as the main view; this config only feeds the on-demand RAW DATA
+    // workspace (open-invoice list), so oil never uses the isAR() main-view A/R path.
+    oil:  {url:"{% url 'realise:api_customer_aging_oil_ar' %}", upload:"{% url 'realise:api_aging_remark_upload_oil' %}",
+           docPrefix:'OILDOC:', spPrefix:'OILSP:', pill:'Oil A/R', name:'Oil'},
+    bev:  {url:"{% url 'realise:api_customer_aging_beverages' %}", upload:"{% url 'realise:api_aging_remark_upload_beverages' %}",
+           docPrefix:'BEVDOC:',  spPrefix:'BEVSP:',  pill:'Beverages A/R', name:'Beverages'}
+  };
+  var MART_URL = "{% url 'realise:api_customer_aging_mart' %}";
+  function isAR(){ return company==='bev'; }         // beverages raw-invoice view only
+  function arCfg(){ return CO_CFG[company] || CO_CFG.bev; }
+  var RAW_BEV = null, RAW_BEV_ASOF = null, RAW_BEV_CO = null, BEV_ERR = null;
+  var MART_DATA = null, MART_ASOF = null;            // cached Mart B1 payload (oil-shaped)
   var BEV_DAYS = [];                   // distinct InDaysDifference values (ascending)
   var BEV_DOCS_BY_CODE = {};           // customer code → joined doc-nos, for the main-search Doc No match
   var selectedDays = null;             // null = all; else {day:true} of INCLUDED days
@@ -385,7 +492,7 @@
     }).sort(function(a,b){return b.balance_due-a.balance_due;});
     roundRow(total);
     GROUPS=groups; TOTAL=total;
-    DATA={company:'bev', groups:groups, total:total, buckets:BUCKETS, error:BEV_ERR, aging_date:ASOF};
+    DATA={company:company, groups:groups, total:total, buckets:BUCKETS, error:BEV_ERR, aging_date:ASOF};
   }
 
   function restoreOil(){
@@ -393,20 +500,56 @@
   }
 
   function loadBev(){
-    var asof=document.getElementById('agAsOf').value||'';
-    if(RAW_BEV && RAW_BEV_ASOF===asof){ buildBev(); rerenderAll(); return; }
-    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading beverages…</td></tr>';
-    fetch(BEV_URL+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+    var co=company, asof=document.getElementById('agAsOf').value||'';
+    // Reuse the buffer only when it holds THIS company's rows for THIS date (bev & mart share it).
+    if(RAW_BEV && RAW_BEV_ASOF===asof && RAW_BEV_CO===co){ buildBev(); rerenderAll(); refreshRawIfOpen(); return; }
+    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading '+esc(arCfg().name.toLowerCase())+'…</td></tr>';
+    fetch(arCfg().url+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{};})
       .then(function(p){
-        if(company!=='bev') return;
-        RAW_BEV=p.rows||[]; RAW_BEV_ASOF=asof; BEV_ERR=p.error||null; ASOF=p.aging_date||asof;
+        if(company!==co) return;
+        RAW_BEV=p.rows||[]; RAW_BEV_ASOF=asof; RAW_BEV_CO=co; BEV_ERR=p.error||null; ASOF=p.aging_date||asof;
         var ds={}; RAW_BEV.forEach(function(r){ds[r.days]=1;});
         BEV_DAYS=Object.keys(ds).map(Number).sort(function(a,b){return a-b;});
         selectedDays=null;
-        buildBev(); rerenderAll();
+        buildBev(); rerenderAll(); refreshRawIfOpen();
       })
-      .catch(function(){ if(company==='bev'){ BEV_ERR='load failed'; RAW_BEV=[]; BEV_DAYS=[]; selectedDays=null; buildBev(); rerenderAll(); } });
+      .catch(function(){ if(company===co){ BEV_ERR='load failed'; RAW_BEV=[]; RAW_BEV_CO=co; BEV_DAYS=[]; selectedDays=null; buildBev(); rerenderAll(); } });
+  }
+
+  // Oil RAW DATA: fetch the open-invoice list into the shared RAW_BEV buffer on demand, WITHOUT
+  // rebuilding the main oil pivot (which stays the B1 reconciliation view). Feeds the workspace only.
+  function loadOilRaw(cb){
+    var co=company, asof=document.getElementById('agAsOf').value||'';
+    if(RAW_BEV && RAW_BEV_ASOF===asof && RAW_BEV_CO===co){ cb&&cb(); return; }
+    fetch(CO_CFG.oil.url+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{};})
+      .then(function(p){
+        if(company!==co) return;
+        RAW_BEV=p.rows||[]; RAW_BEV_ASOF=asof; RAW_BEV_CO=co; BEV_ERR=p.error||null;
+        var ds={}; RAW_BEV.forEach(function(r){ds[r.days]=1;});
+        BEV_DAYS=Object.keys(ds).map(Number).sort(function(a,b){return a-b;});
+        selectedDays=null;
+        cb&&cb();
+      })
+      .catch(function(){ if(company===co){ BEV_ERR='load failed'; RAW_BEV=[]; RAW_BEV_ASOF=asof; RAW_BEV_CO=co; cb&&cb(); } });
+  }
+
+  // Mart — fetch the server-computed B1 aging payload (oil-shaped: {groups, total}) and render
+  // it exactly like Oil. Cached per as-of date so a toggle back is instant.
+  function applyMart(p, asof){
+    MART_DATA={company:'mart', groups:p.groups||[], total:p.total||{}, buckets:BUCKETS, error:p.error||null, aging_date:p.aging_date||asof};
+    MART_ASOF=asof;
+    DATA=MART_DATA; GROUPS=DATA.groups; TOTAL=DATA.total; ASOF=DATA.aging_date;
+  }
+  function loadMart(){
+    var asof=document.getElementById('agAsOf').value||'';
+    if(MART_DATA && MART_ASOF===asof){ DATA=MART_DATA; GROUPS=DATA.groups||[]; TOTAL=DATA.total||{}; ASOF=DATA.aging_date||asof; rerenderAll(); return; }
+    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading mart…</td></tr>';
+    fetch(MART_URL+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{};})
+      .then(function(p){ if(company!=='mart') return; applyMart(p, asof); rerenderAll(); })
+      .catch(function(){ if(company==='mart'){ applyMart({error:'load failed'}, asof); rerenderAll(); } });
   }
 
   // Full refresh after a company switch or a beverages (re)load.
@@ -415,17 +558,22 @@
   function renderPivotOnly(){ buildBev(); renderBody(); applyView(); }
 
   function updateCompanyUI(){
-    var bev = company==='bev';
-    document.getElementById('agSearch').placeholder = bev ? 'Search customer or doc no…' : 'Search customer or format…';
-    document.getElementById('agDays').style.display = bev ? '' : 'none';
-    document.getElementById('agRem').style.display  = bev ? 'none' : '';
-    document.getElementById('agExportDetail').style.display = bev ? 'none' : '';
-    document.getElementById('agUploadBev').style.display = bev ? '' : 'none';
+    var ar = isAR();                                  // beverages raw-invoice view
+    document.getElementById('agSearch').placeholder = ar ? 'Search customer or doc no…' : 'Search customer or format…';
+    document.getElementById('agDays').style.display = ar ? '' : 'none';
+    // RAW DATA workspace: Beverages (its main view) + Oil (fetched on demand, pivot stays B1).
+    document.getElementById('agRawData').style.display = (company==='bev'||company==='oil') ? '' : 'none';
+    // B2B/B2C segment split + filter is Mart-only (only Mart rows carry a GSTIN-based segment).
+    document.getElementById('agSeg').style.display = company==='mart' ? '' : 'none';
+    // Remarks filter + whole-book detail export are oil-only (built from oil's stored remarks / schema).
+    document.getElementById('agRem').style.display  = company==='oil' ? '' : 'none';
+    document.getElementById('agExportDetail').style.display = company==='oil' ? '' : 'none';
     document.getElementById('agFmtLabel').textContent =
-      selectedFormats.length ? selectedFormats.length+(bev?' sales person':' format')+(selectedFormats.length>1?'s':'')
-                             : (bev?'All sales persons':'All formats');
+      selectedFormats.length ? selectedFormats.length+(ar?' sales person':' format')+(selectedFormats.length>1?'s':'')
+                             : (ar?'All sales persons':'All formats');
     var pill=document.querySelector('.ag-srcpill');
-    if(pill) pill.innerHTML='<span class="material-icons">bolt</span>Live · '+(bev?'Beverages A/R':'SAP B1')+' · as of '+esc(ASOF);
+    var pillTxt = company==='oil' ? 'SAP B1' : (company==='mart' ? 'Mart · SAP B1' : arCfg().pill);
+    if(pill) pill.innerHTML='<span class="material-icons">bolt</span>Live · '+pillTxt+' · as of '+esc(ASOF);
   }
 
   // Per-format accent palette (cycled) — keeps the pivot colourful & scannable.
@@ -453,28 +601,31 @@
 
   // ── KPIs (recomputed from the currently-filtered customer set) ──
   function round1(n){ return Math.round((Number(n)||0)*10)/10; }
+  // Does one customer pass the active search + remark + Balance-Due sign + numeric condition
+  // filters? (The Format multi-select is applied per-group by the callers.) Shared by the KPIs,
+  // the group/grand-total re-summing, and the row-visibility pass so they never disagree.
+  function custDataPass(c, format, q){
+    if(q){
+      var hit = (c.name+' '+format).toLowerCase().indexOf(q)!==-1;
+      if(!hit && isAR()){ var d=BEV_DOCS_BY_CODE[c.code]; hit=!!d && d.indexOf(q)!==-1; }
+      if(!hit) return false;
+    }
+    if(!remarkPass(c.code)) return false;
+    if(!segPass(c.segment==='B2B')) return false;
+    var bd = Number(c.balance_due)||0;
+    if(signSel==='pos' && !(bd>0)) return false;
+    if(signSel==='neg' && !(bd<0)) return false;
+    if(cond.op==='gte' && !(bd>=cond.a)) return false;
+    if(cond.op==='lte' && !(bd<=cond.a)) return false;
+    if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return false;
+    return true;
+  }
   // Customers passing the active Format multi-select + search + sign + condition filters.
   function filteredCustomers(){
-    var q = (document.getElementById('agSearch').value||'').trim().toLowerCase();
-    var useFmt = selectedFormats.length>0;
-    var out = [];
+    var q = currentQuery(), useFmt = selectedFormats.length>0, out = [];
     GROUPS.forEach(function(g){
       if(useFmt && selectedFormats.indexOf(g.format)===-1) return;
-      g.customers.forEach(function(c){
-        if(q){
-          var hit = (c.name+' '+g.format).toLowerCase().indexOf(q)!==-1;
-          if(!hit && company==='bev'){ var d=BEV_DOCS_BY_CODE[c.code]; hit=!!d && d.indexOf(q)!==-1; }
-          if(!hit) return;
-        }
-        if(!remarkPass(c.code)) return;
-        var bd = Number(c.balance_due)||0;
-        if(signSel==='pos' && !(bd>0)) return;
-        if(signSel==='neg' && !(bd<0)) return;
-        if(cond.op==='gte' && !(bd>=cond.a)) return;
-        if(cond.op==='lte' && !(bd<=cond.a)) return;
-        if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return;
-        out.push({c:c, format:g.format});
-      });
+      g.customers.forEach(function(c){ if(custDataPass(c, g.format, q)) out.push({c:c, format:g.format}); });
     });
     return out;
   }
@@ -499,7 +650,7 @@
     var K = computeKpis();
     var cards = [
       {c:'k-total',ic:'account_balance',l:'Total Outstanding',v:abbr(K.total_outstanding),
-        m:(K.customer_count||0)+' customers · '+(K.format_count||0)+(company==='bev'?' sales persons':' formats')},
+        m:(K.customer_count||0)+' customers · '+(K.format_count||0)+(isAR()?' sales persons':' formats')},
       {c:'k-cur',ic:'check_circle',l:'Current (0–30 d)',v:abbr(K.current),
         m:(K.current_pct||0)+'% of book'},
       {c:'k-over',ic:'warning',l:'Overdue 90+ days',v:abbr(K.overdue_90),
@@ -518,7 +669,7 @@
 
   // ── Header + legend ──
   function renderHead(){
-    var th = '<th class="lbl">'+(company==='bev'?'Sales Person / Customer':'Format / Customer')+'</th><th>Original</th><th>Balance Due</th>';
+    var th = '<th class="lbl">'+(isAR()?'Sales Person / Customer':'Format / Customer')+'</th><th>Original</th><th>Balance Due</th>';
     BUCKETS.forEach(function(b,i){ th += '<th class="b'+i+'"><span class="bk">'+esc(b.label)+'</span></th>'; });
     document.getElementById('agHead').innerHTML = th;
 
@@ -546,39 +697,68 @@
   }
 
   // ── Body ──
+  // One customer <tr>. `seg` ('b2b'|'b2c') is set only for Mart, where each format is split
+  // into B2B (has GSTIN) and B2C sub-sections; it drives the segment filter and sub-totals.
+  function custRow(c, g, gi, seg){
+    var bdCell = isAR()
+      ? '<td class="num"><div class="cellpad bal"><a class="ag-bd-link ag-rawlink" title="Open raw invoices" data-scope="cust" data-code="'+esc(c.code)+'" data-name="'+esc(c.name)+'">'+money(c.balance_due)+'</a></div></td>'
+      : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+(company==='mart'?'&company=mart':'')+'">'+money(c.balance_due)+'</a></div></td>';
+    return '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'"'+(seg?' data-seg="'+seg+'"':'')+'>'+
+      '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
+      '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
+      bdCell+
+      bucketCells(c,false)+
+    '</tr>';
+  }
+  // Sum a bucket-carrying row set (for the B2B/B2C sub-total header).
+  function sumRows(list){
+    var s = emptyB();
+    list.forEach(function(c){ s.original+=Number(c.original)||0; s.balance_due+=Number(c.balance_due)||0;
+      BUCKET_KEYS.forEach(function(k){ s[k]+=Number(c[k])||0; }); });
+    roundRow(s); return s;
+  }
+  // A Mart B2B/B2C sub-section: a subtotal header row + its customer rows. Empty segments render nothing.
+  function segBlock(g, gi, seg, label, list){
+    if(!list.length) return '';
+    var s = sumRows(list);
+    var html = '<tr class="ag-segrow" data-gi="'+gi+'" data-seg="'+seg+'">'+
+      '<td><div class="cellpad ag-subname"><span class="ag-subchip '+seg+'">'+label+'</span><span class="sub-cnt">'+list.length+'</span></div></td>'+
+      '<td class="num"><div class="cellpad">'+money(s.original)+'</div></td>'+
+      '<td class="num"><div class="cellpad bal">'+money(s.balance_due)+'</div></td>'+
+      BUCKETS.map(function(b,i){ return '<td class="num bk'+i+'"><div class="cellpad">'+money(s[b.key])+'</div></td>'; }).join('')+
+    '</tr>';
+    list.forEach(function(c){ html += custRow(c, g, gi, seg); });
+    return html;
+  }
   function renderBody(){
     var body = document.getElementById('agBody');
     if(DATA.error){ body.innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Could not load aging data ('+esc(DATA.error)+').</td></tr>'; return; }
     if(!GROUPS.length){ body.innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">No outstanding balances.</td></tr>'; return; }
 
+    var isMart = company==='mart';
     var html = '';
     GROUPS.forEach(function(g,gi){
       var color = fmtColor(gi);
-      var rawBtn = company==='bev'
-        ? '<span class="ag-rawbtn" data-scope="sp" data-sp="'+esc(g.format)+'" title="Open raw invoices (Excel-like)"><span class="material-icons">table_view</span>Raw</span>'
-        : '';
       html += '<tr class="ag-grp" data-gi="'+gi+'">'+
         '<td><div class="cellpad ag-gname">'+
           '<span class="ag-tw-i">▶</span>'+
           '<span class="ag-chip" style="background:'+color+'">'+esc(g.format)+'</span>'+
-          '<span class="ag-cnt">'+g.count+'</span>'+rawBtn+
+          '<span class="ag-cnt">'+g.count+'</span>'+
         '</div></td>'+
         '<td class="num"><div class="cellpad">'+money(g.original)+'</div></td>'+
         '<td class="num"><div class="cellpad bal">'+money(g.balance_due)+'</div></td>'+
         bucketCells(g,true)+
       '</tr>';
 
-      g.customers.forEach(function(c){
-        var bdCell = company==='bev'
-          ? '<td class="num"><div class="cellpad bal"><a class="ag-bd-link ag-rawlink" title="Open raw invoices" data-scope="cust" data-code="'+esc(c.code)+'" data-name="'+esc(c.name)+'">'+money(c.balance_due)+'</a></div></td>'
-          : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+'">'+money(c.balance_due)+'</a></div></td>';
-        html += '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'">'+
-          '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
-          '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
-          bdCell+
-          bucketCells(c,false)+
-        '</tr>';
-      });
+      if(isMart){
+        // Split the format's customers into B2B (GSTIN on file) then B2C, each with a subtotal.
+        var b2b=[], b2c=[];
+        g.customers.forEach(function(c){ (c.segment==='B2B'?b2b:b2c).push(c); });
+        html += segBlock(g, gi, 'b2b', 'B2B', b2b);
+        html += segBlock(g, gi, 'b2c', 'B2C', b2c);
+      } else {
+        g.customers.forEach(function(c){ html += custRow(c, g, gi, null); });
+      }
     });
 
     // grand total
@@ -594,7 +774,7 @@
 
   // ── Interactions ──
   function currentQuery(){ return (document.getElementById('agSearch').value||'').trim().toLowerCase(); }
-  function rowFilterActive(){ return !!currentQuery() || signSel!=='both' || !!cond.op || selectedRemarks.length>0; }
+  function rowFilterActive(){ return !!currentQuery() || signSel!=='both' || (company==='mart'&&segSel!=='both') || !!cond.op || selectedRemarks.length>0; }
   // Expand/Collapse only flip each group's open state, then let applyView() reconcile
   // visibility with the active filters — so they work whether or not a filter is on.
   function setGroup(gi,open){
@@ -614,13 +794,14 @@
   function custPasses(r,q){
     if(q){
       var hit = (r.getAttribute('data-name')||'').indexOf(q)!==-1;
-      if(!hit && company==='bev'){                       // Beverages: also match by open-invoice Doc No
+      if(!hit && isAR()){                                // Beverages/Mart: also match by open-invoice Doc No
         var d = BEV_DOCS_BY_CODE[r.getAttribute('data-code')];
         hit = !!d && d.indexOf(q)!==-1;
       }
       if(!hit) return false;
     }
     if(!remarkPass(r.getAttribute('data-code'))) return false;
+    if(!segPass(r.getAttribute('data-seg')==='b2b')) return false;
     var bd = Number(r.getAttribute('data-bd'))||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
@@ -628,6 +809,46 @@
     if(cond.op==='lte' && !(bd<=cond.a)) return false;
     if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return false;
     return true;
+  }
+  // Re-sum each group's header + the grand-total row from the customers passing the CURRENT
+  // filters (Format + search + remark + sign + condition), so the totals always agree with the
+  // visible rows and the KPI cards — e.g. under "Positive only" a group total is the sum of just
+  // its positive customers, not the net of the whole book. Runs regardless of expand/collapse.
+  function setNumCells(tr, sums){
+    if(!tr) return;
+    var tds = tr.children, pad;
+    if(tds[1] && (pad=tds[1].querySelector('.cellpad'))) pad.innerHTML = money(sums.original);
+    if(tds[2] && (pad=tds[2].querySelector('.cellpad'))) pad.innerHTML = money(sums.balance_due);
+    BUCKETS.forEach(function(b,i){ var td=tds[3+i]; if(td && (pad=td.querySelector('.cellpad'))) pad.innerHTML = money(sums[b.key]); });
+  }
+  function recomputeTotals(){
+    var q = currentQuery(), useFmt = selectedFormats.length>0, grand = emptyB(), isMart = company==='mart';
+    GROUPS.forEach(function(g,gi){
+      var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]'); if(!grp) return;
+      var fmtOk = !useFmt || selectedFormats.indexOf(g.format)!==-1, sums = emptyB(), n = 0;
+      var seg = {b2b:emptyB(), b2c:emptyB()}, segN = {b2b:0, b2c:0};
+      if(fmtOk){
+        g.customers.forEach(function(c){
+          if(!custDataPass(c, g.format, q)) return;
+          n++; sums.original += Number(c.original)||0; sums.balance_due += Number(c.balance_due)||0;
+          BUCKET_KEYS.forEach(function(k){ sums[k] += Number(c[k])||0; });
+          if(isMart){ var sk = c.segment==='B2B' ? 'b2b' : 'b2c'; segN[sk]++;
+            seg[sk].original += Number(c.original)||0; seg[sk].balance_due += Number(c.balance_due)||0;
+            BUCKET_KEYS.forEach(function(k){ seg[sk][k] += Number(c[k])||0; }); }
+        });
+        for(var k in grand) grand[k] += sums[k];
+      }
+      setNumCells(grp, sums);
+      var cnt = grp.querySelector('.ag-cnt'); if(cnt) cnt.textContent = n;
+      if(isMart){
+        ['b2b','b2c'].forEach(function(sk){
+          var sub = document.querySelector('.ag-segrow[data-gi="'+gi+'"][data-seg="'+sk+'"]'); if(!sub) return;
+          setNumCells(sub, seg[sk]);
+          var sc = sub.querySelector('.sub-cnt'); if(sc) sc.textContent = segN[sk];
+        });
+      }
+    });
+    setNumCells(document.querySelector('tr.ag-tot'), grand);
   }
   // Single source of truth for visibility: Format filter (whole groups) + row filters
   // (search / sign / condition) + each group's open state. A customer row shows iff it
@@ -638,23 +859,32 @@
     GROUPS.forEach(function(g,gi){
       var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
       var custs = document.querySelectorAll('.ag-cust[data-gi="'+gi+'"]');
+      var subs  = document.querySelectorAll('.ag-segrow[data-gi="'+gi+'"]');   // Mart B2B/B2C headers
       var fmtOk = !useFmt || selectedFormats.indexOf(g.format)!==-1;
       if(!fmtOk){
         if(grp) grp.style.display='none';
         custs.forEach(function(r){ r.style.display='none'; r.classList.remove('show'); });
+        subs.forEach(function(r){ r.style.display='none'; r.classList.remove('show'); });
         return;
       }
-      var open = !!(grp && grp.classList.contains('open')), anyPass=false;
+      var open = !!(grp && grp.classList.contains('open')), anyPass=false, segAny={b2b:false,b2c:false};
       custs.forEach(function(r){
-        var pass = custPasses(r,q); if(pass) anyPass=true;
+        var pass = custPasses(r,q); if(pass){ anyPass=true; segAny[r.getAttribute('data-seg')]=true; }
         var show = pass && open;
         r.style.display = show ? 'table-row' : 'none';
         r.classList.toggle('show', show);
       });
+      // A B2B/B2C sub-header shows only when its group is open and it has ≥1 passing customer.
+      subs.forEach(function(s){
+        var show = open && !!segAny[s.getAttribute('data-seg')];
+        s.style.display = show ? 'table-row' : 'none';
+        s.classList.toggle('show', show);
+      });
       // With a row filter on, hide format headers that have no matching rows.
       if(grp) grp.style.display = (!rowActive || anyPass) ? 'table-row' : 'none';
     });
-    renderKpis();   // KPI cards reflect the active filters / conditions
+    recomputeTotals();   // group + grand totals reflect the active filters
+    renderKpis();        // KPI cards reflect the active filters / conditions
   }
   // A row-filter change auto-opens groups with matches (results show at once); clearing all
   // row filters collapses back to the format-only view. Then applyView() paints it.
@@ -681,9 +911,9 @@
   function syncFmt(){
     selectedFormats = [];
     document.querySelectorAll('#agFmtList input:checked').forEach(function(i){ selectedFormats.push(i.value); });
-    var noun = company==='bev' ? ' sales person' : ' format';
+    var noun = isAR() ? ' sales person' : ' format';
     document.getElementById('agFmtLabel').textContent =
-      selectedFormats.length ? selectedFormats.length+noun+(selectedFormats.length>1?'s':'') : (company==='bev'?'All sales persons':'All formats');
+      selectedFormats.length ? selectedFormats.length+noun+(selectedFormats.length>1?'s':'') : (isAR()?'All sales persons':'All formats');
     applyFilters();
   }
 
@@ -749,25 +979,55 @@
       .then(function(){ if(btn)btn.disabled=false; if(lbl)lbl.textContent=old; });
   }
 
-  // Export the aging pivot to CSV (opens in Excel). Hidden formats/customers are already
-  // excluded server-side, so they never appear here.
+  // The book to export = exactly what the active filters show: each format keeps only the
+  // customers passing the Format + search + remark + sign (Positive/Negative) + condition +
+  // segment filters, its subtotal is re-summed from just those, empty formats are dropped, and
+  // the grand total re-sums the survivors. So an export never carries rows the on-screen table hid.
+  function exportModel(){
+    var q = currentQuery(), useFmt = selectedFormats.length>0, groups=[], grand=emptyB();
+    GROUPS.forEach(function(g, gi){
+      if(useFmt && selectedFormats.indexOf(g.format)===-1) return;
+      var custs = g.customers.filter(function(c){ return custDataPass(c, g.format, q); });
+      if(!custs.length) return;
+      var sums = sumRows(custs);
+      for(var k in grand) grand[k] += sums[k];
+      groups.push({format:g.format, gi:gi, customers:custs, sums:sums});
+    });
+    roundRow(grand);
+    return {groups:groups, total:grand};
+  }
+
+  // Export the aging pivot to CSV (opens in Excel), honouring the active filters (see exportModel).
   function exportAgingCSV(){
-    if(!GROUPS.length){ return; }
+    var model = exportModel();
+    if(!model.groups.length){ alert('No rows match the current filters.'); return; }
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     function rnd(n){ return Math.round(Number(n)||0); }
-    var head = [(company==='bev'?'Sales Person':'Format'),'Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
+    var head = [(isAR()?'Sales Person':'Format'),'Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
     var lines = [head.map(cell).join(',')];
-    GROUPS.forEach(function(g){
-      lines.push([g.format,'(Format total)','',rnd(g.original),rnd(g.balance_due)]
-        .concat(BUCKETS.map(function(b){return rnd(g[b.key]);})).map(cell).join(','));
-      g.customers.forEach(function(c){
+    model.groups.forEach(function(g){
+      lines.push([g.format,'(Format total)','',rnd(g.sums.original),rnd(g.sums.balance_due)]
+        .concat(BUCKETS.map(function(b){return rnd(g.sums[b.key]);})).map(cell).join(','));
+      function custLine(c){
         lines.push([g.format,c.name,c.code,rnd(c.original),rnd(c.balance_due)]
           .concat(BUCKETS.map(function(b){return rnd(c[b.key]);})).map(cell).join(','));
-      });
+      }
+      if(company==='mart'){          // split each format into B2B / B2C sub-totals
+        ['B2B','B2C'].forEach(function(sg){
+          var list=g.customers.filter(function(c){ return (c.segment==='B2B'?'B2B':'B2C')===sg; });
+          if(!list.length) return;
+          var s=sumRows(list);
+          lines.push([g.format,sg+' subtotal ('+list.length+')','',rnd(s.original),rnd(s.balance_due)]
+            .concat(BUCKETS.map(function(b){return rnd(s[b.key]);})).map(cell).join(','));
+          list.forEach(custLine);
+        });
+      } else {
+        g.customers.forEach(custLine);
+      }
     });
-    lines.push(['GRAND TOTAL','','',rnd(TOTAL.original),rnd(TOTAL.balance_due)]
-      .concat(BUCKETS.map(function(b){return rnd(TOTAL[b.key]);})).map(cell).join(','));
-    var blob = new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    lines.push(['GRAND TOTAL','','',rnd(model.total.original),rnd(model.total.balance_due)]
+      .concat(BUCKETS.map(function(b){return rnd(model.total[b.key]);})).map(cell).join(','));
+    var blob = new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = 'Customer_Aging_'+(document.getElementById('agAsOf').value||'')+'.csv'; a.click();
@@ -777,9 +1037,10 @@
   // Export to a colour-matched .xlsx that mirrors the on-screen table: dark header row,
   // per-format accent chips, the five bucket-column tints, ₹ amounts with red negatives in
   // parentheses and "—" for zero, and a dark grand-total row. Falls back to CSV on failure.
-  // (Hidden formats/customers are already excluded server-side, so the full book is exported.)
+  // Honours the active filters (see exportModel) — e.g. "Positive only" exports no credits.
   function exportAgingXLSX(){
-    if(!GROUPS.length){ return; }
+    var model = exportModel();
+    if(!model.groups.length){ alert('No rows match the current filters.'); return; }
     function rnd(n){return Math.round(Number(n)||0);}
     function hx(c){return String(c||'').replace('#','');}
     var CUST_T=['f0fdf4','f0fdfa','fffbeb','fff7ed','fef2f2'];   // customer bucket tints (bk0..bk4)
@@ -789,25 +1050,40 @@
     function hdr(v,left){return {value:v, fill:'0f172a', color:'ffffff', bold:true, align:left?'left':'right'};}
     function tot(v,isNum){var c={value:v, fill:'1e293b', color:'ffffff', bold:true, align:isNum?'right':'left'}; if(isNum)c.numfmt=NUMW; return c;}
 
-    var out=[ [(company==='bev'?'Sales Person / Customer':'Format / Customer'),'Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
+    var out=[ [(isAR()?'Sales Person / Customer':'Format / Customer'),'Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
                 .map(function(l,i){return hdr(l, i===0);}) ];
-    GROUPS.forEach(function(g,gi){
-      var acc=hx(fmtColor(gi));
-      var grow=[{value:g.format+' ('+g.count+')', fill:acc, color:'ffffff', bold:true, align:'left'},
-        {value:rnd(g.original), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'},
-        {value:rnd(g.balance_due), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'}];
-      BUCKETS.forEach(function(b,i){ grow.push({value:rnd(g[b.key]), fill:GRP_T[i], bold:true, numfmt:NUM, align:'right'}); });
+    model.groups.forEach(function(g){
+      var acc=hx(fmtColor(g.gi));
+      var grow=[{value:g.format+' ('+g.customers.length+')', fill:acc, color:'ffffff', bold:true, align:'left'},
+        {value:rnd(g.sums.original), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'},
+        {value:rnd(g.sums.balance_due), fill:'eef2ff', bold:true, numfmt:NUM, align:'right'}];
+      BUCKETS.forEach(function(b,i){ grow.push({value:rnd(g.sums[b.key]), fill:GRP_T[i], bold:true, numfmt:NUM, align:'right'}); });
       out.push(grow);
-      g.customers.forEach(function(c){
+      function xlCust(c){
         var crow=[{value:c.name+(c.code?('   '+c.code):''), align:'left'},
           {value:rnd(c.original), numfmt:NUM, align:'right'},
           {value:rnd(c.balance_due), bold:true, numfmt:NUM, align:'right'}];
         BUCKETS.forEach(function(b,i){ crow.push({value:rnd(c[b.key]), fill:CUST_T[i], numfmt:NUM, align:'right'}); });
         out.push(crow);
-      });
+      }
+      if(company==='mart'){          // B2B / B2C sub-total rows, mirroring the on-screen split
+        [{k:'B2B',fill:'e0e7ff'},{k:'B2C',fill:'ccfbf1'}].forEach(function(sg){
+          var list=g.customers.filter(function(c){ return (c.segment==='B2B'?'B2B':'B2C')===sg.k; });
+          if(!list.length) return;
+          var s=sumRows(list);
+          var srow=[{value:'   '+sg.k+' ('+list.length+')', fill:sg.fill, bold:true, align:'left'},
+            {value:rnd(s.original), fill:sg.fill, bold:true, numfmt:NUM, align:'right'},
+            {value:rnd(s.balance_due), fill:sg.fill, bold:true, numfmt:NUM, align:'right'}];
+          BUCKETS.forEach(function(b,i){ srow.push({value:rnd(s[b.key]), fill:sg.fill, bold:true, numfmt:NUM, align:'right'}); });
+          out.push(srow);
+          list.forEach(xlCust);
+        });
+      } else {
+        g.customers.forEach(xlCust);
+      }
     });
-    out.push([tot('GRAND TOTAL',false), tot(rnd(TOTAL.original),true), tot(rnd(TOTAL.balance_due),true)]
-      .concat(BUCKETS.map(function(b){return tot(rnd(TOTAL[b.key]),true);})));
+    out.push([tot('GRAND TOTAL',false), tot(rnd(model.total.original),true), tot(rnd(model.total.balance_due),true)]
+      .concat(BUCKETS.map(function(b){return tot(rnd(model.total[b.key]),true);})));
 
     var fn='Customer_Aging_'+(document.getElementById('agAsOf').value||'')+'.xlsx';
     var btn=document.getElementById('agExport'); if(btn)btn.disabled=true;
@@ -828,6 +1104,7 @@
     {key:'doc',label:'Doc No',type:'text'},{key:'date',label:'Doc Date',type:'text'},
     {key:'days',label:'Days',type:'num'},{key:'aging',label:'Aging',type:'text'},
     {key:'name',label:'Customer',type:'text'},{key:'code',label:'Code',type:'text'},
+    {key:'actual_sp',label:'Actual Sales Person',type:'editsp'},
     {key:'sp',label:'Sales Person',type:'text'},{key:'total',label:'Doc Total',type:'money'},
     {key:'bal',label:'Balance Due',type:'money'},{key:'outstanding',label:'Outstanding',type:'money'},
     {key:'remark',label:'Remarks',type:'remark'},
@@ -841,20 +1118,29 @@
   var rawSort={key:'days',dir:-1};   // dir: 1 asc, -1 desc
   var rawColF={};                    // column key → lower-cased filter text
   function rawColByKey(k){ for(var i=0;i<RAW_COLS.length;i++){ if(RAW_COLS[i].key===k) return RAW_COLS[i]; } return null; }
-  function rawVal(r,col){ return col.key==='aging' ? bucketLabelForDays(r.days) : (r[col.key]==null?'':r[col.key]); }
+  // Effective Actual Sales Person: the user's entry if set, otherwise defaults to the SAP Sales
+  // Person — so an untouched row shows (and sorts/filters/pivots as) the original sales person.
+  function effActualSp(r){ var a=r.actual_sp; return (a!=null && String(a).trim()!=='') ? a : (r.sp==null?'':r.sp); }
+  function rawVal(r,col){
+    if(col.key==='aging') return bucketLabelForDays(r.days);
+    if(col.key==='actual_sp') return effActualSp(r);
+    return r[col.key]==null?'':r[col.key];
+  }
   function rawDisp(r,col){
     if(col.type==='remark') return '<input class="agrx-rmk" data-doc="'+esc(r.doc)+'" data-code="'+esc(r.code)+'" value="'+esc(r.remark==null?'':r.remark)+'" placeholder="remark…">';
+    if(col.type==='editsp') return '<input class="agrx-sp" data-doc="'+esc(r.doc)+'" data-code="'+esc(r.code)+'" value="'+esc(effActualSp(r))+'" placeholder="actual sales person…">';
     return col.type==='money' ? money(r[col.key]) : esc(String(rawVal(r,col)));
   }
-  // Manual remark on a raw invoice — persisted via the shared aging-remark endpoint, keyed by
-  // (customer code, 'BEVDOC:'+DocNo). Debounced; updates the in-memory row so sort/filter keep it.
+  // Editable per-invoice fields (remark / actual sales person) — persisted via the shared
+  // aging-remark endpoint keyed by (customer code, '<prefix>'+DocNo). Debounced; updates the
+  // in-memory row so sort/filter/search keep the new value.
   var rawRmkTimers={};
-  function saveRawRemark(code, doc, val, inp){
-    var k=code+'|'+doc;
+  function saveRawField(code, doc, val, prefix, inp){
+    var k=prefix+code+'|'+doc;
     clearTimeout(rawRmkTimers[k]);
     rawRmkTimers[k]=setTimeout(function(){
       fetch(AGING_REMARK_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-        body:JSON.stringify({code:code, row_key:'BEVDOC:'+doc, remark:val})})
+        body:JSON.stringify({code:code, row_key:prefix+doc, remark:val})})
         .then(function(r){return r.json();})
         .then(function(j){ if(j&&j.status==='ok'&&inp){ inp.classList.add('saved'); setTimeout(function(){inp.classList.remove('saved');},900); } })
         .catch(function(){});
@@ -902,16 +1188,34 @@
     tbody.innerHTML = rows.length
       ? rows.map(function(r){ return '<tr>'+RAW_COLS.map(function(c){ return '<td class="'+(isNumCol(c)?'num':'')+'">'+rawDisp(r,c)+'</td>'; }).join('')+'</tr>'; }).join('')
       : '<tr><td class="agrx-empty" colspan="'+RAW_COLS.length+'">No invoices match.</td></tr>';
-    document.getElementById('agRawCount').textContent=rows.length+' invoice'+(rows.length===1?'':'s');
+    var rc=document.getElementById('agRawCount'); if(rc) rc.textContent=rows.length+' invoice'+(rows.length===1?'':'s');
   }
-  function openRaw(scope){
-    rawScope=scope; rawColF={}; rawSort={key:'days',dir:-1};
+  // Open the RAW DATA workspace. scope: null (all rows) | {type:'cust',code,name} | {type:'sp',sp}.
+  function openRawData(scope, tab){
+    rawScope=scope||null; rawColF={}; rawSort={key:'days',dir:-1}; pivExpanded={};
     document.getElementById('agRawSearch').value='';
-    document.getElementById('agRawTitle').textContent='Raw invoices — '+(scope.type==='sp'?scope.sp:scope.name);
-    renderRawHead(); renderRawBody();
+    var suffix = rawScope ? (' — '+(rawScope.type==='cust'?rawScope.name:rawScope.sp)) : '';
+    document.getElementById('agRawTitle').textContent='RAW DATA'+suffix;
+    renderRawHead();
+    setTab(tab||'table');
+    var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
+    if(card) card.style.display='none';
+    if(foot) foot.style.display='none';
     document.getElementById('agRawModal').classList.add('show');
   }
-  function closeRaw(){ document.getElementById('agRawModal').classList.remove('show'); }
+  function closeRaw(){
+    document.getElementById('agRawModal').classList.remove('show');
+    var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
+    if(card) card.style.display='';
+    if(foot) foot.style.display='';
+  }
+  // Re-render the workspace in place after a beverages (re)load (e.g. after Upload Remarks),
+  // keeping the current scope / tab / drill-by.
+  function refreshRawIfOpen(){
+    if(!document.getElementById('agRawModal').classList.contains('show')) return;
+    renderRawHead();
+    if(rawTab==='pivot'){ renderDrill(); renderPivot(); } else { renderRawBody(); }
+  }
   function exportRawCSV(){
     var rows=rawFilteredRows();
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
@@ -919,9 +1223,194 @@
     rows.forEach(function(r){ lines.push(RAW_COLS.map(function(c){
       var v=rawVal(r,c); if(isNumCol(c)) v=Math.round(Number(v)||0); return v;
     }).map(cell).join(',')); });
-    var blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob), a=document.createElement('a');
-    a.href=url; a.download='Beverages_Raw_Invoices.csv'; a.click();
+    a.href=url; a.download=arCfg().name+'_Raw_Invoices.csv'; a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+
+  // ── RAW DATA workspace: Raw Table | Pivot tabs ────────────────────────────────
+  var rawTab='table';
+  function setTab(tab){
+    rawTab=tab;
+    [].forEach.call(document.querySelectorAll('#agRawTabs button'),function(b){ b.classList.toggle('on', b.getAttribute('data-tab')===tab); });
+    var isTable = tab==='table';
+    document.getElementById('agRawPaneTable').classList.toggle('on', isTable);
+    document.getElementById('agRawPanePivot').classList.toggle('on', !isTable);
+    document.getElementById('agRawDrill').style.display  = isTable ? 'none' : '';
+    document.getElementById('agPivTools').style.display  = isTable ? 'none' : '';
+    document.getElementById('agRawExport').textContent   = isTable ? 'Export CSV' : 'Export Pivot';
+    if(isTable){ renderRawBody(); } else { renderDrill(); renderPivot(); }
+  }
+
+  // ── Customizable nested pivot over the raw beverages rows ──────────────────────
+  // Every raw-table column is a drill-by option (same order as the table) EXCEPT Remarks,
+  // which is shown automatically next to its Doc No rather than picked as a dimension.
+  var PIV_DIMS=RAW_COLS.filter(function(c){ return c.key!=='remark'; }).map(function(c){ return {key:c.key, label:c.label}; });
+  var drillBy=['sp'];        // ordered dimension keys the pivot groups by
+  var pivExpanded={};        // path string → expanded
+  var pivOutSign='both';     // Original Outstanding sign filter: 'both' | 'pos' | 'neg'
+  var pivSort={key:'bal',dir:-1};   // column sort applied within every group level
+  // Comparator for a parent node's children by the active pivot column sort.
+  function pivCmp(parent){
+    var k=pivSort.key, dir=pivSort.dir;
+    return function(a,b){
+      var A=parent._kids[a], B=parent._kids[b], va, vb;
+      if(k==='name')   return String(a).localeCompare(String(b))*dir;
+      if(k==='remark') return String(pivRemark(A)).localeCompare(String(pivRemark(B)))*dir;
+      if(k==='total') { va=A.total; vb=B.total; }
+      else if(k==='bal'){ va=A.bal; vb=B.bal; }
+      else if(k==='outstanding'){ va=A.outstanding; vb=B.outstanding; }
+      else if(k==='diff'){ va=A.bal-A.outstanding; vb=B.bal-B.outstanding; }
+      else if(k==='count'){ va=A.count; vb=B.count; }
+      else { va=A[k]||0; vb=B[k]||0; }   // aging buckets
+      return ((Number(va)||0)-(Number(vb)||0))*dir;
+    };
+  }
+  function pivDimLabel(k){ for(var i=0;i<PIV_DIMS.length;i++) if(PIV_DIMS[i].key===k) return PIV_DIMS[i].label; return k; }
+  function pivDimVal(r,k){
+    if(k==='aging') return bucketLabelForDays(r.days);
+    if(k==='actual_sp'){ var e=effActualSp(r); return e===''?'(blank)':e; }
+    var v=r[k]; return (v==null||v==='')?'(blank)':String(v);
+  }
+  // Day-filter + scope + the header search box (matched across all columns), same as the table.
+  function pivotSourceRows(){
+    var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
+    return (RAW_BEV||[]).filter(function(r){
+      if(!dayIncluded(r.days)) return false;
+      if(rawScope){
+        if(rawScope.type==='sp'   && r.sp!==rawScope.sp)   return false;
+        if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
+      }
+      if(q){ var hit=false; for(var i=0;i<RAW_COLS.length;i++){ if(String(rawVal(r,RAW_COLS[i])).toLowerCase().indexOf(q)!==-1){hit=true;break;} } if(!hit) return false; }
+      if(pivOutSign!=='both'){ var os=Number(r.outstanding)||0; if(pivOutSign==='pos' && !(os>0)) return false; if(pivOutSign==='neg' && !(os<0)) return false; }
+      return true;
+    });
+  }
+  // Each node also tracks the remark shared by its rows (single distinct remark → show it,
+  // e.g. at the Doc No level; mixed remarks → blank).
+  function pivNode(){ var o={count:0,total:0,bal:0,outstanding:0,_seen:{},_rmks:{},_kids:{},_order:[]}; BUCKET_KEYS.forEach(function(k){o[k]=0;}); return o; }
+  function pivAdd(n,r){
+    var rm=(r.remark==null?'':String(r.remark)).trim();
+    if(rm) n._rmks[rm]=1;               // collect the distinct remarks under this node
+    // Outstanding is a per-customer ledger balance repeated on each invoice → count it once per customer.
+    if(!(r.code in n._seen)){ n._seen[r.code]=1; n.outstanding+=Number(r.outstanding)||0; }
+    var bk=bucketKeyForDays(r.days); n.count++; n.total+=Number(r.total)||0; n.bal+=Number(r.bal)||0; n[bk]+=Number(r.bal)||0;
+  }
+  // A single remark shows in full (e.g. at Doc No level); several are summarised ("A, B +N more"),
+  // with the full list in the cell's tooltip.
+  function pivRemarkFull(n){ return Object.keys(n._rmks).join(', '); }
+  function pivRemark(n){ var k=Object.keys(n._rmks); if(!k.length) return ''; if(k.length<=2) return k.join(', '); return k.slice(0,2).join(', ')+' +'+(k.length-2)+' more'; }
+  function buildPivotTree(){
+    var root=pivNode();
+    pivotSourceRows().forEach(function(r){
+      pivAdd(root,r); var node=root;
+      for(var d=0; d<drillBy.length; d++){
+        var kv=pivDimVal(r,drillBy[d]);
+        if(!node._kids[kv]){ node._kids[kv]=pivNode(); node._order.push(kv); }
+        node=node._kids[kv]; pivAdd(node,r);
+      }
+    });
+    return root;
+  }
+  // Original Outstanding = the customer's ledger balance (once per customer); Diff = Balance Due − Outstanding.
+  function pivMeasureCells(n){
+    return '<td class="num">'+money(n.total)+'</td><td class="num">'+money(n.bal)+'</td>'+
+      '<td class="num">'+money(n.outstanding)+'</td>'+
+      '<td class="num">'+money(n.bal-n.outstanding)+'</td>'+
+      BUCKET_KEYS.map(function(k){return '<td class="num">'+money(n[k])+'</td>';}).join('');
+  }
+  function renderPivotHead(){
+    function th(key,label,cls){
+      var ar=pivSort.key===key ? '<span class="ar">'+(pivSort.dir<0?'▼':'▲')+'</span>' : '';
+      return '<th class="'+cls+'" data-key="'+key+'">'+esc(label)+ar+'</th>';
+    }
+    var h= th('name', drillBy.map(pivDimLabel).join(' › ')||'Group','lbl') + th('remark','Remarks','lbl')+
+      th('total','Doc Total','num')+th('bal','Balance Due','num')+th('outstanding','Original Outstanding','num')+th('diff','Diff','num')+
+      BUCKETS.map(function(b){return th(b.key, b.label,'num');}).join('');
+    var tbl=document.getElementById('agPivTable'), thead=tbl.querySelector('thead');
+    if(!thead){ thead=document.createElement('thead'); tbl.insertBefore(thead, tbl.firstChild); }
+    thead.innerHTML='<tr>'+h+'</tr>';
+  }
+  function pathVisible(p){
+    var segs=p.split('¦');
+    for(var i=1;i<segs.length;i++){ if(!pivExpanded[segs.slice(0,i).join('¦')]) return false; }
+    return true;
+  }
+  function applyPivVisibility(){
+    [].forEach.call(document.querySelectorAll('#agPivTable tbody tr[data-path]'),function(tr){
+      var p=tr.getAttribute('data-path');
+      tr.style.display = pathVisible(p) ? '' : 'none';
+      if(tr.getAttribute('data-haskids')==='1'){ var tw=tr.querySelector('.pv-tw'); if(tw) tw.textContent=pivExpanded[p]?'▼':'▶'; }
+    });
+  }
+  function renderPivotBody(){
+    var root=buildPivotTree(), tbl=document.getElementById('agPivTable'), tbody=tbl.querySelector('tbody');
+    if(!tbody){ tbody=document.createElement('tbody'); tbl.appendChild(tbody); }
+    var ncol=6+BUCKETS.length;
+    var rc=document.getElementById('agRawCount'); if(rc) rc.textContent=root.count+' invoice'+(root.count===1?'':'s');
+    if(!drillBy.length || !root._order.length){
+      tbody.innerHTML='<tr><td class="agrx-empty" colspan="'+ncol+'">'+(drillBy.length?'No invoices match.':'Add a dimension to drill by.')+'</td></tr>';
+      return;
+    }
+    var out=[];
+    (function walk(node, depth, path){
+      node._order.sort(pivCmp(node));
+      node._order.forEach(function(kv){
+        var kid=node._kids[kv], p=path?(path+'¦'+kv):kv;
+        var hasKids=(depth+1<drillBy.length) && kid._order.length>0;
+        out.push('<tr data-path="'+esc(p)+'" data-haskids="'+(hasKids?1:0)+'">'+
+          '<td class="lbl" style="padding-left:'+(10+depth*18)+'px"><span class="pv-tw">'+(hasKids?'▶':'')+'</span>'+
+          '<span class="pv-name">'+esc(kv)+'</span><span class="pv-cnt">'+kid.count+'</span></td>'+
+          '<td class="pv-rmk" title="'+esc(pivRemarkFull(kid))+'">'+esc(pivRemark(kid))+'</td>'+
+          pivMeasureCells(kid)+'</tr>');
+        if(hasKids) walk(kid, depth+1, p);
+      });
+    })(root,0,'');
+    out.push('<tr class="pv-tot"><td class="lbl">Grand Total</td><td></td>'+pivMeasureCells(root)+'</tr>');
+    tbody.innerHTML=out.join('');
+    applyPivVisibility();
+  }
+  function renderPivot(){ renderPivotHead(); renderPivotBody(); }
+  function expandAllPiv(){ [].forEach.call(document.querySelectorAll('#agPivTable tbody tr[data-haskids="1"]'),function(tr){ pivExpanded[tr.getAttribute('data-path')]=true; }); applyPivVisibility(); }
+  function collapseAllPiv(){ pivExpanded={}; applyPivVisibility(); }
+  // Dynamic multi-select drill-by: a "Drill by ▾" dropdown of checkboxes (project-standard
+  // pattern). Checking adds a level in selection order; the button shows the current path.
+  function renderDrill(){
+    document.getElementById('agDrillLbl').textContent = drillBy.length ? drillBy.map(pivDimLabel).join(' › ') : 'nothing yet';
+    document.getElementById('agDrillList').innerHTML = PIV_DIMS.map(function(d){
+      var idx=drillBy.indexOf(d.key), on=idx!==-1;
+      return '<label class="agrx-opt"><input type="checkbox" data-k="'+esc(d.key)+'"'+(on?' checked':'')+'>'+
+        (on?'<span class="agrx-ord">'+(idx+1)+'</span>':'')+'<span>'+esc(d.label)+'</span></label>';
+    }).join('');
+  }
+  function exportPivotCSV(){
+    var root=buildPivotTree();
+    function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
+    var hdr=drillBy.map(pivDimLabel).concat(['Remarks','Count','Doc Total','Balance Due','Original Outstanding','Diff']).concat(BUCKETS.map(function(b){return b.label;}));
+    var lines=[hdr.map(cell).join(',')];
+    // Original Outstanding + Diff are per-customer figures → export them only on the top-level
+    // "main total" line (depth 0) and the Grand Total; leave them blank on drilled-down sub-rows.
+    function meas(n, depth){
+      var showOut = depth===0;
+      return [n.count, Math.round(n.total), Math.round(n.bal),
+              showOut?Math.round(n.outstanding):'', showOut?Math.round(n.bal-n.outstanding):'']
+             .concat(BUCKET_KEYS.map(function(k){return Math.round(n[k]);}));
+    }
+    (function walk(node, depth, labels){
+      node._order.sort(pivCmp(node));
+      node._order.forEach(function(kv){
+        var kid=node._kids[kv], lab=labels.concat([kv]), dim=[];
+        for(var i=0;i<drillBy.length;i++) dim.push(i<lab.length?lab[i]:'');
+        lines.push(dim.concat([pivRemarkFull(kid)]).concat(meas(kid, depth)).map(cell).join(','));
+        if(depth+1<drillBy.length) walk(kid, depth+1, lab);
+      });
+    })(root,0,[]);
+    var tot=[]; for(var i=0;i<drillBy.length;i++) tot.push(i===0?'Grand Total':'');
+    lines.push(tot.concat(['']).concat(meas(root, 0)).map(cell).join(','));
+    var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download=arCfg().name+'_Raw_Pivot.csv'; a.click();
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   }
 
@@ -929,7 +1418,8 @@
     // Aging date picker → oil reloads the page (server recomputes); beverages refetches in place.
     var asof = document.getElementById('agAsOf');
     if(asof) asof.addEventListener('change',function(){
-      if(company==='bev'){ RAW_BEV=null; loadBev(); return; }
+      if(isAR()){ RAW_BEV=null; loadBev(); return; }
+      if(company==='mart'){ MART_DATA=null; loadMart(); return; }
       var u = new URL(window.location.href);
       if(this.value) u.searchParams.set('as_of', this.value); else u.searchParams.delete('as_of');
       window.location.href = u.toString();
@@ -939,35 +1429,45 @@
     document.getElementById('agCo').addEventListener('click',function(e){
       var b=e.target.closest('button'); if(!b) return;
       var c=b.getAttribute('data-co'); if(c===company) return;
+      closeRaw();                       // exit the RAW DATA workspace on company switch
       company=c;
       [].forEach.call(this.children,function(x){ x.classList.toggle('on', x===b); });
       // Reset row filters on switch (groups/formats differ per company).
-      selectedFormats=[]; selectedRemarks=[]; signSel='both'; cond={op:'',a:0,b:0};
+      selectedFormats=[]; selectedRemarks=[]; signSel='both'; segSel='both'; cond={op:'',a:0,b:0};
       document.getElementById('agSearch').value='';
       [].forEach.call(document.getElementById('agSign').children,function(x){ x.classList.toggle('on', x.getAttribute('data-sign')==='both'); });
+      [].forEach.call(document.getElementById('agSeg').children,function(x){ x.classList.toggle('on', x.getAttribute('data-seg')==='both'); });
       document.getElementById('agCondLabel').textContent='Conditions';
       document.getElementById('agRemLabel').textContent='All remarks';
-      if(c==='oil'){ restoreOil(); rerenderAll(); } else { loadBev(); }
+      if(c==='oil'){ restoreOil(); rerenderAll(); }
+      else if(c==='mart'){ loadMart(); }
+      else { loadBev(); }
     });
 
     // Beverages: bulk-update open-invoice remarks from an Excel/CSV, matched by Doc No.
-    var upBtn = document.getElementById('agUploadBev'), upFile = document.getElementById('agUploadBevFile');
+    // Trigger lives in the RAW DATA workspace header.
+    var upBtn = document.getElementById('agRawUpload'), upFile = document.getElementById('agUploadBevFile');
     if(upBtn && upFile){
       upBtn.addEventListener('click', function(){ upFile.click(); });
       upFile.addEventListener('change', function(){
         var f = this.files && this.files[0]; if(!f) return;
         var fd = new FormData(); fd.append('file', f); fd.append('as_of', ASOF||'');
         upBtn.disabled = true;
-        fetch(UPLOAD_BEV_URL, {method:'POST', headers:{'X-CSRFToken':csrf()}, body:fd})
+        fetch(arCfg().upload, {method:'POST', headers:{'X-CSRFToken':csrf()}, body:fd})
           .then(function(r){ return r.json(); })
           .then(function(j){
             if(j && j.status==='ok'){
               var msg = 'Updated '+j.updated+' remark(s) across '+j.matched_docs+' Doc No(s) (from '+j.rows+' row(s) read).';
+              if(j.sp_updated){ msg += '\nUpdated '+j.sp_updated+' Actual Sales Person value(s).'; }
               if(j.unmatched && j.unmatched.length){
-                msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open beverages invoice and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
+                msg += '\n\n'+j.unmatched.length+' Doc No(s) had no open '+arCfg().name.toLowerCase()+' invoice and were skipped:\n'+j.unmatched.slice(0,15).join(', ')+(j.unmatched.length>15?' …':'');
               }
               alert(msg);
-              RAW_BEV=null; loadBev();          // refetch so the updated remarks show
+              // Refetch so the updated remarks show — oil only re-feeds the workspace (its main
+              // view is the B1 pivot); beverages reloads its main A/R view.
+              RAW_BEV=null;
+              if(company==='oil'){ loadOilRaw(function(){ refreshRawIfOpen(); }); }
+              else { loadBev(); }
             } else { alert('Upload failed: '+((j&&j.error)||'unknown error')); }
           })
           .catch(function(){ alert('Upload failed — please try again.'); })
@@ -976,10 +1476,9 @@
     }
 
     document.getElementById('agBody').addEventListener('click',function(e){
-      var raw = e.target.closest && e.target.closest('.ag-rawbtn, .ag-rawlink');
+      var raw = e.target.closest && e.target.closest('.ag-rawlink');
       if(raw){ e.preventDefault(); e.stopPropagation();
-        if(raw.getAttribute('data-scope')==='sp') openRaw({type:'sp', sp:raw.getAttribute('data-sp')});
-        else openRaw({type:'cust', code:raw.getAttribute('data-code'), name:raw.getAttribute('data-name')});
+        openRawData({type:'cust', code:raw.getAttribute('data-code'), name:raw.getAttribute('data-name')}, 'table');
         return;
       }
       var grp = e.target.closest && e.target.closest('.ag-grp'); if(!grp) return;
@@ -990,6 +1489,15 @@
     document.getElementById('agCollapse').addEventListener('click',function(){ setAll(false); });
     document.getElementById('agExport').addEventListener('click', exportAgingXLSX);
     document.getElementById('agExportDetail').addEventListener('click', exportAgingDetail);
+    document.getElementById('agRawData').addEventListener('click', function(){
+      if(document.getElementById('agRawModal').classList.contains('show')){ closeRaw(); return; }
+      if(company==='oil'){                       // oil: fetch open invoices on demand, then open
+        var b=this; b.disabled=true;
+        loadOilRaw(function(){ b.disabled=false; openRawData(null,'table'); });
+        return;
+      }
+      openRawData(null, 'table');                // beverages already has RAW_BEV from its main view
+    });
 
     document.getElementById('agSearch').addEventListener('input', applyFilters);
 
@@ -1030,11 +1538,47 @@
       syncDays();
     });
 
-    // Raw-invoice modal (Beverages) — global search, per-column filter, click-to-sort, CSV.
+    // RAW DATA workspace (Beverages) — tabs, table (search/filter/sort/CSV) + pivot (drill-by).
     document.getElementById('agRawClose').addEventListener('click', closeRaw);
-    document.getElementById('agRawModal').addEventListener('click',function(e){ if(e.target===this) closeRaw(); });
-    document.getElementById('agRawSearch').addEventListener('input', renderRawBody);
-    document.getElementById('agRawExport').addEventListener('click', exportRawCSV);
+    document.getElementById('agRawSearch').addEventListener('input', function(){ if(rawTab==='pivot') renderPivot(); else renderRawBody(); });
+    document.getElementById('agPivExpand').addEventListener('click', expandAllPiv);
+    document.getElementById('agPivCollapse').addEventListener('click', collapseAllPiv);
+    document.getElementById('agPivSign').addEventListener('click',function(e){
+      var b=e.target.closest('button[data-sign]'); if(!b) return;
+      pivOutSign=b.getAttribute('data-sign');
+      [].forEach.call(this.querySelectorAll('button'),function(x){ x.classList.toggle('on', x===b); });
+      renderPivot();
+    });
+    document.getElementById('agRawExport').addEventListener('click',function(){ if(rawTab==='pivot') exportPivotCSV(); else exportRawCSV(); });
+    document.getElementById('agRawTabs').addEventListener('click',function(e){
+      var b=e.target.closest('button[data-tab]'); if(b) setTab(b.getAttribute('data-tab'));
+    });
+    // Pivot drill-by: a dropdown of checkboxes; check to add a level (in selection order), Clear to reset.
+    var drillAdd=document.getElementById('agRawDrillAdd');
+    document.getElementById('agDrillBtn').addEventListener('click',function(e){ e.stopPropagation(); drillAdd.classList.toggle('open'); });
+    document.getElementById('agDrillList').addEventListener('change',function(e){
+      var cb=e.target.closest('input[data-k]'); if(!cb) return;
+      var k=cb.getAttribute('data-k');
+      if(cb.checked){ if(drillBy.indexOf(k)===-1) drillBy.push(k); } else { drillBy=drillBy.filter(function(x){return x!==k;}); }
+      pivExpanded={}; renderDrill(); renderPivot();
+    });
+    document.getElementById('agRawDrillPop').addEventListener('click',function(e){
+      var a=e.target.closest('[data-act="clear"]'); if(!a) return;
+      drillBy=[]; pivExpanded={}; renderDrill(); renderPivot();
+    });
+    document.addEventListener('click',function(e){ if(!drillAdd.contains(e.target)) drillAdd.classList.remove('open'); });
+    // Pivot rows: expand / collapse a group.
+    document.getElementById('agPivTable').addEventListener('click',function(e){
+      var tr=e.target.closest('tr[data-haskids="1"]'); if(!tr) return;
+      var p=tr.getAttribute('data-path'); pivExpanded[p]=!pivExpanded[p]; applyPivVisibility();
+    });
+    // Pivot headers: click to sort every group level by that column.
+    document.getElementById('agPivTable').addEventListener('click',function(e){
+      var th=e.target.closest('th[data-key]'); if(!th) return;
+      var k=th.getAttribute('data-key'), isText=(k==='name'||k==='remark');
+      if(pivSort.key===k) pivSort.dir=-pivSort.dir; else pivSort={key:k, dir:isText?1:-1};
+      renderPivot();
+    });
     document.getElementById('agRawTable').addEventListener('click',function(e){
       var th=e.target.closest('th[data-key]'); if(!th) return;
       var k=th.getAttribute('data-key');
@@ -1046,7 +1590,14 @@
       if(rmk){                                  // manual remark edit — save, don't re-render (keep focus)
         var doc=rmk.getAttribute('data-doc'), code=rmk.getAttribute('data-code'), val=rmk.value;
         (RAW_BEV||[]).forEach(function(r){ if(String(r.doc)===doc && String(r.code)===code) r.remark=val; });
-        saveRawRemark(code, doc, val, rmk);
+        saveRawField(code, doc, val, arCfg().docPrefix, rmk);
+        return;
+      }
+      var sp=e.target.closest('.agrx-sp');
+      if(sp){                                   // actual sales person edit — save, keep focus
+        var sdoc=sp.getAttribute('data-doc'), scode=sp.getAttribute('data-code'), sval=sp.value;
+        (RAW_BEV||[]).forEach(function(r){ if(String(r.doc)===sdoc && String(r.code)===scode) r.actual_sp=sval; });
+        saveRawField(scode, sdoc, sval, arCfg().spPrefix, sp);
         return;
       }
       var inp=e.target.closest('input[data-fk]'); if(!inp) return;
@@ -1059,6 +1610,14 @@
     document.getElementById('agSign').addEventListener('click',function(e){
       var b = e.target.closest('button'); if(!b) return;
       signSel = b.getAttribute('data-sign');
+      [].forEach.call(this.children,function(x){ x.classList.toggle('on', x===b); });
+      applyFilters();
+    });
+
+    // Mart B2B/B2C segment filter (Both / B2B / B2C) — mirrors the sign control.
+    document.getElementById('agSeg').addEventListener('click',function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      segSel = b.getAttribute('data-seg');
       [].forEach.call(this.children,function(x){ x.classList.toggle('on', x===b); });
       applyFilters();
     });
