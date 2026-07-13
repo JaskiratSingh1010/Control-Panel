@@ -27,6 +27,18 @@ _KPI_FETCHERS = [
     ('inventory',          services.get_inventory_value),
 ]
 
+# Direction that reads as "good" for each KPI's month-on-month trend: revenue metrics are
+# better when they rise (True); cost metrics are better when they fall (False); the rest are
+# neutral (None). Drives the green(good)/red(bad) trend pill so a card is readable at a glance.
+_KPI_HIGHER_IS_BETTER = {
+    'total_sales_volume': True,
+    'avg_realisation':    True,
+    'cogs':               False,
+    'opex':               False,
+    'salaries':           False,
+    'inventory':          None,
+}
+
 
 def _build_period_options():
     today = date.today()
@@ -78,6 +90,11 @@ def index(request):
                     logger.error('[home] KPI "%s" raised: %s', name, e)
                     kpis[name] = services._stub_kpi(name, 'error', 'grey')
         cache.set(cache_key, kpis, CACHE_TTL)
+
+    # Tag each KPI with its trend direction semantics (idempotent — safe on cached payloads too).
+    for _name, _kpi in kpis.items():
+        if isinstance(_kpi, dict):
+            _kpi['higher_is_better'] = _KPI_HIGHER_IS_BETTER.get(_name)
 
     period_month_name = date(year, month, 1).strftime('%B')
 

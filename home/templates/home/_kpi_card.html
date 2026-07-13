@@ -4,33 +4,28 @@
   <div class="kpi-head">
     <div class="kpi-icon"><span class="material-icons">{{ kpi.icon }}</span></div>
     {% if kpi.trend is not None %}
+      {# Colour by MEANING: a rise is "good" (green) for revenue KPIs, "bad" (red) for cost KPIs. #}
       {% if kpi.trend > 0 %}
-        <span class="kpi-trend up">&#9650; +{{ kpi.trend }}%</span>
+        <span class="kpi-trend {% if kpi.higher_is_better %}good{% elif kpi.higher_is_better == False %}bad{% else %}flat{% endif %}" title="vs last month">&#9650; +{{ kpi.trend }}%</span>
       {% elif kpi.trend < 0 %}
-        <span class="kpi-trend down">&#9660; {{ kpi.trend }}%</span>
+        <span class="kpi-trend {% if kpi.higher_is_better %}bad{% elif kpi.higher_is_better == False %}good{% else %}flat{% endif %}" title="vs last month">&#9660; {{ kpi.trend }}%</span>
       {% else %}
-        <span class="kpi-trend flat">&#8213; 0%</span>
+        <span class="kpi-trend flat" title="vs last month">&#8213; 0%</span>
       {% endif %}
     {% endif %}
   </div>
 
   <div class="kpi-label">{{ kpi.label }}</div>
   {% if kpi.current_value %}
-    <div class="kpi-month-values">
-      <div class="kpi-month-row current">
-        <span>Current month value</span>
-        <strong>{{ kpi.current_value }}</strong>
-      </div>
-      <div class="kpi-month-row">
-        <span>Last month value</span>
-        <strong>{{ kpi.last_value }}</strong>
-      </div>
-    </div>
+    <div class="kpi-value"{% if kpi.extra.is_cogs %} data-cogs-value{% endif %}>{{ kpi.current_value }}</div>
+    <div class="kpi-compare">vs last month <b>{{ kpi.last_value }}</b></div>
   {% else %}
     <div class="kpi-value"{% if kpi.extra.is_cogs %} data-cogs-value{% endif %}>{{ kpi.value }}</div>
   {% endif %}
   {% if is_inventory %}
     <div class="kpi-sub">{{ kpi.status|default:kpi.sub_value }}</div>
+  {% elif kpi.sub_value %}
+    <div class="kpi-sub"{% if kpi.extra.is_cogs %} data-cogs-sub{% endif %}>{{ kpi.sub_value }}</div>
   {% endif %}
 
   {% if kpi.extra.is_cogs %}

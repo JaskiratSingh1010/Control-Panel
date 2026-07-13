@@ -1389,29 +1389,43 @@
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     var hdr=drillBy.map(pivDimLabel).concat(['Remarks','Count','Doc Total','Balance Due','Original Outstanding','Diff']).concat(BUCKETS.map(function(b){return b.label;}));
     var lines=[hdr.map(cell).join(',')];
-    // Balance Due, Original Outstanding + Diff are blanked on Doc No rows: Original Outstanding is
-    // a per-customer ledger balance repeated on each of a customer's invoices (summing doc rows
-    // would double-count it), and its Balance Due belongs on the customer line — so these three
-    // export on Customer / Sales Person (any non-doc) rows and the Grand Total, but not per Doc No.
-    function meas(n, dimKey){
-      var hide = dimKey==='doc';
+    // Balance Due, Original Outstanding + Diff are a customer-level view — Original Outstanding is
+    // the customer's whole ledger balance, repeated on every one of its invoices, so on per-invoice
+    // rows it misleads and would double-count if summed. Blank all three once the drill path has
+    // reached Doc No grain (Doc No, or any dimension nested under it); they stay on Customer /
+    // Sales Person rows and the Grand Total.
+    function meas(n, atDocGrain){
       return [n.count, Math.round(n.total),
-              hide?'':Math.round(n.bal),
-              hide?'':Math.round(n.outstanding),
-              hide?'':Math.round(n.bal-n.outstanding)]
+              atDocGrain?'':Math.round(n.bal),
+              atDocGrain?'':Math.round(n.outstanding),
+              atDocGrain?'':Math.round(n.bal-n.outstanding)]
              .concat(BUCKET_KEYS.map(function(k){return Math.round(n[k]);}));
     }
+    // A Doc No is a single invoice, so ANY dimension nested under it (e.g. Days) is 1:1 with it —
+    // emitting both the Doc No row and its lone child would print the same invoice twice. Once we're
+    // at Doc No grain, collapse a node that has a single child so each invoice appears exactly once
+    // (the surviving child row still carries the Doc No — and Days — in its own columns).
     (function walk(node, depth, labels){
       node._order.sort(pivCmp(node));
+      var atDocGrain = drillBy.slice(0, depth+1).indexOf('doc')!==-1;
       node._order.forEach(function(kv){
-        var kid=node._kids[kv], lab=labels.concat([kv]), dim=[];
-        for(var i=0;i<drillBy.length;i++) dim.push(i<lab.length?lab[i]:'');
-        lines.push(dim.concat([pivRemarkFull(kid)]).concat(meas(kid, drillBy[depth])).map(cell).join(','));
-        if(depth+1<drillBy.length) walk(kid, depth+1, lab);
+        var kid=node._kids[kv], lab=labels.concat([kv]);
+        var isLeaf = depth+1>=drillBy.length;
+        var redundant = !isLeaf && atDocGrain && kid._order.length===1;   // e.g. Doc No → its single Days child
+        if(!redundant){
+          var dim=[]; for(var i=0;i<drillBy.length;i++) dim.push(i<lab.length?lab[i]:'');
+          // The row that groups a set of Doc No rows is that customer's documents total — mark its
+          // own label so it reads unmistakably as a total, e.g. "RISHI ENTERPRISES — Total (6 docs)".
+          if(!isLeaf && drillBy[depth+1]==='doc'){
+            var c=kid.count; dim[lab.length-1] = String(dim[lab.length-1])+' — Total ('+c+' doc'+(c===1?'':'s')+')';
+          }
+          lines.push(dim.concat([pivRemarkFull(kid)]).concat(meas(kid, atDocGrain)).map(cell).join(','));
+        }
+        if(!isLeaf) walk(kid, depth+1, lab);
       });
     })(root,0,[]);
     var tot=[]; for(var i=0;i<drillBy.length;i++) tot.push(i===0?'Grand Total':'');
-    lines.push(tot.concat(['']).concat(meas(root, null)).map(cell).join(','));
+    lines.push(tot.concat(['']).concat(meas(root, false)).map(cell).join(','));
     var blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob), a=document.createElement('a');
     a.href=url; a.download=arCfg().name+'_Raw_Pivot.csv'; a.click();
