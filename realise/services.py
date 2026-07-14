@@ -5291,6 +5291,8 @@ def _serialize_claim(c):
         'product': c.product or '',
         'item': c.item or '',
         'claim_type': c.claim_type or '',
+        'ref_inv_no': c.ref_inv_no or '',
+        'coop_no': c.coop_no or '',
         'claim_amount': float(c.claim_amount or 0),
         'claim_pass_date': c.claim_pass_date.isoformat() if c.claim_pass_date else '',
         'claim_hold': c.claim_hold or '',
@@ -5356,6 +5358,8 @@ def upsert_claim(data, user=None):
     claim.product         = str(data.get('product') or '').strip()
     claim.item            = str(data.get('item') or '').strip()
     claim.claim_type      = str(data.get('claim_type') or '').strip()
+    claim.ref_inv_no      = str(data.get('ref_inv_no') or '').strip()[:100]
+    claim.coop_no         = str(data.get('coop_no') or '').strip()[:100]
     claim.claim_amount    = _parse_claim_amount(data.get('claim_amount'))
     claim.claim_pass_date = _parse_claim_date(data.get('claim_pass_date'))
     hold = str(data.get('claim_hold') or '').strip().capitalize()

@@ -90,7 +90,6 @@
     /* Icon-only look only while the rail is NOT peeking/focused */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-brand,
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label,
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-period-block,
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-user-badge,
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-logout-form { display: none; }
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav:first-of-type { margin-top: 56px; }  /* clear the floating menu button */
@@ -135,17 +134,8 @@
     .cp-nav-group.open > .cp-nav-sub { display: flex; }
     .cp-nav-sub .cp-nav-item { font-size: 12.5px; padding: 8px 11px; }
 
-    /* ── Period block ── */
-    .cp-period-block { margin-top: auto; padding-top: 18px; }
-    .cp-period-select { width: 100%; padding: 9px 11px; border-radius: 9px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; font-family: inherit; font-size: 12px; cursor: pointer; outline: none; transition: border-color .15s, background .15s; }
-    .cp-period-select:hover, .cp-period-select:focus { border-color: #6366f1; background: #eef2ff; }
-    .cp-period-select option { color: #1f2937; background: #fff; }
-    .cp-clock { text-align: center; margin: 10px 0 8px; font-size: 12px; color: #64748b; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 1px; }
-    .cp-refresh-btn { display: block; text-align: center; padding: 9px; background: #f1f5f9; color: #475569; border-radius: 9px; text-decoration: none; font-size: 12px; font-weight: 600; border: 1px solid #e2e8f0; transition: background .15s, color .15s, border-color .15s; }
-    .cp-refresh-btn:hover { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
-
     /* ── User badge ── */
-    .cp-user-badge { margin-top: 14px; padding: 10px; background: #f1f5f9; border: 1px solid #e5e7eb; border-radius: 11px; display: flex; align-items: center; gap: 10px; }
+    .cp-user-badge { margin-top: auto; padding: 10px; background: #f1f5f9; border: 1px solid #e5e7eb; border-radius: 11px; display: flex; align-items: center; gap: 10px; }
     .cp-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 9px rgba(99,102,241,0.4); }
     .cp-user-name { font-size: 12px; font-weight: 700; color: #0f172a; }
     .cp-user-role { font-size: 10px; color: #64748b; text-transform: capitalize; }
@@ -360,17 +350,6 @@
         </nav>
         {% endif %}
 
-        <div class="cp-period-block">
-          <div class="cp-section-label">Period</div>
-          <select class="cp-period-select" onchange="window.location.href='?period='+this.value">
-            {% for opt in period_options %}
-              <option value="{{ opt.value }}"{% if opt.value == selected_period %} selected{% endif %}>{{ opt.label }}</option>
-            {% endfor %}
-          </select>
-          <div class="cp-clock" id="cpClock">--:--:-- --</div>
-          <a class="cp-refresh-btn" href="?nocache=1">&#8635; Clear Cache &amp; Refresh</a>
-        </div>
-
         <div class="cp-user-badge">
           <div class="cp-avatar">{{ display_name|slice:":2"|upper }}</div>
           <div>
@@ -448,18 +427,6 @@
       });
     })();
 
-    (function () {
-      function pad(n) { return n < 10 ? '0' + n : '' + n; }
-      function tick() {
-        var d = new Date();
-        var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
-        var ampm = h >= 12 ? 'PM' : 'AM';
-        h = h % 12; if (h === 0) h = 12;
-        var el = document.getElementById('cpClock');
-        if (el) el.textContent = pad(h) + ':' + pad(m) + ':' + pad(s) + ' ' + ampm;
-      }
-      tick(); setInterval(tick, 1000);
-    })();
   </script>
   {% block extra_scripts %}{% endblock %}
 

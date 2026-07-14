@@ -366,6 +366,8 @@ class Claim(models.Model):
     product         = models.CharField(max_length=120, blank=True, default='')    # oil variety / sub-group
     item            = models.CharField(max_length=200, blank=True, default='')    # SKU / item name
     claim_type      = models.CharField(max_length=120, blank=True, default='')    # manual (Discount / FOC / …)
+    ref_inv_no      = models.CharField(max_length=100, blank=True, default='')    # Ref. Invoice No (manual)
+    coop_no         = models.CharField(max_length=100, blank=True, default='')    # COOP No (manual)
     claim_amount    = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     claim_pass_date = models.DateField(null=True, blank=True)
     claim_hold      = models.CharField(max_length=10, blank=True, default='')     # 'Yes' / 'No'
