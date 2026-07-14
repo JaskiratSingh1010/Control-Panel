@@ -963,6 +963,16 @@ def api_sales_flow_data(request):
     return JsonResponse(services.get_sales_document_flow(start_date, end_date, company))
 
 
+@any_permission_flag('can_sales_flow', json_response=True)
+@require_http_methods(['POST'])
+def api_sales_flow_open_items(request):
+    """Open line items of one Sales Order / Quotation, for the Sales Document Flow drill-down that
+    opens on clicking an open document. Body: {doc_type:'order'|'quotation', doc_no, company}."""
+    body = _parse_body(request)
+    return JsonResponse(services.get_sales_flow_open_items(
+        body.get('doc_type', ''), body.get('doc_no', ''), body.get('company', 'oil')))
+
+
 @group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['POST'])
 def api_beverages_data(request):

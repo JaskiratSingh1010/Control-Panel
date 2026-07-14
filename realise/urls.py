@@ -16,6 +16,7 @@ urlpatterns = [
     path('customer-master/export/',  views.export_customer_master, name='export_customer_master'),
     path('sales-flow/',              views.sales_document_flow,    name='sales_flow'),
     path('api/sales-flow/',          views.api_sales_flow_data,    name='api_sales_flow_data'),
+    path('api/sales-flow/open-items/', views.api_sales_flow_open_items, name='api_sales_flow_open_items'),
     path('claims/',                  views.claims,                 name='claims'),
     path('api/claims/',              views.api_claims_data,        name='api_claims_data'),
     path('api/claims/save/',         views.api_claim_save,         name='api_claim_save'),

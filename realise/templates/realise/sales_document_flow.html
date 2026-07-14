@@ -52,6 +52,41 @@
   .sf-v0{color:var(--rz-faint)}
   table.sf-table tbody tr.sf-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
   .sf-empty{padding:40px;text-align:center;color:var(--rz-muted)}
+  /* per-document source tag (OMS software vs the SAP user who keyed it) */
+  .sf-doc{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+  .sf-src{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;letter-spacing:.2px;padding:1px 7px;border-radius:999px;line-height:1.6;white-space:nowrap;text-transform:none}
+  .sf-src .sf-dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+  .sf-src.sf-oms{background:rgba(99,102,241,.12);color:var(--rz-indigo-deep);border:1px solid rgba(99,102,241,.28)}
+  .sf-src.sf-oms .sf-dot{background:var(--rz-indigo)}
+  .sf-src.sf-sap{background:var(--rz-soft);color:var(--rz-muted);border:1px solid var(--rz-soft-brd);font-weight:700}
+  .sf-src.sf-sap .sf-dot{background:#94a3b8}
+  .sf-tablehdr{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 16px;padding-right:8px}
+  .sf-legend{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--rz-muted);font-weight:600;padding:0 14px}
+  .sf-legend b{color:var(--rz-body);font-weight:700}
+  /* per-document open/closed status + clickable open document */
+  .sf-tags{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+  .sf-st{display:inline-flex;align-items:center;font-size:10px;font-weight:800;letter-spacing:.2px;padding:1px 7px;border-radius:999px;line-height:1.6;white-space:nowrap}
+  .sf-st.sf-open{background:rgba(16,185,129,.14);color:#047857;border:1px solid rgba(16,185,129,.32)}
+  .sf-st.sf-closed{background:var(--rz-soft);color:var(--rz-faint);border:1px solid var(--rz-soft-brd)}
+  .sf-docnum.sf-drill{cursor:pointer;color:var(--rz-indigo-deep);font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+  .sf-docnum.sf-drill:hover{color:var(--rz-indigo);text-decoration-style:solid}
+  /* open-items drill modal */
+  .sf-modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.45);padding:20px}
+  .sf-modal[hidden]{display:none}
+  .sf-modal-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,.3);width:min(560px,96vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+  .sf-modal-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--rz-line)}
+  .sf-modal-title{font-size:15px;font-weight:800;color:var(--rz-ink)}
+  .sf-modal-sub{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:3px}
+  .sf-modal-x{border:0;background:transparent;font-size:24px;line-height:1;color:var(--rz-muted);cursor:pointer;padding:0 4px}
+  .sf-modal-x:hover{color:var(--rz-ink)}
+  .sf-modal-body{overflow:auto;padding:4px 8px 8px}
+  .sf-modal-empty{padding:28px;text-align:center;color:var(--rz-muted);font-size:13px}
+  table.sf-oi{width:100%;border-collapse:collapse;font-size:13px}
+  table.sf-oi th{position:sticky;top:0;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:left;font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--rz-line)}
+  table.sf-oi th.num,table.sf-oi td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.sf-oi td{padding:8px 12px;border-bottom:1px solid var(--rz-line);color:var(--rz-body);vertical-align:top}
+  table.sf-oi td.sf-oi-item{font-weight:600;color:var(--rz-ink);white-space:normal}
+  table.sf-oi tfoot td{font-weight:800;color:var(--rz-ink);border-top:2px solid var(--rz-total-brd);background:var(--rz-total-bg)}
 </style>
 {% endblock %}
 
@@ -59,7 +94,7 @@
 <div class="sf-wrap">
   <div>
     <h1 class="sf-h1">Sales Document Flow</h1>
-    <p class="sf-psub">Yesterday's sales traced end-to-end — each party's Sales Quotation → Sales Order → Invoice, with the invoiced litres. Blank quotation/order means the document was raised directly.</p>
+    <p class="sf-psub">Yesterday's sales traced end-to-end — each party's Sales Quotation → Sales Order → Invoice, with the invoiced litres. Blank quotation/order means the document was raised directly. Each document is tagged by its source — the <b>OMS</b> software or the SAP user who keyed it.</p>
   </div>
 
   <div class="sf-kpis" id="sfKpis"></div>
@@ -75,18 +110,45 @@
     <div class="sf-fld"><span class="sf-lbl">To</span><input type="date" id="sfEnd"></div>
     <button class="sf-yday" id="sfYday" title="Reset to yesterday">Yesterday</button>
     <button class="sf-fetch" id="sfFetch">&#9654; Fetch</button>
+    <div class="sf-fld"><span class="sf-lbl">Documents</span>
+      <div class="sf-seg" id="sfDocFilter">
+        <button type="button" data-df="both" class="active">Both</button>
+        <button type="button" data-df="open" title="Only rows whose Sales Order is still open (pending delivery / invoicing)">Open Doc</button>
+      </div>
+    </div>
     <div class="sf-fld"><span class="sf-lbl">Search</span>
-      <input type="search" id="sfSearch" placeholder="Party / quotation / order / invoice…" autocomplete="off">
+      <input type="search" id="sfSearch" placeholder="Party / doc no / source (OMS, user)…" autocomplete="off">
     </div>
   </div>
 
   <div class="sf-table-card">
-    <div class="sf-count" id="sfCount"></div>
+    <div class="sf-tablehdr">
+      <div class="sf-count" id="sfCount"></div>
+      <div class="sf-legend">
+        <span class="sf-st sf-open">Open</span> pending — click for open items
+        <span class="sf-st sf-closed">Closed</span> fully processed ·
+        <span class="sf-src sf-oms"><span class="sf-dot"></span>OMS</span> OMS software ·
+        <span class="sf-src sf-sap"><span class="sf-dot"></span>User</span> keyed in SAP
+      </div>
+    </div>
     <div class="sf-table-wrap">
       <table class="sf-table">
         <thead id="sfHead"></thead>
         <tbody id="sfBody"><tr><td class="sf-empty">Loading…</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="sf-modal" id="sfModal" hidden>
+    <div class="sf-modal-card" role="dialog" aria-modal="true">
+      <div class="sf-modal-hd">
+        <div>
+          <div class="sf-modal-title" id="sfModalTitle">Open items</div>
+          <div class="sf-modal-sub" id="sfModalSub"></div>
+        </div>
+        <button type="button" class="sf-modal-x" id="sfModalX" aria-label="Close">&times;</button>
+      </div>
+      <div class="sf-modal-body" id="sfModalBody"></div>
     </div>
   </div>
 </div>
@@ -104,24 +166,29 @@
   var COLS=[
     {k:'date',l:'Date'},
     {k:'party',l:'Party Name',cls:'party'},
-    {k:'quotation_no',l:'Sales Quotation No.',cls:'doc'},
-    {k:'order_no',l:'Sales Order No.',cls:'doc'},
-    {k:'invoice_no',l:'Invoice No.',cls:'doc'},
+    {k:'quotation_no',l:'Sales Quotation No.',cls:'doc',src:'quotation_src',st:'quotation_open',dt:'quotation'},
+    {k:'order_no',l:'Sales Order No.',cls:'doc',src:'order_src',st:'order_open',dt:'order'},
+    {k:'invoice_no',l:'Invoice No.',cls:'doc',src:'invoice_src'},
     {k:'qty',l:'LTR',num:true,qty:true},
   ];
 
   var rows=[], loaded=false, err=null, searchF='';
-  var company='oil', measure='Litres';
+  var company='oil', measure='Litres', docFilter='both';   // docFilter: 'both' | 'open' (order still open)
   var sortKey='invoice_no', sortDir=1;
   function measureLabel(){return measure==='Boxes'?'Boxes':'LTR';}   // column header for the qty column
 
+  function srcHay(s){ return s?((s.oms?'oms':'sap')+' '+s.label+' '+s.user):''; }
   function matches(r){
     if(!searchF)return true;
-    var hay=(r.party+' '+r.quotation_no+' '+r.order_no+' '+r.invoice_no).toLowerCase();
+    var hay=(r.party+' '+r.quotation_no+' '+r.order_no+' '+r.invoice_no+' '
+             +srcHay(r.quotation_src)+' '+srcHay(r.order_src)+' '+srcHay(r.invoice_src)).toLowerCase();
     return hay.indexOf(searchF)!==-1;
   }
+  // 'Open Doc' keeps only rows whose Sales Order is still open (pending delivery/invoicing).
+  // Rows raised directly (no order) have no open order, so they drop out under this filter.
+  function docPass(r){ return docFilter==='open' ? !!r.order_open : true; }
   function activeRows(){
-    var out=rows.filter(matches);
+    var out=rows.filter(function(r){ return docPass(r) && matches(r); });
     out.sort(function(a,b){
       if(sortKey==='qty')return ((Number(a.qty)||0)-(Number(b.qty)||0))*sortDir;
       return String(a[sortKey]||'').localeCompare(String(b[sortKey]||''),undefined,{numeric:true})*sortDir;
@@ -145,11 +212,33 @@
     }).join('');
   }
 
+  // A document's source tag: OMS software (B1i) vs the SAP user who keyed it. Empty when the
+  // document doesn't exist (blank quotation/order raised directly).
+  function srcTag(s){
+    if(!s)return '';
+    if(s.oms)return '<span class="sf-src sf-oms" title="Created by the OMS software (B1i)"><span class="sf-dot"></span>OMS</span>';
+    return '<span class="sf-src sf-sap" title="Keyed in SAP by '+esc(s.user)+'"><span class="sf-dot"></span>'+esc(s.label)+'</span>';
+  }
+  // open (green, clickable → open items) / closed (grey) status chip for a document.
+  function statusChip(isOpen){
+    return isOpen ? '<span class="sf-st sf-open">Open</span>' : '<span class="sf-st sf-closed">Closed</span>';
+  }
   function cell(c,r){
     var v=r[c.k];
     if(c.num)return fN(v);
-    if(!String(v||'').trim())return '<span class="sf-v0">—</span>';
-    return esc(v);
+    var has=String(v||'').trim();
+    if(c.src){
+      var num;
+      if(!has){ num='<span class="sf-v0">—</span>'; }
+      else if(c.dt && r[c.st]){   // open + drillable → the number opens the open-items popup
+        num='<a class="sf-docnum sf-drill" data-dt="'+esc(c.dt)+'" data-no="'+esc(v)+'" title="Show the open items on this document">'+esc(v)+'</a>';
+      } else { num=esc(v); }
+      var tags='';
+      if(has && c.st!=null) tags+=statusChip(!!r[c.st]);
+      tags+=srcTag(r[c.src]);
+      return '<div class="sf-doc">'+num+(tags?'<div class="sf-tags">'+tags+'</div>':'')+'</div>';
+    }
+    return has?esc(v):'<span class="sf-v0">—</span>';
   }
 
   function render(){
@@ -171,6 +260,36 @@
     html+='<tr class="sf-total"><td>TOTAL</td><td></td><td></td><td></td><td></td><td class="num">'+fN(lit)+'</td></tr>';
     body.innerHTML=html;
   }
+
+  // ---- open-items drill modal (opens when an OPEN document number is clicked) ----
+  function openItemsModal(dt,no){
+    document.getElementById('sfModalTitle').textContent=(dt==='order'?'Open Sales Order ':'Open Quotation ')+no;
+    document.getElementById('sfModalSub').textContent='Loading…';
+    document.getElementById('sfModalBody').innerHTML='';
+    document.getElementById('sfModal').hidden=false;
+    fetch('/realise/api/sales-flow/open-items/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({doc_type:dt,doc_no:no,company:company})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(renderItems)
+      .catch(function(){ renderItems({status:'error',error:'load failed'}); });
+  }
+  function renderItems(p){
+    var sub=document.getElementById('sfModalSub'), body=document.getElementById('sfModalBody');
+    if(p.status==='error'){ sub.textContent=''; body.innerHTML='<div class="sf-modal-empty">'+esc(p.error||'Could not load.')+'</div>'; return; }
+    sub.textContent=p.party||'';
+    var items=p.items||[];
+    if(!items.length){ body.innerHTML='<div class="sf-modal-empty">No open items on this document.</div>'; return; }
+    var unit=(p.measure==='Boxes'?'Boxes':'LTR');
+    var trs=items.map(function(it){
+      return '<tr><td class="sf-oi-item">'+esc(it.label||(it.code+' — '+it.name))+'</td>'
+        +'<td class="num">'+fN(it.open_pcs)+'</td><td class="num">'+fN(it.open_qty)+'</td></tr>';
+    }).join('');
+    body.innerHTML='<table class="sf-oi"><thead><tr><th>Item</th><th class="num">Open Pcs</th><th class="num">Open '+esc(unit)+'</th></tr></thead>'
+      +'<tbody>'+trs+'</tbody>'
+      +'<tfoot><tr><td>Total ('+items.length+' item'+(items.length===1?'':'s')+')</td>'
+      +'<td class="num">'+fN(p.total_pcs)+'</td><td class="num">'+fN(p.total_open)+'</td></tr></tfoot></table>';
+  }
+  function closeModal(){ document.getElementById('sfModal').hidden=true; }
 
   function load(){
     var sd=document.getElementById('sfStart').value, ed=document.getElementById('sfEnd').value;
@@ -199,6 +318,12 @@
     [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
     load();
   });
+  document.getElementById('sfDocFilter').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b||b.getAttribute('data-df')===docFilter)return;
+    docFilter=b.getAttribute('data-df');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    render();   // pure client-side view filter — no refetch
+  });
   document.getElementById('sfYday').addEventListener('click',function(){setYesterday();load();});
   document.getElementById('sfStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('sfEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
@@ -208,6 +333,13 @@
     var th=e.target&&e.target.closest?e.target.closest('th[data-k]'):null; if(!th)return;
     var k=th.getAttribute('data-k'); if(k===sortKey){sortDir=-sortDir;}else{sortKey=k;sortDir=1;} render();
   });
+  document.getElementById('sfBody').addEventListener('click',function(e){
+    var a=e.target&&e.target.closest?e.target.closest('.sf-drill'):null; if(!a)return;
+    e.preventDefault(); openItemsModal(a.getAttribute('data-dt'), a.getAttribute('data-no'));
+  });
+  document.getElementById('sfModalX').addEventListener('click',closeModal);
+  document.getElementById('sfModal').addEventListener('click',function(e){ if(e.target===this)closeModal(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeModal(); });
 
   setYesterday();
   load();

@@ -354,10 +354,12 @@ class Claim(models.Model):
     main_group), and product/item are chosen from the item master. Amount, type, pass date and the
     hold/pass workflow are all manual (no derivation). ``claim_hold`` is a plain 'Yes'/'No' flag;
     ``claim_passed`` and ``hold_amount`` are the manual ₹ amounts approved / withheld; the report's
-    'Claim Month & Year' column is derived from ``claim_date``. Drill By pivots on party_name
-    (Customer) / product / item / main_group."""
+    'Claim Month & Year' column uses ``claim_month`` ('YYYY-MM', chosen on the form) when set, else
+    falls back to the month of ``claim_date``. Drill By pivots on party_name (Customer) / product /
+    item / main_group."""
 
     claim_date      = models.DateField()
+    claim_month     = models.CharField(max_length=7, blank=True, default='')     # 'YYYY-MM' explicit claim period; blank = derive from claim_date
     party_code      = models.CharField(max_length=50, blank=True, default='')    # SAP CardCode (if picked)
     party_name      = models.CharField(max_length=200)                            # Party Name / Customer
     main_group      = models.CharField(max_length=100, blank=True, default='')    # channel, auto from the party

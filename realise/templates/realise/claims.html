@@ -120,6 +120,16 @@
     </div>
     <div class="cl-fld"><span class="cl-lbl">From</span><input type="date" id="clFrom"></div>
     <div class="cl-fld"><span class="cl-lbl">To</span><input type="date" id="clTo"></div>
+    <div class="cl-fld"><span class="cl-lbl">Parties</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="clPtyBtn"><span id="clPtyLabel">All parties</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="clPtyPanel">
+          <div class="com-dp-head"><a id="clPtyAll">Select All</a><a id="clPtyClr">Clear All</a></div>
+          <div class="com-dp-list" id="clPtyList"></div>
+          <div class="com-dp-foot"><button type="button" id="clPtyApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
     <div class="cl-fld"><span class="cl-lbl">Types</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="clTypeBtn"><span id="clTypeLabel">All types</span><span class="com-caret">&#9662;</span></button>
@@ -167,6 +177,7 @@
     <div class="cl-form">
       <div class="cl-ffld"><label>Receiving Date *</label><input type="date" id="fDate"></div>
       <div class="cl-ffld"><label>Claim Pass Date</label><input type="date" id="fPassDate"></div>
+      <div class="cl-ffld"><label>Claim Month</label><input type="month" id="fMonth" title="Defaults to the Receiving Date's month; change to file this claim under a different month"></div>
       <div class="cl-ffld cl-f2"><label>Party Name *</label><input list="clPartyList" id="fParty" placeholder="Search customer…" autocomplete="off"><datalist id="clPartyList"></datalist></div>
       <div class="cl-ffld"><label>Main Group (auto)</label><input type="text" id="fMainGroup" readonly placeholder="—"></div>
       <div class="cl-ffld"><label>Claim Type</label><input list="clTypeMaster" id="fType" placeholder="Discount / FOC / …" autocomplete="off"><datalist id="clTypeMaster"></datalist></div>
@@ -227,10 +238,12 @@
   var partyByName={};   // UPPER(name) -> {code, main_group}
   var ymF='', fromF='', toF='', searchF='';
   var typeSet=null;                       // null = all
+  var partySet=null;                      // null = all parties (multi-select party filter)
   var order=[], chosen=[];                // drill dims
   var expanded={};
   var sortKey='claim_date', sortDir=-1;
   var editing=null;                       // claim id being edited, or null for new
+  var monthTouched=false;                 // true once the user hand-picks Claim Month (stops date auto-sync)
 
   /* ---------- filtering ---------- */
   function rowMatches(r){
@@ -238,6 +251,7 @@
     if(fromF && (!r.claim_date || r.claim_date<fromF)) return false;
     if(toF && (!r.claim_date || r.claim_date>toF)) return false;
     if(typeSet && !typeSet.has(r.claim_type||'')) return false;
+    if(partySet && !partySet.has(r.party_name||'')) return false;
     if(searchF){
       var hay=(r.party_name+' '+r.claim_type+' '+r.main_group+' '+r.reason_of_hold).toLowerCase();
       if(hay.indexOf(searchF)===-1) return false;
@@ -402,6 +416,33 @@
     var n=typeSet.size; return n===0?'None':(n+' selected');
   }
 
+  /* ---------- Parties multi-select ---------- */
+  function distinctParties(){
+    var s={}; rows.forEach(function(r){var p=r.party_name||'';if(p)s[p]=1;});
+    return Object.keys(s).sort();
+  }
+  function renderPartyList(){
+    var list=document.getElementById('clPtyList'); list.innerHTML='';
+    var parties=distinctParties();
+    if(!parties.length){list.innerHTML='<div class="com-dp-item" style="color:#94a3b8">No parties yet</div>';return;}
+    parties.forEach(function(p){
+      var on=!partySet||partySet.has(p);
+      var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(p)+'</span><span class="com-pos">✓</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var cur=new Set(); document.querySelectorAll('#clPtyList input:checked').forEach(function(cb){cur.add(cb.parentNode.querySelector('.com-dp-name').textContent);});
+        item.classList.toggle('checked',this.checked);
+        partyWorking=cur;
+      });
+      list.appendChild(item);
+    });
+  }
+  var partyWorking=null;
+  function partyLabel(){
+    if(!partySet)return 'All parties';
+    var n=partySet.size; return n===0?'None':(n+' selected');
+  }
+
   /* ---------- Drill picker ---------- */
   function renderDrillList(){
     var list=document.getElementById('clDrillList'); list.innerHTML='';
@@ -425,6 +466,8 @@
     var g=function(id){return document.getElementById(id);};
     g('fDate').value=row?row.claim_date:'';
     g('fPassDate').value=row?row.claim_pass_date:'';
+    g('fMonth').value=row?(row.claim_month||''):'';
+    monthTouched=!!(row&&row.claim_month);   // an explicit saved month stays put; else auto-syncs to the date
     g('fParty').value=row?row.party_name:'';
     g('fMainGroup').value=row?row.main_group:'';
     g('fType').value=row?row.claim_type:'';
@@ -461,6 +504,7 @@
     var payload={
       id: editing||undefined,
       claim_date: g('fDate').value,
+      claim_month: g('fMonth').value,
       claim_pass_date: g('fPassDate').value,
       party_name: g('fParty').value.trim(),
       party_code: g('fParty').getAttribute('data-code')||'',
@@ -545,6 +589,11 @@
   document.getElementById('fParty').addEventListener('input',onPartyChange);
   document.getElementById('fAmount').addEventListener('input',recalcHold);
   document.getElementById('fPassed').addEventListener('input',recalcHold);
+  // Claim Month defaults to the Receiving Date's month until the user hand-picks a month.
+  document.getElementById('fDate').addEventListener('change',function(){
+    if(!monthTouched && this.value) document.getElementById('fMonth').value=this.value.slice(0,7);
+  });
+  document.getElementById('fMonth').addEventListener('input',function(){ monthTouched=true; });
 
   document.getElementById('clMonth').addEventListener('change',function(){ymF=this.value;render();});
   document.getElementById('clFrom').addEventListener('change',function(){fromF=this.value;render();});
@@ -562,6 +611,17 @@
     if(!typeWorking||typeWorking.size===all.length)typeSet=null; else typeSet=new Set(typeWorking);
     document.getElementById('clTypeLabel').textContent=typeLabel();
     document.getElementById('clTypePanel').classList.remove('open'); render();
+  });
+
+  // Parties multi-select
+  document.getElementById('clPtyBtn').addEventListener('click',function(e){e.stopPropagation();renderPartyList();partyWorking=partySet?new Set(partySet):new Set(distinctParties());togglePanel('clPtyBtn','clPtyPanel');});
+  document.getElementById('clPtyAll').addEventListener('click',function(){partyWorking=new Set(distinctParties());renderPartyList();document.querySelectorAll('#clPtyList input').forEach(function(cb){cb.checked=true;cb.parentNode.classList.add('checked');});});
+  document.getElementById('clPtyClr').addEventListener('click',function(){partyWorking=new Set();document.querySelectorAll('#clPtyList input').forEach(function(cb){cb.checked=false;cb.parentNode.classList.remove('checked');});});
+  document.getElementById('clPtyApply').addEventListener('click',function(){
+    var all=distinctParties();
+    if(!partyWorking||partyWorking.size===all.length)partySet=null; else partySet=new Set(partyWorking);
+    document.getElementById('clPtyLabel').textContent=partyLabel();
+    document.getElementById('clPtyPanel').classList.remove('open'); render();
   });
 
   // Drill picker

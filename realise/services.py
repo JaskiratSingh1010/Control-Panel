@@ -3426,6 +3426,22 @@ _sales_flow_cache = {}
 _SALES_FLOW_TTL = 90
 
 
+# The OMS software integrates into SAP as the B1i integration user; every document it raises
+# is stamped with that user in UserSign. Anything else was keyed by a person inside SAP.
+_OMS_USER_CODE = 'B1I'
+
+
+def _doc_source(ucode, uname):
+    """Classify a document's creator (from OUSR) as OMS vs a manual SAP user. Returns None when
+    there is no document (blank order/quotation), so the frontend shows nothing for that cell."""
+    code = str(ucode or '').strip()
+    if not code:
+        return None
+    name = str(uname or '').strip()
+    is_oms = code.upper() == _OMS_USER_CODE
+    return {'oms': is_oms, 'label': 'OMS' if is_oms else (name or code), 'user': name or code}
+
+
 def get_sales_document_flow(start_date, end_date, company='oil'):
     """Rows of Party / Quotation No / Order No / Invoice No / qty for invoices dated in
     [start_date, end_date] for `company` ('oil' | 'beverages'). One row per (invoice, order,
@@ -3460,6 +3476,15 @@ def get_sales_document_flow(start_date, end_date, company='oil'):
                COALESCE(TRIM(H."CardName"), '') AS "PARTY",
                COALESCE(O1."DocNum", O2."DocNum") AS "ORDER_NO",
                COALESCE(Q1."DocNum", Q2."DocNum") AS "QUOT_NO",
+               -- creator of each document (OUSR via UserSign): B1i = OMS, else a manual SAP user.
+               -- MAX() keeps them out of GROUP BY (constant within an invoice/order/quotation).
+               MAX(UQ."USER_CODE") AS "QUOT_UCODE", MAX(UQ."U_NAME") AS "QUOT_UNAME",
+               MAX(UO."USER_CODE") AS "ORD_UCODE",  MAX(UO."U_NAME") AS "ORD_UNAME",
+               MAX(UI."USER_CODE") AS "INV_UCODE",  MAX(UI."U_NAME") AS "INV_UNAME",
+               -- open/closed (DocStatus 'O'/'C') of each document, for the Open-Doc filter
+               MAX(COALESCE(Q1."DocStatus", Q2."DocStatus")) AS "QUOT_ST",
+               MAX(COALESCE(O1."DocStatus", O2."DocStatus")) AS "ORD_ST",
+               MAX(H."DocStatus") AS "INV_ST",
                SUM({qty}) AS "QTY"
         FROM "{S}"."OINV" H
         JOIN "{S}"."INV1" L ON L."DocEntry" = H."DocEntry"
@@ -3473,6 +3498,10 @@ def get_sales_document_flow(start_date, end_date, company='oil'):
         LEFT JOIN "{S}"."ORDR" O2 ON D."BaseType" = 17 AND O2."DocEntry" = D."BaseEntry"
         LEFT JOIN "{S}"."RDR1" R2 ON D."BaseType" = 17 AND R2."DocEntry" = D."BaseEntry" AND R2."LineNum" = D."BaseLine"
         LEFT JOIN "{S}"."OQUT" Q2 ON R2."BaseType" = 23 AND Q2."DocEntry" = R2."BaseEntry"
+        -- who created each document (OUSR.USERID = the header's UserSign / "Created By")
+        LEFT JOIN "{S}"."OUSR" UI ON UI."USERID" = H."UserSign"
+        LEFT JOIN "{S}"."OUSR" UO ON UO."USERID" = COALESCE(O1."UserSign", O2."UserSign")
+        LEFT JOIN "{S}"."OUSR" UQ ON UQ."USERID" = COALESCE(Q1."UserSign", Q2."UserSign")
         WHERE CAST(H."DocDate" AS DATE) BETWEEN ? AND ? AND H."CANCELED" = 'N' {extra_where}
         GROUP BY H."DocNum", CAST(H."DocDate" AS DATE), H."CardCode", H."CardName",
                  COALESCE(O1."DocNum", O2."DocNum"), COALESCE(Q1."DocNum", Q2."DocNum")
@@ -3495,12 +3524,79 @@ def get_sales_document_flow(start_date, end_date, company='oil'):
             'order_no': str(r.get('ORDER_NO') or '').strip(),
             'invoice_no': str(r.get('INV') or '').strip(),
             'qty': round(float(r.get('QTY') or 0), 2),
+            'quotation_src': _doc_source(r.get('QUOT_UCODE'), r.get('QUOT_UNAME')),
+            'order_src': _doc_source(r.get('ORD_UCODE'), r.get('ORD_UNAME')),
+            'invoice_src': _doc_source(r.get('INV_UCODE'), r.get('INV_UNAME')),
+            'quotation_open': str(r.get('QUOT_ST') or '').strip().upper() == 'O',
+            'order_open': str(r.get('ORD_ST') or '').strip().upper() == 'O',
+            'invoice_open': str(r.get('INV_ST') or '').strip().upper() == 'O',
         })
     payload = {'status': 'ok', 'company': company, 'measure': measure, 'rows': rows,
                'start': str(start_date), 'end': str(end_date)}
     if raw:
         _sales_flow_cache[key] = (now + _SALES_FLOW_TTL, payload)
     return payload
+
+
+# Documents whose open line items can be drilled from the Sales Document Flow report
+# (header table, line table). An invoice has no "open quantity" concept, so it is not here.
+_SALES_FLOW_DOC_TABLES = {
+    'order':     ('ORDR', 'RDR1'),
+    'quotation': ('OQUT', 'QUT1'),
+}
+
+
+def get_sales_flow_open_items(doc_type, doc_no, company='oil'):
+    """Open line items (LineStatus='O') of one Sales Order / Quotation — the drill-down that opens
+    when an OPEN document is clicked on the Sales Document Flow report. Each item carries its still-
+    open quantity in the company measure — Litres (oil, OpenQty×SalPackUn) or Boxes (beverages,
+    OpenQty÷SalFactor2) — plus raw open pieces. Returns {status, doc_type, doc_no, company, measure,
+    party, items:[{code,name,label,open_qty,open_pcs}], total_open, total_pcs}."""
+    company = 'beverages' if str(company or '').lower().startswith('bev') else 'oil'
+    measure = 'Boxes' if company == 'beverages' else 'Litres'
+    dt = str(doc_type or '').strip().lower()
+    tables = _SALES_FLOW_DOC_TABLES.get(dt)
+    if not tables:
+        return {'status': 'error', 'error': 'Unknown document type.', 'items': []}
+    try:
+        docn = int(str(doc_no or '').strip())
+    except (TypeError, ValueError):
+        return {'status': 'error', 'error': 'Invalid document number.', 'items': []}
+    S = BEVERAGES_SCHEMA if company == 'beverages' else SAP_SCHEMA
+    HT, LT = tables
+    open_qty = ('L."OpenQty" / NULLIF(I."SalFactor2", 0)' if company == 'beverages'
+                else 'L."OpenQty" * COALESCE(I."SalPackUn", 0)')
+    sql = f'''
+        SELECT COALESCE(TRIM(H."CardName"), '') AS "PARTY",
+               COALESCE(TRIM(L."ItemCode"), '') AS "CODE",
+               COALESCE(TRIM(I."ItemName"), TRIM(L."Dscription")) AS "NAME",
+               L."OpenQty" AS "OPENPCS",
+               {open_qty} AS "OPENM"
+        FROM "{S}"."{HT}" H
+        JOIN "{S}"."{LT}" L ON L."DocEntry" = H."DocEntry"
+        LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+        WHERE H."DocNum" = ? AND L."LineStatus" = 'O'
+        ORDER BY L."LineNum"
+    '''
+    try:
+        raw = sap_connector.execute_query(sql, (docn,))
+    except Exception as exc:
+        logger.error('[SALES-FLOW] open-items %s %s fetch failed: %s', dt, docn, exc)
+        return {'status': 'error', 'error': 'Could not read the open items from SAP.', 'items': []}
+    items, party, total_m, total_pcs = [], '', 0.0, 0.0
+    for r in raw:
+        party = party or _normalize_name(r.get('PARTY'))
+        code = str(r.get('CODE') or '').strip()
+        name = _normalize_name(r.get('NAME'))
+        m = float(r.get('OPENM') or 0)
+        pcs = float(r.get('OPENPCS') or 0)
+        total_m += m
+        total_pcs += pcs
+        items.append({'code': code, 'name': name, 'label': _item_label(code, name),
+                      'open_qty': round(m, 2), 'open_pcs': round(pcs, 2)})
+    return {'status': 'ok', 'doc_type': dt, 'doc_no': str(doc_no).strip(), 'company': company,
+            'measure': measure, 'party': party, 'items': items,
+            'total_open': round(total_m, 2), 'total_pcs': round(total_pcs, 2)}
 
 
 _OIH_LINE_SQL = f'''
@@ -4412,6 +4508,54 @@ def _bev_attach_remarks(payload):
     return _ar_attach_remarks(payload, 'BEVDOC:', 'BEVSP:')
 
 
+# --- Customer Aging: sales-person name canonicalization ----------------------
+# The aging "sales person" dropdown (Beverages main + Oil RAW DATA, both via
+# _customer_aging_ar) is built from raw OSLP.SlpName strings that were rendered
+# verbatim — so it showed formatting noise (stray double spaces, odd casing)
+# and same-person duplicates. _clean_salesperson() runs on every name before
+# the client pivots by sales person.
+#
+#   _SALESPERSON_MERGE  – WITHIN one company these variants are the SAME person,
+#                         so their invoices are combined into one row. Only
+#                         confirmed pairs belong here; suffix tags (FACTORY / VG
+#                         / HO / SIR / ACC / HONEY / ARY / CHADDA) usually mark
+#                         DIFFERENT people who share a first name and are kept
+#                         separate on purpose.
+#   _SALESPERSON_CANON  – CROSS-company relabel: one person is spelled
+#                         differently per company (e.g. ZIYAUL SIR / ZIAUL
+#                         HAQUE); map each variant to a single canonical name so
+#                         the Oil/Beverages toggle reads consistently. This only
+#                         relabels a name — each company's aging is shown on its
+#                         own, so it never merges another company's receivables.
+#
+# Keys are matched AFTER cleaning (trim + single-spaced + UPPER). Add pairs here
+# as duplicates surface. (See also _BEV_SALESPERSON_ALIAS, the equivalent map
+# for the Beverages *sales* report.)
+_SALES_PLACEHOLDER = '-No Sales Employee / Buyer-'
+
+_SALESPERSON_MERGE = {
+    'GOLDY VG': 'GOLDY',            # Beverages: GOLDY VG is the deactivated dup of GOLDY
+}
+
+_SALESPERSON_CANON = {
+    # Cross-company canonical names — populated once the groups are confirmed.
+}
+
+
+def _clean_salesperson(name):
+    """Trim, collapse internal whitespace and upper-case a raw SlpName, then
+    fold same-person variants to one name. The '-No Sales Employee / Buyer-'
+    placeholder keeps its readable casing."""
+    s = ' '.join(str(name or '').split())
+    if not s:
+        return ''
+    if s.upper() == _SALES_PLACEHOLDER.upper():
+        return _SALES_PLACEHOLDER
+    s = s.upper()
+    s = _SALESPERSON_MERGE.get(s, s)
+    return _SALESPERSON_CANON.get(s, s)
+
+
 def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache):
     """Open A/R invoice aging for one company schema (Beverages / Mart). Returns raw invoice
     rows (Sales Person, Customer, Days, Balance Due, Outstanding, dispatch/bilty fields, …),
@@ -4468,7 +4612,7 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
     for r in raw or []:
         tdd = r.get('tdd')
         rows.append({
-            'sp': _bev_cell(r.get('sp')) or '—',
+            'sp': _clean_salesperson(r.get('sp')) or '—',
             'code': _bev_cell(r.get('code')),
             'name': _bev_cell(r.get('name')) or _bev_cell(r.get('code')),
             'doc': _bev_cell(r.get('doc')),
@@ -5124,11 +5268,23 @@ def get_claim_masters():
 def _serialize_claim(c):
     """One Claim row → the flat dict the frontend table/drill consumes."""
     d = c.claim_date
+    cm = (c.claim_month or '').strip()      # explicit 'YYYY-MM' month picked on the form
+    ym, month_year = '', ''
+    if cm:
+        try:
+            month_year = datetime.strptime(cm, '%Y-%m').strftime('%b %Y')
+            ym = cm
+        except ValueError:
+            cm = ''
+    if not ym:                               # no explicit month → derive from the receiving date
+        ym = d.strftime('%Y-%m') if d else ''
+        month_year = d.strftime('%b %Y') if d else ''
     return {
         'id': c.id,
         'claim_date': d.isoformat() if d else '',
-        'month_year': d.strftime('%b %Y') if d else '',      # 'Claim Month & Year' (derived)
-        'ym': d.strftime('%Y-%m') if d else '',              # sortable month key for the filter
+        'claim_month': cm,                                   # explicit picker value ('' = follow claim_date)
+        'month_year': month_year,                            # 'Claim Month & Year' (explicit month, else derived)
+        'ym': ym,                                            # sortable month key + Month filter value
         'party_code': c.party_code or '',
         'party_name': c.party_name or '',
         'main_group': c.main_group or '',
@@ -5165,6 +5321,18 @@ def _parse_claim_amount(v):
         return Decimal('0')
 
 
+def _parse_claim_month(v):
+    """A 'YYYY-MM' month string (from the form's month picker) → validated 'YYYY-MM', or '' if
+    blank/unparseable (in which case the report derives the month from claim_date)."""
+    s = str(v or '').strip()
+    if not s:
+        return ''
+    try:
+        return datetime.strptime(s, '%Y-%m').strftime('%Y-%m')
+    except (ValueError, TypeError):
+        return ''
+
+
 def upsert_claim(data, user=None):
     """Create or update one claim from the submitted form dict. Requires a valid claim_date and a
     non-blank party_name. Returns the serialized row, or raises ValueError on bad input."""
@@ -5181,6 +5349,7 @@ def upsert_claim(data, user=None):
         claim = Claim(created_by=user if getattr(user, 'is_authenticated', False) else None)
 
     claim.claim_date      = claim_date
+    claim.claim_month     = _parse_claim_month(data.get('claim_month'))
     claim.party_code      = str(data.get('party_code') or '').strip()
     claim.party_name      = party_name
     claim.main_group      = str(data.get('main_group') or '').strip()

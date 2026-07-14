@@ -1389,14 +1389,15 @@
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     var hdr=drillBy.map(pivDimLabel).concat(['Remarks','Count','Doc Total','Balance Due','Original Outstanding','Diff']).concat(BUCKETS.map(function(b){return b.label;}));
     var lines=[hdr.map(cell).join(',')];
-    // Balance Due, Original Outstanding + Diff are a customer-level view — Original Outstanding is
-    // the customer's whole ledger balance, repeated on every one of its invoices, so on per-invoice
-    // rows it misleads and would double-count if summed. Blank all three once the drill path has
-    // reached Doc No grain (Doc No, or any dimension nested under it); they stay on Customer /
-    // Sales Person rows and the Grand Total.
+    // Balance Due is a per-invoice figure (DocTotal − PaidToDate) that sums cleanly up the tree, so
+    // it shows on every row including Doc No. Original Outstanding + Diff are a customer-level view —
+    // Original Outstanding is the customer's whole ledger balance, repeated on every one of its
+    // invoices, so on per-invoice rows it misleads and would double-count if summed. Blank those two
+    // once the drill path has reached Doc No grain (Doc No, or any dimension nested under it); they
+    // stay on Customer / Sales Person rows and the Grand Total.
     function meas(n, atDocGrain){
       return [n.count, Math.round(n.total),
-              atDocGrain?'':Math.round(n.bal),
+              Math.round(n.bal),
               atDocGrain?'':Math.round(n.outstanding),
               atDocGrain?'':Math.round(n.bal-n.outstanding)]
              .concat(BUCKET_KEYS.map(function(k){return Math.round(n[k]);}));
