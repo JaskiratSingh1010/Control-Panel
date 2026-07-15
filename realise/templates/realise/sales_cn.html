@@ -32,6 +32,8 @@
   .scn-bar input[type=search]:focus,.scn-bar input[type=date]:focus,.scn-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .scn-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s,border-color .15s}
   .scn-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
+  .scn-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .scn-export:hover{background:#ecfdf5;border-color:#a7f3d0}
   .scn-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .scn-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
   .scn-seg button.active{background:#fff;color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08),inset 0 0 0 1px var(--rz-soft-brd)}
@@ -132,6 +134,9 @@
           <div class="com-dp-foot"><button type="button" id="scnDrillApply">Apply</button></div>
         </div>
       </div>
+    </div>
+    <div class="scn-fld"><span class="scn-lbl">&nbsp;</span>
+      <button class="scn-export" id="scnExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
     </div>
   </div>
 
@@ -329,8 +334,39 @@
 
   function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
+  // Excel export — flatten the current drill pivot (dimension columns + the 5 measures in the
+  // active Revenue/Qty mode) for the selected company. Mirrors what's on screen.
+  function exportXlsx(){
+    var a=activeRows();
+    if(!a.length){ window.alert('No data to export.'); return; }
+    var dims=order.length?order:['main_group'];
+    var tree=buildTree(a,dims,0,'');
+    function num(v){ return v==null?'':Math.round(v); }
+    var hd=dims.map(function(k){return DIM_LABEL[k];}).concat(['Total Sales','Total CN','CN for Goods','Claim for Services','Net Sales']);
+    var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+    (function walk(nodes,depth,labels){
+      nodes.forEach(function(n){
+        var m=measures(n); if(allZero(m))return;
+        var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
+        out.push(dc.concat([num(m[0]),num(m[1]),num(m[2]),num(m[3]),num(m[4])]));
+        if(!n.leaf)walk(n.kids,depth+1,labels.concat([n.label]));
+      });
+    })(tree,0,[]);
+    var tot=blank(); a.forEach(function(r){addRow(tot,r);}); var tm=measures(tot);
+    var tr=[{value:'TOTAL',bold:true}]; for(var i=1;i<dims.length;i++)tr.push('');
+    out.push(tr.concat([0,1,2,3,4].map(function(k){return {value:num(tm[k]),bold:true};})));
+    var co=(company==='beverages'?'Beverages':'Oil');
+    var modeLbl=(mode==='rev'?'Revenue':measure);
+    var fn=co+'_Sales_vs_Credit_Notes_'+modeLbl;
+    fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn,sheets:[{name:co+' Sales vs CN ('+modeLbl+')',rows:out}]})})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+
   // Wiring
   document.getElementById('scnFetch').addEventListener('click',load);
+  document.getElementById('scnExport').addEventListener('click',exportXlsx);
   document.getElementById('scnStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('scnEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('scnType').addEventListener('change',function(){typeF=this.value;render();});

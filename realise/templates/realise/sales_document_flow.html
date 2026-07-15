@@ -32,6 +32,8 @@
   .sf-fetch:hover{background:var(--rz-indigo-deep)}
   .sf-yday{background:var(--rz-soft);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:var(--rz-indigo-deep);cursor:pointer;font-family:inherit}
   .sf-yday:hover{background:#e0e7ff}
+  .sf-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .sf-export:hover{background:#ecfdf5;border-color:#a7f3d0}
   .sf-seg{display:inline-flex;background:var(--rz-soft);border:1px solid var(--rz-soft-brd);border-radius:10px;padding:3px}
   .sf-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
   .sf-seg button.active{background:#fff;color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
@@ -118,6 +120,9 @@
     </div>
     <div class="sf-fld"><span class="sf-lbl">Search</span>
       <input type="search" id="sfSearch" placeholder="Party / doc no / source (OMS, user)…" autocomplete="off">
+    </div>
+    <div class="sf-fld"><span class="sf-lbl">&nbsp;</span>
+      <button class="sf-export" id="sfExport" title="Export the current rows to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
     </div>
   </div>
 
@@ -291,6 +296,30 @@
   }
   function closeModal(){ document.getElementById('sfModal').hidden=true; }
 
+  // ---- Excel export (current company + filters) ----
+  function srcText(s){ return s ? (s.oms?'OMS':(s.label||'')) : ''; }
+  function exportXlsx(){
+    var a=activeRows();
+    if(!a.length){ window.alert('No rows to export.'); return; }
+    var unit=measureLabel();   // 'LTR' | 'Boxes'
+    var hd=['Date','Party Name','Sales Quotation No.','Quotation Source','Sales Order No.','Order Source','Order Status','Invoice No.','Invoice Source',unit];
+    var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+    var tot=0;
+    a.forEach(function(r){
+      tot+=Number(r.qty)||0;
+      out.push([r.date,r.party,r.quotation_no||'',srcText(r.quotation_src),
+                r.order_no||'',srcText(r.order_src),(r.order_no?(r.order_open?'Open':'Closed'):''),
+                r.invoice_no||'',srcText(r.invoice_src),Number(r.qty)||0]);
+    });
+    out.push([{value:'TOTAL',bold:true},'','','','','','','','',{value:Math.round(tot),bold:true}]);
+    var co=(company==='beverages'?'Beverages':'Oil');
+    var fn=co+'_Sales_Document_Flow';
+    fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn,sheets:[{name:co+' Sales Doc Flow',rows:out}]})})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+
   function load(){
     var sd=document.getElementById('sfStart').value, ed=document.getElementById('sfEnd').value;
     if(!sd||!ed)return;
@@ -337,6 +366,7 @@
     var a=e.target&&e.target.closest?e.target.closest('.sf-drill'):null; if(!a)return;
     e.preventDefault(); openItemsModal(a.getAttribute('data-dt'), a.getAttribute('data-no'));
   });
+  document.getElementById('sfExport').addEventListener('click',exportXlsx);
   document.getElementById('sfModalX').addEventListener('click',closeModal);
   document.getElementById('sfModal').addEventListener('click',function(e){ if(e.target===this)closeModal(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeModal(); });

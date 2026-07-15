@@ -1,64 +1,57 @@
-# Jivo Group — New Control Panel
+# Jivo Group — Control Panel
 
-Multi-dashboard control panel. Currently live: **Realise Dashboard** (SAP HANA).
-Stub tabs for Sales, Inventory, Expenses, Salaries — each replaced with a real app in subsequent passes.
+A single, authenticated **Django** application that consolidates every Jivo Group business
+dashboard behind one shared shell (top bar + sidebar). Each dashboard is its own Django app;
+almost all report data is read **live from SAP Business One (SAP HANA)**, while the data the
+business edits (targets, remarks, claims, credit locks, per‑page permissions) lives in a local
+SQLite database.
 
-## Prerequisites
+## 📚 Documentation
 
-- Python 3.10+
-- Network access to SAP HANA host `103.89.45.192:30015`
+Full documentation lives in **[`docs/`](docs/)**:
 
-## Setup
+- **[docs/README.md](docs/README.md)** — overview, tech stack, setup, configuration, seeded accounts, conventions.
+- **[docs/architecture.md](docs/architecture.md)** — apps model, request lifecycle, SAP integration & caching, access control, data model, frontend conventions, deployment.
+- **[docs/apps-and-reports.md](docs/apps-and-reports.md)** — every app and every report page: route, permission, and data source.
+
+## Quick start
 
 ```bash
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
-
+python -m venv venv
+venv\Scripts\activate            # Windows  (source venv/bin/activate on macOS/Linux)
 pip install -r requirements.txt
-cp .env.example .env   # then fill in real SAP credentials
 python manage.py migrate
 python manage.py runserver 0.0.0.0:9080
 ```
 
-Open <http://127.0.0.1:8000/>.
+Then open <http://127.0.0.1:9080/>. Configure secrets via environment variables
+(`DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `SAP_HANA_HOST/PORT/USER/PASSWORD`, …) — see
+[docs/README.md#configuration](docs/README.md#configuration-environment-variables).
 
-## Default credentials
+## Seeded accounts
 
-| Username    | Password    | Role      | Access            |
-|-------------|-------------|-----------|-------------------|
-| `admin`     | `jivoadmin` | Admin     | All types, can edit targets |
-| `commodity` | `commodity` | Viewer    | COMMODITY locked  |
-| `premium`   | `premium`   | Viewer    | PREMIUM locked    |
+| Username | Password | Access |
+|----------|----------|--------|
+| `admin` | `jivoadmin` | Realise admin (full, may edit targets — PIN `gill`) |
+| `premium` | `premium` | Realise viewer, PREMIUM segment |
+| `commodity` | `commodity` | Realise viewer, COMMODITY segment |
 
-**Edit-targets PIN:** `gill`
+Grant individual report tabs from **User Management** (`/users/`, staff/superuser only).
+Create a superuser with `python manage.py createsuperuser`.
 
-## Adding a new user
+## Apps at a glance
 
-1. Go to `/admin/` (log in with a superuser account).
-2. Create a `User` record with the desired username/password.
-3. Assign the user to one of: `realise_admin`, `realise_premium`, `realise_commodity`.
-4. For superuser creation on a fresh DB: `python manage.py createsuperuser`.
+| App | Mount | What's inside |
+|-----|-------|---------------|
+| `core` | — | shared: SAP connector, permissions, base shell + theme, xlsx writer, login |
+| `home` | `/` | P&L KPI landing page + User Management |
+| `dashboard` | `/` | Expenses, Salaries, COGS, home ticker |
+| `realise` | `/realise/` | Realise sales analytics + ~10 report pages (Customer Aging, OIH vs Stock, Compare Sales, Sales vs CN, Hidden Sales, Customer Master, Sales Flow, Claims, Required Credit Limit, Targets) |
+| `inventory` | `/inventory/` | Stock Available, Non‑Inventory FG, Wellness–Mart Reconciliation, Production Plan, Daily Production |
+| `sales` | `/sales/` | standalone Sales dashboard |
 
-## Sidebar nav (`core/templates/core/base.html`)
+## Stack
 
-The sidebar is defined in `core/templates/core/base.html`. Each stub tab is a
-single `path(...)` line in `config/urls.py` pointing at `core_views.coming_soon`.
-
-### Converting a stub tab into a real app
-
-1. Build the new Django app (e.g. `python manage.py startapp sales`).
-2. Add `'sales.apps.SalesConfig'` to `INSTALLED_APPS` in `config/settings.py`.
-3. In `config/urls.py`, replace:
-   ```python
-   path('sales/', core_views.coming_soon, {'tab': 'sales', 'label': 'Sales Dashboard'}, name='sales_stub'),
-   ```
-   with:
-   ```python
-   path('sales/', include('sales.urls')),
-   ```
-4. Remove the `name='sales_stub'` stub and update any `{% url 'sales_stub' %}` references
-   in `base.html` to the new app's URL name.
+Django ≥ 5.2 · SAP HANA via `hdbcli` · SQLite (app data) · server‑rendered templates + vanilla
+JS · shared `--rz-*` light theme · `openpyxl` / `core/simple_xlsx.py` exports · WhiteNoise ·
+optional Groq API for inventory chat. See [docs/](docs/) for details.

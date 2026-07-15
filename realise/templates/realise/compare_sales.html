@@ -19,6 +19,8 @@
   .cs-bar input[type=number]:focus,.cs-bar input[type=search]:focus,.cs-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .cs-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
   .cs-fetch:hover{background:var(--rz-indigo-deep)}
+  .cs-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .cs-export:hover{background:#ecfdf5;border-color:#a7f3d0}
   /* Compare segmented control */
   .cs-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
@@ -62,6 +64,10 @@
   table.cs-table tbody tr:hover td.gc-name{background:#eef3ff}
   .cs-grand{background:var(--rz-total-bg);font-weight:800;color:var(--rz-ink)}
   table.cs-table thead th.cs-grand{background:var(--rz-head-bg);color:var(--rz-head-ink)}
+  /* Avg Sales column — subordinate to Grand Total */
+  table.cs-table tbody td.cs-avg{color:var(--rz-muted);font-weight:600}
+  table.cs-table thead th.cs-avg-h{background:var(--rz-head-bg);color:var(--rz-head-ink)}
+  table.cs-table tbody tr.cs-total td.cs-avg{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800}
   table.cs-table tbody tr.cs-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
   table.cs-table tbody tr.cs-total td.gc-name{background:var(--rz-total-bg);color:var(--rz-ink)}
   .cs-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
@@ -126,6 +132,12 @@
         </div>
       </div>
     </div>
+    <div class="cs-fld" id="csTopWrap" style="display:none"><span class="cs-lbl">Top N Items</span>
+      <input type="number" id="csTopN" min="0" step="1" placeholder="All" title="Show only the top N items by grand total (blank = all)">
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">&nbsp;</span>
+      <button class="cs-export" id="csExport" title="Export the current pivot to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+    </div>
   </div>
 
   <div class="cd-refine" id="csRefine"></div>
@@ -168,7 +180,7 @@
 
   var rows=[], loaded=false, err=null, expanded={};
   var order=['group'], chosen=['group'];                 // drill order
-  var typeF='', compareMode='liters', custF='', itemF='';
+  var typeF='', compareMode='liters', custF='', itemF='', topN=0;
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
 
   function rowVal(r,dim){
@@ -220,15 +232,24 @@
     return L?fN(Math.round(L)):'';
   }
 
+  // Build the pivot tree, then — only when the FIRST drill dimension is the Item — keep the top N
+  // items by grand total (Top N Items input; blank/0 = all). buildTree already sorts top-level nodes
+  // by total litres desc, so slicing yields the biggest N.
+  function pivotTree(subset,dims){
+    var t=buildTree(subset,dims,0,'');
+    if(dims[0]==='item'&&topN>0)t=t.slice(0,topN);
+    return t;
+  }
+
   function treeRows(nodes,months,depth){
-    var html='';
+    var html='', nM=months.length||1;
     nodes.forEach(function(n){
       var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
       var tw=hasKids?'<span class="cs-tw'+(open?' open':'')+'" data-cspath="'+esc(n.path)+'">&#9654;</span>':'<span class="cs-tw-empty"></span>';
       var tag='<span class="cs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
       var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-cstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
       var cells=months.map(function(mo){return '<td>'+cell(n.byL[mo.ym]||0,n.byR[mo.ym]||0)+'</td>';}).join('');
-      html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR)+'</td></tr>';
+      html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR)+'</td><td class="cs-avg">'+cell(n.totL/nM,n.totR/nM)+'</td></tr>';
       if(hasKids&&open)html+=treeRows(n.kids,months,depth+1);
     });
     return html;
@@ -312,18 +333,21 @@
     var a=activeRows(), months=a.months, dims=order.length?order:['group'];
     csRefine.sync();
     var arows=csRefine.filterRows(a.rows);   // + Product/SKU narrowing when Item is first
+    // Top N Items input is only relevant when the Item is the first drill dimension.
+    document.getElementById('csTopWrap').style.display=(dims[0]==='item')?'':'none';
+    var nMonths=months.length||1;
     var rowLabel=dims.map(function(k){return DIM_LABEL[k];}).join(' › ');
     head.innerHTML='<tr><th class="gc-name">'+esc(rowLabel)+'</th>'
       +months.map(function(mo){return '<th>'+esc(mo.label)+'</th>';}).join('')
-      +'<th class="cs-grand">Grand Total</th></tr>';
-    if(!arows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+2)+'">No sales in this selection.</td></tr>';return;}
-    var tree=buildTree(arows,dims,0,'');
+      +'<th class="cs-grand">Grand Total</th><th class="cs-avg-h">Avg Sales</th></tr>';
+    if(!arows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+3)+'">No sales in this selection.</td></tr>';return;}
+    var tree=pivotTree(arows,dims);          // top-level nodes, sliced to Top N when Item is first
     var html=treeRows(tree,months,0);
-    // Totals row
+    // Totals row — summed over the DISPLAYED top-level nodes, so Top N totals reflect the shown items.
     var colL={},colR={},gL=0,gR=0;
-    arows.forEach(function(r){var L=Number(r.liter)||0,R=Number(r.line_total)||0;colL[r.ym]=(colL[r.ym]||0)+L;colR[r.ym]=(colR[r.ym]||0)+R;gL+=L;gR+=R;});
+    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);});gL+=n.totL;gR+=n.totR;});
     var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0)+'</td>';}).join('');
-    html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td></tr>';
+    html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths)+'</td></tr>';
     body.innerHTML=html;
   }
 
@@ -401,13 +425,48 @@
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
+  // Excel export — flatten the current month-wise pivot into two sheets (Litres + Revenue) so the
+  // Realise ₹/L is recoverable. Respects the drill order, Type / Main-Group / Customer / Item /
+  // Product-SKU filters. Compare Sales is Oil only (sales-data endpoint).
+  function exportXlsx(){
+    var a=activeRows(), months=a.months, dims=order.length?order:['group'];
+    var arows=csRefine.filterRows(a.rows);
+    if(!arows.length){ window.alert('No data to export — click Fetch first.'); return; }
+    var nMonths=months.length||1;
+    var tree=pivotTree(arows,dims);          // respects the Top N Items slice when Item is first
+    // Column + grand totals summed over the displayed (sliced) top-level nodes.
+    var colL={},colR={},gL=0,gR=0;
+    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);});gL+=n.totL;gR+=n.totR;});
+    function sheet(byKey,totKey,colTot,grand){
+      var hd=dims.map(function(k){return DIM_LABEL[k];}).concat(months.map(function(mo){return mo.label;})).concat(['Grand Total','Avg Sales']);
+      var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+      (function walk(nodes,depth,labels){
+        nodes.forEach(function(n){
+          var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
+          out.push(dc.concat(months.map(function(mo){return Math.round(n[byKey][mo.ym]||0);})).concat([Math.round(n[totKey]||0),Math.round((n[totKey]||0)/nMonths)]));
+          if(!n.leaf)walk(n.kids,depth+1,labels.concat([n.label]));
+        });
+      })(tree,0,[]);
+      var tr=[{value:'TOTAL',bold:true}]; for(var i=1;i<dims.length;i++)tr.push('');
+      out.push(tr.concat(months.map(function(mo){return {value:Math.round(colTot[mo.ym]||0),bold:true};})).concat([{value:Math.round(grand),bold:true},{value:Math.round(grand/nMonths),bold:true}]));
+      return out;
+    }
+    var fn='Oil_Compare_Sales';
+    fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn,sheets:[{name:'Litres',rows:sheet('byL','totL',colL,gL)},{name:'Revenue (Rs)',rows:sheet('byR','totR',colR,gR)}]})})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+
   // Wiring
   document.getElementById('csFetch').addEventListener('click',load);
+  document.getElementById('csExport').addEventListener('click',exportXlsx);
   document.getElementById('csMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('csType').addEventListener('change',function(){typeF=this.value;render();});
   var searchFilter=debounce(render,120);
   document.getElementById('csCustSearch').addEventListener('input',function(){custF=this.value.trim().toLowerCase();searchFilter();});
   document.getElementById('csItemSearch').addEventListener('input',function(){itemF=this.value.trim().toLowerCase();searchFilter();});
+  document.getElementById('csTopN').addEventListener('input',function(){var v=parseInt(this.value,10);topN=(!v||v<0)?0:v;searchFilter();});
   document.getElementById('csBody').addEventListener('click',function(e){
     var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
     var p=t.getAttribute('data-cstoggle'); expanded[p]=!expanded[p]; render();

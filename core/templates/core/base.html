@@ -41,12 +41,32 @@
       --rz-neg:       #e11d48;   /* negative / red                        */
       --rz-amber:     #d97706;   /* amber accent                          */
       --rz-teal:      #0d9488;   /* teal accent                           */
+      /* Numeric font: plain upright figures for money / metric values. Raleway's numerals
+         read as slanted / "cursive"; a neutral system sans keeps numbers legible & subtle.
+         Applied to numeric cells & KPI values app-wide via the rule below.               */
+      --rz-num: system-ui, "Segoe UI", Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif;
       /* KPI accent bars (thin top strip on white stat cards) */
       --rz-acc-indigo: linear-gradient(90deg,#6366f1,#7c3aed);
       --rz-acc-green:  linear-gradient(90deg,#059669,#16a34a);
       --rz-acc-red:    linear-gradient(90deg,#e11d48,#f43f5e);
       --rz-acc-amber:  linear-gradient(90deg,#d97706,#f59e0b);
       --rz-acc-teal:   linear-gradient(90deg,#0d9488,#14b8a6);
+    }
+
+    /* ── Numeric values: subtle, upright figures across every report ───────────
+       Numbers in these pages were inheriting Raleway, whose numerals look slanted /
+       "cursive". Force a neutral tabular sans + normal style on the numeric containers
+       used app-wide: KPI stat values (*-kpi-v), the shared .num table cell, and the
+       common per-report money/qty cell classes. Selectors only hit number-only elements,
+       so prose (party names, headings) keeps Raleway. Edit --rz-num to re-tone at once. */
+    [class$="kpi-v"], [class*="kpi-v "], .kpi-value,
+    .num, td.num, .op-hi, .dd-mono,
+    .sv, .sp-amt, .sa-qty, .doc, .doc-bal, .cmp-big, .cmp-chg, .cm-gst,
+    .rc-so-one, .pf-prow-qty, .sc2-state-val, .sc2-drillval {
+      font-family: var(--rz-num);
+      font-variant-numeric: tabular-nums;
+      font-style: normal;
+      letter-spacing: 0;
     }
 
     /* ── Topbar ── */
@@ -203,7 +223,7 @@
           {% endif %}
         </nav>
 
-        {% if can_inventory or can_stock_available or can_reconciliation or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_expenses or can_salaries or can_realise %}
+        {% if can_inventory or can_stock_available or can_reconciliation or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_open_payments or can_dispatch_details or can_expenses or can_salaries or can_realise %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
           {% if can_inventory %}
@@ -212,8 +232,8 @@
           </a>
           {% endif %}
           {# ── Sales reports ── #}
-          {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow %}
-          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' %} open{% endif %}" data-group="reports-sales">
+          {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow or can_dispatch_details %}
+          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' %} open{% endif %}" data-group="reports-sales">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Sales" aria-label="Toggle Sales reports">
               <span class="cp-nav-group-lead"><span class="material-icons">trending_up</span>Sales</span>
               <span class="material-icons cp-nav-group-chev">expand_more</span>
@@ -239,13 +259,18 @@
                 <span class="material-icons">account_tree</span>Sales Doc Flow
               </a>
               {% endif %}
+              {% if can_dispatch_details %}
+              <a class="cp-nav-item {% if sidebar_active == 'dispatch_details' %}active{% endif %}" href="{% url 'realise:dispatch_details' %}" title="Dispatch Details">
+                <span class="material-icons">local_shipping</span>Dispatch Details
+              </a>
+              {% endif %}
             </div>
           </div>
           {% endif %}
 
           {# ── Accounts / receivables ── #}
-          {% if can_customer_aging or can_required_credit_limit or can_claims or can_reconciliation %}
-          <div class="cp-nav-group{% if sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' or sidebar_active == 'claims' or sidebar_active == 'reconciliation' %} open{% endif %}" data-group="reports-accounts">
+          {% if can_customer_aging or can_required_credit_limit or can_claims or can_open_payments or can_reconciliation %}
+          <div class="cp-nav-group{% if sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' or sidebar_active == 'claims' or sidebar_active == 'open_payments' or sidebar_active == 'reconciliation' %} open{% endif %}" data-group="reports-accounts">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Accounts" aria-label="Toggle Accounts reports">
               <span class="cp-nav-group-lead"><span class="material-icons">account_balance</span>Accounts</span>
               <span class="material-icons cp-nav-group-chev">expand_more</span>
@@ -259,6 +284,11 @@
               {% if can_required_credit_limit %}
               <a class="cp-nav-item {% if sidebar_active == 'required_credit_limit' %}active{% endif %}" href="{% url 'realise:required_credit_limit' %}" title="Required Credit Limit">
                 <span class="material-icons">credit_score</span>Required Credit Limit
+              </a>
+              {% endif %}
+              {% if can_open_payments %}
+              <a class="cp-nav-item {% if sidebar_active == 'open_payments' %}active{% endif %}" href="{% url 'realise:open_payments' %}" title="Open Payments">
+                <span class="material-icons">account_balance</span>Open Payments
               </a>
               {% endif %}
               {% if can_claims %}

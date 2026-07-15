@@ -3,18 +3,18 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:#f4f6fb !important}
+  .cp-main{background:var(--rz-bg) !important}
   .ni-wrap{max-width:1600px;margin:0 auto}
 
   .ni-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 24px;margin-bottom:16px;
-    background:linear-gradient(120deg,#0f766e,#0d9488 55%,#14b8a6);box-shadow:0 14px 34px rgba(13,148,136,.28)}
+    background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .ni-hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .ni-h1{font-size:23px;font-weight:900;color:#fff;margin:0}
+  .ni-h1{font-size:23px;font-weight:800;color:var(--rz-ink);margin:0}
 
-  .ni-seg{display:inline-flex;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:24px;padding:4px}
-  .ni-seg button{padding:8px 18px;border-radius:20px;font-weight:700;font-size:12.5px;color:#ecfdf5;border:0;background:transparent;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
-  .ni-seg button:hover{color:#fff}
-  .ni-seg button.active{background:#fff;color:#0f766e;box-shadow:0 4px 12px rgba(0,0,0,.14)}
+  .ni-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:24px;padding:4px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .ni-seg button{padding:8px 18px;border-radius:20px;font-weight:700;font-size:12.5px;color:var(--rz-muted);border:0;background:transparent;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+  .ni-seg button:hover{color:#0f766e}
+  .ni-seg button.active{background:#ccfbf1;color:#0f766e;box-shadow:0 1px 2px rgba(15,23,42,.08)}
 
   .ni-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
   .ni-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
@@ -79,8 +79,8 @@
   .ni-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
   .ni-tw{overflow:auto;max-height:74vh}
   table.ni-tb{width:100%;border-collapse:collapse;font-size:12.5px}
-  table.ni-tb thead th{position:sticky;top:0;z-index:2;background:#0f172a;color:#fff;text-align:right;
-    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 12px;white-space:nowrap}
+  table.ni-tb thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;
+    font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:11px 12px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.ni-tb thead th.lbl{text-align:left}
   table.ni-tb td{padding:8px 12px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
   table.ni-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
@@ -116,7 +116,7 @@
   .ni-leaf td{background:#fff}
   .ni-leaf:hover td{background:#f8fafc}
   .ni-lbl{white-space:nowrap}
-  tr.ni-tot td{position:sticky;bottom:0;background:#1e293b;color:#fff;font-weight:900;border-top:2px solid #334155;z-index:1}
+  tr.ni-tot td{position:sticky;bottom:0;background:var(--rz-total-bg);color:var(--rz-ink);font-weight:900;border-top:2px solid var(--rz-total-brd);z-index:1}
   .ni-empty{padding:44px;text-align:center;color:#7b8794}
 
   /* Warehouse drill modal */
@@ -134,7 +134,7 @@
   table.ni-mt th{text-align:left;background:#f1f5f9;color:#334155;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
   table.ni-mt td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.ni-mt tbody tr:hover td{background:#f0fdfa}
-  table.ni-mt tr.ni-tot td{position:static;background:#1e293b;color:#fff}
+  table.ni-mt tr.ni-tot td{position:static;background:var(--rz-total-bg);color:var(--rz-ink)}
   .ni-mo-empty{padding:30px;text-align:center;color:#7b8794}
 </style>
 {% endblock %}

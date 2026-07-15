@@ -34,6 +34,9 @@
   .cl-add:hover{background:var(--rz-indigo-deep)}
   .cl-export{background:#fff;color:var(--rz-teal);border:1px solid #e2e8f0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
   .cl-export:hover{background:#f0fdfa;border-color:#99f6e4}
+  .cl-upload{background:#fff;color:var(--rz-indigo-deep);border:1px solid #e2e8f0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+  .cl-upload:hover{background:#eef2ff;border-color:#c7d2fe}
+  .cl-upload:disabled{opacity:.6;cursor:default}
 
   .com-drill-box{position:relative}
   .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
@@ -155,7 +158,11 @@
     </div>
     <div class="cl-spacer"></div>
     <div class="cl-fld"><span class="cl-lbl">&nbsp;</span>
-      <button class="cl-export" id="clExport"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="cl-export" id="clExport"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+        <button class="cl-upload" id="clUpload" title="Import claims from an .xlsx/.csv in the export format (adds new claims)"><span class="material-icons" style="font-size:16px">upload</span>Upload Excel</button>
+        <input type="file" id="clUploadFile" accept=".xlsx,.csv" style="display:none">
+      </div>
     </div>
   </div>
 
@@ -213,7 +220,7 @@
   function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
 
   var API='/realise/api/claims/';
-  var SAVE_URL=API+'save/', DEL_URL=API+'delete/', EXPORT_URL='/realise/api/export-xlsx/';
+  var SAVE_URL=API+'save/', DEL_URL=API+'delete/', UPLOAD_URL=API+'upload/', EXPORT_URL='/realise/api/export-xlsx/';
 
   // dims for Drill By
   var DIMS=[
@@ -609,6 +616,28 @@
   var searchDeb=debounce(render,120);
   document.getElementById('clSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
   document.getElementById('clExport').addEventListener('click',exportXlsx);
+  // Upload Excel — import claims from an .xlsx/.csv in the export format (adds new claims).
+  (function(){
+    var fileInput=document.getElementById('clUploadFile');
+    document.getElementById('clUpload').addEventListener('click',function(){fileInput.click();});
+    fileInput.addEventListener('change',function(){
+      var f=fileInput.files&&fileInput.files[0]; if(!f)return;
+      var btn=document.getElementById('clUpload'), lbl=btn.innerHTML;
+      btn.disabled=true; btn.textContent='Uploading…';
+      var fd=new FormData(); fd.append('file',f);
+      fetch(UPLOAD_URL,{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd})
+        .then(function(r){return r.json().catch(function(){return {status:'error',error:'HTTP '+r.status};});})
+        .then(function(p){
+          if(p.status!=='ok'){ window.alert('Upload failed: '+(p.error||'unknown error')); return; }
+          var msg='Added '+p.created+' claim(s).'+(p.skipped?(' Skipped '+p.skipped+' row(s).'):'');
+          if(p.errors&&p.errors.length)msg+='\n\n'+p.errors.slice(0,15).join('\n');
+          window.alert(msg);
+          if(p.created)location.reload();
+        })
+        .catch(function(){ window.alert('Upload failed.'); })
+        .then(function(){ btn.disabled=false; btn.innerHTML=lbl; fileInput.value=''; });
+    });
+  })();
 
   // Types multi-select
   document.getElementById('clTypeBtn').addEventListener('click',function(e){e.stopPropagation();renderTypeList();typeWorking=typeSet?new Set(typeSet):new Set(distinctTypes());togglePanel('clTypeBtn','clTypePanel');});

@@ -3416,6 +3416,177 @@ def get_customer_master():
     return payload
 
 
+# ══════════════════════ Open Payments report ══════════════════════
+# One row per incoming customer payment (SAP ORCT, DocType='C', not cancelled) whose posting date
+# falls in the range. "Payment on account" is the receipt amount (ORCT.DocTotal); "Open balance" is
+# the still-UNRECONCILED portion of that receipt, read live from its journal entry's BP line
+# (JDT1.BalDueCred − BalDueDeb, maintained by the same B1 reconciliation engine that powers Customer
+# Aging). A payment applied in full to invoices has open balance 0; a payment left on account keeps
+# its full amount open until it is applied. The frontend's Open/Total toggle decides whether to show
+# only the open (>0) rows or every payment. Oil company (JIVO_OIL_HANADB).
+_open_payments_cache = {}
+_OPEN_PAYMENTS_TTL = 90
+
+
+def _parse_ymd(s):
+    """A 'YYYY-MM-DD' string → datetime.date, or None."""
+    try:
+        return datetime.strptime(str(s or '').strip()[:10], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def get_open_payments(start_date, end_date):
+    """Incoming customer payments (ORCT) posted in [start_date, end_date], each with its receipt
+    amount ("payment on account") and current open/unreconciled balance. Returns
+    {status, rows, start, end}; each row: date, doc_no, code, name, main_group, state, amount,
+    open_bal. Rows are NOT filtered by open balance here — the client's Open/Total toggle does that
+    (Open = open_bal > 0, Total = all) — but the caller-facing rule "hide zero open balance" is the
+    default (Open). Cached _OPEN_PAYMENTS_TTL seconds. {} rows on any SAP error."""
+    sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
+    if not sd or not ed:
+        return {'status': 'error', 'rows': [], 'error': 'start_date and end_date required',
+                'start': start_date, 'end': end_date}
+    if ed < sd:
+        sd, ed = ed, sd
+    key = (sd.isoformat(), ed.isoformat())
+    now = time.time()
+    hit = _open_payments_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    S = SAP_SCHEMA
+    next_day = ed + timedelta(days=1)           # half-open range: correct for date or timestamp DocDate
+    sql = f'''
+        SELECT R."DocNum"  AS "docnum",
+               R."DocDate" AS "docdate",
+               R."CardCode" AS "code",
+               COALESCE(TRIM(C."CardName"), '')     AS "name",
+               COALESCE(TRIM(C."U_Main_Group"), '') AS "grp",
+               (SELECT MAX(K."Name") FROM "{S}"."OCST" K
+                  WHERE K."Code" = C."State1" AND K."Country" = C."Country") AS "state",
+               COALESCE(R."DocTotal", 0) AS "amount",
+               (SELECT SUM(COALESCE(J."BalDueCred", 0) - COALESCE(J."BalDueDeb", 0))
+                  FROM "{S}"."JDT1" J
+                  WHERE J."TransId" = R."TransId" AND J."ShortName" = R."CardCode") AS "openbal"
+        FROM "{S}"."ORCT" R
+        JOIN "{S}"."OCRD" C ON C."CardCode" = R."CardCode"
+        WHERE R."DocType" = 'C' AND R."Canceled" = 'N'
+          AND R."DocDate" >= ? AND R."DocDate" < ?
+        ORDER BY R."DocDate", R."DocNum"
+    '''
+    try:
+        raw = sap_connector.execute_query(sql, (sd, next_day))
+    except Exception as exc:
+        logger.error('[OPEN-PAY] fetch failed: %s', exc)
+        return {'status': 'error', 'rows': [],
+                'error': 'Could not read incoming payments from SAP.',
+                'start': sd.isoformat(), 'end': ed.isoformat()}
+
+    rows = []
+    for r in raw:
+        openbal = float(r.get('openbal') or 0)
+        if abs(openbal) < 0.005:
+            openbal = 0.0
+        rows.append({
+            'date': _aging_fmt_date(r.get('docdate')),
+            'doc_no': str(r.get('docnum') or '').strip(),
+            'code': str(r.get('code') or '').strip(),
+            'name': (str(r.get('name') or '').strip() or str(r.get('code') or '').strip()).upper(),
+            'main_group': (str(r.get('grp') or '').strip() or '—').upper(),
+            'state': (str(r.get('state') or '').strip() or '—').upper(),
+            'amount': round(float(r.get('amount') or 0), 2),
+            'open_bal': round(openbal, 2),
+        })
+    payload = {'status': 'ok', 'rows': rows, 'count': len(rows),
+               'start': sd.isoformat(), 'end': ed.isoformat()}
+    if rows:
+        _open_payments_cache[key] = (now + _OPEN_PAYMENTS_TTL, payload)
+    return payload
+
+
+# ══════════════════════ Dispatch Details report ══════════════════════
+# One row per A/R invoice (OINV) with its dispatch / logistics UDFs — dispatch date, bilty no &
+# date, transporter, vehicle no and driver mobile — for the Oil company (Jivo Wellness). These
+# are the header custom fields keyed on the SAP A/R Invoice's right-hand panel. The columns may
+# be absent on a schema that never defined them, so the query is retried without them.
+_dispatch_details_cache = {}
+_DISPATCH_DETAILS_TTL = 90
+
+
+def get_dispatch_details(start_date, end_date):
+    """A/R invoices (OINV) dated in [start_date, end_date] for the Oil company, each with its
+    dispatch/logistics custom fields. Returns {status, rows, count, start, end}; each row:
+    inv_date, code, name, inv_no, dispatch (dispatch date), biltydate, bilty, transporter,
+    vehicle, mobile (driver mobile). Non-cancelled item invoices only (open and closed), newest
+    first. Cached _DISPATCH_DETAILS_TTL seconds. The dispatch UDFs may be absent on some schemas —
+    the query is retried without them so the report still lists invoices. {} rows on any SAP error."""
+    sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
+    if not sd or not ed:
+        return {'status': 'error', 'rows': [], 'error': 'start_date and end_date required',
+                'start': start_date, 'end': end_date}
+    if ed < sd:
+        sd, ed = ed, sd
+    key = (sd.isoformat(), ed.isoformat())
+    now = time.time()
+    hit = _dispatch_details_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    S = SAP_SCHEMA
+    next_day = ed + timedelta(days=1)           # half-open range: correct for date or timestamp DocDate
+    # Dispatch/bilty custom fields as named on the Oil OINV (Jivo Wellness). NB the Oil column
+    # names differ from Beverages — U_BilltyNumber (double-L) and U_VehicleNoM here vs the
+    # U_BiltyNumber / U_VechileNom used by the Beverages aging query. Retried-without on absence.
+    udf = ('''T0."U_Dipatch_Date" AS "dispatch", T0."U_BiltyDate" AS "biltydate",
+               T0."U_BilltyNumber" AS "bilty", T0."U_TransporterName" AS "transporter",
+               T0."U_VehicleNoM" AS "vehicle", T0."U_Mob_No" AS "mobile",''')
+
+    def build(extras):
+        return f'''
+        SELECT T0."DocNum" AS "docnum",
+               TO_VARCHAR(T0."DocDate",'YYYY-MM-DD') AS "invdate",
+               T0."CardCode" AS "code",
+               COALESCE(TRIM(T0."CardName"), '') AS "name",
+               {extras}T0."DocStatus" AS "status"
+        FROM "{S}"."OINV" T0
+        WHERE T0."DocType" = 'I' AND T0."CANCELED" = 'N'
+          AND T0."DocDate" >= ? AND T0."DocDate" < ?
+        ORDER BY T0."DocDate" DESC, T0."DocNum" DESC
+    '''
+    try:
+        raw = sap_connector.execute_query(build(udf), (sd, next_day))
+    except Exception:
+        try:                                    # schema without the dispatch/bilty UDFs
+            raw = sap_connector.execute_query(build(''), (sd, next_day))
+        except Exception as exc:
+            logger.error('[DISPATCH] fetch failed: %s', exc)
+            return {'status': 'error', 'rows': [],
+                    'error': 'Could not read dispatch details from SAP.',
+                    'start': sd.isoformat(), 'end': ed.isoformat()}
+
+    rows = []
+    for r in raw or []:
+        code = _bev_cell(r.get('code'))
+        rows.append({
+            'inv_date': _bev_cell(r.get('invdate')),
+            'code': code,
+            'name': (_bev_cell(r.get('name')) or code).upper(),
+            'inv_no': _bev_cell(r.get('docnum')),
+            'dispatch': _bev_cell(r.get('dispatch')),
+            'biltydate': _bev_cell(r.get('biltydate')),
+            'bilty': _bev_cell(r.get('bilty')),
+            'transporter': _bev_cell(r.get('transporter')),
+            'vehicle': _bev_cell(r.get('vehicle')),
+            'mobile': _bev_cell(r.get('mobile')),
+        })
+    payload = {'status': 'ok', 'rows': rows, 'count': len(rows),
+               'start': sd.isoformat(), 'end': ed.isoformat()}
+    if rows:
+        _dispatch_details_cache[key] = (now + _DISPATCH_DETAILS_TTL, payload)
+    return payload
+
+
 # ══════════════════════ Sales Document Flow report ══════════════════════
 # The sales document chain per party for a day's invoices: Sales Quotation → Sales Order → A/R
 # Invoice, with the invoiced litres. Anchored on invoices (OINV) in the date range (excluding
@@ -5369,6 +5540,93 @@ def upsert_claim(data, user=None):
     claim.reason_of_hold  = str(data.get('reason_of_hold') or '').strip()[:255]
     claim.save()
     return _serialize_claim(claim)
+
+
+def _claim_upload_date(v):
+    """Any date-ish upload cell → 'YYYY-MM-DD' (the form format _parse_claim_date accepts), or ''.
+    Handles real datetimes (openpyxl) and the export's dd.mm.yyyy text plus common variants."""
+    if v in (None, ''):
+        return ''
+    if isinstance(v, datetime):
+        return v.date().isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    s = str(v).strip()
+    for fmt in ('%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y', '%d/%m/%Y', '%d.%m.%y', '%d-%m-%y', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return ''
+
+
+def _claim_upload_month(v):
+    """Any month-ish upload cell → 'YYYY-MM' (the format _parse_claim_month accepts), or ''.
+    Handles the export's 'Jul 2026' label plus dates / 'YYYY-MM' / 'MM/YYYY'."""
+    if v in (None, ''):
+        return ''
+    if isinstance(v, (datetime, date)):
+        return v.strftime('%Y-%m')
+    s = str(v).strip()
+    for fmt in ('%b %Y', '%B %Y', '%Y-%m', '%m/%Y', '%b-%Y'):
+        try:
+            return datetime.strptime(s, fmt).strftime('%Y-%m')
+        except ValueError:
+            pass
+    d = _claim_upload_date(s)
+    return d[:7] if d else ''
+
+
+def _claim_upload_amount(v):
+    """A ₹/comma-formatted or numeric upload cell → a plain number (0 if unparseable)."""
+    if isinstance(v, (int, float)):
+        return v
+    s = ''.join(ch for ch in str(v if v is not None else '') if ch.isdigit() or ch in '.-')
+    if s in ('', '-', '.', '-.', '--'):
+        return 0
+    try:
+        return float(s)
+    except ValueError:
+        return 0
+
+
+def bulk_upload_claims(rows, user=None):
+    """Create Claim rows from parsed upload records (the columns of the Claims Excel export). Each
+    record is normalized (dates → YYYY-MM-DD, month → YYYY-MM, amounts → numbers) then handed to
+    upsert_claim, so it ADDS new claims (it does not update existing ones — the export carries no
+    id). Rows without a valid Receiving Date + Party Name are skipped. Returns
+    {created, skipped, errors:[...]}."""
+    created, skipped, errors = 0, 0, []
+    for idx, r in enumerate(rows or [], 1):
+        party = str(r.get('party_name') or '').strip()
+        cdate = _claim_upload_date(r.get('claim_date'))
+        if not party or not cdate:
+            skipped += 1
+            if party and not cdate:
+                errors.append(f'Row {idx} ({party}): missing / unreadable Receiving Date')
+            continue
+        hold = str(r.get('claim_hold') or '').strip().capitalize()
+        data = {
+            'claim_date':      cdate,
+            'party_name':      party,
+            'claim_pass_date': _claim_upload_date(r.get('claim_pass_date')),
+            'claim_month':     _claim_upload_month(r.get('claim_month')),
+            'claim_type':      str(r.get('claim_type') or '').strip(),
+            'ref_inv_no':      str(r.get('ref_inv_no') or '').strip(),
+            'coop_no':         str(r.get('coop_no') or '').strip(),
+            'claim_hold':      hold if hold in ('Yes', 'No') else '',
+            'claim_amount':    _claim_upload_amount(r.get('claim_amount')),
+            'claim_passed':    _claim_upload_amount(r.get('claim_passed')),
+            'main_group':      str(r.get('main_group') or '').strip(),
+            'reason_of_hold':  str(r.get('reason_of_hold') or '').strip(),
+        }
+        try:
+            upsert_claim(data, user=user)
+            created += 1
+        except Exception as exc:
+            skipped += 1
+            errors.append(f'Row {idx} ({party}): {exc}')
+    return {'created': created, 'skipped': skipped, 'errors': errors[:25]}
 
 
 def delete_claim(claim_id):

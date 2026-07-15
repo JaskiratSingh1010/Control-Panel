@@ -1,0 +1,237 @@
+{% extends "core/base.html" %}
+{% block title %}Dispatch Details — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:var(--rz-bg) !important}
+  .dd-wrap{max-width:1600px;margin:0 auto}
+  .dd-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .dd-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
+
+  /* ── KPI cards (white + thin colour accent) ── */
+  .dd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+  .dd-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);
+          background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
+  .dd-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .dd-kpi .dd-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
+  .dd-kpi .dd-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .dd-kpi .dd-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
+  .dd-kpi .dd-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
+  .dd-kpi .material-icons.dd-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .k-inv{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
+  .k-disp{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
+  .k-cust{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0891b2}
+  .k-trans{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
+
+  .dd-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .dd-fld{display:flex;flex-direction:column;gap:5px}
+  .dd-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .dd-bar input[type=date],.dd-bar input[type=search]{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .dd-bar input[type=search]{min-width:240px}
+  .dd-bar input[type=search]::placeholder{color:var(--rz-faint)}
+  .dd-bar input[type=search]:focus,.dd-bar input[type=date]:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .dd-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .dd-fetch:hover{background:var(--rz-indigo-deep)}
+  .dd-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .dd-export:hover{background:#ecfdf5;border-color:#a7f3d0}
+
+  .dd-table-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
+  .dd-table-wrap{overflow:auto;max-height:74vh}
+  table.dd-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.dd-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:left;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 14px;white-space:nowrap;border-bottom:1px solid var(--rz-line);cursor:pointer;user-select:none}
+  table.dd-table thead th .dd-sort{font-size:9px;color:var(--rz-muted);margin-left:5px}
+  table.dd-table tbody td{padding:9px 14px;border-bottom:1px solid #eef2f6;color:var(--rz-body);text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.dd-table tbody td.dd-name{color:var(--rz-ink);font-weight:600}
+  table.dd-table tbody tr:nth-child(even) td{background:#fafcff}
+  table.dd-table tbody tr:hover td{background:#f1f5ff}
+  .dd-code{font-size:10px;color:var(--rz-faint);font-weight:700;margin-left:6px}
+  .dd-mono{font-variant-numeric:tabular-nums}
+  .dd-v0{color:#cbd5e1}
+  .dd-empty{padding:40px;text-align:center;color:var(--rz-muted)}
+  .dd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dd-wrap">
+  <div>
+    <h1 class="dd-h1">Dispatch Details</h1>
+  </div>
+
+  <div class="dd-kpis" id="ddKpis"></div>
+
+  <div class="dd-bar">
+    <div class="dd-fld"><span class="dd-lbl">From</span><input type="date" id="ddStart"></div>
+    <div class="dd-fld"><span class="dd-lbl">To</span><input type="date" id="ddEnd"></div>
+    <button class="dd-fetch" id="ddFetch">&#9654; Fetch</button>
+    <div class="dd-fld"><span class="dd-lbl">Search</span>
+      <input type="search" id="ddSearch" placeholder="Customer / inv no / bilty / vehicle / transporter…" autocomplete="off">
+    </div>
+    <div class="dd-fld"><span class="dd-lbl">&nbsp;</span>
+      <button class="dd-export" id="ddExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+    </div>
+    <span class="dd-count" id="ddCount"></span>
+  </div>
+
+  <div class="dd-table-card">
+    <div class="dd-table-wrap">
+      <table class="dd-table">
+        <thead id="ddHead"></thead>
+        <tbody id="ddBody"><tr><td class="dd-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+  function dispDate(s){s=String(s||'');if(s.length>=10){var p=s.slice(0,10).split('-');if(p.length===3&&p[0].length===4)return p[2]+'-'+p[1]+'-'+p[0];}return s;}
+  function cell(v){v=String(v==null?'':v).trim();return v?esc(v):'<span class="dd-v0">—</span>';}
+
+  var rows=[], loaded=false, err=null, searchF='';
+  var sortKey='inv_date', sortDir=-1;                 // newest invoices first by default
+
+  // Columns — order = on-screen order. get() returns the sort/search value.
+  var COLS=[
+    {k:'inv_date',   l:'Inv Date',          date:true,  get:function(r){return r.inv_date;}},
+    {k:'name',       l:'Customer',          name:true,  get:function(r){return r.name;}},
+    {k:'inv_no',     l:'Inv No.',           num:true,   get:function(r){return r.inv_no;}},
+    {k:'dispatch',   l:'Dispatch Date',     date:true,  get:function(r){return r.dispatch;}},
+    {k:'biltydate',  l:'Bilty Date',        date:true,  get:function(r){return r.biltydate;}},
+    {k:'bilty',      l:'Bilty No.',         num:true,   get:function(r){return r.bilty;}},
+    {k:'transporter',l:'Transporter',       get:function(r){return r.transporter;}},
+    {k:'vehicle',    l:'Vehicle No.',       get:function(r){return r.vehicle;}},
+    {k:'mobile',     l:'Driver Mobile No.', get:function(r){return r.mobile;}}
+  ];
+  var GET={}; COLS.forEach(function(c){GET[c.k]=c.get;});
+
+  function rowMatches(r){
+    if(!searchF)return true;
+    var hay=(r.inv_date+' '+r.name+' '+r.code+' '+r.inv_no+' '+r.dispatch+' '+r.biltydate+' '
+             +r.bilty+' '+r.transporter+' '+r.vehicle+' '+r.mobile).toLowerCase();
+    return hay.indexOf(searchF)!==-1;
+  }
+  function activeRows(){var out=[];for(var i=0;i<rows.length;i++){if(rowMatches(rows[i]))out.push(rows[i]);}return out;}
+
+  function sorted(a){
+    var col=null; COLS.forEach(function(c){if(c.k===sortKey)col=c;});
+    var get=(col&&col.get)||GET.inv_date, isNum=!!(col&&col.num);
+    return a.slice().sort(function(x,y){
+      var vx=get(x),vy=get(y),c;
+      if(isNum){c=(parseFloat(String(vx).replace(/[^0-9.\-]/g,''))||0)-(parseFloat(String(vy).replace(/[^0-9.\-]/g,''))||0);}
+      else c=String(vx==null?'':vx).localeCompare(String(vy==null?'':vy));
+      return c*sortDir||String(x.inv_no).localeCompare(String(y.inv_no));
+    });
+  }
+
+  function sortArrow(k){if(sortKey!==k)return '<span class="dd-sort">↕</span>';return '<span class="dd-sort">'+(sortDir>0?'▲':'▼')+'</span>';}
+
+  function renderKpis(){
+    var a=activeRows(), custs={}, trans={}, disp=0;
+    a.forEach(function(r){
+      if(r.code)custs[r.code]=1;
+      if(String(r.transporter||'').trim())trans[String(r.transporter).trim().toUpperCase()]=1;
+      if(String(r.bilty||'').trim())disp++;
+    });
+    var cards=[
+      {c:'k-inv',ic:'receipt_long',l:'Invoices',v:fN(a.length),m:'A/R invoices in range'},
+      {c:'k-disp',ic:'local_shipping',l:'Dispatched',v:fN(disp),m:'With a bilty number'},
+      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'},
+      {c:'k-trans',ic:'commute',l:'Transporters',v:fN(Object.keys(trans).length),m:'Distinct transporters'}
+    ];
+    document.getElementById('ddKpis').innerHTML=cards.map(function(k){
+      return '<div class="dd-kpi '+k.c+'"><div class="dd-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="dd-kpi-v">'+k.v+'</div><div class="dd-kpi-m">'+esc(k.m)+'</div>'
+        +'<span class="material-icons dd-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function rowHtml(r){
+    return '<tr>'
+      +'<td class="dd-mono">'+cell(dispDate(r.inv_date))+'</td>'
+      +'<td class="dd-name">'+esc(r.name)+(r.code?'<span class="dd-code">'+esc(r.code)+'</span>':'')+'</td>'
+      +'<td class="dd-mono">'+cell(r.inv_no)+'</td>'
+      +'<td class="dd-mono">'+cell(dispDate(r.dispatch))+'</td>'
+      +'<td class="dd-mono">'+cell(dispDate(r.biltydate))+'</td>'
+      +'<td class="dd-mono">'+cell(r.bilty)+'</td>'
+      +'<td>'+cell(r.transporter)+'</td>'
+      +'<td class="dd-mono">'+cell(r.vehicle)+'</td>'
+      +'<td class="dd-mono">'+cell(r.mobile)+'</td></tr>';
+  }
+
+  function render(){
+    var head=document.getElementById('ddHead'), body=document.getElementById('ddBody'),
+        cnt=document.getElementById('ddCount');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="dd-empty">Could not load ('+esc(err)+').</td></tr>';document.getElementById('ddKpis').innerHTML='';cnt.textContent='';return;}
+    if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="dd-empty">Loading…</td></tr>';cnt.textContent='';return;}
+    renderKpis();
+    var a=activeRows();
+    head.innerHTML='<tr>'+COLS.map(function(c){
+      return '<th data-ddsort="'+c.k+'">'+esc(c.l)+sortArrow(c.k)+'</th>';
+    }).join('')+'</tr>';
+    cnt.textContent=fN(a.length)+' invoice'+(a.length===1?'':'s');
+    if(!a.length){body.innerHTML='<tr><td class="dd-empty" colspan="'+COLS.length+'">No invoices in this selection.</td></tr>';return;}
+    body.innerHTML=sorted(a).map(rowHtml).join('');
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function load(){
+    var sd=document.getElementById('ddStart').value, ed=document.getElementById('ddEnd').value;
+    if(!sd||!ed)return;
+    var btn=document.getElementById('ddFetch'); btn.disabled=true; btn.textContent='Loading…';
+    loaded=false; render();
+    fetch('/realise/api/dispatch-details/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:sd,end_date:ed})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ rows=p.rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  // Excel export — the current (filtered + sorted) view.
+  function exportXlsx(){
+    var a=activeRows();
+    if(!a.length){ window.alert('No data to export — click Fetch first.'); return; }
+    var hd=['Inv Date','Customer Code','Customer','Inv No.','Dispatch Date','Bilty Date',
+            'Bilty No.','Transporter','Vehicle No.','Driver Mobile No.'];
+    var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+    sorted(a).forEach(function(r){
+      out.push([dispDate(r.inv_date),r.code,r.name,r.inv_no,dispDate(r.dispatch),dispDate(r.biltydate),
+                r.bilty,r.transporter,r.vehicle,r.mobile]);
+    });
+    var fn='Dispatch_Details';
+    fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn,sheets:[{name:'Dispatch Details',rows:out}]})})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+
+  // Wiring
+  document.getElementById('ddFetch').addEventListener('click',load);
+  document.getElementById('ddExport').addEventListener('click',exportXlsx);
+  document.getElementById('ddStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('ddEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  var searchDeb=debounce(render,120);
+  document.getElementById('ddSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('ddHead').addEventListener('click',function(e){
+    var th=e.target&&e.target.closest?e.target.closest('[data-ddsort]'):null; if(!th)return;
+    var k=th.getAttribute('data-ddsort');
+    if(sortKey===k)sortDir=-sortDir; else{sortKey=k;sortDir=(k==='inv_date')?-1:1;}
+    render();
+  });
+
+  // Default range = current month to date, then auto-fetch.
+  (function(){var t=new Date();
+    document.getElementById('ddStart').value=ymd(new Date(t.getFullYear(),t.getMonth(),1));
+    document.getElementById('ddEnd').value=ymd(t);
+  })();
+  load();
+})();
+</script>
+{% endblock %}

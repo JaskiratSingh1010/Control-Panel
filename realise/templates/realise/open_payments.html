@@ -1,0 +1,431 @@
+{% extends "core/base.html" %}
+{% block title %}Open Payments — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:var(--rz-bg) !important}
+  .op-wrap{max-width:1500px;margin:0 auto}
+  .op-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .op-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
+
+  /* ── KPI cards (white + thin colour accent) ── */
+  .op-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
+  .op-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);
+          background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
+  .op-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .op-kpi .op-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
+  .op-kpi .op-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .op-kpi .op-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
+  .op-kpi .op-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
+  .op-kpi .material-icons.op-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .k-oa{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
+  .k-open{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
+  .k-pay{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
+  .k-cust{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0891b2}
+
+  .op-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .op-fld{display:flex;flex-direction:column;gap:5px}
+  .op-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .op-bar input[type=date],.op-bar input[type=search],.op-bar select{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .op-bar input[type=search]{min-width:200px}
+  .op-bar input[type=search]::placeholder{color:var(--rz-faint)}
+  .op-bar input[type=search]:focus,.op-bar input[type=date]:focus,.op-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .op-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .op-fetch:hover{background:var(--rz-indigo-deep)}
+  .op-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .op-export:hover{background:#ecfdf5;border-color:#a7f3d0}
+  /* Open / Total segmented control */
+  .op-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .op-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
+  .op-seg button.active{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:170px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:250px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--rz-line);position:sticky;top:0;background:#fff}
+  .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:var(--rz-soft)}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:var(--rz-ink)}
+  .com-dp-item .com-dp-sub{font-size:10px;color:var(--rz-faint);font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--rz-indigo);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid var(--rz-line);position:sticky;bottom:0;background:#fff}
+  .com-dp-foot button{width:100%;background:var(--rz-indigo);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  .op-table-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
+  .op-table-wrap{overflow:auto;max-height:72vh}
+  table.op-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.op-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 16px;white-space:nowrap;border-bottom:1px solid var(--rz-line);cursor:pointer;user-select:none}
+  table.op-table thead th.gc-name{text-align:left;left:0;z-index:3}
+  table.op-table thead th .op-sort{font-size:9px;color:var(--rz-muted);margin-left:5px}
+  table.op-table tbody td{padding:9px 16px;border-bottom:1px solid #eef2f6;color:var(--rz-body);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.op-table tbody td.gc-name{text-align:left;color:var(--rz-ink);font-weight:600;position:sticky;left:0;background:#fff;z-index:1}
+  table.op-table tbody tr:nth-child(even) td.gc-name{background:#fafcff}
+  table.op-table tbody tr:hover td{background:#f1f5ff}
+  table.op-table tbody tr:hover td.gc-name{background:#eef3ff}
+  td.op-hi{font-weight:800;color:var(--rz-ink)}
+  .op-v0{color:#cbd5e1}
+  .op-code{font-size:10px;color:var(--rz-faint);font-weight:700}
+  table.op-table tbody tr.op-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
+  table.op-table tbody tr.op-total td.gc-name{background:var(--rz-total-bg);color:var(--rz-ink)}
+  .op-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
+  .op-tw.open{transform:rotate(90deg)}
+  .op-tw-empty{display:inline-block;width:13px;margin-right:7px}
+  .op-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--rz-soft);color:var(--rz-indigo-deep);margin-right:8px;vertical-align:middle}
+  .op-empty{padding:40px;text-align:center;color:var(--rz-muted)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="op-wrap">
+  <div>
+    <h1 class="op-h1">Open Payments</h1>
+    <p class="op-psub">Incoming customer payments (SAP) with their payment-on-account amount and current open (unapplied) balance. Parties fully applied — open balance 0 — are hidden in <b>Open</b> mode. Filter by state, main group, contact person; drill by any dimension.</p>
+  </div>
+
+  <div class="op-kpis" id="opKpis"></div>
+
+  <div class="op-bar">
+    <div class="op-fld"><span class="op-lbl">From</span><input type="date" id="opStart"></div>
+    <div class="op-fld"><span class="op-lbl">To</span><input type="date" id="opEnd"></div>
+    <button class="op-fetch" id="opFetch">&#9654; Fetch</button>
+    <div class="op-fld"><span class="op-lbl">Show</span>
+      <div class="op-seg" id="opMode">
+        <button type="button" data-mode="open" class="active">Open</button>
+        <button type="button" data-mode="total">Total</button>
+      </div>
+    </div>
+    <div class="op-fld"><span class="op-lbl">State</span>
+      <select id="opState"><option value="">All states</option></select>
+    </div>
+    <div class="op-fld"><span class="op-lbl">Main Group</span>
+      <select id="opGroup"><option value="">All groups</option></select>
+    </div>
+    <div class="op-fld"><span class="op-lbl">Contact Person</span>
+      <select id="opPerson"><option value="">All persons</option></select>
+    </div>
+    <div class="op-fld"><span class="op-lbl">Search</span>
+      <input type="search" id="opSearch" placeholder="Customer / code / doc…" autocomplete="off">
+    </div>
+    <div class="op-fld"><span class="op-lbl">Drill By</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="opDrillBtn"><span id="opDrillLabel">— none (per payment) —</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="opDrillPanel">
+          <div class="com-dp-head"><a id="opDrillAll">Select All</a><a id="opDrillClr">Clear All</a></div>
+          <div class="com-dp-list" id="opDrillList"></div>
+          <div class="com-dp-foot"><button type="button" id="opDrillApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="op-fld"><span class="op-lbl">&nbsp;</span>
+      <button class="op-export" id="opExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+    </div>
+  </div>
+
+  <div class="op-table-card">
+    <div class="op-table-wrap">
+      <table class="op-table">
+        <thead id="opHead"></thead>
+        <tbody id="opBody"><tr><td class="op-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  var TERRITORY_DATA={{ territory_payload|safe }};
+  var TERRITORY=TERRITORY_DATA.map||{}, GROUP_OWNERS=TERRITORY_DATA.group_owners||{};
+  function assignedPerson(group,state){
+    group=String(group||'').trim().toUpperCase(); state=String(state||'').trim().toUpperCase();
+    return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
+  }
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function money(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="op-v0">—</span>';return '₹'+Math.round(n).toLocaleString('en-IN');}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+  function abbr(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e7)return sg+'₹'+(a/1e7).toFixed(2)+' Cr';if(a>=1e5)return sg+'₹'+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+'₹'+(a/1e3).toFixed(1)+' K';return sg+'₹'+Math.round(a);}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+  function dispDate(s){s=String(s||'');if(s.length>=10){var p=s.slice(0,10).split('-');if(p.length===3)return p[2]+'-'+p[1]+'-'+p[0];}return s;}
+
+  // Drill dimensions applicable to a payment / party.
+  var DIMS=[
+    {key:'customer',label:'Customer',sub:'CardName / buyer'},
+    {key:'person',label:'Contact Person',sub:'Assigned territory owner'},
+    {key:'state',label:'State',sub:'Party state'},
+    {key:'main_group',label:'Main Group',sub:'Channel'},
+    {key:'date',label:'Date',sub:'Payment date'}
+  ];
+  var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
+
+  var rows=[], loaded=false, err=null, expanded={};
+  var order=[], chosen=[];                       // drill order (empty = flat per-payment)
+  var mode='open';                               // 'open' | 'total'
+  var searchF='', stateF='', groupF='', personF='';
+  var sortKey='date', sortDir=1;                 // flat-table sort (date asc default)
+
+  // Person (territory owner) resolved per payment from its main group + state.
+  function personOf(r){return assignedPerson(r.main_group,r.state)||'—';}
+  function dimVal(r,dim){
+    if(dim==='customer')return r.name||'—';
+    if(dim==='person')return personOf(r);
+    if(dim==='state')return r.state||'—';
+    if(dim==='main_group')return r.main_group||'—';
+    if(dim==='date')return r.date||'—';
+    return '—';
+  }
+
+  function rowMatches(r){
+    if(mode==='open' && !(Math.abs(Number(r.open_bal)||0)>0.005))return false;
+    if(stateF && String(r.state||'')!==stateF)return false;
+    if(groupF && String(r.main_group||'')!==groupF)return false;
+    if(personF && personOf(r)!==personF)return false;
+    if(!searchF)return true;
+    var hay=(r.name+' '+r.code+' '+r.doc_no+' '+r.state+' '+r.main_group+' '+personOf(r)).toLowerCase();
+    return hay.indexOf(searchF)!==-1;
+  }
+  function activeRows(){var out=[];for(var i=0;i<rows.length;i++){if(rowMatches(rows[i]))out.push(rows[i]);}return out;}
+
+  function fillFilter(id,fn,cur){
+    var s={}; rows.forEach(function(r){var v=fn(r);if(v&&v!=='—')s[v]=1;});
+    var el=document.getElementById(id), first=el.querySelector('option').outerHTML;
+    el.innerHTML=first+Object.keys(s).sort().map(function(v){
+      return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(v)+'</option>';}).join('');
+  }
+  function buildFilters(){
+    fillFilter('opState',function(r){return r.state;},stateF);
+    fillFilter('opGroup',function(r){return r.main_group;},groupF);
+    fillFilter('opPerson',personOf,personF);
+  }
+
+  // ── Grouped pivot (when Drill By is set) ──────────────────────────────────
+  function blank(){return {cnt:0,amount:0,open_bal:0};}
+  function add(n,r){n.cnt+=1;n.amount+=Number(r.amount)||0;n.open_bal+=Number(r.open_bal)||0;}
+  function buildTree(subset,dims,depth,prefix){
+    if(depth>=dims.length)return [];
+    var dim=dims[depth], map={}, ord=[];
+    for(var i=0;i<subset.length;i++){var r=subset[i],k=String(dimVal(r,dim)||'—')||'—';
+      var n=map[k]; if(!n){n=map[k]=blank();n.label=k;n.dim=dim;n._rows=[];ord.push(k);}
+      add(n,r); n._rows.push(r);
+    }
+    return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
+      n.kids=buildTree(n._rows,dims,depth+1,n.path); n.leaf=!n.kids.length; delete n._rows; return n;
+    }).sort(function(a,b){
+      if(dim==='date')return String(b.label).localeCompare(String(a.label));   // newest first
+      return (b.open_bal-a.open_bal)||(b.amount-a.amount)||String(a.label).localeCompare(String(b.label));
+    });
+  }
+  function gCells(n){return '<td class="op-hi">'+fN(n.cnt)+'</td><td>'+money(n.amount)+'</td><td class="op-hi">'+money(n.open_bal)+'</td>';}
+  function treeRows(nodes,depth){
+    var html='';
+    nodes.forEach(function(n){
+      var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
+      var tw=hasKids?'<span class="op-tw'+(open?' open':'')+'" data-oppath="'+esc(n.path)+'">&#9654;</span>':'<span class="op-tw-empty"></span>';
+      var tag='<span class="op-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
+      var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-optoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
+      html+='<tr>'+name+gCells(n)+'</tr>';
+      if(hasKids&&open)html+=treeRows(n.kids,depth+1);
+    });
+    return html;
+  }
+
+  // ── Flat per-payment table (no drill) ─────────────────────────────────────
+  var FLAT_COLS=[
+    {k:'date',l:'Date',num:false,get:function(r){return r.date;}},
+    {k:'name',l:'Customer',num:false,get:function(r){return r.name;}},
+    {k:'main_group',l:'Main Group',num:false,get:function(r){return r.main_group;}},
+    {k:'state',l:'State',num:false,get:function(r){return r.state;}},
+    {k:'person',l:'Contact Person',num:false,get:personOf},
+    {k:'amount',l:'Payment on Account',num:true,get:function(r){return Number(r.amount)||0;}},
+    {k:'open_bal',l:'Open Balance',num:true,get:function(r){return Number(r.open_bal)||0;}}
+  ];
+  var FLAT_GET={}; FLAT_COLS.forEach(function(c){FLAT_GET[c.k]=c.get;});
+  function sortedFlat(a){
+    var get=FLAT_GET[sortKey]||FLAT_GET.date;
+    return a.slice().sort(function(x,y){
+      var vx=get(x),vy=get(y),c;
+      if(typeof vx==='number'||typeof vy==='number')c=(Number(vx)||0)-(Number(vy)||0);
+      else c=String(vx==null?'':vx).localeCompare(String(vy==null?'':vy));
+      return c*sortDir||String(x.doc_no).localeCompare(String(y.doc_no));
+    });
+  }
+  function flatRow(r){
+    var name='<td class="gc-name">'+esc(r.name)+' <span class="op-code">'+esc(r.code)+'</span></td>';
+    return '<tr><td class="gc-name" style="min-width:96px">'+esc(dispDate(r.date))+'</td>'
+      +name
+      +'<td style="text-align:left">'+esc(r.main_group)+'</td>'
+      +'<td style="text-align:left">'+esc(r.state)+'</td>'
+      +'<td style="text-align:left">'+esc(personOf(r))+'</td>'
+      +'<td>'+money(r.amount)+'</td><td class="op-hi">'+money(r.open_bal)+'</td></tr>';
+  }
+
+  function renderKpis(){
+    var a=activeRows(), custs={}, amt=0, ob=0;
+    a.forEach(function(r){if(r.code)custs[r.code]=1;amt+=Number(r.amount)||0;ob+=Number(r.open_bal)||0;});
+    var cards=[
+      {c:'k-open',ic:'account_balance',l:'Open Balance',v:abbr(ob),m:'Σ unapplied on account (₹)'},
+      {c:'k-oa',ic:'payments',l:'Payment on Account',v:abbr(amt),m:'Σ receipt amount (₹)'},
+      {c:'k-pay',ic:'receipt_long',l:'Payments',v:fN(a.length),m:mode==='open'?'With an open balance':'Incoming payments'},
+      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'}
+    ];
+    document.getElementById('opKpis').innerHTML=cards.map(function(k){
+      return '<div class="op-kpi '+k.c+'"><div class="op-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="op-kpi-v">'+k.v+'</div><div class="op-kpi-m">'+esc(k.m)+'</div>'
+        +'<span class="material-icons op-kpi-bg">'+k.ic+'</span></div>';
+    }).join('');
+  }
+
+  function sortArrow(k){if(sortKey!==k)return '<span class="op-sort">↕</span>';return '<span class="op-sort">'+(sortDir>0?'▲':'▼')+'</span>';}
+
+  function render(){
+    document.getElementById('opDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none (per payment) —';
+    var head=document.getElementById('opHead'), body=document.getElementById('opBody');
+    if(err){head.innerHTML='';body.innerHTML='<tr><td class="op-empty">Could not load ('+esc(err)+').</td></tr>';document.getElementById('opKpis').innerHTML='';return;}
+    if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="op-empty">Loading…</td></tr>';return;}
+    renderKpis();
+    var a=activeRows();
+
+    if(order.length){                                    // grouped pivot
+      var dims=order;
+      head.innerHTML='<tr><th class="gc-name">'+esc(dims.map(function(k){return DIM_LABEL[k];}).join(' › '))
+        +'</th><th>Payments</th><th>Payment on Account</th><th>Open Balance</th></tr>';
+      if(!a.length){body.innerHTML='<tr><td class="op-empty" colspan="4">No payments in this selection.</td></tr>';return;}
+      var html=treeRows(buildTree(a,dims,0,''),0);
+      var t=blank(); a.forEach(function(r){add(t,r);});
+      html+='<tr class="op-total"><td class="gc-name">TOTAL</td>'+gCells(t)+'</tr>';
+      body.innerHTML=html;
+      return;
+    }
+
+    // Flat, one row per payment (sortable)
+    head.innerHTML='<tr>'+FLAT_COLS.map(function(c){
+      var cls=c.num?'':(c.k==='date'||c.k==='name'?'gc-name':'');
+      var style=c.num?'':(c.k!=='date'&&c.k!=='name'?' style="text-align:left"':'');
+      return '<th class="'+cls+'" data-opsort="'+c.k+'"'+style+'>'+esc(c.l)+sortArrow(c.k)+'</th>';
+    }).join('')+'</tr>';
+    if(!a.length){body.innerHTML='<tr><td class="op-empty" colspan="'+FLAT_COLS.length+'">No payments in this selection.</td></tr>';return;}
+    var sorted=sortedFlat(a);
+    var amt=0,ob=0; a.forEach(function(r){amt+=Number(r.amount)||0;ob+=Number(r.open_bal)||0;});
+    var html=sorted.map(flatRow).join('');
+    html+='<tr class="op-total"><td class="gc-name">TOTAL</td><td class="gc-name"></td>'
+      +'<td style="text-align:left"></td><td style="text-align:left"></td><td style="text-align:left"></td>'
+      +'<td>'+money(amt)+'</td><td class="op-hi">'+money(ob)+'</td></tr>';
+    body.innerHTML=html;
+  }
+
+  function renderDrillList(){
+    var list=document.getElementById('opDrillList'); list.innerHTML='';
+    DIMS.forEach(function(d){
+      var pos=chosen.indexOf(d.key);
+      var item=document.createElement('label'); item.className='com-dp-item'+(pos!==-1?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'+esc(d.label)+'<div class="com-dp-sub">'+esc(d.sub)+'</div></span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=chosen.indexOf(d.key); if(this.checked){if(i===-1)chosen.push(d.key);}else if(i!==-1)chosen.splice(i,1);
+        renderDrillList();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function load(){
+    var sd=document.getElementById('opStart').value, ed=document.getElementById('opEnd').value;
+    if(!sd||!ed)return;
+    var btn=document.getElementById('opFetch'); btn.disabled=true; btn.textContent='Loading…';
+    loaded=false; render();
+    fetch('/realise/api/open-payments/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({start_date:sd,end_date:ed})})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ rows=p.rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; buildFilters(); render(); })
+      .catch(function(){ err='load failed'; loaded=true; render(); })
+      .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
+  }
+
+  // Excel export — the current view (flat per-payment OR the grouped pivot), respecting all filters.
+  function exportXlsx(){
+    var a=activeRows();
+    if(!a.length){ window.alert('No data to export — click Fetch first.'); return; }
+    var out, fn='Open_Payments';
+    if(order.length){
+      var dims=order, tree=buildTree(a,dims,0,'');
+      var hd=dims.map(function(k){return DIM_LABEL[k];}).concat(['Payments','Payment on Account','Open Balance']);
+      out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+      (function walk(nodes,depth,labels){
+        nodes.forEach(function(n){
+          var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
+          out.push(dc.concat([n.cnt,Math.round(n.amount),Math.round(n.open_bal)]));
+          if(!n.leaf)walk(n.kids,depth+1,labels.concat([n.label]));
+        });
+      })(tree,0,[]);
+      var t=blank(); a.forEach(function(r){add(t,r);});
+      var tr=[{value:'TOTAL',bold:true}]; for(var i=1;i<dims.length;i++)tr.push('');
+      out.push(tr.concat([{value:t.cnt,bold:true},{value:Math.round(t.amount),bold:true},{value:Math.round(t.open_bal),bold:true}]));
+    }else{
+      var hd2=['Date','Customer Code','Customer','Main Group','State','Contact Person','Payment on Account','Open Balance'];
+      out=[hd2.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+      var amt=0,ob=0;
+      sortedFlat(a).forEach(function(r){
+        out.push([dispDate(r.date),r.code,r.name,r.main_group,r.state,personOf(r),Math.round(Number(r.amount)||0),Math.round(Number(r.open_bal)||0)]);
+        amt+=Number(r.amount)||0; ob+=Number(r.open_bal)||0;
+      });
+      out.push([{value:'TOTAL',bold:true},'','','','','',{value:Math.round(amt),bold:true},{value:Math.round(ob),bold:true}]);
+    }
+    fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fn,sheets:[{name:'Open Payments',rows:out}]})})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+
+  // Wiring
+  document.getElementById('opFetch').addEventListener('click',load);
+  document.getElementById('opExport').addEventListener('click',exportXlsx);
+  document.getElementById('opStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('opEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  var searchDeb=debounce(render,120);
+  document.getElementById('opSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
+  document.getElementById('opState').addEventListener('change',function(){stateF=this.value;render();});
+  document.getElementById('opGroup').addEventListener('change',function(){groupF=this.value;render();});
+  document.getElementById('opPerson').addEventListener('change',function(){personF=this.value;render();});
+  document.getElementById('opMode').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    mode=b.getAttribute('data-mode');
+    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
+    render();
+  });
+  document.getElementById('opHead').addEventListener('click',function(e){
+    var th=e.target&&e.target.closest?e.target.closest('[data-opsort]'):null; if(!th)return;
+    var k=th.getAttribute('data-opsort');
+    if(sortKey===k)sortDir=-sortDir; else{sortKey=k;sortDir=(k==='amount'||k==='open_bal')?-1:1;}
+    render();
+  });
+  document.getElementById('opBody').addEventListener('click',function(e){
+    var t=e.target&&e.target.closest?e.target.closest('[data-optoggle]'):null; if(!t)return;
+    var p=t.getAttribute('data-optoggle'); expanded[p]=!expanded[p]; render();
+  });
+  (function(){
+    var btn=document.getElementById('opDrillBtn'), panel=document.getElementById('opDrillPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();chosen=order.slice();renderDrillList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('opDrillAll').addEventListener('click',function(){chosen=DIMS.map(function(d){return d.key;});renderDrillList();});
+    document.getElementById('opDrillClr').addEventListener('click',function(){chosen=[];renderDrillList();});
+    document.getElementById('opDrillApply').addEventListener('click',function(){order=chosen.slice();expanded={};panel.classList.remove('open');render();});
+  })();
+
+  // Default range = current month to date, then auto-fetch.
+  (function(){var t=new Date();
+    document.getElementById('opStart').value=ymd(new Date(t.getFullYear(),t.getMonth(),1));
+    document.getElementById('opEnd').value=ymd(t);
+  })();
+  renderDrillList();
+  load();
+})();
+</script>
+{% endblock %}

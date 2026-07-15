@@ -364,6 +364,94 @@ def _parse_remark_upload(uploaded):
     raise ValueError('Could not find a "Doc No" column with "Remarks" and/or "Category" + "Amount" columns')
 
 
+# ── Claims bulk upload (same columns as the Claims Excel export) ──────────────────────────────
+_CLAIM_HEADER_ALIASES = {
+    'claim_date':      ('receiving date', 'claim date', 'date'),
+    'party_name':      ('party name', 'party', 'customer', 'customer name'),
+    'claim_pass_date': ('claim pass date', 'pass date'),
+    'claim_month':     ('claim month year', 'claim month and year', 'claim month', 'month year', 'month'),
+    'claim_type':      ('claim type', 'type'),
+    'ref_inv_no':      ('ref inv no', 'ref inv', 'ref invoice no', 'reference inv no', 'ref no'),
+    'coop_no':         ('coop no', 'coop', 'co op no'),
+    'claim_hold':      ('claim hold', 'hold status', 'on hold'),
+    'claim_amount':    ('claim amount', 'amount'),
+    'claim_passed':    ('claim passed manual', 'claim passed', 'passed'),
+    'reason_of_hold':  ('reason of hold manual', 'reason of hold', 'reason'),
+    'main_group':      ('main group', 'group', 'channel'),
+}
+_CLAIM_HEADER_TO_FIELD = {alias: field for field, aliases in _CLAIM_HEADER_ALIASES.items() for alias in aliases}
+
+
+def _norm_claim_header(h):
+    return re.sub(r'[^a-z0-9]+', ' ', str(h if h is not None else '').strip().lower()).strip()
+
+
+def _extract_claim_rows(table):
+    """A sheet (list of rows) → list of {field: raw_value} claim records, or None if it has no
+    header row exposing at least a Receiving Date + Party Name column. Headers are matched
+    case-insensitively on the export's column names; blank / TOTAL rows are dropped."""
+    if not table:
+        return None
+    header_idx, colmap = None, {}
+    for i, row in enumerate(table[:20]):
+        m = {}
+        for j, cell in enumerate(row or []):
+            field = _CLAIM_HEADER_TO_FIELD.get(_norm_claim_header(cell))
+            if field and field not in m:
+                m[field] = j
+        if 'claim_date' in m and 'party_name' in m:
+            header_idx, colmap = i, m
+            break
+    if header_idx is None:
+        return None
+    out = []
+    for row in table[header_idx + 1:]:
+        if not row:
+            continue
+        rec = {field: (row[j] if j < len(row) else None) for field, j in colmap.items()}
+        pname = str(rec.get('party_name') or '').strip()
+        if not pname or pname.upper() == 'TOTAL':
+            continue
+        out.append(rec)
+    return out
+
+
+def _parse_claim_upload(uploaded):
+    """Read an uploaded .xlsx/.csv (Claims export format) into a list of {field: raw_value} records.
+    Scans every sheet for the one carrying the claim columns. Raises ValueError if none match."""
+    raw = uploaded.read()
+    name = (getattr(uploaded, 'name', '') or '').lower()
+    if name.endswith('.csv'):
+        text = raw.decode('utf-8-sig', errors='replace')
+        tables = [list(csv.reader(io.StringIO(text)))]
+    else:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        tables = [[list(r) for r in wb[sn].iter_rows(values_only=True)] for sn in wb.sheetnames]
+    for table in tables:
+        rows = _extract_claim_rows(table)
+        if rows is not None:
+            return rows
+    raise ValueError('Could not find the claim columns — the file needs a "Receiving Date" and a "Party Name" column (export a claim file to see the format).')
+
+
+@permission_flag_required('can_claims', json_response=True)
+@require_http_methods(['POST'])
+def api_claim_upload(request):
+    """Bulk-create claims from an uploaded .xlsx/.csv in the Claims export format.
+    multipart: file=<xlsx/csv>. Each data row becomes a NEW claim (needs a valid Receiving Date +
+    Party Name); it adds rows and does not update existing claims."""
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'status': 'error', 'error': 'file is required'}, status=400)
+    try:
+        rows = _parse_claim_upload(upload)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'error': str(exc)}, status=400)
+    result = services.bulk_upload_claims(rows, user=request.user)
+    return JsonResponse({'status': 'ok', **result})
+
+
 @permission_flag_required('can_customer_aging', json_response=True)
 @require_http_methods(['POST'])
 def api_aging_remark_upload(request):
@@ -430,7 +518,9 @@ def api_aging_remark_clear(request):
 
 
 @any_permission_flag('can_realise', 'can_customer_aging', 'can_oih_vs_stock', 'can_compare_sales',
-                     'can_claims', json_response=True)
+                     'can_claims', 'can_sales_cn', 'can_hidden_sales', 'can_sales_flow',
+                     'can_open_payments',
+                     json_response=True)
 @require_http_methods(['POST'])
 def api_export_xlsx(request):
     """Build a multi-sheet .xlsx from client-supplied sheets and stream it back.
@@ -849,6 +939,51 @@ def api_hidden_sales_data(request):
     if not start_date or not end_date:
         return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
     return JsonResponse(services.get_hidden_customer_sales(start_date, end_date))
+
+
+@permission_flag_required('can_open_payments')
+def open_payments(request):
+    """Standalone tab: Open Payments — one row per incoming customer payment (SAP ORCT), showing the
+    receipt amount ("payment on account") and its current open/unreconciled balance. The territory
+    payload lets the client resolve the Contact Person dimension (same as Compare Sales). Data via
+    /realise/api/open-payments/."""
+    return render(request, 'realise/open_payments.html', {
+        'sidebar_active': 'open_payments',
+        'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
+    })
+
+
+@any_permission_flag('can_open_payments', json_response=True)
+@require_http_methods(['POST'])
+def api_open_payments_data(request):
+    """Incoming customer payments for a date range. Body: {start_date, end_date}."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date = body.get('end_date', '')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    return JsonResponse(services.get_open_payments(start_date, end_date))
+
+
+@permission_flag_required('can_dispatch_details')
+def dispatch_details(request):
+    """Standalone tab: Dispatch Details — one row per A/R invoice (SAP OINV) for the Oil company,
+    showing its dispatch/logistics fields: Inv Date, Customer code/name, Inv No, Dispatch Date,
+    Bilty Date, Bilty No, Transporter, Vehicle No and Driver Mobile No. Searchable / sortable
+    register with an Excel export. Data via /realise/api/dispatch-details/."""
+    return render(request, 'realise/dispatch_details.html', {'sidebar_active': 'dispatch_details'})
+
+
+@any_permission_flag('can_dispatch_details', json_response=True)
+@require_http_methods(['POST'])
+def api_dispatch_details_data(request):
+    """Dispatch details (invoice + logistics UDFs) for a date range. Body: {start_date, end_date}."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date = body.get('end_date', '')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    return JsonResponse(services.get_dispatch_details(start_date, end_date))
 
 
 @permission_flag_required('can_customer_master')

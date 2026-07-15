@@ -1014,7 +1014,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <h3>Customer Grading</h3>
         <p id="bevGradeSub"></p>
       </div>
-      <button type="button" class="bev-sold-close" onclick="closeBevGrading()" aria-label="Close">&times;</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" class="btn btn-ghost" onclick="exportBevGrading()" title="Export this grading table to Excel">&#11015; Export Excel</button>
+        <button type="button" class="bev-sold-close" onclick="closeBevGrading()" aria-label="Close">&times;</button>
+      </div>
     </div>
     <div class="bev-sold-wrap" style="overflow:auto">
       <table class="bev-table bev-grade-table" style="table-layout:auto;width:max-content;min-width:100%">
@@ -2061,9 +2064,33 @@ function openBevGrading(){
       +'<td class="num gc-avg">'+fN(Math.round((gtot/nMonths)*100)/100)+'</td><td class="num">—</td></tr>';
     body.innerHTML=html;
   }
+  bevGradeData={list:list, months:months, labels:labels, brand:bevBrand, nMonths:nMonths};
   document.getElementById('bevGradeModal').classList.add('show');
 }
 function closeBevGrading(){document.getElementById('bevGradeModal').classList.remove('show');}
+
+// Export the Customer Grading table (customers × months + Avg Sales + Grade) to Excel.
+var bevGradeData=null;
+function exportBevGrading(){
+  var d=bevGradeData;
+  if(!d||!d.list.length){showToast('Nothing to export — open grading first','info');return;}
+  function r2(v){return Math.round((Number(v)||0)*100)/100;}
+  var hd=['Customer'].concat(d.months.map(function(m){return d.labels[m]||m;})).concat(['Avg Sales','Grade']);
+  var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
+  var colTot={}, gtot=0;
+  d.list.forEach(function(c){
+    var cells=d.months.map(function(m){var v=c.by[m]||0; colTot[m]=(colTot[m]||0)+v; return v?r2(v):'';});
+    gtot+=c.total;
+    out.push([c.name].concat(cells).concat([r2(c.avg), c.grade]));
+  });
+  var totCells=d.months.map(function(m){return {value:r2(colTot[m]||0),bold:true};});
+  out.push([{value:'TOTAL',bold:true}].concat(totCells).concat([{value:r2(gtot/d.nMonths),bold:true},'']));
+  var fn='Beverages_Customer_Grading'+(d.brand?('_'+String(d.brand).replace(/[^A-Za-z0-9]+/g,'_')):'');
+  fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},
+    body:JSON.stringify({filename:fn,sheets:[{name:'Customer Grading',rows:out}]})})
+    .then(function(r){return r.ok?r.blob():null;})
+    .then(function(b){ if(!b){showToast('Export failed','error');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=fn+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+}
 // ── Order in Hand popup — dynamic drill over open-order rows ────────────────
 function bevOihActive(){
   return (bevOihRows||[]).filter(function(r){return (!bevBrand||r.brand===bevBrand)&&(!bevMonth||r.ym===bevMonth);});
