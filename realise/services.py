@@ -5288,6 +5288,42 @@ def clear_aging_remarks(card_code, row_keys=None):
     return n
 
 
+def clear_ar_overrides(prefixes):
+    """Delete every AgingRemark whose row_key starts with one of `prefixes`. Used by the RAW DATA
+    'Clear' action to wipe stale COMPANY-WIDE per-invoice overrides (e.g. 'BEVSP:' for all
+    Beverages Actual Sales Person entries, 'BEVDOC:' for the Remarks) before a fresh upload —
+    unlike clear_aging_remarks, which is scoped to one customer. The aging payload re-attaches
+    remarks fresh on every load (_ar_attach_remarks), so a clear is reflected on the next fetch.
+    Returns how many rows were removed."""
+    total = 0
+    for p in prefixes:
+        p = (p or '').strip()
+        if not p:
+            continue
+        qs = AgingRemark.objects.filter(row_key__startswith=p)
+        total += qs.count()
+        qs.delete()
+    return total
+
+
+# what → the row_key prefixes each RAW DATA company wipes: 'remarks' = the note (BEV/OILDOC:),
+# 'sp' = the Actual Sales Person (BEV/OILSP:), 'both' = both. Mirrors _customer_aging_ar's prefixes.
+_AR_CLEAR_PREFIXES = {
+    'bev': {'remarks': ['BEVDOC:'], 'sp': ['BEVSP:'], 'both': ['BEVDOC:', 'BEVSP:']},
+    'oil': {'remarks': ['OILDOC:'], 'sp': ['OILSP:'], 'both': ['OILDOC:', 'OILSP:']},
+}
+
+
+def clear_ar_company_overrides(company, what='both'):
+    """Clear a RAW DATA company's per-invoice overrides. company in {'bev','oil'}; what in
+    {'remarks','sp','both'} (default/unknown → 'both'). Returns how many rows were removed."""
+    by_what = _AR_CLEAR_PREFIXES.get(company)
+    if not by_what:
+        return 0
+    prefixes = by_what.get((what or 'both').strip().lower(), by_what['both'])
+    return clear_ar_overrides(prefixes)
+
+
 def bulk_update_aging_remarks(card_code, aging_date, entries):
     """Apply an uploaded sheet to a customer's open documents, matching on Doc No (JDT1.BaseRef)
     as of aging_date. ``entries`` is {doc_no: {'remark': str|None, 'splits': [{category, amount,

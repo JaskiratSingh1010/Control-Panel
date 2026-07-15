@@ -517,6 +517,27 @@ def api_aging_remark_clear(request):
     return JsonResponse({'status': 'ok', 'cleared': services.clear_aging_remarks(code)})
 
 
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_clear_beverages(request):
+    """Wipe Beverages RAW DATA per-invoice overrides company-wide, so stale Remarks / Actual Sales
+    Person values from an earlier upload can be erased before re-uploading. Body:
+    {what: 'remarks'|'sp'|'both'} (default 'both')."""
+    what = str(_parse_body(request).get('what') or 'both').strip().lower()
+    return JsonResponse({'status': 'ok', 'cleared': services.clear_ar_company_overrides('bev', what),
+                         'what': what})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_remark_clear_oil(request):
+    """Wipe Oil RAW DATA per-invoice overrides company-wide. Body: {what: 'remarks'|'sp'|'both'}
+    (default 'both')."""
+    what = str(_parse_body(request).get('what') or 'both').strip().lower()
+    return JsonResponse({'status': 'ok', 'cleared': services.clear_ar_company_overrides('oil', what),
+                         'what': what})
+
+
 @any_permission_flag('can_realise', 'can_customer_aging', 'can_oih_vs_stock', 'can_compare_sales',
                      'can_claims', 'can_sales_cn', 'can_hidden_sales', 'can_sales_flow',
                      'can_open_payments',

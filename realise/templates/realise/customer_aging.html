@@ -217,6 +217,10 @@
   .agrx-add-head{display:flex;justify-content:flex-end;padding:2px 6px 6px;border-bottom:1px solid #eef2f6;margin-bottom:4px}
   .agrx-add-head a{font-size:11.5px;font-weight:800;color:#6366f1;cursor:pointer}
   .agrx-add-head a:hover{text-decoration:underline}
+  #agRawClearBtn{padding:8px 13px;color:var(--rz-indigo-deep)}   /* match sibling .agrx-btn (overrides .agrx-add>button) */
+  #agRawClearPop{min-width:190px;padding:4px}
+  .agrx-clr{padding:7px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--rz-body);cursor:pointer;white-space:nowrap}
+  .agrx-clr:hover{background:#fef2f2;color:#b91c1c}
   label.agrx-opt{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:#334155;cursor:pointer;white-space:nowrap}
   label.agrx-opt:hover{background:#eef2ff;color:#4338ca}
   label.agrx-opt input{margin:0;cursor:pointer}
@@ -385,6 +389,14 @@
         <button type="button" class="agrx-btn" id="agPivCollapse">Collapse all</button>
       </span>
       <button type="button" class="agrx-btn" id="agRawUpload" title="Bulk-update remarks from an Excel/CSV, matched by Doc No (columns: Doc No | Remarks)">Upload Remarks</button>
+      <span class="agrx-add" id="agRawClearAdd">
+        <button type="button" class="agrx-btn" id="agRawClearBtn" title="Erase saved per-invoice overrides for this view (use before re-uploading if old values are confusing)">Clear ▾</button>
+        <div class="agrx-add-pop" id="agRawClearPop">
+          <div class="agrx-clr" data-what="sp">Clear Actual Sales Person</div>
+          <div class="agrx-clr" data-what="remarks">Clear Remarks</div>
+          <div class="agrx-clr" data-what="both">Clear Both</div>
+        </div>
+      </span>
       <button type="button" class="agrx-btn" id="agRawExport">Export CSV</button>
       <button type="button" class="agrx-x" id="agRawClose" title="Close">&times;</button>
     </div>
@@ -447,8 +459,10 @@
     // Oil keeps its B1 pivot as the main view; this config only feeds the on-demand RAW DATA
     // workspace (open-invoice list), so oil never uses the isAR() main-view A/R path.
     oil:  {url:"{% url 'realise:api_customer_aging_oil_ar' %}", upload:"{% url 'realise:api_aging_remark_upload_oil' %}",
+           clear:"{% url 'realise:api_aging_remark_clear_oil' %}",
            docPrefix:'OILDOC:', spPrefix:'OILSP:', pill:'Oil A/R', name:'Oil'},
     bev:  {url:"{% url 'realise:api_customer_aging_beverages' %}", upload:"{% url 'realise:api_aging_remark_upload_beverages' %}",
+           clear:"{% url 'realise:api_aging_remark_clear_beverages' %}",
            docPrefix:'BEVDOC:',  spPrefix:'BEVSP:',  pill:'Beverages A/R', name:'Beverages'}
   };
   var MART_URL = "{% url 'realise:api_customer_aging_mart' %}";
@@ -1491,6 +1505,35 @@
           })
           .catch(function(){ alert('Upload failed — please try again.'); })
           .then(function(){ upBtn.disabled=false; upFile.value=''; });   // allow re-selecting the same file
+      });
+    }
+
+    // Clear saved per-invoice overrides (Actual Sales Person / Remarks / both) company-wide, so
+    // stale values from an earlier upload can be wiped before re-uploading. Menu → confirm → POST.
+    var clrAdd=document.getElementById('agRawClearAdd'), clrBtn=document.getElementById('agRawClearBtn');
+    if(clrAdd && clrBtn){
+      clrBtn.addEventListener('click',function(e){ e.stopPropagation(); clrAdd.classList.toggle('open'); });
+      document.addEventListener('click',function(e){ if(!clrAdd.contains(e.target)) clrAdd.classList.remove('open'); });
+      document.getElementById('agRawClearPop').addEventListener('click',function(e){
+        var it=e.target.closest('.agrx-clr'); if(!it) return;
+        clrAdd.classList.remove('open');
+        var what=it.getAttribute('data-what');
+        var lbl=what==='sp'?'Actual Sales Person':(what==='remarks'?'Remarks':'Actual Sales Person AND Remarks');
+        var co=arCfg().name;
+        if(!confirm('Erase ALL saved '+lbl+' for every '+co+' open invoice?\n\nThis removes the manually-entered/uploaded values for the whole '+co+' book (not just what\'s on screen) and cannot be undone. SAP data is untouched.')) return;
+        clrBtn.disabled=true;
+        fetch(arCfg().clear, {method:'POST', headers:{'X-CSRFToken':csrf(),'Content-Type':'application/json'}, body:JSON.stringify({what:what})})
+          .then(function(r){ return r.json(); })
+          .then(function(j){
+            if(j && j.status==='ok'){
+              alert('Cleared '+j.cleared+' saved '+lbl+' value(s).');
+              RAW_BEV=null;
+              if(company==='oil'){ loadOilRaw(function(){ refreshRawIfOpen(); }); }
+              else { loadBev(); }
+            } else { alert('Clear failed: '+((j&&j.error)||'unknown error')); }
+          })
+          .catch(function(){ alert('Clear failed — please try again.'); })
+          .then(function(){ clrBtn.disabled=false; });
       });
     }
 
