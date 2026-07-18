@@ -1,0 +1,874 @@
+{% extends "core/base.html" %}
+{% block title %}Realise Calculator — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:var(--rz-bg) !important}
+  .rc-wrap{max-width:1600px;margin:0 auto}
+  .rc-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .rc-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
+
+  /* ── KPI cards ── */
+  .rc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+  .rc-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);
+          background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
+  .rc-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .rc-kpi .rc-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
+  .rc-kpi .rc-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .rc-kpi .rc-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
+  .rc-kpi .rc-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
+  .rc-kpi .material-icons.rc-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .k-rev{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
+  .k-vol{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
+  .k-rl{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0891b2}
+  .k-rb{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
+
+  /* ── Calculator: tabs + panes ── */
+  .rc-calc{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
+  .rc-calc-tabs{display:flex;gap:2px;border-bottom:1px solid var(--rz-card-brd);background:#f8fafc;padding:0 6px;align-items:center}
+  .rc-tab{border:0;background:none;font-family:inherit;font-size:12.5px;font-weight:800;color:var(--rz-muted);padding:13px 15px;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;text-transform:uppercase;letter-spacing:.3px}
+  .rc-tab .material-icons{font-size:17px}
+  .rc-tab.on{color:var(--rz-indigo);border-bottom-color:var(--rz-indigo)}
+  .rc-tab-note{margin-left:auto;font-size:11px;font-weight:600;color:var(--rz-muted);padding-right:12px}
+  .rc-pane{padding:16px 18px}
+
+  /* ── Planning grid ── */
+  .rc-grid-wrap{overflow-x:auto}
+  table.rc-grid{width:100%;min-width:1160px;border-collapse:collapse;font-size:13px}
+  table.rc-grid th{text-align:right;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-muted);padding:8px 10px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+  table.rc-grid th.l{text-align:left}
+  table.rc-grid td{padding:5px 7px;border-bottom:1px solid #eef2f6;text-align:right}
+  .gin{font-family:inherit;font-size:13px;font-weight:700;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;background:#fff;outline:none;text-align:right;width:100%;box-sizing:border-box;font-variant-numeric:tabular-nums}
+  .gin.gitem{text-align:left}
+  .gin:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .gcalc{font-weight:800;font-variant-numeric:tabular-nums;color:var(--rz-ink);padding-right:10px;white-space:nowrap}
+  .gcalc.rl{color:#0e7490}
+  .gcalc.grev{color:#065f46}
+  .gcalc.up{color:#16a34a}
+  .gcalc.dn{color:#dc2626}
+  table.rc-grid tfoot td.up{color:#16a34a}
+  table.rc-grid tfoot td.dn{color:#dc2626}
+  table.rc-grid.rc-cmp{min-width:1160px}
+  tr.crow td{border-bottom:0}
+  tr.crow:hover td,tr.crow:hover + tr.rrow td{background:#f1f5ff}
+  .rc-cmp-note{margin:0 0 14px;font-size:12.5px;color:var(--rz-muted);line-height:1.5}
+  .rc-cmp-block{margin:0 0 22px}
+  .rc-cmp-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--rz-ink);margin:0 0 10px;text-transform:uppercase;letter-spacing:.3px}
+  .rc-cmp-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;font-size:12px;font-weight:900;color:#fff}
+  .rc-cmp-badge.a{background:#6366f1}.rc-cmp-badge.b{background:#0d9488}
+  .rc-cmp-vs-h{font-size:13px;font-weight:800;color:var(--rz-ink);text-transform:uppercase;letter-spacing:.4px;margin:6px 0 10px;padding-top:14px;border-top:1px dashed #e2e8f0}
+  table.rc-grid tfoot td.grev{color:#065f46}
+  /* results strip directly under each item's input row */
+  tr.grow td{border-bottom:0}
+  tr.rrow td{border-bottom:1px solid #e6ebf2;background:#fbfcff;padding:3px 8px 9px;text-align:right;vertical-align:top}
+  tr.rrow td.rlab{color:var(--rz-faint);font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+  td.rc{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.rc .rlbl{display:block;font-size:8.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--rz-faint);margin-bottom:1px}
+  td.rc [data-c]{font-weight:800;color:var(--rz-ink);font-size:13px}
+  td.rc.rl [data-c]{color:#0e7490}
+  td.rc.grev [data-c]{color:#065f46}
+  tr.grow:hover td,tr.grow:hover + tr.rrow td{background:#f1f5ff}
+  .gap-up{color:#dc2626}      /* target above actual → realisation upside available */
+  .gap-dn{color:#16a34a}      /* already at/above target */
+  .grm{background:none;border:0;cursor:pointer;color:#cbd5e1;font-family:inherit;font-size:14px;line-height:1;padding:6px}
+  .grm:hover{color:#dc2626}
+  table.rc-grid tfoot td{padding:11px 10px;border-top:2px solid var(--rz-line);font-weight:900;font-variant-numeric:tabular-nums;color:var(--rz-ink);text-align:right;background:#f8fafc}
+  table.rc-grid tfoot td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:var(--rz-muted)}
+  .rc-grid-actions{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .rc-gadd{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+  .rc-gadd:hover{background:var(--rz-indigo-deep)}
+  .rc-gclear{background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:700;color:var(--rz-muted);cursor:pointer;font-family:inherit}
+  .rc-gclear:hover{color:var(--rz-ink);background:#f8fafc}
+  .rc-gexport{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:800;color:#047857;cursor:pointer;font-family:inherit}
+  .rc-gexport:hover{background:#ecfdf5;border-color:#a7f3d0}
+  .rc-gupload{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:800;color:#4338ca;cursor:pointer;font-family:inherit}
+  .rc-gupload:hover{background:#eef2ff;border-color:#c7d2fe}
+  /* export choice dialog */
+  .rc-choice{position:fixed;inset:0;z-index:110;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}
+  .rc-choice[hidden]{display:none}
+  .rc-choice-card{background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.35);padding:24px;width:min(420px,94vw);text-align:center}
+  .rc-choice-h{font-size:16px;font-weight:800;color:var(--rz-ink);margin-bottom:16px}
+  .rc-choice-btns{display:flex;flex-direction:column;gap:10px}
+  .rc-choice-b{border:1px solid #e2e8f0;background:#fff;font-family:inherit;font-size:14px;font-weight:800;padding:12px;border-radius:10px;cursor:pointer;color:var(--rz-ink)}
+  .rc-choice-b:hover{border-color:var(--rz-indigo);background:#f1f5ff}
+  .rc-choice-b.both{background:var(--rz-indigo);color:#fff;border-color:var(--rz-indigo)}
+  .rc-choice-b.both:hover{background:var(--rz-indigo-deep)}
+  .rc-choice-cancel{margin-top:14px;border:0;background:none;color:var(--rz-muted);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+  .rc-gsave{display:inline-flex;align-items:center;gap:6px;background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+  .rc-gsave:hover{background:var(--rz-indigo-deep)}
+  .rc-save-f{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .rc-save-l{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .rc-save-f select,.rc-save-f input{font-family:inherit;font-size:14px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:9px 11px;background:#fff;outline:none}
+  .rc-save-f select:focus,.rc-save-f input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rc-save-radios{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;font-weight:700;color:var(--rz-ink)}
+  .rc-save-radios label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+  .rc-ghint{font-size:11px;font-weight:600;color:var(--rz-muted)}
+
+  /* summary chips under the grid */
+  .rc-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:14px}
+  .rc-chip{border-radius:12px;padding:12px 14px;background:#f8fafc;border:1px solid #eef2f6}
+  .rc-chip .c-l{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-muted)}
+  .rc-chip .c-v{font-size:21px;font-weight:900;color:var(--rz-ink);margin-top:3px;line-height:1;font-variant-numeric:tabular-nums}
+  .rc-chip.acc{background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-color:#c7d2fe}
+  .rc-chip.acc .c-l{color:#4338ca}.rc-chip.acc .c-v{color:#312e81}
+  .rc-chip.opp{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}
+  .rc-chip.opp .c-l{color:#047857}.rc-chip.opp .c-v{color:#065f46}
+
+  /* ── Margin waterfall ── */
+  .rc-wf{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;align-items:start}
+  .rc-wf-in{display:flex;flex-direction:column;gap:9px}
+  .rc-wf-row{display:flex;align-items:center;gap:10px}
+  .rc-wf-row label{font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--rz-muted);flex:1}
+  .rc-wf-row .u{font-size:11px;font-weight:700;color:var(--rz-faint);width:16px}
+  .rc-wf-row input{width:120px;font-family:inherit;font-size:14px;font-weight:700;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;text-align:right;background:#fff;outline:none;font-variant-numeric:tabular-nums}
+  .rc-wf-row input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rc-wf-steps{display:flex;flex-direction:column;gap:3px}
+  .rc-step{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-radius:9px;background:#f8fafc;border:1px solid #eef2f6}
+  .rc-step .s-l{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--rz-muted)}
+  .rc-step .s-l small{display:block;font-size:9px;color:var(--rz-faint);font-weight:600;letter-spacing:0;text-transform:none;margin-top:1px}
+  .rc-step .s-v{font-size:15px;font-weight:800;color:var(--rz-ink);font-variant-numeric:tabular-nums}
+  .rc-step.final{background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-color:#c7d2fe}
+  .rc-step.final .s-l{color:#4338ca}.rc-step.final .s-v{color:#312e81;font-size:21px;font-weight:900}
+  .rc-step.final.b{background:linear-gradient(135deg,#fef2f4,#fee2e8);border-color:#fecdd6}
+  .rc-step.final.b .s-l{color:#be123c}.rc-step.final.b .s-v{color:#881337}
+  .rc-step.final.rev{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}
+  .rc-step.final.rev .s-l{color:#047857}.rc-step.final.rev .s-v{color:#065f46}
+  .rc-wfpick{width:180px;font-family:inherit;font-size:13px;font-weight:700;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;text-align:left;background:#fff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc-wfpick:hover{border-color:var(--rz-indigo)}
+  .rc-wf-actions{margin-top:14px;display:flex;gap:10px;align-items:center}
+  .rc-wfsend{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+  .rc-wfsend:hover{background:var(--rz-indigo-deep)}
+
+  /* ── Report bar + table (SAP-driven) ── */
+  .rc-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:0 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .rc-fld{display:flex;flex-direction:column;gap:5px}
+  .rc-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .rc-bar input[type=date],.rc-bar input[type=search],.rc-bar select{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .rc-bar input[type=search]{min-width:210px}
+  .rc-bar input[type=search]::placeholder{color:var(--rz-faint)}
+  .rc-bar input:focus,.rc-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rc-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .rc-fetch:hover{background:var(--rz-indigo-deep)}
+  .rc-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
+  .rc-export:hover{background:#ecfdf5;border-color:#a7f3d0}
+  .rc-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+
+  .rc-table-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
+  .rc-table-wrap{overflow:auto;max-height:64vh}
+  table.rc-table{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px}
+  table.rc-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 14px;white-space:nowrap;border-bottom:1px solid var(--rz-line);cursor:pointer;user-select:none}
+  table.rc-table thead th.rc-l{text-align:left}
+  table.rc-table thead th .rc-sort{font-size:9px;color:var(--rz-muted);margin-left:5px}
+  table.rc-table tbody td{padding:9px 14px;border-bottom:1px solid #eef2f6;color:var(--rz-body);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.rc-table tbody td.rc-name{text-align:left;color:var(--rz-ink);font-weight:600;cursor:pointer}
+  table.rc-table tbody td.rc-name:hover{color:var(--rz-indigo)}
+  table.rc-table tbody td.rc-name .rc-add{opacity:0;font-size:10px;color:var(--rz-indigo);font-weight:800;margin-left:8px}
+  table.rc-table tbody tr:hover td.rc-name .rc-add{opacity:1}
+  table.rc-table tbody tr:nth-child(even) td{background:#fafcff}
+  table.rc-table tbody tr:hover td{background:#f1f5ff}
+  .rc-type{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:.3px}
+  .rc-type.P{background:#eef2ff;color:#4338ca}.rc-type.C{background:#fef9c3;color:#854d0e}.rc-type.X{background:#f1f5f9;color:#64748b}
+  .rc-rl{font-weight:800;color:#0e7490}.rc-rb{font-weight:800;color:#be123c}
+  .rc-code{font-size:10px;color:var(--rz-faint);font-weight:700;margin-left:6px}
+  table.rc-table tfoot td{position:sticky;bottom:0;background:var(--rz-head-bg);color:var(--rz-ink);font-weight:900;padding:11px 14px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.rc-table tfoot td.rc-l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+  .rc-empty{padding:40px;text-align:center;color:var(--rz-muted)}
+
+  /* ── Item picker cell + modal (Variety → SKU → Item) ── */
+  .gpick{cursor:pointer;text-align:left;color:var(--rz-ink);display:flex;align-items:center;min-height:34px;background:#fff}
+  .gpick:hover{border-color:var(--rz-indigo)}
+  .gph{color:var(--rz-faint);font-weight:600}
+  .gcode{font-size:10px;color:var(--rz-faint);font-weight:700;margin-left:7px}
+  .rc-modal{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}
+  .rc-modal[hidden]{display:none}
+  .rc-modal-card{background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.35);width:min(940px,96vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+  .rc-modal-h{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eef2f6}
+  .rc-modal-h .t{font-size:15px;font-weight:800;color:var(--rz-ink)}
+  .rc-modal-h input{margin-left:auto;font-family:inherit;font-size:13px;font-weight:600;border:1px solid #e2e8f0;border-radius:9px;padding:8px 11px;min-width:240px;outline:none}
+  .rc-modal-h input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rc-modal-x{border:0;background:#f1f5f9;color:#64748b;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit}
+  .rc-modal-x:hover{background:#e2e8f0;color:#334155}
+  .rc-modal-clear{border:1px solid #e2e8f0;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .rc-modal-clear:hover{background:#f8fafc;color:var(--rz-ink);border-color:var(--rz-indigo)}
+  .rc-modal-body{display:grid;grid-template-columns:1fr 1fr 1.5fr;height:64vh;max-height:560px;overflow:hidden}
+  .rc-col{overflow-y:auto;min-height:0;border-right:1px solid #eef2f6;padding:6px}   /* min-height:0 lets the column actually scroll inside the grid */
+  .rc-col:last-child{border-right:0}
+  .rc-col-h{position:sticky;top:0;background:#fff;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted);padding:6px 10px 6px;z-index:1}
+  .rc-opt{padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--rz-body);display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .rc-opt:hover{background:#f1f5ff}
+  .rc-opt.on{background:#eef2ff;color:var(--rz-indigo);font-weight:800}
+  .rc-opt .n{font-size:11px;color:var(--rz-faint);font-weight:700}
+  .rc-opt .tp{font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px}
+  .rc-opt .tp.P{background:#eef2ff;color:#4338ca}.rc-opt .tp.C{background:#fef9c3;color:#854d0e}
+  .rc-col-empty{padding:16px;color:var(--rz-faint);font-size:12px;text-align:center}
+  /* SKU column as grouped chips */
+  .rc-skugrp{margin:2px 8px 16px}
+  .rc-skugrp-l{display:inline-block;font-size:12.5px;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:#4338ca;background:#eef2ff;padding:4px 11px;border-radius:7px;margin:10px 2px 9px}
+  .rc-skuchips{display:flex;flex-wrap:wrap;gap:7px}
+  .rc-skuchip{display:inline-flex;align-items:baseline;gap:5px;min-width:46px;justify-content:center;padding:9px 13px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:16px;font-weight:800;color:var(--rz-ink)}
+  .rc-skuchip:hover{border-color:var(--rz-indigo);background:#f1f5ff}
+  .rc-skuchip.on{background:#eef2ff;border-color:var(--rz-indigo);color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+  .rc-skuchip .n{font-size:10.5px;color:var(--rz-faint);font-weight:700}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rc-wrap">
+  <h1 class="rc-h1">Realise Calculator</h1>
+
+  <!-- ══ Interactive calculator: Planning Grid + Compare ══ -->
+  <div class="rc-calc">
+    <div class="rc-calc-tabs">
+      <button class="rc-tab on" data-tab="grid"><span class="material-icons">table_chart</span>Planning Grid</button>
+      <button class="rc-tab" data-tab="cmp"><span class="material-icons">compare_arrows</span>Compare</button>
+      <span class="rc-tab-note">Realise ₹/L = (Retailer ÷ margins ÷ (1+GST%) × pcs/box − discount) ÷ (box + scheme litres)</span>
+    </div>
+
+    <!-- PLANNING GRID -->
+    <div class="rc-pane" id="paneGrid">
+      <div class="rc-grid-wrap">
+        <table class="rc-grid">
+          <thead>
+            <tr>
+              <th class="l">Item</th>
+              <th>Retailer ₹<br><small style="font-weight:600;color:var(--rz-faint)">per piece</small></th>
+              <th>SS %</th>
+              <th>Dist %</th>
+              <th>GST %</th>
+              <th>Pcs/Box</th>
+              <th>Flat Disc ₹<br><small style="font-weight:600;color:var(--rz-faint)">per box</small></th>
+              <th>Box Ltrs</th>
+              <th>Scheme L</th>
+              <th>To be sale (L)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="gridBody"></tbody>
+          <tfoot id="gridFoot"></tfoot>
+        </table>
+      </div>
+      <div class="rc-grid-actions">
+        <button class="rc-gadd" id="gridAdd">+ Add row</button>
+        <button class="rc-gclear" id="gridClear">Clear all</button>
+        <button class="rc-gsave" id="gridSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
+        <button class="rc-gexport" id="gridExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel</button>
+        <button class="rc-gupload" id="gridUpload"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+        <span class="rc-ghint">Upload an .xlsx with an <b>Item Code</b> column to fill rows.</span>
+      </div>
+      <div class="rc-sum" id="gridSum"></div>
+    </div>
+
+
+    <!-- COMPARE — present (actual) vs future (planned) realise across products -->
+    <div class="rc-pane" id="paneCmp" hidden>
+      <p class="rc-cmp-note">Two independent plans side by side — fill both box grids and compare their blended realise &amp; revenue at the bottom.</p>
+
+      <!-- Plan A -->
+      <div class="rc-cmp-block">
+        <div class="rc-cmp-h"><span class="rc-cmp-badge a">E</span>Existing Plan</div>
+        <div class="rc-grid-wrap">
+          <table class="rc-grid rc-cmp">
+            <thead><tr>
+              <th class="l">Item</th>
+              <th>Retailer ₹<br><small style="font-weight:600;color:var(--rz-faint)">per piece</small></th>
+              <th>SS %</th><th>Dist %</th><th>GST %</th><th>Pcs/Box</th>
+              <th>Flat Disc ₹<br><small style="font-weight:600;color:var(--rz-faint)">per box</small></th>
+              <th>Box Ltrs</th><th>Scheme L</th><th>To be sale (L)</th><th></th>
+            </tr></thead>
+            <tbody id="cmpBodyA"></tbody>
+            <tfoot id="cmpFootA"></tfoot>
+          </table>
+        </div>
+        <div class="rc-grid-actions">
+          <button class="rc-gadd" id="cmpAddA">+ Add row</button>
+          <button class="rc-gclear" id="cmpClearA">Clear all</button>
+          <button class="rc-gupload" id="cmpUploadA"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+        </div>
+        <div class="rc-sum" id="cmpSumA"></div>
+      </div>
+
+      <!-- Plan B -->
+      <div class="rc-cmp-block">
+        <div class="rc-cmp-h"><span class="rc-cmp-badge b">N</span>New Plan</div>
+        <div class="rc-grid-wrap">
+          <table class="rc-grid rc-cmp">
+            <thead><tr>
+              <th class="l">Item</th>
+              <th>Retailer ₹<br><small style="font-weight:600;color:var(--rz-faint)">per piece</small></th>
+              <th>SS %</th><th>Dist %</th><th>GST %</th><th>Pcs/Box</th>
+              <th>Flat Disc ₹<br><small style="font-weight:600;color:var(--rz-faint)">per box</small></th>
+              <th>Box Ltrs</th><th>Scheme L</th><th>To be sale (L)</th><th></th>
+            </tr></thead>
+            <tbody id="cmpBodyB"></tbody>
+            <tfoot id="cmpFootB"></tfoot>
+          </table>
+        </div>
+        <div class="rc-grid-actions">
+          <button class="rc-gadd" id="cmpAddB">+ Add row</button>
+          <button class="rc-gclear" id="cmpClearB">Clear all</button>
+          <button class="rc-gupload" id="cmpUploadB"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+        </div>
+        <div class="rc-sum" id="cmpSumB"></div>
+      </div>
+
+      <!-- A vs B -->
+      <div class="rc-cmp-vs-h">Existing vs New Plan</div>
+      <div class="rc-sum" id="cmpVs"></div>
+      <div class="rc-grid-actions" style="margin-top:16px">
+        <button class="rc-gsave" id="cmpSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
+        <button class="rc-gexport" id="cmpExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel (Existing + New)</button>
+        <span class="rc-ghint">Save to the Rate List (by state) or export both plans with live formulas.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Item picker modal: Variety → SKU/Size → Item -->
+  <div class="rc-modal" id="pickModal" hidden>
+    <div class="rc-modal-card">
+      <div class="rc-modal-h">
+        <span class="t">Select item</span>
+        <input type="search" id="pkSearch" placeholder="Search item code / name…" autocomplete="off">
+        <button class="rc-modal-clear" id="pkClear" title="Reset size / variety / search">Clear</button>
+        <button class="rc-modal-x" id="pkClose" title="Close">✕</button>
+      </div>
+      <div class="rc-modal-body">
+        <div class="rc-col" id="pkVar"></div>
+        <div class="rc-col" id="pkSku"></div>
+        <div class="rc-col" id="pkItem"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compare export: choose which plan to export -->
+  <div class="rc-choice" id="expChoice" hidden>
+    <div class="rc-choice-card">
+      <div class="rc-choice-h">Export which plan?</div>
+      <div class="rc-choice-btns">
+        <button type="button" class="rc-choice-b" data-exp="A">Existing Plan only</button>
+        <button type="button" class="rc-choice-b" data-exp="B">New Plan only</button>
+        <button type="button" class="rc-choice-b both" data-exp="both">Both — one sheet</button>
+      </div>
+      <button type="button" class="rc-choice-cancel" id="expCancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Save result to Rate List -->
+  <div class="rc-choice" id="saveModal" hidden>
+    <div class="rc-choice-card" style="text-align:left;width:min(440px,94vw)">
+      <div class="rc-choice-h" style="text-align:center">Save result to Rate List</div>
+      <div class="rc-save-f" id="svScopeRow"><span class="rc-save-l">Save</span>
+        <div class="rc-save-radios">
+          <label><input type="radio" name="svScope" value="BOTH" checked> Both (Existing + New)</label>
+          <label><input type="radio" name="svScope" value="A"> Existing Plan</label>
+          <label><input type="radio" name="svScope" value="B"> New Plan</label>
+        </div>
+      </div>
+      <div class="rc-save-f"><span class="rc-save-l">State</span><select id="svState"></select></div>
+      <div class="rc-save-f"><span class="rc-save-l">Result name</span><input type="text" id="svName" placeholder="e.g. Delhi GT — July plan"></div>
+      <button type="button" class="rc-choice-b both" id="svSave" style="margin-top:16px;width:100%">Save to Rate List</button>
+      <button type="button" class="rc-choice-cancel" id="svCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+  function f2(n){return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function av(v){return (v===''||v==null)?'':esc(String(v));}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+  /* ══════════════════ Planning Grid ══════════════════ */
+  // Realise ₹/L (ex-GST) = (price / (1 + gst/100)) / litres-per-pack. Blended = Σ(₹/L·vol)/Σvol.
+  // Opportunity vs target computed only over rows that carry a Target ₹/L.
+  var grid=[];
+  function blankRow(){return {item:'',code:'',retailer:'',ss:'0',dm:'0',gst:'5',pcsbox:'',disc:'0',boxltr:'',scheme:'0',sell:''};}
+  // Full Margin-Waterfall chain per row (each step is its own column):
+  //   Retailer ÷(1+SS%)=SS Rate ÷(1+Dist%)=Dist Rate ÷(1+GST%)=Ex-GST ; × pcs/box=Box Value
+  //   − flat disc = Net Box ; ÷ (box litres + scheme)=Total Ltr ⇒ RELISE ₹/L ; × To-be-sale = Revenue.
+  function rowCalc(r){
+    var rp=parseFloat(r.retailer)||0, ss=parseFloat(r.ss)||0, dm=parseFloat(r.dm)||0, gst=parseFloat(r.gst)||0,
+        ppb=parseFloat(r.pcsbox)||0, disc=parseFloat(r.disc)||0, bl=parseFloat(r.boxltr)||0, sch=parseFloat(r.scheme)||0,
+        sell=parseFloat(r.sell)||0;
+    var ssRate=rp/(1+ss/100), dmRate=ssRate/(1+dm/100), exgst=dmRate/(1+gst/100);
+    var boxVal=exgst*ppb, netBox=boxVal-disc, totLtr=bl+sch;
+    var realise=totLtr?netBox/totLtr:0;
+    var revenue=realise*sell;
+    return {ssRate:ssRate,dmRate:dmRate,exgst:exgst,boxVal:boxVal,netBox:netBox,totLtr:totLtr,realise:realise,sell:sell,revenue:revenue};
+  }
+  function gInput(f,r,ph){return '<td><input class="gin" data-f="'+f+'" type="number" step="any" value="'+av(r[f])+'" placeholder="'+(ph||'0')+'"></td>';}
+  function rcell(k,label,cls){return '<td class="rc '+(cls||'')+'"><span class="rlbl">'+label+'</span><span data-c="'+k+'">—</span></td>';}
+  // Each item = two rows: an inputs row (.grow) + a results strip (.rrow) whose cells sit
+  // directly under the matching input columns (SS Rate under SS%, RELISE under Scheme, …).
+  function gridRowHtml(r,i){
+    return '<tr class="grow" data-i="'+i+'">'
+      +'<td class="l"><button type="button" class="gin gitem gpick">'+(r.item?esc(r.item)+(r.code?'<span class="gcode">'+esc(r.code)+'</span>':''):'<span class="gph">Click to pick item…</span>')+'</button></td>'
+      +gInput('retailer',r)+gInput('ss',r)+gInput('dm',r)+gInput('gst',r)
+      +gInput('pcsbox',r)+gInput('disc',r)+gInput('boxltr',r)+gInput('scheme',r)
+      +gInput('sell',r)
+      +'<td><button class="grm" title="Remove row">✕</button></td></tr>'
+      +'<tr class="rrow">'
+      +'<td class="l rlab">↳ result</td>'
+      +'<td></td>'                              // under Retailer
+      +rcell('ssrate','SS Rate')                // under SS %
+      +rcell('dmrate','Dist Rate')              // under Dist %
+      +rcell('exgst','Ex-GST')                  // under GST %
+      +rcell('boxval','Box Value')              // under Pcs/Box
+      +rcell('netbox','Net Box')                // under Flat Disc
+      +rcell('totltr','Total Ltr/Box')          // under Box Ltrs
+      +rcell('realise','RELISE ₹/L','rl')       // under Scheme
+      +rcell('revenue','Revenue','grev')        // under To be sale
+      +'<td></td></tr>';                        // under remove
+  }
+  function paintRow(tr,r){                       // tr = the .grow input row; results live in the next sibling
+    var c=rowCalc(r), rr=tr.nextElementSibling; if(!rr)return;
+    function set(k,v){var el=rr.querySelector('[data-c='+k+']'); if(el)el.textContent=v;}
+    set('ssrate', c.ssRate?'₹'+f2(c.ssRate):'—');
+    set('dmrate', c.dmRate?'₹'+f2(c.dmRate):'—');
+    set('exgst',  c.exgst?'₹'+f2(c.exgst):'—');
+    set('boxval', c.boxVal?'₹'+f2(c.boxVal):'—');
+    set('netbox', c.netBox?'₹'+f2(c.netBox):'—');
+    set('totltr', c.totLtr?f2(c.totLtr)+' L':'—');
+    set('realise',c.realise?'₹'+f2(c.realise):'—');
+    set('revenue',c.revenue?'₹'+fN(Math.round(c.revenue)):'—');
+  }
+  function gridSummary(){
+    var totSell=0, revSum=0;
+    grid.forEach(function(r){var c=rowCalc(r); totSell+=c.sell; revSum+=c.revenue;});
+    var blendR=totSell?revSum/totSell:0;
+    return {totSell:totSell, revSum:revSum, blendR:blendR};
+  }
+  function renderGridFootAndSum(){
+    var s=gridSummary();
+    document.getElementById('gridFoot').innerHTML=
+      '<tr><td class="l">Blended ('+grid.length+' item'+(grid.length===1?'':'s')+')</td>'
+      +'<td></td>'.repeat(7)                                     // retailer,ss,dm,gst,pcsbox,disc,boxltr
+      +'<td class="rl">'+f2(s.blendR)+'</td>'                    // under Scheme = blended RELISE ₹/L
+      +'<td class="grev">₹'+fN(Math.round(s.revSum))+'</td>'     // under To-be-sale = total revenue
+      +'<td></td></tr>';
+    document.getElementById('gridSum').innerHTML=[
+      {c:'',   l:'Total To-be-sale',       v:fN(Math.round(s.totSell))+' L'},
+      {c:'acc',l:'Blended Realise',        v:'₹'+f2(s.blendR)+' /L'},
+      {c:'opp',l:'Total Projected Revenue',v:'₹'+fN(Math.round(s.revSum))}
+    ].map(function(k){return '<div class="rc-chip '+k.c+'"><div class="c-l">'+k.l+'</div><div class="c-v">'+k.v+'</div></div>';}).join('');
+  }
+  function renderGrid(){
+    var body=document.getElementById('gridBody');
+    body.innerHTML=grid.map(gridRowHtml).join('');
+    Array.prototype.forEach.call(body.querySelectorAll('tr.grow'),function(tr){paintRow(tr,grid[+tr.getAttribute('data-i')]);});
+    renderGridFootAndSum();
+  }
+  function addRow(pre){ grid.push(Object.assign(blankRow(),pre||{})); renderGrid(); }
+
+  document.getElementById('gridBody').addEventListener('input',function(e){
+    var inp=e.target; if(!inp.classList.contains('gin'))return;
+    var tr=inp.closest('tr'), i=+tr.getAttribute('data-i'), f=inp.getAttribute('data-f');
+    grid[i][f]=inp.value; paintRow(tr,grid[i]); renderGridFootAndSum();
+  });
+  document.getElementById('gridBody').addEventListener('click',function(e){
+    var rm=e.target.closest?e.target.closest('.grm'):null;
+    if(rm){var i=+rm.closest('tr').getAttribute('data-i');grid.splice(i,1);if(!grid.length)grid.push(blankRow());renderGrid();return;}
+    var pk=e.target.closest?e.target.closest('.gpick'):null;
+    if(pk){openPicker({t:'grid',i:+pk.closest('tr').getAttribute('data-i')});}
+  });
+  document.getElementById('gridAdd').addEventListener('click',function(){addRow();});
+  document.getElementById('gridClear').addEventListener('click',function(){grid=[blankRow()];renderGrid();});
+
+  /* ══════════════════ Compare tab: full box calc (Future) + Present (actual) ══════════════════ */
+  // Same box-level columns as the Planning Grid, PLUS a Present ₹/L (SAP actual) input and a
+  // Diff ₹/L result (Future RELISE − Present). Reuses rowCalc() for the box chain.
+  function blankCmp(){return {item:'',code:'',retailer:'',ss:'0',dm:'0',gst:'5',pcsbox:'',disc:'0',boxltr:'',scheme:'0',sell:''};}
+  function cmpCalc(r){ return rowCalc(r); }        // same box chain as the Planning Grid
+  function cInput(f,r){return '<td><input class="gin" data-cf="'+f+'" type="number" step="any" value="'+av(r[f])+'" placeholder="0"></td>';}
+  function cmpRowHtml(r,i){
+    return '<tr class="crow" data-ci="'+i+'">'
+      +'<td class="l"><button type="button" class="gin gitem cpick">'+(r.item?esc(r.item)+(r.code?'<span class="gcode">'+esc(r.code)+'</span>':''):'<span class="gph">Click to pick item…</span>')+'</button></td>'
+      +cInput('retailer',r)+cInput('ss',r)+cInput('dm',r)+cInput('gst',r)
+      +cInput('pcsbox',r)+cInput('disc',r)+cInput('boxltr',r)+cInput('scheme',r)
+      +cInput('sell',r)
+      +'<td><button class="crm" title="Remove row">✕</button></td></tr>'
+      +'<tr class="rrow">'
+      +'<td class="l rlab">↳ result</td>'
+      +'<td></td>'                              // under Retailer
+      +rcell('ssrate','SS Rate')                // under SS %
+      +rcell('dmrate','Dist Rate')              // under Dist %
+      +rcell('exgst','Ex-GST')                  // under GST %
+      +rcell('boxval','Box Value')              // under Pcs/Box
+      +rcell('netbox','Net Box')                // under Flat Disc
+      +rcell('totltr','Total Ltr/Box')          // under Box Ltrs
+      +rcell('realise','RELISE ₹/L','rl')       // under Scheme
+      +rcell('revenue','Revenue','grev')        // under To be sale
+      +'<td></td></tr>';
+  }
+  function paintCmp(tr,r){
+    var c=cmpCalc(r), rr=tr.nextElementSibling; if(!rr)return;
+    function set(k,v){var el=rr.querySelector('[data-c='+k+']'); if(el)el.textContent=v;}
+    set('ssrate', c.ssRate?'₹'+f2(c.ssRate):'—');
+    set('dmrate', c.dmRate?'₹'+f2(c.dmRate):'—');
+    set('exgst',  c.exgst?'₹'+f2(c.exgst):'—');
+    set('boxval', c.boxVal?'₹'+f2(c.boxVal):'—');
+    set('netbox', c.netBox?'₹'+f2(c.netBox):'—');
+    set('totltr', c.totLtr?f2(c.totLtr)+' L':'—');
+    set('realise',c.realise?'₹'+f2(c.realise):'—');
+    set('revenue',c.revenue?'₹'+fN(Math.round(c.revenue)):'—');
+  }
+  // Two independent box grids (Plan A / Plan B) driven by one factory, keyed by element IDs.
+  var cmpGrids={};
+  function cmpFootSum(ctx){
+    var totSell=0, revSum=0;
+    ctx.arr.forEach(function(r){ var c=cmpCalc(r); totSell+=c.sell; revSum+=c.revenue; });
+    var blendFut=totSell?revSum/totSell:0;
+    ctx.totSell=totSell; ctx.revSum=revSum; ctx.blendFut=blendFut;
+    document.getElementById(ctx.footId).innerHTML=
+      '<tr><td class="l">Blended ('+ctx.arr.length+' item'+(ctx.arr.length===1?'':'s')+')</td>'
+      +'<td></td>'.repeat(7)
+      +'<td class="rl">'+f2(blendFut)+'</td>'                    // under Scheme = blended RELISE
+      +'<td class="grev" style="line-height:1.3"><div>'+fN(Math.round(totSell))+' L</div>'  // To-be-sale: total litres
+        +'<div style="font-size:11px;font-weight:800;color:#065f46;margin-top:2px">₹'+fN(Math.round(revSum))+'</div></td>'  // + total revenue
+      +'<td></td></tr>';
+    document.getElementById(ctx.sumId).innerHTML=[
+      {c:'',   l:'Total To-be-sale', v:fN(Math.round(totSell))+' L'},
+      {c:'acc',l:'Blended Realise',  v:'₹'+f2(blendFut)+' /L'},
+      {c:'opp',l:'Total Revenue',    v:'₹'+fN(Math.round(revSum))}
+    ].map(function(k){return '<div class="rc-chip '+k.c+'"><div class="c-l">'+k.l+'</div><div class="c-v">'+k.v+'</div></div>';}).join('');
+    renderVs();
+  }
+  function renderCmpGrid(ctx){
+    var body=document.getElementById(ctx.bodyId);
+    body.innerHTML=ctx.arr.map(cmpRowHtml).join('');
+    Array.prototype.forEach.call(body.querySelectorAll('tr.crow'),function(tr){paintCmp(tr,ctx.arr[+tr.getAttribute('data-ci')]);});
+    cmpFootSum(ctx);
+  }
+  function renderVs(){
+    var A=cmpGrids['cmpA'], B=cmpGrids['cmpB']; if(!A||!B)return;
+    var d=(A.blendFut||0)-(B.blendFut||0), rd=(A.revSum||0)-(B.revSum||0);
+    var gB=d*(B.totSell||0);                        // (A−B realise) × Plan B total to-be-sale
+    document.getElementById('cmpVs').innerHTML=[
+      {c:'acc',l:'Existing · Realise',  v:A.totSell?('₹'+f2(A.blendFut)+' /L'):'—'},
+      {c:'acc',l:'New · Realise',       v:B.totSell?('₹'+f2(B.blendFut)+' /L'):'—'},
+      {c:'opp',l:'Existing − New · Realise', v:(A.totSell&&B.totSell)?(((d>=0?'+':'')+'₹'+f2(d))+' /L'):'—'},
+      {c:'opp',l:'Existing − New · Revenue', v:(A.totSell||B.totSell)?(((rd>=0?'+':'')+'₹'+fN(Math.round(rd)))):'—'},
+      {c:'opp',l:'(Existing−New) × New Vol', v:(A.totSell&&B.totSell)?(((gB>=0?'+':'')+'₹'+fN(Math.round(gB)))):'—'}
+    ].map(function(k){return '<div class="rc-chip '+k.c+'"><div class="c-l">'+k.l+'</div><div class="c-v">'+k.v+'</div></div>';}).join('');
+  }
+  function setupCmpGrid(ctx){
+    cmpGrids[ctx.tag]=ctx;
+    var body=document.getElementById(ctx.bodyId);
+    body.addEventListener('input',function(e){
+      var inp=e.target; if(!inp.classList.contains('gin')||!inp.hasAttribute('data-cf'))return;
+      var tr=inp.closest('tr'), i=+tr.getAttribute('data-ci'), f=inp.getAttribute('data-cf');
+      ctx.arr[i][f]=inp.value; paintCmp(tr,ctx.arr[i]); cmpFootSum(ctx);
+    });
+    body.addEventListener('click',function(e){
+      var rm=e.target.closest?e.target.closest('.crm'):null;
+      if(rm){var i=+rm.closest('tr').getAttribute('data-ci');ctx.arr.splice(i,1);if(!ctx.arr.length)ctx.arr.push(blankCmp());renderCmpGrid(ctx);return;}
+      var pk=e.target.closest?e.target.closest('.cpick'):null;
+      if(pk){openPicker({t:ctx.tag,i:+pk.closest('tr').getAttribute('data-ci')});}
+    });
+    document.getElementById(ctx.addId).addEventListener('click',function(){ctx.arr.push(blankCmp());renderCmpGrid(ctx);});
+    document.getElementById(ctx.clearId).addEventListener('click',function(){ctx.arr.length=0;ctx.arr.push(blankCmp());renderCmpGrid(ctx);});
+    renderCmpGrid(ctx);
+  }
+  function renderCmp(){ if(cmpGrids['cmpA'])renderCmpGrid(cmpGrids['cmpA']); if(cmpGrids['cmpB'])renderCmpGrid(cmpGrids['cmpB']); }
+
+  /* ══════════════════ SAP item picker (Variety → SKU → Item) ══════════════════ */
+  var ITEMS=null, itemsLoading=false, pickTarget=null, pkVar='', pkSku='', pkQuery='';
+  function loadItems(cb){
+    if(ITEMS){cb&&cb();return;}
+    if(itemsLoading)return;
+    itemsLoading=true;
+    fetch('/realise/api/realise-calculator/items/',{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{items:[]};})
+      .then(function(p){ITEMS=p.items||[];itemsLoading=false;cb&&cb();})
+      .catch(function(){ITEMS=[];itemsLoading=false;cb&&cb();});
+  }
+  function openPicker(target){
+    pickTarget=target; pkVar=''; pkSku=''; pkQuery='';
+    document.getElementById('pkSearch').value='';
+    document.getElementById('pickModal').hidden=false;
+    renderPicker(); loadItems(renderPicker);
+    setTimeout(function(){document.getElementById('pkSearch').focus();},30);
+  }
+  function closePicker(){document.getElementById('pickModal').hidden=true;pickTarget=null;}
+  function itemOpt(x){
+    return '<div class="rc-opt" data-code="'+esc(x.code)+'"><span>'+esc(x.name)+'</span>'
+      +'<span>'+(x.type?'<span class="tp '+x.type+'">'+x.type+'</span>':'')+'</span></div>';
+  }
+  // SKU sort: unit group order MLS → LTR → GMS → KG (others last), number descending within a unit.
+  function skuRank(s){
+    var m=String(s).trim().match(/^([\d.]+)\s*(\S+)/);
+    var num=m?parseFloat(m[1]):0, u=m?m[2].toUpperCase():'', order;
+    if(/^ML/.test(u))order=0; else if(/^L/.test(u))order=1;
+    else if(/^G/.test(u))order=2; else if(/^K/.test(u))order=3; else order=9;
+    return {order:order,num:num};
+  }
+  function skuCmp(a,b){ var ra=skuRank(a),rb=skuRank(b); return ra.order!==rb.order?ra.order-rb.order:rb.num-ra.num; }
+  function renderPicker(){
+    var vC=document.getElementById('pkVar'),sC=document.getElementById('pkSku'),iC=document.getElementById('pkItem');
+    if(!ITEMS){vC.innerHTML='<div class="rc-col-h">Variety</div>';sC.innerHTML='<div class="rc-col-h">SKU / Size</div>';iC.innerHTML='<div class="rc-col-h">Item</div><div class="rc-col-empty">Loading items…</div>';return;}
+    if(pkQuery){                                   // search overrides the cascade
+      var q=pkQuery.toLowerCase();
+      var m=ITEMS.filter(function(x){return (x.name+' '+x.code).toLowerCase().indexOf(q)!==-1;}).slice(0,400);
+      vC.innerHTML='<div class="rc-col-h">SKU / Size</div><div class="rc-col-empty">— searching —</div>';
+      sC.innerHTML='<div class="rc-col-h">Variety</div>';
+      iC.innerHTML='<div class="rc-col-h">Item ('+m.length+')</div>'+(m.length?m.map(itemOpt).join(''):'<div class="rc-col-empty">No match</div>');
+      return;
+    }
+    // Column 1 = SKU / Size (chosen first), Column 2 = Variety (filtered by SKU), Column 3 = Item.
+    var skuMap={}; ITEMS.forEach(function(x){skuMap[x.sku]=(skuMap[x.sku]||0)+1;});
+    var GK=['MLS','LTR','GMS','KGS','OTHER'], grp={MLS:[],LTR:[],GMS:[],KGS:[],OTHER:[]};
+    Object.keys(skuMap).forEach(function(s){
+      var o=skuRank(s).order; grp[o===0?'MLS':o===1?'LTR':o===2?'GMS':o===3?'KGS':'OTHER'].push(s);
+    });
+    var html='<div class="rc-col-h">SKU / Size</div>';
+    GK.forEach(function(g){
+      var arr=grp[g]; if(!arr.length)return; arr.sort(skuCmp);
+      html+='<div class="rc-skugrp"><div class="rc-skugrp-l">'+g+'</div><div class="rc-skuchips">'
+        +arr.map(function(s){var num=s.split(/\s+/)[0];
+          return '<div class="rc-skuchip'+(s===pkSku?' on':'')+'" data-sku="'+esc(s)+'" title="'+esc(s)+'">'+esc(num)+'<span class="n">'+skuMap[s]+'</span></div>';
+        }).join('')+'</div></div>';
+    });
+    vC.innerHTML=html;
+    if(pkSku){
+      var varMap={}; ITEMS.forEach(function(x){if(x.sku===pkSku)varMap[x.variety]=(varMap[x.variety]||0)+1;});
+      sC.innerHTML='<div class="rc-col-h">Variety</div>'+Object.keys(varMap).sort().map(function(v){
+        return '<div class="rc-opt'+(v===pkVar?' on':'')+'" data-var="'+esc(v)+'">'+esc(v)+'<span class="n">'+varMap[v]+'</span></div>';}).join('');
+    } else sC.innerHTML='<div class="rc-col-h">Variety</div><div class="rc-col-empty">Pick a size</div>';
+    if(pkSku&&pkVar){
+      var its=ITEMS.filter(function(x){return x.sku===pkSku&&x.variety===pkVar;});
+      iC.innerHTML='<div class="rc-col-h">Item ('+its.length+')</div>'+its.map(itemOpt).join('');
+    } else iC.innerHTML='<div class="rc-col-h">Item</div><div class="rc-col-empty">Pick size &amp; variety</div>';
+  }
+  function selectItem(code){
+    var x=null; for(var i=0;i<(ITEMS||[]).length;i++){if(ITEMS[i].code===code){x=ITEMS[i];break;}}
+    if(!x||!pickTarget)return;
+    if(pickTarget.t==='grid'){
+      var r=grid[pickTarget.i];
+      r.item=x.name; r.code=x.code;
+      if(x.pcs_per_box)r.pcsbox=x.pcs_per_box;          // auto-fill Pcs/Box (SalFactor2)
+      if(x.box_litres)r.boxltr=x.box_litres;            // auto-fill Box Litres from SAP
+      if(!String(r.gst).trim())r.gst='5';
+      closePicker(); renderGrid();
+    } else if(cmpGrids[pickTarget.t]){                   // Plan A / Plan B grids
+      var ctx=cmpGrids[pickTarget.t], rc=ctx.arr[pickTarget.i];
+      rc.item=x.name; rc.code=x.code;
+      if(x.pcs_per_box)rc.pcsbox=x.pcs_per_box;         // auto-fill Pcs/Box (SalFactor2)
+      if(x.box_litres)rc.boxltr=x.box_litres;           // auto-fill Box Litres
+      if(!String(rc.gst).trim())rc.gst='5';
+      for(var j=0;j<rows.length;j++){                    // auto-fill volume from SAP actual
+        if(rows[j].item_code===x.code){ if(!String(rc.sell).trim()&&rows[j].litres)rc.sell=rows[j].litres; break; }
+      }
+      closePicker(); renderCmpGrid(ctx);
+    }
+  }
+  document.getElementById('pkSearch').addEventListener('input',function(){pkQuery=this.value.trim();renderPicker();});
+  document.getElementById('pkClose').addEventListener('click',closePicker);
+  document.getElementById('pkClear').addEventListener('click',function(){
+    pkSku=''; pkVar=''; pkQuery=''; document.getElementById('pkSearch').value='';
+    renderPicker(); document.getElementById('pkSearch').focus();
+  });
+  document.getElementById('pickModal').addEventListener('click',function(e){if(e.target===this)closePicker();});
+  document.querySelector('.rc-modal-body').addEventListener('click',function(e){
+    var el=e.target.closest?e.target.closest('.rc-opt,.rc-skuchip'):null; if(!el)return;
+    if(el.hasAttribute('data-sku')){pkSku=el.getAttribute('data-sku');pkVar='';pkQuery='';document.getElementById('pkSearch').value='';renderPicker();}
+    else if(el.hasAttribute('data-var')){pkVar=el.getAttribute('data-var');renderPicker();}
+    else if(el.hasAttribute('data-code')){selectItem(el.getAttribute('data-code'));}
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!document.getElementById('pickModal').hidden)closePicker();});
+
+  /* ── Excel export (live formulas) ── */
+  function collectRows(arr){
+    return arr.filter(function(r){
+      return (r.item&&String(r.item).trim()) || (parseFloat(r.retailer)||0)>0 || (parseFloat(r.sell)||0)>0;
+    });
+  }
+  function exportReq(filename, body){
+    fetch('/realise/api/realise-calculator/export/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify(Object.assign({filename:filename},body))})
+      .then(function(r){return r.ok?r.blob():null;})
+      .then(function(b){ if(!b){window.alert('Export failed.');return;} var u=URL.createObjectURL(b),el=document.createElement('a');el.href=u;el.download=filename+'.xlsx';document.body.appendChild(el);el.click();el.remove();URL.revokeObjectURL(u); });
+  }
+  function statsOf(arr){
+    var totSell=0,revSum=0; arr.forEach(function(r){var c=rowCalc(r);totSell+=c.sell;revSum+=c.revenue;});
+    return {totSell:totSell,revSum:revSum,blend:totSell?revSum/totSell:0};
+  }
+  function kpiOf(label,s){
+    return [
+      {label:label+' · Total To-be-sale (L)', value:Math.round(s.totSell)},
+      {label:label+' · Blended Realise (Rs/L)', value:Math.round(s.blend*100)/100},
+      {label:label+' · Total Revenue (Rs)', value:Math.round(s.revSum)}
+    ];
+  }
+  // Planning Grid export
+  document.getElementById('gridExport').addEventListener('click',function(){
+    var items=collectRows(grid); if(!items.length){window.alert('Add at least one item first.');return;}
+    exportReq('Realise_Planning_Grid',{layout:'separate',
+      plans:[{name:'Planning Grid',items:items,color:'EEF2FF',hcolor:'4F46E5'}],
+      summary:kpiOf('Planning Grid',statsOf(grid))});
+  });
+  // Compare export → ask which plan
+  var expChoice=document.getElementById('expChoice');
+  document.getElementById('cmpExport').addEventListener('click',function(){expChoice.hidden=false;});
+  document.getElementById('expCancel').addEventListener('click',function(){expChoice.hidden=true;});
+  expChoice.addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
+  function doCompareExport(which){
+    var A=collectRows(cmpGrids['cmpA'].arr), B=collectRows(cmpGrids['cmpB'].arr);
+    if(which==='A'){
+      if(!A.length){window.alert('Existing Plan has no items.');return;}
+      exportReq('Realise_Existing_Plan',{layout:'separate',plans:[{name:'Existing Plan',items:A,color:'EEF2FF',hcolor:'4F46E5'}],summary:kpiOf('Existing Plan',statsOf(cmpGrids['cmpA'].arr))});
+    } else if(which==='B'){
+      if(!B.length){window.alert('New Plan has no items.');return;}
+      exportReq('Realise_New_Plan',{layout:'separate',plans:[{name:'New Plan',items:B,color:'ECFDF5',hcolor:'0D9488'}],summary:kpiOf('New Plan',statsOf(cmpGrids['cmpB'].arr))});
+    } else {
+      if(!A.length&&!B.length){window.alert('Both plans are empty.');return;}
+      var sa=statsOf(cmpGrids['cmpA'].arr), sb=statsOf(cmpGrids['cmpB'].arr);
+      var d=sa.blend-sb.blend, rd=sa.revSum-sb.revSum, gB=d*sb.totSell;
+      var summary=kpiOf('Existing Plan',sa).concat(kpiOf('New Plan',sb)).concat([
+        {label:'Existing − New · Realise (Rs/L)', value:Math.round(d*100)/100},
+        {label:'Existing − New · Revenue (Rs)', value:Math.round(rd)},
+        {label:'(Existing−New) × New Vol (Rs)', value:Math.round(gB)}
+      ]);
+      exportReq('Realise_Compare',{layout:'single',plans:[
+        {name:'EXISTING PLAN',items:A,color:'EEF2FF',hcolor:'4F46E5'},
+        {name:'NEW PLAN',items:B,color:'ECFDF5',hcolor:'0D9488'}
+      ],summary:summary});
+    }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#expChoice .rc-choice-b'),function(btn){
+    btn.addEventListener('click',function(){expChoice.hidden=true; doCompareExport(btn.getAttribute('data-exp'));});
+  });
+
+  /* ── Excel upload (fill rows by item code) ── */
+  var _upTarget=null;
+  var _upInput=document.createElement('input'); _upInput.type='file'; _upInput.accept='.xlsx'; _upInput.style.display='none';
+  document.body.appendChild(_upInput);
+  _upInput.addEventListener('change',function(){ var f=_upInput.files&&_upInput.files[0]; if(f)uploadExcel(f,_upTarget); });
+  function triggerUpload(target){ _upTarget=target; _upInput.value=''; _upInput.click(); }
+  function uploadExcel(file,target){
+    var fd=new FormData(); fd.append('file',file);
+    fetch('/realise/api/realise-calculator/upload/',{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd})
+      .then(function(r){ return r.json().then(function(j){return j;}).catch(function(){return {status:'error',error:'Server error (HTTP '+r.status+')'};}); })
+      .then(function(p){
+        if(p.status!=='ok'||!(p.rows&&p.rows.length)){ window.alert('Upload failed: '+((p&&p.error)||'no item rows found in the file.')); return; }
+        if(target==='grid'){ grid=p.rows.map(function(u){return Object.assign(blankRow(),u);}); renderGrid(); }
+        else { var ctx=cmpGrids[target]; ctx.arr=p.rows.map(function(u){return Object.assign(blankCmp(),u);}); renderCmpGrid(ctx); }
+        if(p.matched<p.count) window.alert(p.count+' rows loaded — '+(p.count-p.matched)+' item code(s) were not found in the SAP master (name/box blank for those).');
+      })
+      .catch(function(){ window.alert('Upload failed.'); });
+  }
+  document.getElementById('gridUpload').addEventListener('click',function(){triggerUpload('grid');});
+  document.getElementById('cmpUploadA').addEventListener('click',function(){triggerUpload('cmpA');});
+  document.getElementById('cmpUploadB').addEventListener('click',function(){triggerUpload('cmpB');});
+
+  /* ── Save result to Rate List ── */
+  var RC_STATES=['Andhra Pradesh','Assam','Bihar','Chandigarh','Chhattisgarh','Delhi','Goa','Gujarat','Haryana','Himachal Pradesh','Jammu & Kashmir','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Odisha','Punjab','Rajasthan','Tamil Nadu','Telangana','Uttar Pradesh','Uttarakhand','West Bengal'];
+  (function(){var sel=document.getElementById('svState');
+    sel.innerHTML='<option value="">— select state —</option>'+RC_STATES.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');})();
+  function planPayload(tag){
+    var rows=collectRows(cmpGrids[tag].arr).map(function(r){var c=cmpCalc(r);return {
+      item:r.item,code:r.code,retailer:r.retailer,ss:r.ss,dm:r.dm,gst:r.gst,pcsbox:r.pcsbox,disc:r.disc,boxltr:r.boxltr,scheme:r.scheme,sell:r.sell,
+      realise:c.realise,revenue:c.revenue,ssRate:c.ssRate,dmRate:c.dmRate,exgst:c.exgst,boxVal:c.boxVal,netBox:c.netBox,totLtr:c.totLtr};});
+    var s=statsOf(cmpGrids[tag].arr);
+    return {name:(tag==='cmpA'?'Existing Plan':'New Plan'),rows:rows,totals:{totSell:s.totSell,revSum:s.revSum,blend:s.blend}};
+  }
+  function gridPayload(){
+    var rows=collectRows(grid).map(function(r){var c=rowCalc(r);return {
+      item:r.item,code:r.code,retailer:r.retailer,ss:r.ss,dm:r.dm,gst:r.gst,pcsbox:r.pcsbox,disc:r.disc,boxltr:r.boxltr,scheme:r.scheme,sell:r.sell,
+      realise:c.realise,revenue:c.revenue,ssRate:c.ssRate,dmRate:c.dmRate,exgst:c.exgst,boxVal:c.boxVal,netBox:c.netBox,totLtr:c.totLtr};});
+    var s=statsOf(grid);
+    return {name:'Planning Grid',rows:rows,totals:{totSell:s.totSell,revSum:s.revSum,blend:s.blend}};
+  }
+  var saveModal=document.getElementById('saveModal'), saveSource='compare';
+  function openSave(src){ saveSource=src; document.getElementById('svName').value='';
+    document.getElementById('svScopeRow').style.display=(src==='compare'?'':'none'); saveModal.hidden=false; }
+  document.getElementById('cmpSave').addEventListener('click',function(){openSave('compare');});
+  document.getElementById('gridSave').addEventListener('click',function(){openSave('grid');});
+  document.getElementById('svCancel').addEventListener('click',function(){saveModal.hidden=true;});
+  saveModal.addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
+  document.getElementById('svSave').addEventListener('click',function(){
+    var state=document.getElementById('svState').value;
+    var name=document.getElementById('svName').value.trim();
+    if(!name){window.alert('Please enter a result name.');return;}
+    var scope, plans, compare=null;
+    if(saveSource==='grid'){
+      var gp=gridPayload();
+      if(!gp.rows.length){window.alert('Add at least one item first.');return;}
+      scope='GRID'; plans=[gp];
+    } else {
+      scope=(document.querySelector('input[name=svScope]:checked')||{}).value||'BOTH';
+      plans=[];
+      if(scope==='A'||scope==='BOTH')plans.push(planPayload('cmpA'));
+      if(scope==='B'||scope==='BOTH')plans.push(planPayload('cmpB'));
+      plans=plans.filter(function(p){return p.rows.length;});
+      if(!plans.length){window.alert('The selected plan has no items.');return;}
+      if(scope==='BOTH'){var sa=statsOf(cmpGrids['cmpA'].arr),sb=statsOf(cmpGrids['cmpB'].arr),d=sa.blend-sb.blend;
+        compare={blendA:sa.blend,blendB:sb.blend,diffRealise:d,diffRevenue:sa.revSum-sb.revSum,aMinusBxBvol:d*sb.totSell};}
+    }
+    var btn=document.getElementById('svSave');btn.disabled=true;btn.textContent='Saving…';
+    fetch('/realise/api/rate-list/save/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({name:name,state:state,scope:scope,payload:{plans:plans,compare:compare}})})
+      .then(function(r){return r.json().catch(function(){return {status:'error',error:'HTTP '+r.status};});})
+      .then(function(p){ btn.disabled=false;btn.textContent='Save to Rate List';
+        if(p.status==='ok'){ saveModal.hidden=true; window.alert('Saved to Rate List. Open the Rate List tab to view it.'); }
+        else window.alert('Save failed: '+(p.error||'error')); })
+      .catch(function(){ btn.disabled=false;btn.textContent='Save to Rate List';window.alert('Save failed.'); });
+  });
+
+  /* ── Tab switching ── */
+  function switchTab(t){
+    document.getElementById('paneGrid').hidden=(t!=='grid');
+    document.getElementById('paneCmp').hidden=(t!=='cmp');
+    Array.prototype.forEach.call(document.querySelectorAll('.rc-tab'),function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t);});
+    if(t==='cmp')renderCmp();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.rc-tab'),function(b){
+    b.addEventListener('click',function(){switchTab(b.getAttribute('data-tab'));});
+  });
+
+  var rows=[];   // (SAP report table removed; kept empty so the item picker's optional volume lookup is a no-op)
+
+  // ── Init ──
+  grid=[blankRow(),blankRow(),blankRow()];
+  setupCmpGrid({tag:'cmpA', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyA', footId:'cmpFootA', sumId:'cmpSumA', addId:'cmpAddA', clearId:'cmpClearA'});
+  setupCmpGrid({tag:'cmpB', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyB', footId:'cmpFootB', sumId:'cmpSumB', addId:'cmpAddB', clearId:'cmpClearB'});
+  renderGrid();
+
+  // Load a saved Rate List result for editing when opened via /realise-calculator/?load=<id>
+  function qparam(k){var m=new RegExp('[?&]'+k+'=([^&]*)').exec(location.search);return m?decodeURIComponent(m[1]):'';}
+  function savedRows(rows, blank){
+    return (rows||[]).map(function(r){ return Object.assign(blank(),{
+      item:r.item||'',code:r.code||'',retailer:r.retailer,ss:r.ss,dm:r.dm,gst:r.gst,
+      pcsbox:r.pcsbox,disc:r.disc,boxltr:r.boxltr,scheme:r.scheme,sell:r.sell }); });
+  }
+  function loadSavedResult(o){
+    var plans=(o.payload&&o.payload.plans)||[], scope=o.scope||'BOTH';
+    if(o.state){document.getElementById('svState').value=o.state;}   // prefill Save dialog
+    document.getElementById('svName').value=o.name||'';
+    if(scope==='GRID'){                                              // saved from the Planning Grid
+      grid=savedRows(plans[0]&&plans[0].rows, blankRow);
+      if(!grid.length)grid=[blankRow()];
+      renderGrid(); switchTab('grid'); return;
+    }
+    if(scope==='B'){ cmpGrids['cmpB'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp); }
+    else if(scope==='A'){ cmpGrids['cmpA'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp); }
+    else { cmpGrids['cmpA'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp);
+           cmpGrids['cmpB'].arr=savedRows(plans[1]&&plans[1].rows, blankCmp); }
+    if(!cmpGrids['cmpA'].arr.length)cmpGrids['cmpA'].arr=[blankCmp()];
+    if(!cmpGrids['cmpB'].arr.length)cmpGrids['cmpB'].arr=[blankCmp()];
+    renderCmpGrid(cmpGrids['cmpA']); renderCmpGrid(cmpGrids['cmpB']);
+    switchTab('cmp');
+  }
+  (function(){
+    var id=qparam('load'); if(!id)return;
+    fetch('/realise/api/rate-list/?id='+encodeURIComponent(id),{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{rows:[]};})
+      .then(function(p){ var o=(p.rows||[])[0]; if(o&&o.payload)loadSavedResult(o); })
+      .catch(function(){});
+  })();
+})();
+</script>
+{% endblock %}

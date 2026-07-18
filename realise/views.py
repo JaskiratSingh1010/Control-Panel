@@ -1007,6 +1007,393 @@ def api_dispatch_details_data(request):
     return JsonResponse(services.get_dispatch_details(start_date, end_date))
 
 
+@permission_flag_required('can_realise_calculator')
+def realise_calculator(request):
+    """Standalone tab: Realise Calculator — per-item Oil realisation (Revenue ÷ Volume) at two
+    grains, ₹/Litre and ₹/Box, for a date range. A SAP-driven report (filter by P/C, sub-group,
+    search; sortable; Excel export) plus an interactive what-if calculator that recomputes
+    realisation from typed Revenue + Volume/Boxes. Data via /realise/api/realise-calculator/."""
+    return render(request, 'realise/realise_calculator.html', {'sidebar_active': 'realise_calculator'})
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_realise_calculator_data(request):
+    """Per-item Oil realisation for a date range. Body: {start_date, end_date}."""
+    body = _parse_body(request)
+    start_date = body.get('start_date', '')
+    end_date = body.get('end_date', '')
+    if not start_date or not end_date:
+        return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
+    return JsonResponse(services.get_realise_calculator(start_date, end_date))
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['GET'])
+def api_realise_calculator_items(request):
+    """Oil item master (Variety → SKU → Item) for the calculator's cascading item picker."""
+    return JsonResponse(services.get_realise_calc_items())
+
+
+# Column layout of the export (also the order used in the live formulas below).
+_RC_XLSX_HEAD = [
+    'Item', 'Item Code', 'Retailer ₹', 'SS %', 'Dist %', 'GST %', 'Pcs/Box', 'Flat Disc ₹',
+    'Box Ltrs', 'Scheme L', 'To be sale (L)', 'SS Rate ₹', 'Dist Rate ₹', 'Ex-GST ₹',
+    'Box Value ₹', 'Net Box ₹', 'Total Ltr/Box', 'RELISE ₹/L', 'Revenue ₹',
+]
+
+
+def _realise_calc_workbook(payload):
+    """Build an .xlsx (bytes) from the calculator's plans, writing computed columns as LIVE Excel
+    formulas (SS Rate … RELISE … Revenue) so the sheet recalculates if inputs are edited. Each
+    plan gets a TOTAL row (Σ litres, Σ revenue, blended RELISE) and an optional KPI summary block.
+    layout='single' packs every plan into ONE 'Compare' sheet with a coloured plan-header bar and
+    tinted rows per plan; layout='separate' writes one sheet per plan."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    from io import BytesIO
+
+    plans = [p for p in (payload.get('plans') or []) if isinstance(p, dict)]
+    layout = payload.get('layout') or 'separate'
+    summary = payload.get('summary') or []
+    NCOL = len(_RC_XLSX_HEAD)
+    widths = [34, 14, 11, 7, 7, 7, 9, 11, 9, 9, 13, 11, 11, 11, 12, 12, 13, 12, 14]
+
+    wb = openpyxl.Workbook(); wb.remove(wb.active)
+    hfill = PatternFill('solid', fgColor='0F172A')
+    hfont = Font(bold=True, color='FFFFFF')
+    tfont = Font(bold=True)
+
+    def fnum(v):
+        try:
+            return float(v) if str(v).strip() != '' else 0.0
+        except Exception:
+            return 0.0
+
+    def header(ws):
+        ws.append(_RC_XLSX_HEAD)
+        for c in ws[1]:
+            c.fill = hfill; c.font = hfont; c.alignment = Alignment(horizontal='center', wrap_text=True)
+
+    def item_row(ws, r, it, tint):
+        ws.cell(r, 1, str(it.get('item') or '')); ws.cell(r, 2, str(it.get('code') or ''))
+        for col, key in ((3,'retailer'),(4,'ss'),(5,'dm'),(6,'gst'),(7,'pcsbox'),(8,'disc'),(9,'boxltr'),(10,'scheme'),(11,'sell')):
+            ws.cell(r, col, fnum(it.get(key)))
+        ws.cell(r,12,f'=C{r}/(1+D{r}/100)'); ws.cell(r,13,f'=L{r}/(1+E{r}/100)'); ws.cell(r,14,f'=M{r}/(1+F{r}/100)')
+        ws.cell(r,15,f'=N{r}*G{r}'); ws.cell(r,16,f'=O{r}-H{r}'); ws.cell(r,17,f'=I{r}+J{r}')
+        ws.cell(r,18,f'=IF(Q{r}=0,0,P{r}/Q{r})'); ws.cell(r,19,f'=R{r}*K{r}')
+        for cc in range(3, NCOL+1):
+            ws.cell(r, cc).number_format = '#,##0.00'
+        if tint:
+            fl = PatternFill('solid', fgColor=tint)
+            for cc in range(1, NCOL+1):
+                ws.cell(r, cc).fill = fl
+
+    def total_row(ws, tr, r0, last):
+        ws.cell(tr,1,'TOTAL').font=tfont
+        ws.cell(tr,11,f'=SUM(K{r0}:K{last})').font=tfont
+        ws.cell(tr,18,f'=IF(SUM(K{r0}:K{last})=0,0,SUM(S{r0}:S{last})/SUM(K{r0}:K{last}))').font=tfont
+        ws.cell(tr,19,f'=SUM(S{r0}:S{last})').font=tfont
+        for cc in (11, 18, 19):
+            ws.cell(tr, cc).number_format = '#,##0.00'
+
+    def plan_bar(ws, r, name, hcolor):
+        fl = PatternFill('solid', fgColor=hcolor or '4F46E5')
+        for cc in range(1, NCOL+1):
+            ws.cell(r, cc).fill = fl
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=NCOL)
+        tl = ws.cell(r, 1, name); tl.font = Font(bold=True, color='FFFFFF', size=12)
+        tl.alignment = Alignment(horizontal='left', vertical='center')
+
+    def summary_block(ws, r, rows):
+        if not rows:
+            return
+        c = ws.cell(r, 1, 'SUMMARY / KPIs'); c.font = Font(bold=True, size=12); r += 1
+        for kv in rows:
+            ws.cell(r, 1, str(kv.get('label') or '')).font = tfont
+            v = kv.get('value')
+            if isinstance(v, (int, float)):
+                ws.cell(r, 2, v); ws.cell(r, 2).number_format = '#,##0.00'
+            else:
+                ws.cell(r, 2, str(v))
+            r += 1
+
+    def widths_for(ws):
+        for idx, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(idx)].width = w
+
+    if layout == 'single':
+        ws = wb.create_sheet('Compare')
+        header(ws)
+        cur = 2
+        for plan in plans:
+            items = plan.get('items') or []
+            if not items:
+                continue
+            plan_bar(ws, cur, str(plan.get('name') or 'Plan'), plan.get('hcolor')); cur += 1
+            r0 = cur
+            for it in items:
+                item_row(ws, cur, it, plan.get('color')); cur += 1
+            last = cur - 1
+            total_row(ws, cur, r0, last); cur += 2      # + blank spacer
+        summary_block(ws, cur, summary)
+        widths_for(ws)
+    else:
+        for plan in plans:
+            items = plan.get('items') or []
+            name = (str(plan.get('name') or 'Plan'))[:31] or 'Plan'
+            ws = wb.create_sheet(name)
+            header(ws)
+            r0 = 2
+            for i, it in enumerate(items):
+                item_row(ws, r0+i, it, plan.get('color'))
+            sr = r0
+            if items:
+                last = r0 + len(items) - 1
+                total_row(ws, last+1, r0, last)
+                sr = last + 3
+            summary_block(ws, sr, summary)
+            widths_for(ws)
+
+    if not wb.sheetnames:
+        wb.create_sheet('Empty')
+    bio = BytesIO(); wb.save(bio)
+    return bio.getvalue()
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_realise_calculator_export(request):
+    """Export the calculator's items to .xlsx with LIVE formulas. Body: {filename, layout:'single'
+    |'separate', plans:[{name, color, hcolor, items:[{item, code, retailer, ss, dm, gst, pcsbox,
+    disc, boxltr, scheme, sell}, ...]}, ...], summary:[{label, value}, ...]}."""
+    body = _parse_body(request)
+    plans = body.get('plans') or []
+    if not isinstance(plans, list) or not any(
+            (isinstance(p, dict) and p.get('items')) for p in plans):
+        return JsonResponse({'error': 'no items to export'}, status=400)
+    content = _realise_calc_workbook(body)
+    fn = re.sub(r'[^A-Za-z0-9._ -]', '_', str(body.get('filename') or 'Realise_Calculator'))[:120]
+    if not fn.lower().endswith('.xlsx'):
+        fn += '.xlsx'
+    resp = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resp['Content-Disposition'] = f'attachment; filename="{fn}"'
+    return resp
+
+
+def _rc_upload_field(t):
+    """Map an uploaded-sheet header cell to a calculator input field (loose match). Deliberately
+    strict on SS/Dist/GST so the export's computed columns (SS Rate, Ex-GST, …) are NOT picked up."""
+    t = (str(t) if t is not None else '').strip().lower()
+    if not t:
+        return None
+    if 'item code' in t or 'itemcode' in t or 'item_code' in t or t == 'code' or t.endswith(' code'):
+        return 'code'
+    if t == 'item' or 'item name' in t:
+        return 'item'
+    if 'retailer' in t:
+        return 'retailer'
+    if t in ('ss', 'ss %') or 'super stockist margin' in t:
+        return 'ss'
+    if t in ('dist', 'dist %') or 'distributor margin' in t:
+        return 'dm'
+    if t in ('gst', 'gst %'):
+        return 'gst'
+    if 'pcs/box' in t or 'pcs per box' in t or t == 'pcsbox':
+        return 'pcsbox'
+    if 'flat disc' in t:
+        return 'disc'
+    if 'box ltr' in t or 'box litre' in t:
+        return 'boxltr'
+    if 'scheme' in t:
+        return 'scheme'
+    if 'to be sale' in t or t == 'sell' or 'volume' in t:
+        return 'sell'
+    return None
+
+
+_RC_CODE_RE = re.compile(r'^[A-Za-z]{1,4}\d{3,}$')     # e.g. FG0000030, RM0000015
+
+
+def _parse_realise_upload(f):
+    """Parse an uploaded .xlsx into calculator rows. First tries a header row containing an item-code
+    column (then reads the other input columns too); if none is found, it falls back to detecting the
+    column whose values match the SAP item master (a bare list of codes still works). Each code is
+    matched against the master to fill name + Pcs/Box + Box Litres; missing inputs use defaults.
+    Rows without a code (plan-header bars, TOTAL, blanks) are skipped."""
+    import openpyxl
+    from io import BytesIO
+    wb = openpyxl.load_workbook(BytesIO(f.read()), data_only=True, read_only=True)
+    master = {i['code']: i for i in (services.get_realise_calc_items().get('items') or [])}
+
+    def s(v):
+        if v is None:
+            return ''
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return str(v).strip()
+
+    for ws in wb.worksheets:
+        data = [list(r) for r in ws.iter_rows(values_only=True)]
+        if not data:
+            continue
+        ncol = max((len(r) for r in data), default=0)
+
+        # 1) header-based detection (scan the first 15 rows)
+        colmap, header_ri = {}, None
+        for ri in range(min(15, len(data))):
+            cm = {}
+            for ci, val in enumerate(data[ri]):
+                fld = _rc_upload_field(val)
+                if fld and fld not in cm:
+                    cm[fld] = ci
+            if 'code' in cm:
+                colmap, header_ri = cm, ri
+                break
+
+        code_ci = colmap.get('code')
+        start_ri = (header_ri + 1) if header_ri is not None else 0
+
+        # 2) fallback: the column with the most master-matching codes
+        if code_ci is None:
+            best_ci, best_hits = None, 0
+            for ci in range(ncol):
+                hits = sum(1 for r in data if ci < len(r) and s(r[ci]) in master)
+                if hits > best_hits:
+                    best_ci, best_hits = ci, hits
+            if best_hits >= 1:
+                code_ci, colmap, start_ri = best_ci, {'code': best_ci}, 0
+        if code_ci is None:
+            continue
+
+        out = []
+        for r in data[start_ri:]:
+            def g(fld):
+                ci = colmap.get(fld)
+                return r[ci] if (ci is not None and ci < len(r)) else None
+            code = s(g('code'))
+            if not code or code.upper() == 'TOTAL':
+                continue
+            m = master.get(code)
+            if not m and not _RC_CODE_RE.match(code):    # skip stray text (e.g. a header caught in fallback)
+                continue
+
+            def val(fld, dflt=''):
+                vs = s(g(fld))
+                return vs if vs != '' else dflt
+
+            out.append({
+                'code': code,
+                'item': (m['name'] if m else (s(g('item')) or code)),
+                'retailer': val('retailer', ''),
+                'ss': val('ss', '0'),
+                'dm': val('dm', '0'),
+                'gst': val('gst', '5'),
+                'pcsbox': val('pcsbox', (s(m['pcs_per_box']) if m else '')),
+                'disc': val('disc', '0'),
+                'boxltr': val('boxltr', (s(m['box_litres']) if m else '')),
+                'scheme': val('scheme', '0'),
+                'sell': val('sell', ''),
+                '_matched': bool(m),
+            })
+        if out:
+            return out
+    return []
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_realise_calculator_upload(request):
+    """Read an uploaded .xlsx of item codes (+ optional input columns) and return calculator rows,
+    matched against the SAP item master. Multipart: field 'file'."""
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'status': 'error', 'error': 'No file uploaded.'}, status=400)
+    try:
+        rows = _parse_realise_upload(f)
+    except Exception as exc:
+        logger.error('[REALISE-CALC UPLOAD] parse failed: %s', exc)
+        return JsonResponse({'status': 'error', 'error': 'Could not read the Excel file.'}, status=400)
+    if not rows:
+        return JsonResponse({'status': 'error', 'error': 'No item-code rows found in the file.'}, status=400)
+    matched = sum(1 for r in rows if r.get('_matched'))
+    for r in rows:
+        r.pop('_matched', None)
+    return JsonResponse({'status': 'ok', 'rows': rows, 'count': len(rows), 'matched': matched})
+
+
+# ══════════════════════ Rate List (saved calculator results) ══════════════════════
+
+@permission_flag_required('can_realise_calculator')
+def rate_list(request):
+    """Rate List tab — browse saved Realise-Calculator results, grouped by state."""
+    return render(request, 'realise/rate_list.html', {'sidebar_active': 'rate_list'})
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_save(request):
+    """Save a calculator result. Body: {name, state, scope('BOTH'/'A'/'B'), payload:{plans, compare}}."""
+    from .models import RateList
+    body = _parse_body(request)
+    name = (body.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'status': 'error', 'error': 'A result name is required.'}, status=400)
+    payload = body.get('payload') or {}
+    if not (isinstance(payload, dict) and payload.get('plans')):
+        return JsonResponse({'status': 'error', 'error': 'Nothing to save.'}, status=400)
+    obj = RateList.objects.create(
+        name=name[:200],
+        state=(body.get('state') or '').strip()[:100],
+        scope=(str(body.get('scope') or 'BOTH').upper())[:10],
+        payload=payload,
+        created_by=(request.user.username if request.user.is_authenticated else ''),
+    )
+    return JsonResponse({'status': 'ok', 'id': obj.id})
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['GET'])
+def api_rate_list(request):
+    """List saved results (optionally filtered by ?state=...), newest first."""
+    from .models import RateList
+    qs = RateList.objects.all()
+    one_id = request.GET.get('id')
+    if one_id:                                     # single result (used by "Load into Calculator")
+        try:
+            qs = qs.filter(id=int(one_id))
+        except (TypeError, ValueError):
+            qs = qs.none()
+    state = (request.GET.get('state') or '').strip()
+    if state:
+        qs = qs.filter(state=state)
+    rows = [{
+        'id': o.id, 'name': o.name, 'state': o.state, 'scope': o.scope,
+        'payload': o.payload, 'created_by': o.created_by,
+        'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
+    } for o in qs[:500]]
+    states = list(RateList.objects.exclude(state='').order_by('state')
+                  .values_list('state', flat=True).distinct())
+    return JsonResponse({'status': 'ok', 'rows': rows, 'count': len(rows), 'states': states})
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_delete(request):
+    """Delete a saved result. Body: {id}."""
+    from .models import RateList
+    body = _parse_body(request)
+    try:
+        RateList.objects.filter(id=int(body.get('id'))).delete()
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
+    return JsonResponse({'status': 'ok'})
+
+
 @permission_flag_required('can_customer_master')
 def customer_master(request):
     """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /

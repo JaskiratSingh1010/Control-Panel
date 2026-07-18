@@ -1,0 +1,179 @@
+{% extends "core/base.html" %}
+{% block title %}Rate List — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:var(--rz-bg) !important}
+  .rl-wrap{max-width:1500px;margin:0 auto}
+  .rl-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .rl-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
+  .rl-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:16px 0;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .rl-fld{display:flex;flex-direction:column;gap:5px}
+  .rl-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .rl-bar select,.rl-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .rl-bar select:focus,.rl-bar input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rl-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+
+  .rl-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
+  .rl-card-h{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;border-bottom:1px solid transparent}
+  .rl-card.open .rl-card-h{border-bottom-color:#eef2f6}
+  .rl-card-h .rl-name{font-size:16px;font-weight:800;color:var(--rz-ink)}
+  .rl-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;letter-spacing:.3px}
+  .rl-chip.state{background:#eef2ff;color:#4338ca}
+  .rl-chip.scope{background:#ecfdf5;color:#047857}
+  .rl-meta{font-size:11.5px;color:var(--rz-muted);font-weight:600}
+  .rl-card-h .rl-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .rl-chev{font-size:20px;color:#94a3b8;transition:transform .18s}
+  .rl-card.open .rl-chev{transform:rotate(180deg)}
+  .rl-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+  .rl-del:hover{background:#fff1f3}
+  .rl-load{display:inline-flex;align-items:center;gap:5px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:8px;padding:6px 11px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:800}
+  .rl-load:hover{background:#e0e7ff}
+  .rl-body{display:none;padding:6px 18px 18px}
+  .rl-card.open .rl-body{display:block}
+
+  .rl-plan-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--rz-indigo);margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+  .rl-tbl-wrap{overflow-x:auto;border:1px solid #eef2f6;border-radius:12px}
+  table.rl-tbl{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}
+  table.rl-tbl thead th{background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+  table.rl-tbl thead th.l{text-align:left}
+  table.rl-tbl tbody td{padding:8px 12px;border-bottom:1px solid #eef2f6;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--rz-body)}
+  table.rl-tbl tbody td.l{text-align:left;color:var(--rz-ink);font-weight:600}
+  table.rl-tbl tbody tr:nth-child(even) td{background:#fafcff}
+  table.rl-tbl .rl-rl{font-weight:800;color:#0e7490}
+  table.rl-tbl .rl-rev{font-weight:800;color:#065f46}
+  table.rl-tbl tfoot td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.rl-tbl tfoot td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
+  .rl-code{font-size:10px;color:var(--rz-faint);font-weight:700;margin-left:6px}
+
+  .rl-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px}
+  .rl-kpi{border-radius:12px;padding:12px 14px;background:#f8fafc;border:1px solid #eef2f6}
+  .rl-kpi .k-l{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-muted)}
+  .rl-kpi .k-v{font-size:20px;font-weight:900;color:var(--rz-ink);margin-top:3px;line-height:1;font-variant-numeric:tabular-nums}
+  .rl-kpi.acc{background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-color:#c7d2fe}
+  .rl-kpi.acc .k-l{color:#4338ca}.rl-kpi.acc .k-v{color:#312e81}
+  .rl-kpi.opp{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}
+  .rl-kpi.opp .k-l{color:#047857}.rl-kpi.opp .k-v{color:#065f46}
+
+  .rl-empty{padding:44px;text-align:center;color:var(--rz-muted);background:var(--rz-card);border:1px dashed var(--rz-card-brd);border-radius:16px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rl-wrap">
+  <h1 class="rl-h1">Rate List</h1>
+  <p class="rl-psub">Saved Realise-Calculator results, tagged by state. Save new ones from the Compare tab of the Realise Calculator.</p>
+
+  <div class="rl-bar">
+    <div class="rl-fld"><span class="rl-lbl">State</span><select id="rlState"><option value="">All states</option></select></div>
+    <div class="rl-fld"><span class="rl-lbl">Search</span><input type="search" id="rlSearch" placeholder="Result name…" autocomplete="off"></div>
+    <span class="rl-count" id="rlCount"></span>
+  </div>
+
+  <div id="rlList"><div class="rl-empty">Loading…</div></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+  function f2(n){return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+  var ALL=[], stateF='', searchF='';
+
+  function planTable(p){
+    var rows=(p.rows||[]).map(function(r){
+      return '<tr>'
+        +'<td class="l">'+esc(r.item||'')+(r.code?'<span class="rl-code">'+esc(r.code)+'</span>':'')+'</td>'
+        +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.gst)+'</td><td>'+f2(r.pcsbox)+'</td>'
+        +'<td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td><td>'+fN(Math.round(r.sell))+'</td>'
+        +'<td class="rl-rl">'+f2(r.realise)+'</td><td class="rl-rev">'+fN(Math.round(r.revenue))+'</td></tr>';
+    }).join('');
+    var t=p.totals||{};
+    return '<div class="rl-plan-h">'+esc(p.name||'Plan')+'</div>'
+      +'<div class="rl-tbl-wrap"><table class="rl-tbl"><thead><tr>'
+      +'<th class="l">Item</th><th>Retailer ₹</th><th>GST %</th><th>Pcs/Box</th><th>Box Ltrs</th><th>Scheme</th><th>To be sale</th><th>RELISE ₹/L</th><th>Revenue ₹</th>'
+      +'</tr></thead><tbody>'+rows+'</tbody>'
+      +'<tfoot><tr><td class="l">Blended ('+(p.rows||[]).length+')</td><td></td><td></td><td></td><td></td><td></td>'
+      +'<td>'+fN(Math.round(t.totSell||0))+'</td><td class="rl-rl">'+f2(t.blend||0)+'</td><td class="rl-rev">'+fN(Math.round(t.revSum||0))+'</td></tr></tfoot>'
+      +'</table></div>';
+  }
+
+  function compareKpis(cmp){
+    if(!cmp)return '';
+    var cards=[
+      {c:'acc',l:'Plan A · Realise',v:'₹'+f2(cmp.blendA)+' /L'},
+      {c:'acc',l:'Plan B · Realise',v:'₹'+f2(cmp.blendB)+' /L'},
+      {c:'opp',l:'A − B · Realise',v:(cmp.diffRealise>=0?'+':'')+'₹'+f2(cmp.diffRealise)+' /L'},
+      {c:'opp',l:'A − B · Revenue',v:(cmp.diffRevenue>=0?'+':'')+'₹'+fN(Math.round(cmp.diffRevenue))},
+      {c:'opp',l:'(A−B) × Plan B Vol',v:(cmp.aMinusBxBvol>=0?'+':'')+'₹'+fN(Math.round(cmp.aMinusBxBvol))}
+    ];
+    return '<div class="rl-kpis">'+cards.map(function(k){return '<div class="rl-kpi '+k.c+'"><div class="k-l">'+k.l+'</div><div class="k-v">'+k.v+'</div></div>';}).join('')+'</div>';
+  }
+
+  function cardHtml(o){
+    var pl=(o.payload&&o.payload.plans)||[];
+    var body=pl.map(planTable).join('')+compareKpis(o.payload&&o.payload.compare);
+    return '<div class="rl-card" data-id="'+o.id+'">'
+      +'<div class="rl-card-h">'
+        +'<span class="rl-name">'+esc(o.name)+'</span>'
+        +(o.state?'<span class="rl-chip state">'+esc(o.state)+'</span>':'')
+        +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan')))+'</span>'
+        +'<div class="rl-sp"><span class="rl-meta">'+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
+        +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><span class="material-icons" style="font-size:14px">edit</span>Load &amp; Edit</button>'
+        +'<button class="rl-del" title="Delete" data-del="'+o.id+'">✕</button>'
+        +'<span class="material-icons rl-chev">expand_more</span></div>'
+      +'</div><div class="rl-body">'+body+'</div></div>';
+  }
+
+  function render(){
+    var list=document.getElementById('rlList'), cnt=document.getElementById('rlCount');
+    var rows=ALL.filter(function(o){
+      if(stateF && o.state!==stateF)return false;
+      if(searchF && String(o.name||'').toLowerCase().indexOf(searchF)===-1)return false;
+      return true;
+    });
+    cnt.textContent=fN(rows.length)+' saved result'+(rows.length===1?'':'s');
+    if(!rows.length){ list.innerHTML='<div class="rl-empty">No saved results'+(stateF?(' for '+esc(stateF)):'')+'. Save one from the Realise Calculator → Compare tab.</div>'; return; }
+    list.innerHTML=rows.map(cardHtml).join('');
+  }
+
+  function fillStates(states){
+    var sel=document.getElementById('rlState'), cur=sel.value;
+    sel.innerHTML='<option value="">All states</option>'+states.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
+    if(states.indexOf(cur)>=0)sel.value=cur;
+  }
+
+  function load(){
+    fetch('/realise/api/rate-list/',{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{rows:[],states:[]};})
+      .then(function(p){ ALL=p.rows||[]; fillStates(p.states||[]); render(); })
+      .catch(function(){ document.getElementById('rlList').innerHTML='<div class="rl-empty">Could not load saved results.</div>'; });
+  }
+
+  document.getElementById('rlState').addEventListener('change',function(){stateF=this.value;render();});
+  var sd=debounce(render,120);
+  document.getElementById('rlSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});
+  document.getElementById('rlList').addEventListener('click',function(e){
+    var load=e.target.closest?e.target.closest('[data-load]'):null;
+    if(load){ e.stopPropagation(); window.location.href='/realise/realise-calculator/?load='+encodeURIComponent(load.getAttribute('data-load')); return; }
+    var del=e.target.closest?e.target.closest('[data-del]'):null;
+    if(del){ e.stopPropagation();
+      if(!window.confirm('Delete this saved result?'))return;
+      var id=del.getAttribute('data-del');
+      fetch('/realise/api/rate-list/delete/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({id:id})})
+        .then(function(){ ALL=ALL.filter(function(o){return String(o.id)!==String(id);}); render(); });
+      return;
+    }
+    var h=e.target.closest?e.target.closest('.rl-card-h'):null;
+    if(h){ h.parentNode.classList.toggle('open'); }
+  });
+
+  load();
+})();
+</script>
+{% endblock %}

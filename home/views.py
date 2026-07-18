@@ -132,6 +132,7 @@ PAGE_PERMS = [                       # standalone report pages (independent of f
     {'group': 'required_credit_viewer', 'label': 'Required Credit Limit'},
     {'group': 'open_payments_viewer',   'label': 'Open Payments'},
     {'group': 'dispatch_details_viewer', 'label': 'Dispatch Details'},
+    {'group': 'realise_calculator_viewer', 'label': 'Realise Calculator'},
     {'group': 'reconciliation_viewer',  'label': 'Wellness–Mart Reconciliation'},
     {'group': 'stock_viewer',           'label': 'Stock Available'},
     {'group': 'production_viewer',       'label': 'Production Plan'},

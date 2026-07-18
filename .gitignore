@@ -46,3 +46,6 @@ Excel File/
 *.xlsx
 *.xls
 ~$*
+
+# Exported Claude Code chat history (large, local only)
+claude-chat-history.md

@@ -3587,6 +3587,169 @@ def get_dispatch_details(start_date, end_date):
     return payload
 
 
+# ══════════════════════ Realise Calculator report ══════════════════════
+# Per-item Oil realisation for a date range. Realisation = Revenue ÷ Volume, at two grains:
+#   ₹/Litre = LineTotal ÷ (Quantity × OITM.SalPackUn)   — litres per piece
+#   ₹/Box   = LineTotal ÷ (Quantity ÷ OITM.SalFactor2)  — pieces per box
+# Net of returns: OINV/INV1 add (sign +1), ORIN/RIN1 subtract (sign −1). Hidden invoices
+# (U_ARNO IN 'T','H') are excluded to match the dashboard's "Done". Cancelled docs dropped.
+_realise_calc_cache = {}
+_REALISE_CALC_TTL = 90        # seconds
+
+_REALISE_CALC_SQL = '''
+    SELECT COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
+           COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
+           COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
+           {sign} * SUM(L."Quantity")                                        AS "PCS",
+           {sign} * SUM(L."Quantity" * COALESCE(I."SalPackUn", 0))           AS "LIT",
+           {sign} * SUM(L."Quantity" / NULLIF(I."SalFactor2", 0))            AS "BOX",
+           {sign} * SUM(L."LineTotal")                                       AS "REV"
+    FROM "{S}"."{hdr}" H
+    JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
+    LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    WHERE H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
+      AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+    GROUP BY I."ItemCode", I."ItemName", I."U_TYPE", I."U_Sub_Group"
+'''
+
+
+def get_realise_calculator(start_date, end_date):
+    """Per-item Oil realisation (₹/Litre and ₹/Box) for [start_date, end_date]. Returns
+    {status, rows, totals, count, start, end}. Each row: item_code, item_name, u_type,
+    u_sub_group, pcs, litres, boxes, revenue, realise_l, realise_box. Net of credit
+    notes/returns. Cached _REALISE_CALC_TTL seconds. {} rows on any SAP error."""
+    sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
+    if not sd or not ed:
+        return {'status': 'error', 'rows': [], 'totals': {},
+                'error': 'start_date and end_date required',
+                'start': start_date, 'end': end_date}
+    if ed < sd:
+        sd, ed = ed, sd
+    key = (sd.isoformat(), ed.isoformat())
+    now = time.time()
+    hit = _realise_calc_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    S = SAP_SCHEMA
+    next_day = ed + timedelta(days=1)          # half-open range: correct for date or timestamp DocDate
+    inv = _REALISE_CALC_SQL.format(S=S, hdr='OINV', ln='INV1', sign='1')
+    ret = _REALISE_CALC_SQL.format(S=S, hdr='ORIN', ln='RIN1', sign='-1')
+    try:
+        raw = sap_connector.execute_query(inv, (sd, next_day))
+        raw += sap_connector.execute_query(ret, (sd, next_day))
+    except Exception as exc:
+        logger.error('[REALISE-CALC] fetch failed: %s', exc)
+        return {'status': 'error', 'rows': [], 'totals': {},
+                'error': 'Could not read sales from SAP.',
+                'start': sd.isoformat(), 'end': ed.isoformat()}
+
+    agg = {}       # item_code -> accumulated metrics
+    for r in raw or []:
+        code = _bev_cell(r.get('ICODE'))
+        name = _bev_cell(r.get('ITEM'))
+        cell = agg.get(code)
+        if cell is None:
+            cell = agg[code] = {
+                'item_code': code,
+                'item_name': (name or code).upper(),
+                'u_type': (_bev_cell(r.get('UTYPE')) or '').upper(),
+                'u_sub_group': (_bev_cell(r.get('SUBG')) or '').upper(),
+                'pcs': 0.0, 'litres': 0.0, 'boxes': 0.0, 'revenue': 0.0,
+            }
+        cell['pcs']     += float(r.get('PCS') or 0)
+        cell['litres']  += float(r.get('LIT') or 0)
+        cell['boxes']   += float(r.get('BOX') or 0)
+        cell['revenue'] += float(r.get('REV') or 0)
+
+    rows = []
+    tot_pcs = tot_lit = tot_box = tot_rev = 0.0
+    for c in agg.values():
+        lit, box, rev = c['litres'], c['boxes'], c['revenue']
+        # Drop items that net to nothing (a sale fully cancelled by a return in the period).
+        if round(rev, 2) == 0 and round(lit, 2) == 0 and round(box, 2) == 0:
+            continue
+        c['pcs']         = round(c['pcs'], 2)
+        c['litres']      = round(lit, 2)
+        c['boxes']       = round(box, 2)
+        c['revenue']     = round(rev, 2)
+        c['realise_l']   = round(rev / lit, 2) if lit else 0.0
+        c['realise_box'] = round(rev / box, 2) if box else 0.0
+        rows.append(c)
+        tot_pcs += c['pcs']; tot_lit += c['litres']; tot_box += c['boxes']; tot_rev += c['revenue']
+
+    rows.sort(key=lambda x: x['revenue'], reverse=True)
+    totals = {
+        'pcs': round(tot_pcs, 2),
+        'litres': round(tot_lit, 2),
+        'boxes': round(tot_box, 2),
+        'revenue': round(tot_rev, 2),
+        'realise_l': round(tot_rev / tot_lit, 2) if tot_lit else 0.0,
+        'realise_box': round(tot_rev / tot_box, 2) if tot_box else 0.0,
+    }
+    payload = {'status': 'ok', 'rows': rows, 'totals': totals, 'count': len(rows),
+               'start': sd.isoformat(), 'end': ed.isoformat()}
+    if rows:
+        _realise_calc_cache[key] = (now + _REALISE_CALC_TTL, payload)
+    return payload
+
+
+_realise_calc_items_cache = {}     # {'t': expiry, 'v': items}
+_REALISE_CALC_ITEMS_TTL = 600      # seconds — the item master barely changes
+
+def get_realise_calc_items():
+    """Oil finished-goods item master for the Realise Calculator's cascading item picker.
+    Returns {'status', 'items'}; each item: code, name, variety (U_Sub_Group), sku (U_SKU
+    pack size), type ('P'/'C'), litres_per_pack (OITM.SalPackUn — litres per selling unit,
+    used to auto-fill the grid's Litres/Pack). Sellable Premium/Commodity items only.
+    Cached _REALISE_CALC_ITEMS_TTL seconds; [] on any SAP error."""
+    now = time.time()
+    hit = _realise_calc_items_cache.get('v')
+    if hit is not None and _realise_calc_items_cache.get('t', 0) > now:
+        return {'status': 'ok', 'items': hit}
+
+    S = SAP_SCHEMA
+    sql = f'''
+        SELECT COALESCE(TRIM(I."ItemCode"), '')     AS "CODE",
+               COALESCE(TRIM(I."ItemName"), '')     AS "NAME",
+               COALESCE(TRIM(I."U_Sub_Group"), '')  AS "VARIETY",
+               COALESCE(TRIM(I."U_SKU"), '')        AS "SKU",
+               COALESCE(TRIM(I."U_TYPE"), '')       AS "TYPE",
+               COALESCE(I."SalPackUn", 0)           AS "LPP",
+               COALESCE(I."SalFactor2", 0)          AS "PPB"
+        FROM "{S}"."OITM" I
+        WHERE I."SellItem" = 'Y'
+          AND UPPER(COALESCE(TRIM(I."U_TYPE"), '')) IN ('PREMIUM', 'COMMODITY')
+          AND COALESCE(TRIM(I."ItemName"), '') <> ''
+        ORDER BY "VARIETY", "SKU", "NAME"
+    '''
+    try:
+        raw = sap_connector.execute_query(sql)
+    except Exception as exc:
+        logger.error('[REALISE-CALC ITEMS] fetch failed: %s', exc)
+        return {'status': 'error', 'items': [], 'error': 'Could not read the item list from SAP.'}
+
+    items = []
+    for r in raw or []:
+        t = (_bev_cell(r.get('TYPE')) or '').upper()
+        lpp = round(float(r.get('LPP') or 0), 3)          # litres per selling unit (piece)
+        ppb = round(float(r.get('PPB') or 0), 2)          # pieces per box (SalFactor2)
+        items.append({
+            'code': _bev_cell(r.get('CODE')),
+            'name': (_bev_cell(r.get('NAME')) or '').upper(),
+            'variety': (_bev_cell(r.get('VARIETY')) or '—').upper(),
+            'sku': (_bev_cell(r.get('SKU')) or '—').upper(),
+            'type': 'P' if t == 'PREMIUM' else ('C' if t == 'COMMODITY' else ''),
+            'litres_per_pack': lpp,
+            'pcs_per_box': ppb,
+            'box_litres': round(lpp * ppb, 3),            # litres in one box
+        })
+    _realise_calc_items_cache['v'] = items
+    _realise_calc_items_cache['t'] = now + _REALISE_CALC_ITEMS_TTL
+    return {'status': 'ok', 'items': items}
+
+
 # ══════════════════════ Sales Document Flow report ══════════════════════
 # The sales document chain per party for a day's invoices: Sales Quotation → Sales Order → A/R
 # Invoice, with the invoiced litres. Anchored on invoices (OINV) in the date range (excluding

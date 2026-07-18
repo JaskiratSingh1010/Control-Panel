@@ -223,7 +223,7 @@
           {% endif %}
         </nav>
 
-        {% if can_inventory or can_stock_available or can_reconciliation or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_open_payments or can_dispatch_details or can_expenses or can_salaries or can_realise %}
+        {% if can_inventory or can_stock_available or can_reconciliation or can_production or can_oih_vs_stock or can_compare_sales or can_customer_aging or can_required_credit_limit or can_open_payments or can_dispatch_details or can_realise_calculator or can_expenses or can_salaries or can_realise %}
         <div class="cp-section-label">Reports</div>
         <nav class="cp-nav">
           {% if can_inventory %}
@@ -232,8 +232,8 @@
           </a>
           {% endif %}
           {# ── Sales reports ── #}
-          {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow or can_dispatch_details %}
-          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' %} open{% endif %}" data-group="reports-sales">
+          {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow or can_dispatch_details or can_realise_calculator %}
+          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' or sidebar_active == 'realise_calculator' or sidebar_active == 'rate_list' %} open{% endif %}" data-group="reports-sales">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Sales" aria-label="Toggle Sales reports">
               <span class="cp-nav-group-lead"><span class="material-icons">trending_up</span>Sales</span>
               <span class="material-icons cp-nav-group-chev">expand_more</span>
@@ -262,6 +262,14 @@
               {% if can_dispatch_details %}
               <a class="cp-nav-item {% if sidebar_active == 'dispatch_details' %}active{% endif %}" href="{% url 'realise:dispatch_details' %}" title="Dispatch Details">
                 <span class="material-icons">local_shipping</span>Dispatch Details
+              </a>
+              {% endif %}
+              {% if can_realise_calculator %}
+              <a class="cp-nav-item {% if sidebar_active == 'realise_calculator' %}active{% endif %}" href="{% url 'realise:realise_calculator' %}" title="Realise Calculator">
+                <span class="material-icons">calculate</span>Realise Calculator
+              </a>
+              <a class="cp-nav-item {% if sidebar_active == 'rate_list' %}active{% endif %}" href="{% url 'realise:rate_list' %}" title="Rate List">
+                <span class="material-icons">sell</span>Rate List
               </a>
               {% endif %}
             </div>

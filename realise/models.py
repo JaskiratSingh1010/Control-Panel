@@ -406,3 +406,21 @@ class AgingDueConfig(models.Model):
 
     def __str__(self):
         return f"{self.card_code}: {self.grace_days}d"
+
+
+class RateList(models.Model):
+    """A saved Realise-Calculator result (a named 'rate list'), tagged by state. Stores a JSON
+    snapshot of the plan(s): each item's inputs + computed realise/revenue, plan totals, and the
+    A-vs-B comparison. Viewed from the Rate List sidebar tab. scope = 'BOTH' / 'A' / 'B'."""
+    name = models.CharField(max_length=200)
+    state = models.CharField(max_length=100, blank=True)
+    scope = models.CharField(max_length=10, default='BOTH')
+    payload = models.JSONField(default=dict)
+    created_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.state})"
