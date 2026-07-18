@@ -164,7 +164,9 @@ function channelMeta(ch) {
   };
 }
 function orderChannels(rows) {
-  const present = distinct(rows.map(r => r.channel));
+  // Always surface every dashboard channel (incl. REST, which has no territory rows) so each
+  // can be given a channel-level target — even when it isn't present in the territory map.
+  const present = distinct([...rows.map(r => r.channel), ...ALL_CHANNELS]);
   return [...KNOWN_ORDER.filter(c => present.includes(c)), ...present.filter(c => !KNOWN_ORDER.includes(c))];
 }
 const initials = name => name.replace(/ JI$/, '').split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('');

@@ -1762,6 +1762,11 @@ def get_territory_dashboard_payload():
             if not any(e['label'] == name for e in bucket):
                 bucket.append({'label': name, 'match': [name] + ([code] if code else [])})
         if not name and person:
+            # Key by the CHANNEL name too ('ECOM'), not just its raw member groups
+            # ('E-COMMERCE'): a channel-level TargetNode stores main_group='ECOM', so the
+            # person drill's assignedPerson('ECOM','') must resolve the owner. Without this,
+            # a whole-channel ECOM target falls into "Other" instead of its owner.
+            group_owners[channel] = person
             for raw in CHANNEL_MEMBERS.get(channel, [channel]):
                 group_owners[_normalize_name(raw)] = person
     # City overrides: "GROUP|STATE|CITY" -> person (keyed by channel + each raw group),
