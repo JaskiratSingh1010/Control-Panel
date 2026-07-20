@@ -1305,6 +1305,117 @@ def _parse_realise_upload(f):
     return []
 
 
+def _rc_order_field(t):
+    """Map an order-file header cell to an order field."""
+    t = (str(t) if t is not None else '').strip().lower()
+    if not t:
+        return None
+    if 'item code' in t or t == 'code':
+        return 'code'
+    if 'price list' in t:                 # "Price List (Basic)" — price WITHOUT GST
+        return 'basic'
+    if 'basic price' in t:                # fallback price column (some exports fill this instead)
+        return 'basic2'
+    if 'total ltr' in t or 'total litre' in t:
+        return 'ltrs'
+    if t in ('liters', 'litres', 'liter'):
+        return 'liters'
+    if t in ('qty', 'quantity'):
+        return 'qty'
+    return None
+
+
+def _parse_realise_order_upload(f):
+    """Parse an order export (Item Code + Price List (Basic) + Total Ltrs) into calculator rows.
+    Price List (Basic) is ex-GST, so we gross it up by GST (5%) into the Retailer field and set
+    GST%=5 — the box chain then removes it back to Basic, reproducing the order's realise/revenue.
+    Item code is matched to the SAP master for name + Pcs/Box + Box Litres. Margins/disc/scheme=0;
+    To-be-sale = the line's Total Ltrs."""
+    import openpyxl
+    from io import BytesIO
+    wb = openpyxl.load_workbook(BytesIO(f.read()), data_only=True, read_only=True)
+    master = {i['code']: i for i in (services.get_realise_calc_items().get('items') or [])}
+    GST = 5.0
+
+    def s(v):
+        if v is None:
+            return ''
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return str(v).strip()
+
+    def num(v):
+        try:
+            return float(str(v).replace(',', '')) if str(v).strip() != '' else 0.0
+        except Exception:
+            return 0.0
+
+    for ws in wb.worksheets:
+        data = [list(r) for r in ws.iter_rows(values_only=True)]
+        if not data:
+            continue
+        colmap, header_ri = {}, None
+        for ri in range(min(10, len(data))):
+            cm = {}
+            for ci, val in enumerate(data[ri]):
+                fld = _rc_order_field(val)
+                if fld and fld not in cm:
+                    cm[fld] = ci
+            if 'code' in cm and ('basic' in cm or 'basic2' in cm):
+                colmap, header_ri = cm, ri
+                break
+        if header_ri is None:
+            continue
+        out = []
+        for r in data[header_ri + 1:]:
+            def g(fld):
+                ci = colmap.get(fld)
+                return r[ci] if (ci is not None and ci < len(r)) else None
+            code = s(g('code'))
+            if not code or code.upper() == 'TOTAL':
+                continue
+            m = master.get(code)
+            basic = num(g('basic')) or num(g('basic2'))       # Price List (Basic), else Basic Price
+            retailer = round(basic * (1 + GST / 100.0), 2) if basic else ''
+            ltrs = num(g('ltrs')) or num(g('liters'))
+            out.append({
+                'code': code,
+                'item': (m['name'] if m else code),
+                'retailer': (str(retailer) if retailer != '' else ''),
+                'ss': '0', 'dm': '0', 'gst': '5',
+                'pcsbox': (s(m['pcs_per_box']) if m else ''),
+                'disc': '0',
+                'boxltr': (s(m['box_litres']) if m else ''),
+                'scheme': '0',
+                'sell': (str(ltrs) if ltrs else ''),
+                '_matched': bool(m),
+            })
+        if out:
+            return out
+    return []
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_realise_calculator_order_upload(request):
+    """Read an uploaded order export and return calculator rows (Old Order side of New vs Old)."""
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'status': 'error', 'error': 'No file uploaded.'}, status=400)
+    try:
+        rows = _parse_realise_order_upload(f)
+    except Exception as exc:
+        logger.error('[REALISE-CALC ORDER] parse failed: %s', exc)
+        return JsonResponse({'status': 'error', 'error': 'Could not read the order file.'}, status=400)
+    if not rows:
+        return JsonResponse({'status': 'error',
+                             'error': 'No order lines found (need Item Code + Price List columns).'}, status=400)
+    matched = sum(1 for r in rows if r.get('_matched'))
+    for r in rows:
+        r.pop('_matched', None)
+    return JsonResponse({'status': 'ok', 'rows': rows, 'count': len(rows), 'matched': matched})
+
+
 @any_permission_flag('can_realise_calculator', json_response=True)
 @require_http_methods(['POST'])
 def api_realise_calculator_upload(request):

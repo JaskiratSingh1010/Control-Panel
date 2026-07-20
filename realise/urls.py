@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/realise-calculator/items/', views.api_realise_calculator_items, name='api_realise_calculator_items'),
     path('api/realise-calculator/export/', views.api_realise_calculator_export, name='api_realise_calculator_export'),
     path('api/realise-calculator/upload/', views.api_realise_calculator_upload, name='api_realise_calculator_upload'),
+    path('api/realise-calculator/order-upload/', views.api_realise_calculator_order_upload, name='api_realise_calculator_order_upload'),
     path('rate-list/',               views.rate_list,               name='rate_list'),
     path('api/rate-list/',           views.api_rate_list,           name='api_rate_list'),
     path('api/rate-list/save/',      views.api_rate_list_save,      name='api_rate_list_save'),

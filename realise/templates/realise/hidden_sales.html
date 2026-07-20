@@ -42,6 +42,11 @@
   .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
   .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:250px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
   .com-drill-panel.open{display:block}
+  .hs-m{line-height:1.35;font-variant-numeric:tabular-nums}
+  .hs-m ~ .hs-m{font-size:11px}                 /* stacked extra metrics slightly smaller */
+  .hs-m.hs-m-lit{color:#0d9488}
+  .hs-m.hs-m-qty{color:#475569}
+  .hs-m.hs-m-rlz{color:#7c3aed}
   .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--rz-line);position:sticky;top:0;background:#fff}
   .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
   .com-dp-list{padding:4px 0}
@@ -89,6 +94,7 @@
   <div class="hs-bar">
     <div class="hs-fld"><span class="hs-lbl">From</span><input type="date" id="hsStart"></div>
     <div class="hs-fld"><span class="hs-lbl">To</span><input type="date" id="hsEnd"></div>
+    <div class="hs-fld"><span class="hs-lbl">Last (months)</span><input type="number" id="hsMonths" min="1" max="120" step="1" placeholder="e.g. 6" style="width:96px" title="Fetch the last N months (overrides From/To); drill by Month to see it month-wise"></div>
     <button class="hs-fetch" id="hsFetch">&#9654; Fetch</button>
     <div class="hs-fld"><span class="hs-lbl">Type</span>
       <select id="hsType"><option value="">All</option><option value="PREMIUM">Premium</option><option value="COMMODITY">Commodity</option></select>
@@ -101,6 +107,12 @@
     </div>
     <div class="hs-fld"><span class="hs-lbl">Search</span>
       <input type="search" id="hsSearch" placeholder="Customer / item / cost center / doc…" autocomplete="off">
+    </div>
+    <div class="hs-fld"><span class="hs-lbl">Metric</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="hsMetricBtn"><span id="hsMetricLabel">Value ₹</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="hsMetricPanel"><div class="com-dp-list" id="hsMetricList"></div></div>
+      </div>
     </div>
     <div class="hs-fld"><span class="hs-lbl">Drill By</span>
       <div class="com-drill-box">
@@ -133,6 +145,7 @@
 (function(){
   function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fRz(x){x=Number(x)||0;return '₹'+x.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
   function fN(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="hs-v0">—</span>';return Math.round(n).toLocaleString('en-IN');}
   function money(n){n=Number(n)||0;if(Math.abs(n)<0.5)return '<span class="hs-v0">—</span>';return '₹'+Math.round(n).toLocaleString('en-IN');}
   function abbr(n){n=Number(n)||0;var a=Math.abs(n),sg=n<0?'-':'';if(a>=1e7)return sg+'₹'+(a/1e7).toFixed(2)+' Cr';if(a>=1e5)return sg+'₹'+(a/1e5).toFixed(2)+' L';if(a>=1e3)return sg+'₹'+(a/1e3).toFixed(1)+' K';return sg+'₹'+Math.round(a);}
@@ -150,15 +163,27 @@
     {key:'status',label:'Status',sub:'Open / Closed'},
   ];
   var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
-  var COLS=[{k:'inv',l:'Invoices'},{k:'qty',l:'Quantity'},{k:'lit',l:'Litres'},{k:'val',l:'Value'}];
-
   var rows=[], loaded=false, err=null, expanded={};
   var order=['customer','item_name'], chosen=['customer','item_name'];
   var searchF='', typeF='', stateF='', groupF='';
+  var METRIC_DEFS=[{k:'val',l:'Value ₹'},{k:'lit',l:'Litres'},{k:'qty',l:'Quantity'},{k:'rlz',l:'Realise ₹/L'}];
+  var METRIC_LBL={}; METRIC_DEFS.forEach(function(d){METRIC_LBL[d.k]=d.l;});
+  var metrics=['val'];   // multi-select: any of val / lit / qty / rlz, shown stacked in each cell
 
-  function blank(){return {docs:{},qty:0,lit:0,val:0};}
-  function addRow(n,r){if(r.doc)n.docs[r.doc]=1;n.qty+=Number(r.qty)||0;n.lit+=Number(r.litres)||0;n.val+=Number(r.value)||0;}
+  function blank(){return {docs:{},qty:0,lit:0,val:0,byM:{}};}
+  function addRow(n,r){
+    if(r.doc)n.docs[r.doc]=1;n.qty+=Number(r.qty)||0;n.lit+=Number(r.litres)||0;n.val+=Number(r.value)||0;
+    var ym=r.ym||'—', b=n.byM[ym]; if(!b)b=n.byM[ym]={qty:0,lit:0,val:0};   // per-month bucket for the pivot
+    b.qty+=Number(r.qty)||0;b.lit+=Number(r.litres)||0;b.val+=Number(r.value)||0;
+  }
   function vals(n){return {inv:Object.keys(n.docs).length,qty:n.qty,lit:n.lit,val:n.val};}
+  function metricRaw(o,k){o=o||{};if(k==='lit')return o.lit||0;if(k==='qty')return o.qty||0;if(k==='rlz')return (o.lit>0)?(o.val/o.lit):0;return o.val||0;}
+  function fmtMetricV(k,x){if(k==='rlz')return x?fRz(x):'';if(!x)return '';return k==='val'?money(Math.round(x)):fN(Math.round(x));}
+  // Stacked cell of the selected metrics (grand-style: realise = value/litres of the bucket).
+  function metricCell(o){return metrics.map(function(k){return '<div class="hs-m hs-m-'+k+'">'+fmtMetricV(k,metricRaw(o,k))+'</div>';}).join('');}
+  // Avg cell: rate metrics (realise) don't divide by #months; counts do.
+  function metricCellAvg(o,nM){return metrics.map(function(k){var g=metricRaw(o,k),a=(k==='rlz')?g:(g/nM);return '<div class="hs-m hs-m-'+k+'">'+fmtMetricV(k,a)+'</div>';}).join('');}
+  function activeMonths(a){var m={};a.forEach(function(r){if(r.ym)m[r.ym]={ym:r.ym,label:r.month||r.ym};});return Object.keys(m).sort().map(function(k){return m[k];});}
 
   function rowMatches(r){
     if(typeF && String(r.u_type||'').toUpperCase()!==typeF)return false;
@@ -192,17 +217,17 @@
     });
   }
 
-  function cells(v){return '<td class="hs-hi">'+fN(v.inv)+'</td><td>'+fN(v.qty)+'</td><td>'+fN(v.lit)+'</td><td class="hs-hi">'+money(v.val)+'</td>';}
-
-  function treeRows(nodes,depth){
-    var html='';
+  // Month-wise pivot rows: name + one cell per month (selected metric) + Grand Total + Avg.
+  function monthRows(nodes,months,depth){
+    var html='', nM=months.length||1;
     nodes.forEach(function(n){
       var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
       var tw=hasKids?'<span class="hs-tw'+(open?' open':'')+'" data-hspath="'+esc(n.path)+'">&#9654;</span>':'<span class="hs-tw-empty"></span>';
       var tag='<span class="hs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
       var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-hstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
-      html+='<tr>'+name+cells(vals(n))+'</tr>';
-      if(hasKids&&open)html+=treeRows(n.kids,depth+1);
+      var mc=months.map(function(mo){return '<td>'+metricCell(n.byM[mo.ym]||{})+'</td>';}).join('');
+      html+='<tr>'+name+mc+'<td class="hs-hi">'+metricCell(n)+'</td><td>'+metricCellAvg(n,nM)+'</td></tr>';
+      if(hasKids&&open)html+=monthRows(n.kids,months,depth+1);
     });
     return html;
   }
@@ -237,12 +262,17 @@
     if(!loaded){head.innerHTML='';body.innerHTML='<tr><td class="hs-empty">Loading…</td></tr>';return;}
     renderKpis();
     var dims=order.length?order:['customer'];
-    head.innerHTML='<tr><th class="gc-name">'+esc(dims.map(function(k){return DIM_LABEL[k];}).join(' › '))+'</th>'+COLS.map(function(c){return '<th>'+esc(c.l)+'</th>';}).join('')+'</tr>';
     var a=activeRows();
-    if(!a.length){body.innerHTML='<tr><td class="hs-empty" colspan="5">No hidden invoices in this selection.</td></tr>';return;}
-    var html=treeRows(buildTree(a,dims,0,''),0);
+    if(!a.length){head.innerHTML='';body.innerHTML='<tr><td class="hs-empty">No hidden invoices in this selection.</td></tr>';return;}
+    var months=activeMonths(a), nM=months.length||1;
+    head.innerHTML='<tr><th class="gc-name">'+esc(dims.map(function(k){return DIM_LABEL[k];}).join(' › '))+'</th>'
+      +months.map(function(mo){return '<th>'+esc(mo.label)+'</th>';}).join('')
+      +'<th>Grand Total</th><th>Avg</th></tr>';
+    var html=monthRows(buildTree(a,dims,0,''),months,0);
     var t=blank(); a.forEach(function(r){addRow(t,r);});
-    html+='<tr class="hs-total"><td class="gc-name">TOTAL</td>'+cells(vals(t))+'</tr>';
+    html+='<tr class="hs-total"><td class="gc-name">TOTAL</td>'
+      +months.map(function(mo){return '<td>'+metricCell(t.byM[mo.ym]||{})+'</td>';}).join('')
+      +'<td class="hs-hi">'+metricCell(t)+'</td><td>'+metricCellAvg(t,nM)+'</td></tr>';
     body.innerHTML=html;
   }
 
@@ -261,15 +291,22 @@
   }
 
   function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  var HS_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtMonth(d){d=String(d||'');if(d.length>=7){var y=d.slice(0,4),m=parseInt(d.slice(5,7),10);if(m>=1&&m<=12)return HS_MON[m-1]+' '+y;}return '—';}
   function load(){
-    var sd=document.getElementById('hsStart').value, ed=document.getElementById('hsEnd').value;
+    // 'Last (months)' overrides From/To when set (like Compare Sales): end=today,
+    // start=1st of the (N-1) months-ago month. Otherwise use the explicit From/To.
+    var sd, ed, m=parseInt(document.getElementById('hsMonths').value,10);
+    if(m&&m>=1){ if(m>120)m=120; var now=new Date(); ed=ymd(now); sd=ymd(new Date(now.getFullYear(), now.getMonth()-(m-1), 1));
+      document.getElementById('hsStart').value=sd; document.getElementById('hsEnd').value=ed; }
+    else { sd=document.getElementById('hsStart').value; ed=document.getElementById('hsEnd').value; }
     if(!sd||!ed)return;
     var btn=document.getElementById('hsFetch'); btn.disabled=true; btn.textContent='Loading…';
     loaded=false; render();
     fetch('/realise/api/hidden-sales/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
       body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
-      .then(function(p){ rows=p.rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; buildFilters(); render(); })
+      .then(function(p){ rows=p.rows||[]; rows.forEach(function(r){r.ym=String(r.date||'').slice(0,7); r.month=fmtMonth(r.date);}); err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; buildFilters(); render(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -280,20 +317,30 @@
     var a=activeRows();
     if(!a.length){ window.alert('No data to export — click Fetch first.'); return; }
     var dims=order.length?order:['customer'];
+    var months=activeMonths(a), nM=months.length||1;
+    function xv(o,k){var v=metricRaw(o,k);return k==='rlz'?Math.round(v*100)/100:Math.round(v);}   // grand/cell value per metric
+    function av(o,k){return k==='rlz'?xv(o,k):Math.round(metricRaw(o,k)/nM);}                       // avg per metric (rate = blended)
     var tree=buildTree(a,dims,0,'');
-    var hd=dims.map(function(k){return DIM_LABEL[k];}).concat(['Invoices','Quantity','Litres','Value']);
+    // One sub-column per (month × selected metric), grouped by month, then Grand Total + Avg per metric.
+    var hd=dims.map(function(k){return DIM_LABEL[k];});
+    months.forEach(function(mo){metrics.forEach(function(k){hd.push(mo.label+' — '+METRIC_LBL[k]);});});
+    metrics.forEach(function(k){hd.push('Grand Total — '+METRIC_LBL[k]);});
+    metrics.forEach(function(k){hd.push('Avg — '+METRIC_LBL[k]);});
     var out=[hd.map(function(h){return {value:h,bold:true,fill:'0F172A',color:'FFFFFF'};})];
     (function walk(nodes,depth,labels){
       nodes.forEach(function(n){
-        var v=vals(n);
         var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
-        out.push(dc.concat([v.inv,Math.round(v.qty),Math.round(v.lit),Math.round(v.val)]));
+        var mc=[]; months.forEach(function(mo){var b=n.byM[mo.ym]||{};metrics.forEach(function(k){mc.push(xv(b,k));});});
+        var gc=metrics.map(function(k){return xv(n,k);}), ac=metrics.map(function(k){return av(n,k);});
+        out.push(dc.concat(mc).concat(gc).concat(ac));
         if(!n.leaf)walk(n.kids,depth+1,labels.concat([n.label]));
       });
     })(tree,0,[]);
-    var t=blank(); a.forEach(function(r){addRow(t,r);}); var tv=vals(t);
+    var t=blank(); a.forEach(function(r){addRow(t,r);});
     var tr=[{value:'TOTAL',bold:true}]; for(var i=1;i<dims.length;i++)tr.push('');
-    out.push(tr.concat([{value:tv.inv,bold:true},{value:Math.round(tv.qty),bold:true},{value:Math.round(tv.lit),bold:true},{value:Math.round(tv.val),bold:true}]));
+    var tmc=[]; months.forEach(function(mo){var b=t.byM[mo.ym]||{};metrics.forEach(function(k){tmc.push({value:xv(b,k),bold:true});});});
+    var tgc=metrics.map(function(k){return {value:xv(t,k),bold:true};}), tac=metrics.map(function(k){return {value:av(t,k),bold:true};});
+    out.push(tr.concat(tmc).concat(tgc).concat(tac));
     var fn='Oil_Hidden_Customer_Sales';
     fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
       body:JSON.stringify({filename:fn,sheets:[{name:'Hidden Sales',rows:out}]})})
@@ -306,11 +353,40 @@
   document.getElementById('hsExport').addEventListener('click',exportXlsx);
   document.getElementById('hsStart').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('hsEnd').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
+  document.getElementById('hsMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   var searchDeb=debounce(render,120);
   document.getElementById('hsSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();searchDeb();});
   document.getElementById('hsType').addEventListener('change',function(){typeF=this.value;render();});
   document.getElementById('hsState').addEventListener('change',function(){stateF=this.value;render();});
   document.getElementById('hsGroup').addEventListener('change',function(){groupF=this.value;render();});
+  // Metric multi-select (Value / Litres / Quantity / Realise) — stacked in each cell.
+  function updateMetricLabel(){
+    metrics=METRIC_DEFS.filter(function(d){return metrics.indexOf(d.k)!==-1;}).map(function(d){return d.k;});
+    if(!metrics.length)metrics=['val'];
+    document.getElementById('hsMetricLabel').textContent=metrics.map(function(k){return METRIC_LBL[k];}).join(', ');
+  }
+  function renderMetricList(){
+    var list=document.getElementById('hsMetricList'); list.innerHTML='';
+    METRIC_DEFS.forEach(function(d){
+      var lab=document.createElement('label');
+      lab.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 11px;cursor:pointer;font-size:13px;font-weight:600;color:var(--rz-ink)';
+      lab.innerHTML='<input type="checkbox"'+(metrics.indexOf(d.k)!==-1?' checked':'')+'>'+esc(d.l);
+      lab.querySelector('input').addEventListener('change',function(){
+        var i=metrics.indexOf(d.k);
+        if(this.checked){ if(i===-1)metrics.push(d.k); }
+        else if(i!==-1){ if(metrics.length>1)metrics.splice(i,1); else this.checked=true; }   // keep at least one
+        updateMetricLabel(); render();
+      });
+      list.appendChild(lab);
+    });
+  }
+  (function(){
+    var btn=document.getElementById('hsMetricBtn'), panel=document.getElementById('hsMetricPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();renderMetricList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    updateMetricLabel();
+  })();
   document.getElementById('hsBody').addEventListener('click',function(e){
     var t=e.target&&e.target.closest?e.target.closest('[data-hstoggle]'):null; if(!t)return;
     var p=t.getAttribute('data-hstoggle'); expanded[p]=!expanded[p]; render();

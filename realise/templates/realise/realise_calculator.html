@@ -221,6 +221,7 @@
     <div class="rc-calc-tabs">
       <button class="rc-tab on" data-tab="grid"><span class="material-icons">table_chart</span>Planning Grid</button>
       <button class="rc-tab" data-tab="cmp"><span class="material-icons">compare_arrows</span>Compare</button>
+      <button class="rc-tab" data-tab="ord"><span class="material-icons">receipt_long</span>New vs Old Order</button>
       <span class="rc-tab-note">Realise ₹/L = (Retailer ÷ margins ÷ (1+GST%) × pcs/box − discount) ÷ (box + scheme litres)</span>
     </div>
 
@@ -319,6 +320,65 @@
         <button class="rc-gexport" id="cmpExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel (Existing + New)</button>
         <span class="rc-ghint">Save to the Rate List (by state) or export both plans with live formulas.</span>
       </div>
+    </div>
+
+    <!-- NEW vs OLD ORDER -->
+    <div class="rc-pane" id="paneOrd" hidden>
+      <p class="rc-cmp-note">Upload an order export — it fills the <b>Old Order</b> (as-billed prices). The <b>New Order</b> starts as an editable copy: change prices/margins to see the new realise &amp; the difference. <b>Price List (Basic)</b> is ex-GST, so it's grossed up by GST and set as Retailer — the order's revenue reproduces exactly.</p>
+      <div class="rc-grid-actions" style="margin-bottom:6px">
+        <button class="rc-gupload" id="ordUpload"><span class="material-icons" style="font-size:15px">upload</span>Upload Order Excel</button>
+        <span class="rc-ghint">Reads Item Code + Price List (Basic) or Basic Price + Total Ltrs from the order file.</span>
+      </div>
+
+      <!-- Old Order -->
+      <div class="rc-cmp-block">
+        <div class="rc-cmp-h"><span class="rc-cmp-badge a">O</span>Old Order</div>
+        <div class="rc-grid-wrap">
+          <table class="rc-grid rc-cmp">
+            <thead><tr>
+              <th class="l">Item</th>
+              <th>Retailer ₹<br><small style="font-weight:600;color:var(--rz-faint)">per piece</small></th>
+              <th>SS %</th><th>Dist %</th><th>GST %</th><th>Pcs/Box</th>
+              <th>Flat Disc ₹<br><small style="font-weight:600;color:var(--rz-faint)">per box</small></th>
+              <th>Box Ltrs</th><th>Scheme L</th><th>To be sale (L)</th><th></th>
+            </tr></thead>
+            <tbody id="ordBodyOld"></tbody>
+            <tfoot id="ordFootOld"></tfoot>
+          </table>
+        </div>
+        <div class="rc-grid-actions">
+          <button class="rc-gadd" id="ordAddOld">+ Add row</button>
+          <button class="rc-gclear" id="ordClearOld">Clear all</button>
+        </div>
+        <div class="rc-sum" id="ordSumOld"></div>
+      </div>
+
+      <!-- New Order -->
+      <div class="rc-cmp-block">
+        <div class="rc-cmp-h"><span class="rc-cmp-badge b">N</span>New Order</div>
+        <div class="rc-grid-wrap">
+          <table class="rc-grid rc-cmp">
+            <thead><tr>
+              <th class="l">Item</th>
+              <th>Retailer ₹<br><small style="font-weight:600;color:var(--rz-faint)">per piece</small></th>
+              <th>SS %</th><th>Dist %</th><th>GST %</th><th>Pcs/Box</th>
+              <th>Flat Disc ₹<br><small style="font-weight:600;color:var(--rz-faint)">per box</small></th>
+              <th>Box Ltrs</th><th>Scheme L</th><th>To be sale (L)</th><th></th>
+            </tr></thead>
+            <tbody id="ordBodyNew"></tbody>
+            <tfoot id="ordFootNew"></tfoot>
+          </table>
+        </div>
+        <div class="rc-grid-actions">
+          <button class="rc-gadd" id="ordAddNew">+ Add row</button>
+          <button class="rc-gclear" id="ordClearNew">Clear all</button>
+        </div>
+        <div class="rc-sum" id="ordSumNew"></div>
+      </div>
+
+      <!-- Old vs New -->
+      <div class="rc-cmp-vs-h">Old Order vs New Order</div>
+      <div class="rc-sum" id="ordVs"></div>
     </div>
   </div>
 
@@ -535,7 +595,7 @@
       {c:'acc',l:'Blended Realise',  v:'₹'+f2(blendFut)+' /L'},
       {c:'opp',l:'Total Revenue',    v:'₹'+fN(Math.round(revSum))}
     ].map(function(k){return '<div class="rc-chip '+k.c+'"><div class="c-l">'+k.l+'</div><div class="c-v">'+k.v+'</div></div>';}).join('');
-    renderVs();
+    if(ctx.onSum)ctx.onSum();
   }
   function renderCmpGrid(ctx){
     var body=document.getElementById(ctx.bodyId);
@@ -574,6 +634,18 @@
     renderCmpGrid(ctx);
   }
   function renderCmp(){ if(cmpGrids['cmpA'])renderCmpGrid(cmpGrids['cmpA']); if(cmpGrids['cmpB'])renderCmpGrid(cmpGrids['cmpB']); }
+  // New vs Old Order — same engine, Old (uploaded) vs New (edited).
+  function renderOrderVs(){
+    var O=cmpGrids['ordOld'], N=cmpGrids['ordNew']; if(!O||!N)return;
+    var d=(N.blendFut||0)-(O.blendFut||0), rd=(N.revSum||0)-(O.revSum||0);
+    document.getElementById('ordVs').innerHTML=[
+      {c:'acc',l:'Old Order · Realise', v:O.totSell?('₹'+f2(O.blendFut)+' /L'):'—'},
+      {c:'acc',l:'New Order · Realise', v:N.totSell?('₹'+f2(N.blendFut)+' /L'):'—'},
+      {c:'opp',l:'New − Old · Realise', v:(O.totSell&&N.totSell)?(((d>=0?'+':'')+'₹'+f2(d))+' /L'):'—'},
+      {c:'opp',l:'New − Old · Revenue', v:(O.totSell||N.totSell)?(((rd>=0?'+':'')+'₹'+fN(Math.round(rd)))):'—'}
+    ].map(function(k){return '<div class="rc-chip '+k.c+'"><div class="c-l">'+k.l+'</div><div class="c-v">'+k.v+'</div></div>';}).join('');
+  }
+  function renderOrd(){ if(cmpGrids['ordOld'])renderCmpGrid(cmpGrids['ordOld']); if(cmpGrids['ordNew'])renderCmpGrid(cmpGrids['ordNew']); }
 
   /* ══════════════════ SAP item picker (Variety → SKU → Item) ══════════════════ */
   var ITEMS=null, itemsLoading=false, pickTarget=null, pkVar='', pkSku='', pkQuery='';
@@ -750,17 +822,23 @@
   function triggerUpload(target){ _upTarget=target; _upInput.value=''; _upInput.click(); }
   function uploadExcel(file,target){
     var fd=new FormData(); fd.append('file',file);
-    fetch('/realise/api/realise-calculator/upload/',{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd})
+    var url=(target==='order')?'/realise/api/realise-calculator/order-upload/':'/realise/api/realise-calculator/upload/';
+    fetch(url,{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd})
       .then(function(r){ return r.json().then(function(j){return j;}).catch(function(){return {status:'error',error:'Server error (HTTP '+r.status+')'};}); })
       .then(function(p){
         if(p.status!=='ok'||!(p.rows&&p.rows.length)){ window.alert('Upload failed: '+((p&&p.error)||'no item rows found in the file.')); return; }
-        if(target==='grid'){ grid=p.rows.map(function(u){return Object.assign(blankRow(),u);}); renderGrid(); }
+        if(target==='order'){                                    // fill BOTH order grids from the order file
+          cmpGrids['ordOld'].arr=p.rows.map(function(u){return Object.assign(blankCmp(),u);});
+          cmpGrids['ordNew'].arr=p.rows.map(function(u){return Object.assign(blankCmp(),u);});
+          renderCmpGrid(cmpGrids['ordOld']); renderCmpGrid(cmpGrids['ordNew']);
+        } else if(target==='grid'){ grid=p.rows.map(function(u){return Object.assign(blankRow(),u);}); renderGrid(); }
         else { var ctx=cmpGrids[target]; ctx.arr=p.rows.map(function(u){return Object.assign(blankCmp(),u);}); renderCmpGrid(ctx); }
         if(p.matched<p.count) window.alert(p.count+' rows loaded — '+(p.count-p.matched)+' item code(s) were not found in the SAP master (name/box blank for those).');
       })
       .catch(function(){ window.alert('Upload failed.'); });
   }
   document.getElementById('gridUpload').addEventListener('click',function(){triggerUpload('grid');});
+  document.getElementById('ordUpload').addEventListener('click',function(){triggerUpload('order');});
   document.getElementById('cmpUploadA').addEventListener('click',function(){triggerUpload('cmpA');});
   document.getElementById('cmpUploadB').addEventListener('click',function(){triggerUpload('cmpB');});
 
@@ -822,8 +900,10 @@
   function switchTab(t){
     document.getElementById('paneGrid').hidden=(t!=='grid');
     document.getElementById('paneCmp').hidden=(t!=='cmp');
+    document.getElementById('paneOrd').hidden=(t!=='ord');
     Array.prototype.forEach.call(document.querySelectorAll('.rc-tab'),function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t);});
     if(t==='cmp')renderCmp();
+    if(t==='ord')renderOrd();
   }
   Array.prototype.forEach.call(document.querySelectorAll('.rc-tab'),function(b){
     b.addEventListener('click',function(){switchTab(b.getAttribute('data-tab'));});
@@ -833,8 +913,10 @@
 
   // ── Init ──
   grid=[blankRow(),blankRow(),blankRow()];
-  setupCmpGrid({tag:'cmpA', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyA', footId:'cmpFootA', sumId:'cmpSumA', addId:'cmpAddA', clearId:'cmpClearA'});
-  setupCmpGrid({tag:'cmpB', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyB', footId:'cmpFootB', sumId:'cmpSumB', addId:'cmpAddB', clearId:'cmpClearB'});
+  setupCmpGrid({tag:'cmpA', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyA', footId:'cmpFootA', sumId:'cmpSumA', addId:'cmpAddA', clearId:'cmpClearA', onSum:renderVs});
+  setupCmpGrid({tag:'cmpB', arr:[blankCmp(),blankCmp()], bodyId:'cmpBodyB', footId:'cmpFootB', sumId:'cmpSumB', addId:'cmpAddB', clearId:'cmpClearB', onSum:renderVs});
+  setupCmpGrid({tag:'ordOld', arr:[blankCmp()], bodyId:'ordBodyOld', footId:'ordFootOld', sumId:'ordSumOld', addId:'ordAddOld', clearId:'ordClearOld', onSum:renderOrderVs});
+  setupCmpGrid({tag:'ordNew', arr:[blankCmp()], bodyId:'ordBodyNew', footId:'ordFootNew', sumId:'ordSumNew', addId:'ordAddNew', clearId:'ordClearNew', onSum:renderOrderVs});
   renderGrid();
 
   // Load a saved Rate List result for editing when opened via /realise-calculator/?load=<id>
