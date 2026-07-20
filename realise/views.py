@@ -135,20 +135,23 @@ def customer_aging_detail(request):
         aging_date = today
     code = (request.GET.get('code') or '').strip()
     name = (request.GET.get('name') or '').strip() or code
-    # Company: 'oil' (default) uses SAP_SCHEMA; 'mart' swaps to MART_SCHEMA and prefixes stored
-    # remarks with 'MART:' so they never collide with oil's for the same CardCode/TransId.
-    is_mart = (request.GET.get('company') or '').strip().lower() == 'mart'
-    schema = services.MART_SCHEMA if is_mart else None
-    rk_prefix = 'MART:' if is_mart else ''
+    # Company: 'oil' (default) uses SAP_SCHEMA; 'mart'/'bev' swap to their company schema and
+    # prefix stored remarks ('MART:' / 'BEV:') so they never collide with oil's (or each other's)
+    # for the same CardCode/TransId. Only oil runs the PREMIUM/COMMODITY item-type classify.
+    company = (request.GET.get('company') or '').strip().lower()
+    if company not in ('mart', 'bev'):
+        company = 'oil'
+    schema = {'mart': services.MART_SCHEMA, 'bev': services.BEVERAGES_SCHEMA}.get(company)
+    rk_prefix = {'mart': 'MART:', 'bev': 'BEV:'}.get(company, '')
     return render(request, 'realise/customer_aging_detail.html', {
         'sidebar_active': 'customer_aging',
         'detail_payload': {'code': code, 'name': name, 'aging_date': aging_date.isoformat(),
-                           'company': 'mart' if is_mart else 'oil',
+                           'company': company,
                            'categories': services.AGING_REMARK_CATEGORIES,
                            'grace_days': services.get_aging_grace_days(code) if code else 0,
                            'rows': services.get_customer_aging_detail(
                                code, aging_date, schema=schema, row_key_prefix=rk_prefix,
-                               classify=not is_mart) if code else []},
+                               classify=(company == 'oil')) if code else []},
         'aging_date': aging_date.isoformat(),
         'aging_today': today.isoformat(),
     })

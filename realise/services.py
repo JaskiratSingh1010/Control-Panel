@@ -4594,7 +4594,8 @@ def _aging_date_literal(aging_date):
     return "TO_DATE('%s')" % aging_date.strftime('%Y-%m-%d')
 
 
-def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_gstin=False):
+def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_gstin=False,
+                         group_by='format'):
     """Customer receivables aging as of aging_date via SAP B1's reconciliation logic
     (JDT1 / ITR1 / OITR), translated from B1's own system query to HANA SQL. Returns one
     dict per customer in the same shape as the workbook loader, with Balance Due (ties to
@@ -4620,6 +4621,16 @@ def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_g
     gst_sel = (f''',
            (SELECT MAX(B2."GSTRegnNo") FROM "{S}"."CRD1" B2 WHERE B2."CardCode"=C."CardCode"
               AND TRIM(COALESCE(B2."GSTRegnNo",''))<>'') AS "gstin"''' if with_gstin else '')
+
+    # Grouping dimension: 'format' (OCRD.U_Main_Group, default — oil/mart) or 'salesperson'
+    # (OCRD.SlpCode → OSLP.SlpName). Beverages ages by the customer's sales person so the tab
+    # keeps its Sales Person → Customer pivot.
+    if group_by == 'salesperson':
+        sp_join = f'LEFT JOIN "{S}"."OSLP" SLP ON SLP."SlpCode"=C."SlpCode"'
+        default_fmt = 'SLP."SlpName"'
+    else:
+        sp_join = ''
+        default_fmt = 'C."U_Main_Group"'
 
     def _sql(fmt_sel, fmt_grp):
         return f'''WITH aged AS (
@@ -4661,15 +4672,16 @@ def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_g
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END) AS "b91_120",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag})>120 THEN a.bal ELSE 0 END) AS "b121"{gst_sel}
     FROM aged a JOIN "{S}"."OCRD" C ON C."CardCode"=a.card
+      {sp_join}
     GROUP BY C."CardCode", C."CardName"{fmt_grp}
     HAVING SUM(a.bal)<>0
     ORDER BY SUM(a.bal) DESC'''
 
     def _run():
         try:
-            return sap_connector.execute_query(_sql('C."U_Main_Group"', ', C."U_Main_Group"'))
+            return sap_connector.execute_query(_sql(default_fmt, ', ' + default_fmt))
         except Exception:
-            return sap_connector.execute_query(_sql("''", ''))   # schema without the U_Main_Group UDF
+            return sap_connector.execute_query(_sql("''", ''))   # schema without the U_Main_Group/OSLP dim
 
     try:
         raw = _run()
@@ -4977,8 +4989,39 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
 
 
 def get_customer_aging_beverages(aging_date=None):
-    """Open A/R invoice aging for Jivo Beverages (JIVO_BEVERAGES_HANADB)."""
-    return _customer_aging_ar(aging_date, BEVERAGES_SCHEMA, 'bev', 'BEVDOC:', 'BEVSP:', _bev_aging_cache)
+    """Customer-receivables aging for Jivo Beverages (JIVO_BEVERAGES_HANADB) via SAP B1's
+    reconciliation engine — the SAME engine as oil/mart (nets on-account payments, ties to
+    OCRD.Balance), but grouped by the customer's SALES PERSON (OSLP) instead of format, so the
+    tab keeps its Sales Person → Customer pivot. Balance Due drills to the per-document open
+    items via the shared aging-detail page (company='bev'). Cached per aging date."""
+    if aging_date is None:
+        aging_date = date.today()
+    key = aging_date.isoformat()
+    now = time.time()
+    hit = _bev_aging_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    try:
+        rows = _load_aging_rows_sap(aging_date, schema=BEVERAGES_SCHEMA,
+                                    apply_oil_filters=False, group_by='salesperson')
+        # Same internal / non-receivable exclusions the old open-invoice Beverages view applied
+        # (inter-company CUSTA000001-3, BLESSING ADVERTISING, CASH SALE DL) so the totals match.
+        _excl_codes = {'CUSTA000001', 'CUSTA000002', 'CUSTA000003'}
+        _excl_names = {'BLESSING ADVERTISING PVT LTD', 'CASH SALE DL'}
+        rows = [r for r in rows
+                if r.get('code') not in _excl_codes
+                and str(r.get('name') or '').strip().upper() not in _excl_names]
+        for r in rows:                                    # canonical sales-person label as the group
+            r['format'] = _clean_salesperson(r.get('format')) or '—'
+        payload = _build_aging_payload(rows)
+    except Exception as e:
+        logger.exception('[aging-bev] failed to build beverages reconciliation aging')
+        return {'company': 'bev', 'buckets': AGING_BUCKETS, 'groups': [], 'total': _empty_buckets(),
+                'kpis': {}, 'aging_date': key, 'error': str(e)}
+    payload['company'] = 'bev'
+    payload['aging_date'] = key
+    _bev_aging_cache[key] = (now + _AGING_TTL, payload)
+    return payload
 
 
 def get_customer_aging_oil_ar(aging_date=None):

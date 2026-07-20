@@ -466,7 +466,8 @@
            docPrefix:'BEVDOC:',  spPrefix:'BEVSP:',  pill:'Beverages A/R', name:'Beverages'}
   };
   var MART_URL = "{% url 'realise:api_customer_aging_mart' %}";
-  function isAR(){ return company==='bev'; }         // beverages raw-invoice view only
+  function isAR(){ return false; }                   // legacy A/R raw-invoice mode — removed (bev is now B1 recon)
+  function spGrouped(){ return company==='bev'; }    // beverages groups by Sales Person (label switch)
   function arCfg(){ return CO_CFG[company] || CO_CFG.bev; }
   var RAW_BEV = null, RAW_BEV_ASOF = null, RAW_BEV_CO = null, BEV_ERR = null;
   var MART_DATA = null, MART_ASOF = null;            // cached Mart B1 payload (oil-shaped)
@@ -513,22 +514,22 @@
     DATA=OIL_DATA; GROUPS=DATA.groups||[]; TOTAL=DATA.total||{}; ASOF=DATA.aging_date||'';
   }
 
+  // Beverages — server-computed B1 reconciliation aging (oil-shaped {groups,total}, grouped by
+  // Sales Person, ties to OCRD.Balance). Rendered exactly like Oil/Mart; cached per as-of date.
+  var BEV_DATA = null, BEV_ASOF = null;
+  function applyBev(p, asof){
+    BEV_DATA={company:'bev', groups:p.groups||[], total:p.total||{}, buckets:BUCKETS, error:p.error||null, aging_date:p.aging_date||asof};
+    BEV_ASOF=asof;
+    DATA=BEV_DATA; GROUPS=DATA.groups; TOTAL=DATA.total; ASOF=DATA.aging_date;
+  }
   function loadBev(){
-    var co=company, asof=document.getElementById('agAsOf').value||'';
-    // Reuse the buffer only when it holds THIS company's rows for THIS date (bev & mart share it).
-    if(RAW_BEV && RAW_BEV_ASOF===asof && RAW_BEV_CO===co){ buildBev(); rerenderAll(); refreshRawIfOpen(); return; }
-    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading '+esc(arCfg().name.toLowerCase())+'…</td></tr>';
-    fetch(arCfg().url+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+    var asof=document.getElementById('agAsOf').value||'';
+    if(BEV_DATA && BEV_ASOF===asof){ DATA=BEV_DATA; GROUPS=DATA.groups||[]; TOTAL=DATA.total||{}; ASOF=DATA.aging_date||asof; rerenderAll(); return; }
+    document.getElementById('agBody').innerHTML='<tr><td class="ag-empty" colspan="'+NCOL+'">Loading beverages…</td></tr>';
+    fetch(CO_CFG.bev.url+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){
-        if(company!==co) return;
-        RAW_BEV=p.rows||[]; RAW_BEV_ASOF=asof; RAW_BEV_CO=co; BEV_ERR=p.error||null; ASOF=p.aging_date||asof;
-        var ds={}; RAW_BEV.forEach(function(r){ds[r.days]=1;});
-        BEV_DAYS=Object.keys(ds).map(Number).sort(function(a,b){return a-b;});
-        selectedDays=null;
-        buildBev(); rerenderAll(); refreshRawIfOpen();
-      })
-      .catch(function(){ if(company===co){ BEV_ERR='load failed'; RAW_BEV=[]; RAW_BEV_CO=co; BEV_DAYS=[]; selectedDays=null; buildBev(); rerenderAll(); } });
+      .then(function(p){ if(company!=='bev') return; applyBev(p, asof); rerenderAll(); })
+      .catch(function(){ if(company==='bev'){ applyBev({error:'load failed'}, asof); rerenderAll(); } });
   }
 
   // Oil RAW DATA: fetch the open-invoice list into the shared RAW_BEV buffer on demand, WITHOUT
@@ -572,21 +573,22 @@
   function renderPivotOnly(){ buildBev(); renderBody(); applyView(); }
 
   function updateCompanyUI(){
-    var ar = isAR();                                  // beverages raw-invoice view
-    document.getElementById('agSearch').placeholder = ar ? 'Search customer or doc no…' : 'Search customer or format…';
-    document.getElementById('agDays').style.display = ar ? '' : 'none';
-    // RAW DATA workspace: Beverages (its main view) + Oil (fetched on demand, pivot stays B1).
-    document.getElementById('agRawData').style.display = (company==='bev'||company==='oil') ? '' : 'none';
+    var sp = spGrouped();                             // beverages: grouped by Sales Person
+    document.getElementById('agSearch').placeholder = sp ? 'Search customer or sales person…' : 'Search customer or format…';
+    document.getElementById('agDays').style.display = 'none';   // per-day multi-select was the old bev raw view only
+    // RAW DATA workspace: Oil only now (fetched on demand; oil's pivot stays B1). Beverages moved
+    // to the B1 reconciliation pivot + document detail drill, so it no longer has a raw workspace.
+    document.getElementById('agRawData').style.display = company==='oil' ? '' : 'none';
     // B2B/B2C segment split + filter is Mart-only (only Mart rows carry a GSTIN-based segment).
     document.getElementById('agSeg').style.display = company==='mart' ? '' : 'none';
     // Remarks filter + whole-book detail export are oil-only (built from oil's stored remarks / schema).
     document.getElementById('agRem').style.display  = company==='oil' ? '' : 'none';
     document.getElementById('agExportDetail').style.display = company==='oil' ? '' : 'none';
     document.getElementById('agFmtLabel').textContent =
-      selectedFormats.length ? selectedFormats.length+(ar?' sales person':' format')+(selectedFormats.length>1?'s':'')
-                             : (ar?'All sales persons':'All formats');
+      selectedFormats.length ? selectedFormats.length+(sp?' sales person':' format')+(selectedFormats.length>1?'s':'')
+                             : (sp?'All sales persons':'All formats');
     var pill=document.querySelector('.ag-srcpill');
-    var pillTxt = company==='oil' ? 'SAP B1' : (company==='mart' ? 'Mart · SAP B1' : arCfg().pill);
+    var pillTxt = company==='oil' ? 'SAP B1' : (company==='mart' ? 'Mart · SAP B1' : 'Beverages · SAP B1');
     if(pill) pill.innerHTML='<span class="material-icons">bolt</span>Live · '+pillTxt+' · as of '+esc(ASOF);
   }
 
@@ -683,7 +685,7 @@
 
   // ── Header + legend ──
   function renderHead(){
-    var th = '<th class="lbl">'+(isAR()?'Sales Person / Customer':'Format / Customer')+'</th><th>Original</th><th>Balance Due</th>';
+    var th = '<th class="lbl">'+(spGrouped()?'Sales Person / Customer':'Format / Customer')+'</th><th>Original</th><th>Balance Due</th>';
     BUCKETS.forEach(function(b,i){ th += '<th class="b'+i+'"><span class="bk">'+esc(b.label)+'</span></th>'; });
     document.getElementById('agHead').innerHTML = th;
 
@@ -716,7 +718,7 @@
   function custRow(c, g, gi, seg){
     var bdCell = isAR()
       ? '<td class="num"><div class="cellpad bal"><a class="ag-bd-link ag-rawlink" title="Open raw invoices" data-scope="cust" data-code="'+esc(c.code)+'" data-name="'+esc(c.name)+'">'+money(c.balance_due)+'</a></div></td>'
-      : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+(company==='mart'?'&company=mart':'')+'">'+money(c.balance_due)+'</a></div></td>';
+      : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+(company==='mart'?'&company=mart':(company==='bev'?'&company=bev':''))+'">'+money(c.balance_due)+'</a></div></td>';
     return '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'"'+(seg?' data-seg="'+seg+'"':'')+'>'+
       '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
       '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
@@ -1017,7 +1019,7 @@
     if(!model.groups.length){ alert('No rows match the current filters.'); return; }
     function cell(v){ v=String(v==null?'':v); return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
     function rnd(n){ return Math.round(Number(n)||0); }
-    var head = [(isAR()?'Sales Person':'Format'),'Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
+    var head = [(spGrouped()?'Sales Person':'Format'),'Customer','Code','Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}));
     var lines = [head.map(cell).join(',')];
     model.groups.forEach(function(g){
       lines.push([g.format,'(Format total)','',rnd(g.sums.original),rnd(g.sums.balance_due)]
@@ -1064,7 +1066,7 @@
     function hdr(v,left){return {value:v, fill:'0f172a', color:'ffffff', bold:true, align:left?'left':'right'};}
     function tot(v,isNum){var c={value:v, fill:'1e293b', color:'ffffff', bold:true, align:isNum?'right':'left'}; if(isNum)c.numfmt=NUMW; return c;}
 
-    var out=[ [(isAR()?'Sales Person / Customer':'Format / Customer'),'Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
+    var out=[ [(spGrouped()?'Sales Person / Customer':'Format / Customer'),'Original','Balance Due'].concat(BUCKETS.map(function(b){return b.label;}))
                 .map(function(l,i){return hdr(l, i===0);}) ];
     model.groups.forEach(function(g){
       var acc=hx(fmtColor(g.gi));
@@ -1451,7 +1453,7 @@
     // Aging date picker → oil reloads the page (server recomputes); beverages refetches in place.
     var asof = document.getElementById('agAsOf');
     if(asof) asof.addEventListener('change',function(){
-      if(isAR()){ RAW_BEV=null; loadBev(); return; }
+      if(company==='bev'){ BEV_DATA=null; loadBev(); return; }
       if(company==='mart'){ MART_DATA=null; loadMart(); return; }
       var u = new URL(window.location.href);
       if(this.value) u.searchParams.set('as_of', this.value); else u.searchParams.delete('as_of');

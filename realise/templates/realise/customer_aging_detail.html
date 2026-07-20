@@ -160,7 +160,7 @@
   var COMPANY = DATA.company || 'oil';
   // Bulk Upload + Clear hit the oil schema / clear all remarks for this CardCode — not safe for
   // Mart (its remarks are 'MART:'-prefixed and could share a CardCode with oil). Hide them there.
-  if(COMPANY==='mart'){
+  if(COMPANY==='mart'||COMPANY==='bev'){
     ['adUpload','adClear'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
   }
   // Fixed Category vocabulary (server is the source of truth; see AGING_REMARK_CATEGORIES).
