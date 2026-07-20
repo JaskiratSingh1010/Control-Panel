@@ -1459,6 +1459,30 @@ function assignedPerson(group,state){
   state=String(state||'').trim().toUpperCase();
   return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
 }
+// A channel-total target (REST/ECOM) may carry no sales_person. If every other
+// target node stored under that channel names the same person, attribute the
+// channel total to them too (so it lands on that person, not "Other").
+function channelDefaultPerson(channel){
+  var ch=String(channel||'').toUpperCase(), owner=GROUP_OWNERS[ch];
+  if(owner)return String(owner).toUpperCase();
+  var seen=null, ambiguous=false;
+  function consider(p){
+    p=String(p||'').trim().toUpperCase();
+    if(!p)return;
+    if(seen===null)seen=p; else if(seen!==p)ambiguous=true;
+  }
+  try{                                        // persons named on this channel's own target nodes
+    for(var i=0;i<detailTargetNodes.length;i++){
+      var n=detailTargetNodes[i];
+      if(String(n.main_group||'').toUpperCase()===ch)consider(n.sales_person);
+    }
+  }catch(e){}
+  try{                                        // per-state territory owners (a national channel = one person)
+    var pre=ch+'|';
+    for(var k in TERRITORY){ if(k.indexOf(pre)===0)consider(TERRITORY[k]); }
+  }catch(e){}
+  return ambiguous?null:seen;                 // ambiguous (many people) → let it fall to "Other"
+}
 var orderInHandCache=null;
 async function fetchOrderInHand(){
   if(orderInHandCache)return orderInHandCache;
@@ -3717,7 +3741,7 @@ function themedChannelCardHtml(item){
   // specific segment (Premium/Commodity) is selected, show every row even at zero so
   // gaps in that segment are visible.
   var showAll=!!sc2Seg();
-  var data=(item.rowsData||[]).filter(function(c){return showAll||(c.done||0)>0||(c.oih||0)>0;});
+  var data=(item.rowsData||[]).filter(function(c){return showAll||(c.done||0)>0||(c.oih||0)>0||(c.target||0)>0;});
   var cardTitle=item.title||themedChannelTitle(item.name)||item.name;
   var firstColLabel=item.firstColLabel||'State/Area';
   var rows='';
@@ -3852,6 +3876,9 @@ var CD_NO_CUSTOMER='—';
 // Targets carry no product/item/customer breakdown, so they bucket under '—' for
 // those finer dims (same convention as Customer). OIH rows do have product/item.
 var CD_NONE='—';
+// A channel-total target (REST/ECOM: main_group=<channel>, state='') has no state to
+// bucket under. Show it as this explicit row so it's visible AND counted in TOTAL.
+var CD_WHOLE='WHOLE CHANNEL';
 // Slide-2 channel rows filtered by the modal-local Premium/Commodity selector.
 function modalChannelRows(){
   var rows=[];
@@ -3874,9 +3901,12 @@ function buildChannelDetailLeaves(){
     var c=cell(g,st,assignedPerson(g,r.state)||'—',cust,prod,item,String(r.sku||'').trim().toUpperCase()||CD_NONE); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
   }
   for(var t=0;t<detailTargetNodes.length;t++){
-    var n=detailTargetNodes[t],g2=String(n.main_group||'').toUpperCase();if(members.indexOf(g2)===-1)continue;
-    var st2=detailStateLabel(channel,n.state);if(st2===null)continue;
-    var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(g2,n.state)||'—';
+    var n=detailTargetNodes[t],g2=String(n.main_group||'').toUpperCase();
+    var isChanLevel=(g2===String(channel||'').toUpperCase());   // REST/ECOM channel-total targets carry main_group=<channel>
+    if(!isChanLevel && members.indexOf(g2)===-1)continue;
+    var st2=(isChanLevel && !String(n.state||'').trim())?CD_WHOLE:detailStateLabel(channel,n.state);
+    if(st2===null)continue;
+    var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(g2,n.state)||channelDefaultPerson(channel)||'—';
     var c2=cell(g2,st2,p2,CD_NO_CUSTOMER,CD_NONE,CD_NONE,CD_NONE); c2.target+=Number(n.target_ltrs)||0; c2.targetRealise=Number(n.target_realise)||c2.targetRealise;
   }
   for(var o=0;o<detailOihRows.length;o++){
@@ -4807,8 +4837,9 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
   }
   for(var t=0;t<targetNodes.length;t++){
     var n=targetNodes[t],ng=String(n.main_group||'').toUpperCase();
-    if(members.indexOf(ng)===-1)continue;
-    var k2=isREST?ng:detailStateLabel(channel,n.state);
+    var isChanLvl=(ng===String(channel||'').toUpperCase());   // channel-total target: main_group=<channel>
+    if(!isChanLvl && members.indexOf(ng)===-1)continue;
+    var k2=isREST?ng:((isChanLvl && !String(n.state||'').trim())?CD_WHOLE:detailStateLabel(channel,n.state));
     if(k2===null)continue;
     var c2=cell(k2),tl=Number(n.target_ltrs)||0,tr=Number(n.target_realise)||0;
     c2.target+=tl;
