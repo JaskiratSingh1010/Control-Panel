@@ -150,6 +150,39 @@
       </table>
     </div>
   </div>
+
+  <!-- Invoice drill: the invoices + item names behind a clicked value cell -->
+  <style>
+    .cs-vcell{cursor:pointer}
+    .cs-vcell:hover{background:#eef2ff;outline:1px solid #c7d2fe}
+    .csd-overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(15,23,42,.45);align-items:flex-start;justify-content:center;padding:40px 16px}
+    .csd-overlay.open{display:flex}
+    .csd-modal{background:#fff;border-radius:14px;max-width:900px;width:100%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(2,6,23,.35);overflow:hidden}
+    .csd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #eef2f7}
+    .csd-title{font-weight:800;font-size:15px;color:#1e293b}
+    .csd-sub{font-size:12px;color:#64748b;margin-top:3px}
+    .csd-x{border:0;background:#f1f5f9;color:#475569;width:30px;height:30px;border-radius:8px;font-size:20px;cursor:pointer;line-height:1}
+    .csd-body{overflow:auto;padding:0}
+    .csd-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+    .csd-tbl th{position:sticky;top:0;background:#f8fafc;color:#475569;text-align:left;font-weight:700;padding:9px 14px;border-bottom:1px solid #e2e8f0;white-space:nowrap;z-index:1}
+    .csd-tbl td{padding:8px 14px;border-bottom:1px solid #f1f5f9;color:#334155}
+    .csd-tbl td.num,.csd-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+    .csd-tbl tr.csd-docrow td{background:#fbfcfe;font-weight:700;color:#3730a3;border-top:1px solid #e2e8f0}
+    .csd-tbl tr.csd-tot td{font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1}
+    .csd-neg{color:#dc2626}
+    .csd-foot{padding:10px 20px;border-top:1px solid #eef2f7;font-size:11px;color:#94a3b8}
+    .csd-empty{padding:34px;text-align:center;color:#94a3b8}
+  </style>
+  <div id="csDrill" class="csd-overlay">
+    <div class="csd-modal">
+      <div class="csd-head">
+        <div><div class="csd-title" id="csdTitle">Invoices</div><div class="csd-sub" id="csdSub"></div></div>
+        <button type="button" class="csd-x" id="csdClose">&times;</button>
+      </div>
+      <div class="csd-body" id="csdBody"></div>
+      <div class="csd-foot">Reads invoice base tables (OINV/INV1 + returns/credit memos) — net litres may differ slightly from the cell, which comes from the sales-analysis proc.</div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -180,6 +213,8 @@
 
   var rows=[], loaded=false, err=null, expanded={};
   var order=['group'], chosen=['group'];                 // drill order
+  var csNodeByPath={};                                   // path -> {dim:value} filters (for the invoice drill)
+  var csMonthsArr=[];                                    // current rendered months (for grand-total drill range)
   var typeF='', compareMode='liters', custF='', itemF='', topN=0;
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
 
@@ -209,7 +244,7 @@
     return {rows:out, months:Object.keys(months).sort().map(function(k){return months[k];})};
   }
 
-  function buildTree(subset,dims,depth,prefix){
+  function buildTree(subset,dims,depth,prefix,pfilters){
     if(depth>=dims.length)return [];
     var dim=dims[depth], map={}, ord=[];
     for(var i=0;i<subset.length;i++){var r=subset[i],k=rowVal(r,dim);
@@ -218,7 +253,9 @@
       n.byL[r.ym]=(n.byL[r.ym]||0)+L; n.byR[r.ym]=(n.byR[r.ym]||0)+R; n.totL+=L; n.totR+=R; n._rows.push(r);
     }
     return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
-      n.kids=buildTree(n._rows,dims,depth+1,n.path); n.leaf=!n.kids.length; delete n._rows; return n;
+      n.filters=Object.assign({},pfilters||{}); n.filters[dim]=k;   // accumulate dim→value down the path
+      csNodeByPath[n.path]=n.filters;
+      n.kids=buildTree(n._rows,dims,depth+1,n.path,n.filters); n.leaf=!n.kids.length; delete n._rows; return n;
     }).sort(function(a,b){return b.totL-a.totL||String(a.label).localeCompare(String(b.label));});
   }
 
@@ -236,7 +273,8 @@
   // items by grand total (Top N Items input; blank/0 = all). buildTree already sorts top-level nodes
   // by total litres desc, so slicing yields the biggest N.
   function pivotTree(subset,dims){
-    var t=buildTree(subset,dims,0,'');
+    csNodeByPath={};                       // rebuilt fresh each render so stale paths never drill
+    var t=buildTree(subset,dims,0,'',{});
     if(dims[0]==='item'&&topN>0)t=t.slice(0,topN);
     return t;
   }
@@ -248,7 +286,11 @@
       var tw=hasKids?'<span class="cs-tw'+(open?' open':'')+'" data-cspath="'+esc(n.path)+'">&#9654;</span>':'<span class="cs-tw-empty"></span>';
       var tag='<span class="cs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
       var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-cstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
-      var cells=months.map(function(mo){return '<td>'+cell(n.byL[mo.ym]||0,n.byR[mo.ym]||0)+'</td>';}).join('');
+      var cells=months.map(function(mo){
+        var L=n.byL[mo.ym]||0, R=n.byR[mo.ym]||0;
+        var clk=(L||R)?' class="cs-vcell" data-cspath="'+esc(n.path)+'" data-csym="'+esc(mo.ym)+'" data-cslabel="'+esc(mo.label)+'" title="Click to see the invoices behind this value"':'';
+        return '<td'+clk+'>'+cell(L,R)+'</td>';
+      }).join('');
       html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR)+'</td><td class="cs-avg">'+cell(n.totL/nM,n.totR/nM)+'</td></tr>';
       if(hasKids&&open)html+=treeRows(n.kids,months,depth+1);
     });
@@ -350,6 +392,58 @@
     html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths)+'</td></tr>';
     body.innerHTML=html;
   }
+
+  // ── Invoice drill: the invoices + item names behind a clicked value cell ─────
+  function ymRange(ym){
+    var p=String(ym||'').split('-'), y=+p[0], m=+p[1];
+    if(!y||!m)return null;
+    var mm=String(m).padStart(2,'0'), last=new Date(y,m,0).getDate();
+    return {start:y+'-'+mm+'-01', end:y+'-'+mm+'-'+String(last).padStart(2,'0')};
+  }
+  function drillTitle(filters){
+    var parts=order.map(function(k){return filters[k];}).filter(Boolean);
+    if(!parts.length)for(var k in filters)parts.push(filters[k]);
+    return parts.join('  ›  ');
+  }
+  function csdMoney0(n){ n=Number(n)||0; var s=fN(Math.abs(Math.round(n))); return n<0?'<span class="csd-neg">('+s+')</span>':s; }
+  function openDrill(path,ym,mlabel){
+    var filters=csNodeByPath[path]; if(!filters)return;
+    var rng=ymRange(ym); if(!rng)return;
+    document.getElementById('csdTitle').textContent=drillTitle(filters);
+    document.getElementById('csdSub').textContent=mlabel+' · loading invoices…';
+    document.getElementById('csdBody').innerHTML='<div class="csd-empty">Loading…</div>';
+    document.getElementById('csDrill').classList.add('open');
+    var payload={start_date:rng.start,end_date:rng.end,seg:typeF||''};
+    for(var k in filters)payload[k]=filters[k];
+    fetch('/realise/api/compare-docs/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ renderDrill(p,mlabel); })
+      .catch(function(){ document.getElementById('csdBody').innerHTML='<div class="csd-empty">Could not load invoices.</div>'; });
+  }
+  function renderDrill(p,mlabel){
+    var sub=document.getElementById('csdSub'), bodyEl=document.getElementById('csdBody');
+    if(!p||p.status!=='ok'){ sub.textContent=mlabel; bodyEl.innerHTML='<div class="csd-empty">'+esc((p&&p.error)||'No data.')+'</div>'; return; }
+    var docs=p.data||[];
+    if(!docs.length){ sub.textContent=mlabel+' · 0 invoices'; bodyEl.innerHTML='<div class="csd-empty">No invoices found for this selection.</div>'; return; }
+    var totL=0;
+    var html='<table class="csd-tbl"><thead><tr><th>Doc No</th><th>Date</th><th>Party</th><th>Item Name</th><th class="num">Litres</th></tr></thead><tbody>';
+    docs.forEach(function(d){
+      html+='<tr class="csd-docrow"><td>'+esc(d.doc_num||'—')+'</td><td>'+esc(d.doc_date||'')+'</td><td>'+esc(d.party||'')+'</td><td></td><td class="num">'+csdMoney0(d.litres)+'</td></tr>';
+      (d.items||[]).forEach(function(it){ html+='<tr><td></td><td></td><td></td><td>'+esc(it.name||'')+'</td><td class="num">'+csdMoney0(it.litres)+'</td></tr>'; });
+      totL+=Number(d.litres)||0;
+    });
+    html+='<tr class="csd-tot"><td colspan="4">TOTAL · '+docs.length+' invoice(s)</td><td class="num">'+csdMoney0(totL)+'</td></tr></tbody></table>';
+    bodyEl.innerHTML=html;
+    sub.textContent=mlabel+' · '+docs.length+' invoice(s) · '+fN(Math.round(totL))+' L';
+  }
+  function closeDrill(){ document.getElementById('csDrill').classList.remove('open'); }
+  document.getElementById('csBody').addEventListener('click',function(e){
+    var td=e.target.closest('.cs-vcell'); if(!td)return;
+    openDrill(td.getAttribute('data-cspath'),td.getAttribute('data-csym'),td.getAttribute('data-cslabel'));
+  });
+  document.getElementById('csdClose').addEventListener('click',closeDrill);
+  document.getElementById('csDrill').addEventListener('click',function(e){ if(e.target===this)closeDrill(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')closeDrill(); });
 
   function rebuildMgList(){
     var seen={}; mgAllGroups=[];

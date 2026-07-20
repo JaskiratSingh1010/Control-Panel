@@ -73,6 +73,7 @@ urlpatterns = [
     path('api/target-nodes/',        views.api_target_nodes,       name='api_target_nodes'),
     path('api/flex-targets/',        views.api_flex_targets,       name='api_flex_targets'),
     path('api/channel-detail-docs/', views.api_channel_detail_docs, name='api_channel_detail_docs'),
+    path('api/compare-docs/',        views.api_compare_docs,        name='api_compare_docs'),
     path('api/commodity-oih-rows/',  views.api_commodity_oih_rows,  name='api_commodity_oih_rows'),
     path('api/oih-breakdown/',       views.api_oih_breakdown,       name='api_oih_breakdown'),
     path('api/oih-breakdown-beverages/', views.api_oih_breakdown_beverages, name='api_oih_breakdown_beverages'),

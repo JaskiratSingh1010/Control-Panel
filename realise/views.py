@@ -1858,6 +1858,31 @@ def api_channel_detail_docs(request):
                          'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})
 
 
+@any_permission_flag('can_realise', 'can_compare_sales', json_response=True)
+@require_http_methods(['POST'])
+def api_compare_docs(request):
+    """Invoices (Doc No / date / party / litres) with per-item breakdown behind a Compare-Sales
+    value cell. Reuses the channel-detail Done-documents source (OINV/INV1 + ORIN/RIN1), but with
+    no channel restriction (channel='') so the clicked pivot node's own dimension filters
+    (group / state / person / customer / product / item) + the cell's month decide the rows."""
+    body = _parse_body(request)
+    start = body.get('start_date', '') or ''
+    end = body.get('end_date', '') or ''
+    seg = str(body.get('seg', '') or '').strip().upper()
+    filters = {}
+    for key in ('group', 'state', 'person', 'customer', 'product', 'item'):
+        val = body.get(key)
+        if val not in (None, ''):
+            filters[key] = str(val).strip().upper()
+    try:
+        data = services.get_channel_done_documents(start, end, '', seg, filters)
+    except Exception as e:
+        logger.error('[COMPARE-DOCS] failed: %s', e)
+        return JsonResponse({'status': 'error', 'error': str(e), 'data': []})
+    return JsonResponse({'status': 'ok', 'count': len(data),
+                         'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})
+
+
 @group_required(*REALISE_GROUPS, json_response=True)
 @require_http_methods(['GET'])
 def api_commodity_oih_rows(request):
