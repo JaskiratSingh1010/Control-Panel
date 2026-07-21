@@ -349,6 +349,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="ordAddOld">+ Add row</button>
           <button class="rc-gclear" id="ordClearOld">Clear all</button>
+          <button class="rc-gupload" id="ordUploadOld"><span class="material-icons" style="font-size:15px">upload</span>Upload to Old</button>
         </div>
         <div class="rc-sum" id="ordSumOld"></div>
       </div>
@@ -372,6 +373,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="ordAddNew">+ Add row</button>
           <button class="rc-gclear" id="ordClearNew">Clear all</button>
+          <button class="rc-gupload" id="ordUploadNew"><span class="material-icons" style="font-size:15px">upload</span>Upload to New</button>
         </div>
         <div class="rc-sum" id="ordSumNew"></div>
       </div>
@@ -379,6 +381,11 @@
       <!-- Old vs New -->
       <div class="rc-cmp-vs-h">Old Order vs New Order</div>
       <div class="rc-sum" id="ordVs"></div>
+      <div class="rc-grid-actions" style="margin-top:16px">
+        <button class="rc-gsave" id="ordSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
+        <button class="rc-gexport" id="ordExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel (Old + New)</button>
+        <span class="rc-ghint">Save to the Rate List (by state) or export both orders with live formulas.</span>
+      </div>
     </div>
   </div>
 
@@ -813,6 +820,23 @@
   Array.prototype.forEach.call(document.querySelectorAll('#expChoice .rc-choice-b'),function(btn){
     btn.addEventListener('click',function(){expChoice.hidden=true; doCompareExport(btn.getAttribute('data-exp'));});
   });
+  // Order tab: export Old + New Order together (one sheet, live formulas + KPI summary).
+  function doOrderExport(){
+    var O=collectRows(cmpGrids['ordOld'].arr), N=collectRows(cmpGrids['ordNew'].arr);
+    if(!O.length&&!N.length){window.alert('Both orders are empty.');return;}
+    var so=statsOf(cmpGrids['ordOld'].arr), sn=statsOf(cmpGrids['ordNew'].arr);
+    var d=so.blend-sn.blend, rd=so.revSum-sn.revSum, gN=d*sn.totSell;
+    var summary=kpiOf('Old Order',so).concat(kpiOf('New Order',sn)).concat([
+      {label:'Old − New · Realise (Rs/L)', value:Math.round(d*100)/100},
+      {label:'Old − New · Revenue (Rs)', value:Math.round(rd)},
+      {label:'(Old−New) × New Vol (Rs)', value:Math.round(gN)}
+    ]);
+    exportReq('Realise_Order_Compare',{layout:'single',plans:[
+      {name:'OLD ORDER',items:O,color:'EEF2FF',hcolor:'4F46E5'},
+      {name:'NEW ORDER',items:N,color:'ECFDF5',hcolor:'0D9488'}
+    ],summary:summary});
+  }
+  document.getElementById('ordExport').addEventListener('click',doOrderExport);
 
   /* ── Excel upload (fill rows by item code) ── */
   var _upTarget=null;
@@ -822,7 +846,7 @@
   function triggerUpload(target){ _upTarget=target; _upInput.value=''; _upInput.click(); }
   function uploadExcel(file,target){
     var fd=new FormData(); fd.append('file',file);
-    var url=(target==='order')?'/realise/api/realise-calculator/order-upload/':'/realise/api/realise-calculator/upload/';
+    var url=(target==='order'||target==='ordOld'||target==='ordNew')?'/realise/api/realise-calculator/order-upload/':'/realise/api/realise-calculator/upload/';
     fetch(url,{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd})
       .then(function(r){ return r.json().then(function(j){return j;}).catch(function(){return {status:'error',error:'Server error (HTTP '+r.status+')'};}); })
       .then(function(p){
@@ -839,6 +863,8 @@
   }
   document.getElementById('gridUpload').addEventListener('click',function(){triggerUpload('grid');});
   document.getElementById('ordUpload').addEventListener('click',function(){triggerUpload('order');});
+  document.getElementById('ordUploadOld').addEventListener('click',function(){triggerUpload('ordOld');});
+  document.getElementById('ordUploadNew').addEventListener('click',function(){triggerUpload('ordNew');});
   document.getElementById('cmpUploadA').addEventListener('click',function(){triggerUpload('cmpA');});
   document.getElementById('cmpUploadB').addEventListener('click',function(){triggerUpload('cmpB');});
 
@@ -846,12 +872,13 @@
   var RC_STATES=['Andhra Pradesh','Assam','Bihar','Chandigarh','Chhattisgarh','Delhi','Goa','Gujarat','Haryana','Himachal Pradesh','Jammu & Kashmir','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Odisha','Punjab','Rajasthan','Tamil Nadu','Telangana','Uttar Pradesh','Uttarakhand','West Bengal'];
   (function(){var sel=document.getElementById('svState');
     sel.innerHTML='<option value="">— select state —</option>'+RC_STATES.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');})();
+  function planName(tag){ return ({cmpA:'Existing Plan',cmpB:'New Plan',ordOld:'Old Order',ordNew:'New Order'})[tag]||tag; }
   function planPayload(tag){
     var rows=collectRows(cmpGrids[tag].arr).map(function(r){var c=cmpCalc(r);return {
       item:r.item,code:r.code,retailer:r.retailer,ss:r.ss,dm:r.dm,gst:r.gst,pcsbox:r.pcsbox,disc:r.disc,boxltr:r.boxltr,scheme:r.scheme,sell:r.sell,
       realise:c.realise,revenue:c.revenue,ssRate:c.ssRate,dmRate:c.dmRate,exgst:c.exgst,boxVal:c.boxVal,netBox:c.netBox,totLtr:c.totLtr};});
     var s=statsOf(cmpGrids[tag].arr);
-    return {name:(tag==='cmpA'?'Existing Plan':'New Plan'),rows:rows,totals:{totSell:s.totSell,revSum:s.revSum,blend:s.blend}};
+    return {name:planName(tag),rows:rows,totals:{totSell:s.totSell,revSum:s.revSum,blend:s.blend}};
   }
   function gridPayload(){
     var rows=collectRows(grid).map(function(r){var c=rowCalc(r);return {
@@ -865,6 +892,7 @@
     document.getElementById('svScopeRow').style.display=(src==='compare'?'':'none'); saveModal.hidden=false; }
   document.getElementById('cmpSave').addEventListener('click',function(){openSave('compare');});
   document.getElementById('gridSave').addEventListener('click',function(){openSave('grid');});
+  document.getElementById('ordSave').addEventListener('click',function(){openSave('order');});
   document.getElementById('svCancel').addEventListener('click',function(){saveModal.hidden=true;});
   saveModal.addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
   document.getElementById('svSave').addEventListener('click',function(){
@@ -876,6 +904,13 @@
       var gp=gridPayload();
       if(!gp.rows.length){window.alert('Add at least one item first.');return;}
       scope='GRID'; plans=[gp];
+    } else if(saveSource==='order'){
+      scope='ORDER';
+      var pOld=planPayload('ordOld'), pNew=planPayload('ordNew');
+      if(!pOld.rows.length && !pNew.rows.length){window.alert('Add at least one item first.');return;}
+      plans=[pOld,pNew];   // keep both positions (Old, New) so it reloads into the right grids
+      var so=statsOf(cmpGrids['ordOld'].arr),sn=statsOf(cmpGrids['ordNew'].arr),dd=so.blend-sn.blend;
+      compare={blendA:so.blend,blendB:sn.blend,diffRealise:dd,diffRevenue:so.revSum-sn.revSum,aMinusBxBvol:dd*sn.totSell};
     } else {
       scope=(document.querySelector('input[name=svScope]:checked')||{}).value||'BOTH';
       plans=[];
@@ -934,6 +969,14 @@
       grid=savedRows(plans[0]&&plans[0].rows, blankRow);
       if(!grid.length)grid=[blankRow()];
       renderGrid(); switchTab('grid'); return;
+    }
+    if(scope==='ORDER'){                                             // saved from New vs Old Order
+      cmpGrids['ordOld'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp);
+      cmpGrids['ordNew'].arr=savedRows(plans[1]&&plans[1].rows, blankCmp);
+      if(!cmpGrids['ordOld'].arr.length)cmpGrids['ordOld'].arr=[blankCmp()];
+      if(!cmpGrids['ordNew'].arr.length)cmpGrids['ordNew'].arr=[blankCmp()];
+      renderCmpGrid(cmpGrids['ordOld']); renderCmpGrid(cmpGrids['ordNew']);
+      switchTab('ord'); return;
     }
     if(scope==='B'){ cmpGrids['cmpB'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp); }
     else if(scope==='A'){ cmpGrids['cmpA'].arr=savedRows(plans[0]&&plans[0].rows, blankCmp); }

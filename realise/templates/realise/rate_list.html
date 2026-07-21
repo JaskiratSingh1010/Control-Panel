@@ -122,7 +122,7 @@
       +'<div class="rl-card-h">'
         +'<span class="rl-name">'+esc(o.name)+'</span>'
         +(o.state?'<span class="rl-chip state">'+esc(o.state)+'</span>':'')
-        +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan')))+'</span>'
+        +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))))+'</span>'
         +'<div class="rl-sp"><span class="rl-meta">'+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
         +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><span class="material-icons" style="font-size:14px">edit</span>Load &amp; Edit</button>'
         +'<button class="rl-del" title="Delete" data-del="'+o.id+'">✕</button>'
