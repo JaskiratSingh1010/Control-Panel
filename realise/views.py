@@ -1875,12 +1875,11 @@ def api_compare_docs(request):
         if val not in (None, ''):
             filters[key] = str(val).strip().upper()
     try:
-        data = services.get_channel_done_documents(start, end, '', seg, filters)
+        data = services.get_compare_sales_documents(start, end, seg, filters)
     except Exception as e:
         logger.error('[COMPARE-DOCS] failed: %s', e)
         return JsonResponse({'status': 'error', 'error': str(e), 'data': []})
-    return JsonResponse({'status': 'ok', 'count': len(data),
-                         'warehouses': services.OIH_STOCK_WAREHOUSES, 'data': data})
+    return JsonResponse({'status': 'ok', 'count': len(data), 'data': data})
 
 
 @group_required(*REALISE_GROUPS, json_response=True)

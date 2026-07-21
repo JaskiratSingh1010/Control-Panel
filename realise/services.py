@@ -3088,6 +3088,101 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     return _finalize_with_stock(docs)
 
 
+# Compare-Sales value-cell drill: same invoice sources as the channel Done docs, but also carries
+# per-item Box Qty (Qty ÷ SalFactor2), Taxable Value (INV1.LineTotal, net of discount before tax)
+# and Rate/Bottle (Taxable ÷ Qty) — so it can't reuse get_channel_done_documents (litres only).
+_COMPARE_LINE_SQL = '''
+    SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
+           COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
+           ''' + _SHIPTO_STATE + ''' AS "ST",
+           ''' + _SHIPTO_CITY + ''' AS "CITY",
+           COALESCE(TRIM(H."CardCode"), '')     AS "CCODE",
+           COALESCE(TRIM(C."CardName"), '')     AS "CUST",
+           COALESCE(TRIM(I."U_Sub_Group"), '')  AS "SUBG",
+           COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
+           COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
+           COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
+           {sign} * L."Quantity" * COALESCE(I."SalPackUn", 0)  AS "LIT",
+           {sign} * L."Quantity"                               AS "QTY",
+           {sign} * L."Quantity" / NULLIF(I."SalFactor2", 0)   AS "BOX",
+           {sign} * L."LineTotal"                              AS "VAL"
+    FROM "{S}"."{hdr}" H
+    JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
+    JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+    LEFT JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    ''' + _SHIPTO_JOIN + '''
+    WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
+      AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+'''
+
+
+def get_compare_sales_documents(start_date, end_date, seg, filters):
+    """Invoices (Doc No / date / party) with a per-item breakdown — Box Qty, Rate/Bottle,
+    Taxable Value and Litres — behind a Compare-Sales value cell. Same OINV/INV1 (+ ORIN/RIN1
+    return) sources as the channel Done docs, but not channel-scoped: the clicked pivot node's
+    derived dimensions (group/state/person/customer/product/item) + the cell's month select the
+    rows. Litres = Qty × SalPackUn; Boxes = Qty ÷ SalFactor2; Taxable = LineTotal."""
+    seg = str(seg or '').strip().upper()
+    inv = _COMPARE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
+    crd = _COMPARE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
+    sql = ('SELECT "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
+           'SUM("LIT") AS "LIT", SUM("QTY") AS "QTY", SUM("BOX") AS "BOX", SUM("VAL") AS "VAL" '
+           f'FROM ( {inv} UNION ALL {crd} ) T '
+           'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
+    try:
+        rows = sap_connector.execute_query(sql, (start_date, end_date, start_date, end_date))
+    except Exception as exc:
+        logger.error('[COMPARE-DOCS] invoice fetch failed: %s', exc)
+        return []
+    person_map = get_territory_dashboard_payload()['map']
+    docs = {}
+    for row in rows or []:
+        g = _normalize_name(row.get('GRP'))
+        if seg and _normalize_name(row.get('UTYPE')) != seg:
+            continue
+        state_name = _delhi_gt_state(row.get('CCODE'), _state_name(row))
+        customer = _normalize_name(row.get('CUST')) or '—'
+        derived = {
+            'group': g, 'state': state_name,
+            'person': person_map.get(g + '|' + state_name) or '—',
+            'customer': customer,
+            'product': _normalize_name(row.get('SUBG')) or '—',
+            'item': _item_label(_normalize_name(row.get('ICODE')), _normalize_name(row.get('ITEM'))),
+        }
+        if not _derived_node_match(derived, filters):
+            continue
+        num = str(row.get('DOCNUM') or '').strip()
+        dkey = num or (_fmt_doc_date(row.get('DOCDATE')) + '|' + customer)
+        rec = docs.get(dkey)
+        if rec is None:
+            rec = docs[dkey] = {'doc_num': num, 'doc_date': _fmt_doc_date(row.get('DOCDATE')),
+                                'party': customer, 'state': state_name,
+                                'litres': 0.0, 'boxes': 0.0, 'taxable': 0.0, '_items': []}
+        lit = float(row.get('LIT') or 0)
+        qty = float(row.get('QTY') or 0)
+        box = float(row.get('BOX') or 0)
+        val = float(row.get('VAL') or 0)
+        rec['litres'] += lit
+        rec['boxes'] += box
+        rec['taxable'] += val
+        rec['_items'].append({
+            'name': derived['item'],
+            'boxes': round(box, 2),
+            'litres': round(lit, 2),
+            'taxable': round(val, 2),
+            'rate': round(val / qty, 2) if qty else 0.0,   # net taxable rate per bottle/piece
+        })
+    out = []
+    for r in docs.values():
+        r['litres'] = round(r['litres'], 2)
+        r['boxes'] = round(r['boxes'], 2)
+        r['taxable'] = round(r['taxable'], 2)
+        r['items'] = sorted(r.pop('_items'), key=lambda x: -x['litres'])
+        out.append(r)
+    out.sort(key=lambda x: (x['doc_date'] or '', -x['litres']))
+    return out
+
+
 # ══════════════════════ Sales vs Credit Notes report ══════════════════════
 # Gross sales (OINV) alongside credit notes (ORIN), the latter split into CN for Goods (item
 # credit memos, DocType 'I' — real product returns, carry litres/type/product) and Claim for
