@@ -68,8 +68,8 @@
   table.cs-table tbody td.cs-avg{color:var(--rz-muted);font-weight:600}
   table.cs-table thead th.cs-avg-h{background:var(--rz-head-bg);color:var(--rz-head-ink)}
   table.cs-table tbody tr.cs-total td.cs-avg{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800}
-  table.cs-table tbody tr.cs-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;bottom:0;border-top:2px solid var(--rz-total-brd)}
-  table.cs-table tbody tr.cs-total td.gc-name{background:var(--rz-total-bg);color:var(--rz-ink)}
+  table.cs-table tbody tr.cs-total td{background:var(--rz-total-bg);color:var(--rz-ink);font-weight:800;position:sticky;top:38px;z-index:2;border-bottom:2px solid var(--rz-total-brd)}
+  table.cs-table tbody tr.cs-total td.gc-name{background:var(--rz-total-bg);color:var(--rz-ink);left:0;z-index:3}
   .cs-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
   .cs-tw.open{transform:rotate(90deg)}
   .cs-tw-empty{display:inline-block;width:13px;margin-right:7px}
@@ -390,13 +390,12 @@
       +'<th class="cs-grand">Grand Total</th><th class="cs-avg-h">Avg Sales</th></tr>';
     if(!arows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+3)+'">No sales in this selection.</td></tr>';return;}
     var tree=pivotTree(arows,dims);          // top-level nodes, sliced to Top N when Item is first
-    var html=treeRows(tree,months,0);
     // Totals row — summed over the DISPLAYED top-level nodes, so Top N totals reflect the shown items.
     var colL={},colR={},gL=0,gR=0;
     tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);});gL+=n.totL;gR+=n.totR;});
     var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0)+'</td>';}).join('');
-    html+='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths)+'</td></tr>';
-    body.innerHTML=html;
+    var totRow='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths)+'</td></tr>';
+    body.innerHTML=totRow+treeRows(tree,months,0);   // TOTAL pinned on top, then the drilldown rows
   }
 
   // ── Invoice drill: the invoices + item names behind a clicked value cell ─────
