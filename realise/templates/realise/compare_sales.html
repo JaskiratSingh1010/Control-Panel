@@ -21,6 +21,8 @@
   .cs-fetch:hover{background:var(--rz-indigo-deep)}
   .cs-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .cs-export:hover{background:#ecfdf5;border-color:#a7f3d0}
+  .cs-curm{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:11px;font-weight:700;color:var(--rz-muted,#64748b);cursor:pointer;white-space:nowrap}
+  .cs-curm input{cursor:pointer;accent-color:var(--rz-indigo,#4f46e5)}
   .cs-calc{display:inline-flex;align-items:center;gap:6px;background:var(--rz-indigo,#4f46e5);border:1px solid var(--rz-indigo,#4f46e5);border-radius:9px;padding:9px 14px;font-size:12px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit}
   .cs-calc:hover{filter:brightness(.94)}
   .cs-isel{width:15px;height:15px;margin-right:7px;vertical-align:middle;cursor:pointer;accent-color:var(--rz-indigo,#4f46e5)}
@@ -97,6 +99,7 @@
   <div class="cs-bar">
     <div class="cs-fld"><span class="cs-lbl">Last (months)</span>
       <input type="number" id="csMonths" min="1" max="120" step="1" value="6">
+      <label class="cs-curm" title="Untick to exclude the running month — the window then ends at the previous complete month"><input type="checkbox" id="csInclCur" checked> Incl. current month</label>
     </div>
     <button class="cs-fetch" id="csFetch">&#9654; Fetch</button>
     <div class="cs-fld"><span class="cs-lbl">Type</span>
@@ -651,8 +654,13 @@
   function load(){
     itemSel={};                                       // new data → clear the item selection
     var n=parseInt(document.getElementById('csMonths').value,10); if(!n||n<1)n=6; if(n>120)n=120;
-    var now=new Date();
-    var ed=ymd(now), sd=ymd(new Date(now.getFullYear(), now.getMonth()-(n-1), 1));
+    var now=new Date(), inclCur=document.getElementById('csInclCur').checked, sd, ed;
+    if(inclCur){                                       // N months ending at the current (running) month
+      ed=ymd(now); sd=ymd(new Date(now.getFullYear(), now.getMonth()-(n-1), 1));
+    } else {                                           // exclude the running month → end at the previous complete month
+      ed=ymd(new Date(now.getFullYear(), now.getMonth(), 0));      // last day of the previous month
+      sd=ymd(new Date(now.getFullYear(), now.getMonth()-n, 1));    // first day, n months before that
+    }
     var btn=document.getElementById('csFetch'); btn.disabled=true; btn.textContent='Loading…';
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
