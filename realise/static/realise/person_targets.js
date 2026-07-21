@@ -49,6 +49,12 @@ const PRIORITY_STATES = ['DELHI', 'PUNJAB', 'HARYANA', 'UTTAR PRADESH', 'RAJASTH
 /* The 7 dashboard DISPLAY channels (match the grid + Sales Channel Dashboard). */
 const ALL_CHANNELS = ['GT', 'MT', 'ROI', 'ECOM', 'HORECA', 'CSD', 'REST'];
 const PRIORITY_CHANNELS = ['GT', 'MT', 'ROI', 'ECOM'];
+/* REST is an umbrella channel over these minor main-groups (see services.REST_SOURCE_GROUPS).
+   They're offered as pickable channels so a person / target can be assigned to the actual group
+   (e.g. CORPORATE) instead of the umbrella — the dashboard rolls them back up under REST, so the
+   target then lines up with the done on the same group row. */
+const REST_GROUPS = ['CORPORATE', 'STAFF', 'CASH SALE', 'SANGAT', 'BRANCH', 'REFERENCE', 'PURCHASE OIL'];
+const CHANNELS_PICKABLE = ALL_CHANNELS.concat(REST_GROUPS);
 
 /* District master per state (standard lists; a "+ Add custom" fallback covers any
    gaps/renames). The SO "City / District" step shows the list for the chosen state;
@@ -432,9 +438,9 @@ function ChannelPicker({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [q, setQ] = useState('');
-  const custom = norm(value) && !ALL_CHANNELS.map(norm).includes(norm(value));
+  const custom = norm(value) && !CHANNELS_PICKABLE.map(norm).includes(norm(value));
   const selectedExtra = norm(value) && !PRIORITY_CHANNELS.includes(norm(value)) && !custom;
-  const more = ALL_CHANNELS.filter(c => !PRIORITY_CHANNELS.includes(c));
+  const more = CHANNELS_PICKABLE.filter(c => !PRIORITY_CHANNELS.includes(c));
   const commit = () => {
     const v = norm(draft);
     if (v) onChange(v);
@@ -2138,7 +2144,7 @@ function MappingCards({
     className: "lbl"
   }, "Step 2 \xB7 Channel"), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick"
-  }, (soShowAllCh ? ALL_CHANNELS : PRIORITY_CHANNELS).map(c => /*#__PURE__*/React.createElement("button", {
+  }, (soShowAllCh ? CHANNELS_PICKABLE : PRIORITY_CHANNELS).map(c => /*#__PURE__*/React.createElement("button", {
     key: c,
     className: "pick",
     style: norm(soCh) === c ? chStyle(c) : null,
@@ -2157,7 +2163,7 @@ function MappingCards({
   }), c)), !soShowAllCh && /*#__PURE__*/React.createElement("button", {
     className: "pick more",
     onClick: () => setSoShowAllCh(true)
-  }, "\u22EF Show all (", ALL_CHANNELS.length, ")"))), /*#__PURE__*/React.createElement("div", {
+  }, "\u22EF Show all (", CHANNELS_PICKABLE.length, ")"))), /*#__PURE__*/React.createElement("div", {
     className: "pick-field"
   }, /*#__PURE__*/React.createElement("span", {
     className: "lbl"
@@ -2673,7 +2679,7 @@ function MappingCards({
     style: {
       marginBottom: 18
     }
-  }, (showAllCh ? ALL_CHANNELS : PRIORITY_CHANNELS).map(c => /*#__PURE__*/React.createElement("button", {
+  }, (showAllCh ? CHANNELS_PICKABLE : PRIORITY_CHANNELS).map(c => /*#__PURE__*/React.createElement("button", {
     key: c,
     className: "pick",
     style: norm(ac) === c ? chStyle(c) : null,
@@ -2689,7 +2695,7 @@ function MappingCards({
   }), c)), !showAllCh && /*#__PURE__*/React.createElement("button", {
     className: "pick more",
     onClick: () => setShowAllCh(true)
-  }, "\u22EF Show all (", ALL_CHANNELS.length, ")"))), addTo.mode !== 'fill' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+  }, "\u22EF Show all (", CHANNELS_PICKABLE.length, ")"))), addTo.mode !== 'fill' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     className: "lbl"
   }, "Step 2 \xB7 State"), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick"
