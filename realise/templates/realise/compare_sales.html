@@ -157,7 +157,7 @@
     .cs-vcell:hover{background:#eef2ff;outline:1px solid #c7d2fe}
     .csd-overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(15,23,42,.45);align-items:flex-start;justify-content:center;padding:40px 16px}
     .csd-overlay.open{display:flex}
-    .csd-modal{background:#fff;border-radius:14px;max-width:1040px;width:100%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(2,6,23,.35);overflow:hidden}
+    .csd-modal{background:#fff;border-radius:14px;max-width:1120px;width:100%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(2,6,23,.35);overflow:hidden}
     .csd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #eef2f7}
     .csd-title{font-weight:800;font-size:15px;color:#1e293b}
     .csd-sub{font-size:12px;color:#64748b;margin-top:3px}
@@ -174,7 +174,7 @@
     .csd-tbl tr.csd-docrow.open .csd-cx{transform:rotate(90deg)}
     .csd-hint{color:#94a3b8;font-size:11px;font-weight:600}
     .csd-tbl tr.csd-itemrow td{color:#475569;font-weight:500}
-    .csd-tbl tr.csd-tot td{font-weight:800;background:#f8fafc;border-top:2px solid #cbd5e1}
+    .csd-tbl tr.csd-tot td{font-weight:800;background:#eef2ff;border-bottom:2px solid #c7d2fe;position:sticky;top:33px;z-index:2}
     .csd-neg{color:#dc2626}
     .csd-foot{padding:10px 20px;border-top:1px solid #eef2f7;font-size:11px;color:#94a3b8}
     .csd-empty{padding:34px;text-align:center;color:#94a3b8}
@@ -415,6 +415,7 @@
   function csdRupee(n){ n=Number(n)||0; var s='₹'+fN(Math.abs(Math.round(n))); return n<0?'<span class="csd-neg">('+s+')</span>':s; }
   function csdRate(n){ n=Number(n)||0; return n?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):''; }
   function csdBox(n){ n=Number(n)||0; if(!n)return ''; var s=Math.abs(n).toLocaleString('en-IN',{maximumFractionDigits:2}); return n<0?'<span class="csd-neg">('+s+')</span>':s; }
+  function csdRlz(val,lit){ lit=Number(lit)||0; if(!lit)return ''; var v=(Number(val)||0)/lit; var s='₹'+Math.abs(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); return v<0?'<span class="csd-neg">('+s+')</span>':s; }
   function openDrill(path,ym,mlabel){
     var filters=csNodeByPath[path]; if(!filters)return;
     var rng=ymRange(ym); if(!rng)return;
@@ -434,30 +435,36 @@
     if(!p||p.status!=='ok'){ sub.textContent=mlabel; bodyEl.innerHTML='<div class="csd-empty">'+esc((p&&p.error)||'No data.')+'</div>'; return; }
     var docs=p.data||[];
     if(!docs.length){ sub.textContent=mlabel+' · 0 invoices'; bodyEl.innerHTML='<div class="csd-empty">No invoices found for this selection.</div>'; return; }
-    var totL=0, totBox=0, totVal=0;
-    var html='<table class="csd-tbl"><thead><tr><th>Doc No</th><th>Date</th><th>Party</th><th>Item Name</th>'
-      +'<th class="num">Box Qty</th><th class="num">Rate/Bottle</th><th class="num">Taxable Value</th><th class="num">Litres</th></tr></thead><tbody>';
+    var totL=0, totBox=0, totVal=0, rowsHtml='';
     docs.forEach(function(d,di){
       var items=d.items||[];
       // Invoice header row — click to expand/collapse its item lines (hidden by default).
-      html+='<tr class="csd-docrow" data-doc="'+di+'"><td><span class="csd-cx">&#9654;</span>'+esc(d.doc_num||'—')+'</td>'
+      rowsHtml+='<tr class="csd-docrow" data-doc="'+di+'"><td><span class="csd-cx">&#9654;</span>'+esc(d.doc_num||'—')+'</td>'
         +'<td>'+esc(d.doc_date||'')+'</td><td>'+esc(d.party||'')+'</td>'
         +'<td class="csd-hint">'+items.length+' item(s)</td>'
         +'<td class="num">'+csdBox(d.boxes)+'</td><td class="num"></td>'
-        +'<td class="num">'+csdRupee(d.taxable)+'</td><td class="num">'+csdMoney0(d.litres)+'</td></tr>';
+        +'<td class="num">'+csdRupee(d.taxable)+'</td><td class="num">'+csdMoney0(d.litres)+'</td>'
+        +'<td class="num">'+csdRlz(d.taxable,d.litres)+'</td></tr>';
       items.forEach(function(it){
-        html+='<tr class="csd-itemrow" data-doc="'+di+'" style="display:none"><td></td><td></td><td></td>'
+        rowsHtml+='<tr class="csd-itemrow" data-doc="'+di+'" style="display:none"><td></td><td></td><td></td>'
           +'<td>'+esc(it.name||'')+'</td><td class="num">'+csdBox(it.boxes)+'</td>'
           +'<td class="num">'+csdRate(it.rate)+'</td><td class="num">'+csdRupee(it.taxable)+'</td>'
-          +'<td class="num">'+csdMoney0(it.litres)+'</td></tr>';
+          +'<td class="num">'+csdMoney0(it.litres)+'</td>'
+          +'<td class="num">'+csdRlz(it.taxable,it.litres)+'</td></tr>';
       });
       totL+=Number(d.litres)||0; totBox+=Number(d.boxes)||0; totVal+=Number(d.taxable)||0;
     });
-    html+='<tr class="csd-tot"><td colspan="4">TOTAL · '+docs.length+' invoice(s)</td>'
+    // TOTAL row pinned at the top (right under the header), before the invoice list.
+    var totRow='<tr class="csd-tot"><td colspan="4">TOTAL · '+docs.length+' invoice(s)</td>'
       +'<td class="num">'+csdBox(totBox)+'</td><td class="num"></td>'
-      +'<td class="num">'+csdRupee(totVal)+'</td><td class="num">'+csdMoney0(totL)+'</td></tr></tbody></table>';
+      +'<td class="num">'+csdRupee(totVal)+'</td><td class="num">'+csdMoney0(totL)+'</td>'
+      +'<td class="num">'+csdRlz(totVal,totL)+'</td></tr>';
+    var html='<table class="csd-tbl"><thead><tr><th>Doc No</th><th>Date</th><th>Party</th><th>Item Name</th>'
+      +'<th class="num">Box Qty</th><th class="num">Rate/Bottle</th><th class="num">Taxable Value</th>'
+      +'<th class="num">Litres</th><th class="num">Realise ₹/L</th></tr></thead><tbody>'
+      +totRow+rowsHtml+'</tbody></table>';
     bodyEl.innerHTML=html;
-    sub.textContent=mlabel+' · '+docs.length+' invoice(s) · '+fN(Math.round(totL))+' L · ₹'+fN(Math.round(totVal))+' taxable';
+    sub.textContent=mlabel+' · '+docs.length+' invoice(s) · '+fN(Math.round(totL))+' L · ₹'+fN(Math.round(totVal))+' taxable · '+csdRlz(totVal,totL).replace(/<[^>]+>/g,'')+'/L';
   }
   // Expand / collapse an invoice's item rows.
   document.getElementById('csdBody').addEventListener('click',function(e){
