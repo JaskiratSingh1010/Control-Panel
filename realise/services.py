@@ -1754,13 +1754,23 @@ def get_territory_dashboard_payload():
             person_map[channel + '|' + name] = person
             for raw in CHANNEL_MEMBERS.get(channel, [channel]):
                 person_map[_normalize_name(raw) + '|' + name] = person
-            # Build the per-channel whitelist for EVERY channel that has a per-state
-            # owner (not just GT/MT) so an assigned state always shows as a card row in
-            # that channel — even with zero live Done. The dashboard treats this list
-            # additively (union with live sales states), so nothing is dropped.
-            bucket = whitelist.setdefault(channel, [])
-            if not any(e['label'] == name for e in bucket):
-                bucket.append({'label': name, 'match': [name] + ([code] if code else [])})
+            if channel == 'REST':
+                # REST is a group-drilled UMBRELLA spanning ALL states (CORPORATE / STAFF / CASH
+                # SALE / …). A person tagged to REST owns the whole channel nationally (like
+                # E-Commerce/CSD): resolve every REST member group to them via group_owners, and
+                # do NOT build a per-state whitelist — that would otherwise restrict the REST
+                # card/modal to just the tagged state and drop all other-state REST sales.
+                group_owners.setdefault(channel, person)
+                for raw in CHANNEL_MEMBERS.get(channel, [channel]):
+                    group_owners.setdefault(_normalize_name(raw), person)
+            else:
+                # Build the per-channel whitelist for EVERY channel that has a per-state
+                # owner (not just GT/MT) so an assigned state always shows as a card row in
+                # that channel — even with zero live Done. The dashboard treats this list
+                # additively (union with live sales states), so nothing is dropped.
+                bucket = whitelist.setdefault(channel, [])
+                if not any(e['label'] == name for e in bucket):
+                    bucket.append({'label': name, 'match': [name] + ([code] if code else [])})
         if not name and person:
             # Key by the CHANNEL name too ('ECOM'), not just its raw member groups
             # ('E-COMMERCE'): a channel-level TargetNode stores main_group='ECOM', so the

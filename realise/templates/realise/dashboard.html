@@ -4831,11 +4831,8 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();
     if(members.indexOf(g)===-1)continue;
-    // Honour the channel's assigned-state whitelist for REST too (once a person is tagged to a
-    // REST state, only that state's REST sales count — same as GT/MT and the detail modal).
-    var sl=detailStateLabel(channel,r.state);
-    if(sl===null)continue;
-    var k=isREST?g:sl;
+    var k=isREST?g:detailStateLabel(channel,r.state);
+    if(k===null)continue;
     var c=cell(k); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
   }
   for(var t=0;t<targetNodes.length;t++){
@@ -4853,9 +4850,9 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
     var x=oihRows[o],xg=String(x.main_group||'').toUpperCase();
     if(members.indexOf(xg)===-1)continue;
     if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
-    var sl3=detailStateLabel(channel,x.state);   // honour the assigned-state whitelist (REST too)
-    if(sl3===null)continue;
-    var oc=cell(isREST?xg:sl3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
+    var k3=isREST?xg:detailStateLabel(channel,x.state);
+    if(k3===null)continue;
+    var oc=cell(k3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
   }
   var list=Object.keys(byKey).map(function(k){
     var c=byKey[k];
