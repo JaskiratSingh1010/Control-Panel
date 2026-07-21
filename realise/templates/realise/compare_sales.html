@@ -541,15 +541,20 @@
   }
   function splitItemLbl(v){ v=v||''; var i=v.indexOf(' — '); return i>=0?[v.slice(0,i),v.slice(i+3)]:['',v]; }
   function calcSummaryAoa(){
+    var nM=(activeRows().months.length)||1;            // months in the current window → monthly average
     var HD=function(v){return {value:v,bold:true,fill:'0F172A',color:'FFFFFF'};};
+    var TB=function(v){return {value:v,bold:true};};
     function rlz(rv,lt){return lt>0?Math.round(rv/lt*100)/100:'';}
-    var out=[[HD('Item Code'),HD('Item Name'),HD('Litres'),HD('Revenue'),HD('Realise ₹/L')]];
+    var out=[[HD('Item Code'),HD('Item Name'),HD('Litres'),HD('Revenue'),HD('Realise ₹/L'),
+              HD('Avg Litres'),HD('Avg Revenue'),HD('Avg ₹/L')]];
     var gL=0,gR=0,cnt=0;
     for(var p in itemSel){ var n=csAllNodes[p]; if(!n)continue; cnt++;
-      var s=splitItemLbl(n.label); gL+=n.totL||0; gR+=n.totR||0;
-      out.push([s[0],s[1],Math.round(n.totL||0),Math.round(n.totR||0),rlz(n.totR||0,n.totL||0)]); }
-    out.push([{value:'TOTAL',bold:true},{value:'('+cnt+' item'+(cnt===1?'':'s')+')',bold:true},{value:Math.round(gL),bold:true},{value:Math.round(gR),bold:true},{value:rlz(gR,gL),bold:true}]);
-    return {aoa:out, count:cnt, litres:gL, revenue:gR};
+      var s=splitItemLbl(n.label), lt=n.totL||0, rv=n.totR||0; gL+=lt; gR+=rv;
+      out.push([s[0],s[1],Math.round(lt),Math.round(rv),rlz(rv,lt),
+                Math.round(lt/nM),Math.round(rv/nM),rlz(rv,lt)]); }
+    out.push([TB('TOTAL'),TB('('+cnt+' item'+(cnt===1?'':'s')+')'),TB(Math.round(gL)),TB(Math.round(gR)),TB(rlz(gR,gL)),
+              TB(Math.round(gL/nM)),TB(Math.round(gR/nM)),TB(rlz(gR,gL))]);
+    return {aoa:out, count:cnt, litres:gL, revenue:gR, months:nM};
   }
   function calcRenderTable(aoa){
     var h='<table class="csd-tbl">';
@@ -568,7 +573,7 @@
   function openCalc(){
     var d=calcSummaryAoa();
     if(!d.count){ window.alert('Tick at least one item (checkbox on the Item rows) first.'); return; }
-    document.getElementById('csCalcSub').textContent=d.count+' item'+(d.count===1?'':'s')+' · '+fN(Math.round(d.litres))+' L · ₹'+fN(Math.round(d.revenue))+' · '+(d.litres>0?fRz(d.revenue/d.litres):'₹0')+'/L';
+    document.getElementById('csCalcSub').textContent=d.count+' item'+(d.count===1?'':'s')+' · '+fN(Math.round(d.litres))+' L · ₹'+fN(Math.round(d.revenue))+' · '+(d.litres>0?fRz(d.revenue/d.litres):'₹0')+'/L · avg over '+d.months+' month'+(d.months===1?'':'s');
     document.getElementById('csCalcBody').innerHTML=calcRenderTable(d.aoa);
     document.getElementById('csCalc2').classList.add('open');
   }
