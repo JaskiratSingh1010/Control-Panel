@@ -3892,14 +3892,9 @@ function buildChannelDetailLeaves(){
   var channel=detailChannel, members=channelMembers(channel), map={};
   function cell(group,state,person,customer,product,item,sku){var k=group+'||'+state+'||'+person+'||'+customer+'||'+product+'||'+item+'||'+sku;if(!map[k])map[k]={group:group,state:state,person:person,customer:customer,product:product,item:item,sku:sku,target:0,done:0,oih:0,lineTotal:0,oihLineTotal:0,targetRealise:0};return map[k];}
   var rows=modalChannelRows();
-  // REST is drilled by main group and spans ALL states. A per-state owner assignment builds a
-  // CHANNEL_STATE_WHITELIST['REST'], which would otherwise make detailStateLabel drop REST sales in
-  // non-listed states — under-counting Done vs the card (which buckets REST by group, all states).
-  var isRest=(channel==='REST');
-  function stLabel(sv){ var s=detailStateLabel(channel,sv); return (s===null&&isRest)?(String(sv||'').trim().toUpperCase()||'UNKNOWN'):s; }
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();if(members.indexOf(g)===-1)continue;
-    var st=stLabel(r.state);if(st===null)continue;
+    var st=detailStateLabel(channel,r.state);if(st===null)continue;
     var cust=String(r.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
     var prod=String(r.u_sub_group||'').trim().toUpperCase()||CD_NONE;
     var item=String(r.item_name||'').trim().toUpperCase()||CD_NONE;
@@ -3909,7 +3904,7 @@ function buildChannelDetailLeaves(){
     var n=detailTargetNodes[t],g2=String(n.main_group||'').toUpperCase();
     var isChanLevel=(g2===String(channel||'').toUpperCase());   // REST/ECOM channel-total targets carry main_group=<channel>
     if(!isChanLevel && members.indexOf(g2)===-1)continue;
-    var st2=(isChanLevel && !String(n.state||'').trim())?CD_WHOLE:stLabel(n.state);
+    var st2=(isChanLevel && !String(n.state||'').trim())?CD_WHOLE:detailStateLabel(channel,n.state);
     if(st2===null)continue;
     var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(g2,n.state)||channelDefaultPerson(channel)||'—';
     var c2=cell(g2,st2,p2,CD_NO_CUSTOMER,CD_NONE,CD_NONE,CD_NONE); c2.target+=Number(n.target_ltrs)||0; c2.targetRealise=Number(n.target_realise)||c2.targetRealise;
@@ -3917,7 +3912,7 @@ function buildChannelDetailLeaves(){
   for(var o=0;o<detailOihRows.length;o++){
     var x=detailOihRows[o],g3=String(x.main_group||'').toUpperCase();if(members.indexOf(g3)===-1)continue;
     if(detailSeg&&String(x.u_type||'').toUpperCase()!==detailSeg)continue;   // honour Premium/Commodity
-    var st3=stLabel(x.state);if(st3===null)continue;
+    var st3=detailStateLabel(channel,x.state);if(st3===null)continue;
     var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(g3,x.state)||'—';
     var cust3=String(x.card_name||'').trim().toUpperCase()||CD_NO_CUSTOMER;
     var prod3=String(x.u_sub_group||'').trim().toUpperCase()||CD_NONE;
@@ -4836,8 +4831,11 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
   for(var i=0;i<rows.length;i++){
     var r=rows[i],g=String(r.u_main_group||'').toUpperCase();
     if(members.indexOf(g)===-1)continue;
-    var k=isREST?g:detailStateLabel(channel,r.state);
-    if(k===null)continue;
+    // Honour the channel's assigned-state whitelist for REST too (once a person is tagged to a
+    // REST state, only that state's REST sales count — same as GT/MT and the detail modal).
+    var sl=detailStateLabel(channel,r.state);
+    if(sl===null)continue;
+    var k=isREST?g:sl;
     var c=cell(k); c.done+=Number(r.liter)||0; c.lineTotal+=Number(r.line_total)||0;
   }
   for(var t=0;t<targetNodes.length;t++){
@@ -4855,9 +4853,9 @@ function buildCardRows(channel,members,rows,targetNodes,oihRows){
     var x=oihRows[o],xg=String(x.main_group||'').toUpperCase();
     if(members.indexOf(xg)===-1)continue;
     if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
-    var k3=isREST?xg:detailStateLabel(channel,x.state);
-    if(k3===null)continue;
-    var oc=cell(k3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
+    var sl3=detailStateLabel(channel,x.state);   // honour the assigned-state whitelist (REST too)
+    if(sl3===null)continue;
+    var oc=cell(isREST?xg:sl3); oc.oih+=Number(x.open_qty)||0; oc.oihLineTotal+=Number(x.open_value)||0;
   }
   var list=Object.keys(byKey).map(function(k){
     var c=byKey[k];
