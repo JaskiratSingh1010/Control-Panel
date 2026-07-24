@@ -1459,6 +1459,11 @@ function assignedPerson(group,state){
   state=String(state||'').trim().toUpperCase();
   return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
 }
+// Real assigned people (territory owners). A sale with no territory owner falls back to its
+// raw SAP salesperson ONLY when that is one of these real people (e.g. TARUN, HAPPY) — not a
+// desk/territory label like 'HORECA/INST' or 'PUNJAB GT', which stay under 'Other'.
+var REAL_PERSONS={}; (ASSIGNED_PERSONS||[]).forEach(function(p){var k=String(p||'').trim().toUpperCase(); if(k)REAL_PERSONS[k]=1;});
+function rawSpPerson(sp){ sp=String(sp||'').trim().toUpperCase(); return REAL_PERSONS[sp]?sp:''; }
 // A channel-total target (REST/ECOM) may carry no sales_person. If every other
 // target node stored under that channel names the same person, attribute the
 // channel total to them too (so it lands on that person, not "Other").
@@ -4902,7 +4907,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
     var r=rows[i], rawG=String(r.u_main_group||'').toUpperCase();
     var g=normaliseChannelGroup(rawG)||'—';
     var st=String(r.state||'').trim().toUpperCase()||'—';
-    var p=assignedPerson(rawG,r.state)||'—';
+    var p=assignedPerson(rawG,r.state)||rawSpPerson(r.sales_person)||'—';   // territory owner → real raw SP → Other
     var cust=String(r.card_name||'').trim().toUpperCase()||'—';
     var prod=String(r.u_sub_group||'').trim().toUpperCase()||'—';
     var it=String(r.item_name||'').trim().toUpperCase()||'—';
@@ -4922,7 +4927,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
     if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
     var g3=normaliseChannelGroup(rawXg)||'—';
     var st3=String(x.state||'').trim().toUpperCase()||'—';
-    var p3=String(x.sales_person||'').toUpperCase()||assignedPerson(rawXg,x.state)||'—';
+    var p3=assignedPerson(rawXg,x.state)||rawSpPerson(x.sales_person)||'—';   // match the Done resolution
     var cust3=String(x.card_name||'').trim().toUpperCase()||'—';
     var prod3=String(x.u_sub_group||'').trim().toUpperCase()||'—';
     var it3=String(x.item_name||'').trim().toUpperCase()||'—';
