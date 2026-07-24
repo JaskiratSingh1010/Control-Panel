@@ -1442,6 +1442,13 @@ var CHANNEL_BLOCKS=[
 // Territory ground truth, supplied by the server (single source = TERRITORY_SHEET).
 var TERRITORY_DATA={{ territory_payload|safe }};
 var TERRITORY=TERRITORY_DATA.map||{};                 // "GROUP|STATENAME" -> person
+// SAP has inconsistent state spellings (CHHATISGARH vs CHHATTISGARH, KERELA vs KERALA,
+// JAMMU & KASHMIR vs JAMMU AND KASHMIR, …). Canonicalise state on BOTH the map keys and the
+// lookups so an assigned territory still matches the sale regardless of which spelling is used.
+var STATE_ALIAS={'CHHATISGARH':'CHHATTISGARH','KERELA':'KERALA','JAMMU & KASHMIR':'JAMMU AND KASHMIR',
+                 'ORISSA':'ODISHA','PONDICHERRY':'PUDUCHERRY','UTTARANCHAL':'UTTARAKHAND'};
+function canonState(s){ s=String(s||'').trim().toUpperCase(); return STATE_ALIAS[s]||s; }
+(function(){var T={};for(var k in TERRITORY){var i=k.indexOf('|');T[i>=0?(k.slice(0,i)+'|'+canonState(k.slice(i+1))):k]=TERRITORY[k];}TERRITORY=T;})();
 var ASSIGNED_PERSONS=TERRITORY_DATA.persons||[];       // ordered owners
 // Fixed state breakdown per channel (label + the sales-side spellings it matches).
 var CHANNEL_STATE_WHITELIST=TERRITORY_DATA.whitelist||{};
@@ -1456,7 +1463,7 @@ function channelStateLabel(channel,stateName){
 }
 function assignedPerson(group,state){
   group=String(group||'').trim().toUpperCase();
-  state=String(state||'').trim().toUpperCase();
+  state=canonState(state);
   return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||null;
 }
 // Real assigned people (territory owners). A sale with no territory owner falls back to its
@@ -4906,7 +4913,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
   for(var i=0;i<rows.length;i++){
     var r=rows[i], rawG=String(r.u_main_group||'').toUpperCase();
     var g=normaliseChannelGroup(rawG)||'—';
-    var st=String(r.state||'').trim().toUpperCase()||'—';
+    var st=canonState(r.state)||'—';
     var p=assignedPerson(rawG,r.state)||rawSpPerson(r.sales_person)||'—';   // territory owner → real raw SP → Other
     var cust=String(r.card_name||'').trim().toUpperCase()||'—';
     var prod=String(r.u_sub_group||'').trim().toUpperCase()||'—';
@@ -4916,7 +4923,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
   for(var t=0;t<(targetNodes||[]).length;t++){
     var n=targetNodes[t], rawNg=String(n.main_group||'').toUpperCase();
     var g2=normaliseChannelGroup(rawNg)||'—';
-    var st2=String(n.state||'').trim().toUpperCase()||'—';
+    var st2=canonState(n.state)||'—';
     var p2=String(n.sales_person||'').toUpperCase()||assignedPerson(rawNg,n.state)||'—';
     var c2=cell(g2,st2,p2,'—','—','—'); c2.target+=Number(n.target_ltrs)||0;
     var tr=Number(n.target_realise)||0; if(tr>0)c2.targetRealise=tr;
@@ -4926,7 +4933,7 @@ function buildSc2DynLeaves(rows,targetNodes,oihRows){
     var x=oihRows[o], rawXg=String(x.main_group||'').toUpperCase();
     if(oihSeg&&String(x.u_type||'').toUpperCase()!==oihSeg)continue;   // honour segment
     var g3=normaliseChannelGroup(rawXg)||'—';
-    var st3=String(x.state||'').trim().toUpperCase()||'—';
+    var st3=canonState(x.state)||'—';
     var p3=assignedPerson(rawXg,x.state)||rawSpPerson(x.sales_person)||'—';   // match the Done resolution
     var cust3=String(x.card_name||'').trim().toUpperCase()||'—';
     var prod3=String(x.u_sub_group||'').trim().toUpperCase()||'—';

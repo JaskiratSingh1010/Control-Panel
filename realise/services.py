@@ -1745,6 +1745,16 @@ def get_territory_dashboard_payload():
     person_map = {}   # "GROUP|STATENAME" -> person
     whitelist = {}    # channel -> [{label, match[]}]
     group_owners = {}
+    # A channel with exactly ONE distinct per-state owner is treated as a single-owner NATIONAL
+    # channel (like REST / E-Commerce / CSD): that person owns the whole channel across EVERY state
+    # and no per-state whitelist is built (which would otherwise hide other states). GT / MT / ROI
+    # etc. with several owners stay per-state.
+    _ch_owners = {}
+    for r in d['rows']:
+        ch = _normalize_name(r['channel']); nm = _normalize_name(r['state_name']); pr = _normalize_name(r['sales_person'])
+        if nm and pr:
+            _ch_owners.setdefault(ch, set()).add(pr)
+    single_owner = {ch for ch, ps in _ch_owners.items() if len(ps) == 1}
     for r in d['rows']:
         channel = _normalize_name(r['channel'])
         name = _normalize_name(r['state_name'])
@@ -1754,12 +1764,12 @@ def get_territory_dashboard_payload():
             person_map[channel + '|' + name] = person
             for raw in CHANNEL_MEMBERS.get(channel, [channel]):
                 person_map[_normalize_name(raw) + '|' + name] = person
-            if channel == 'REST':
-                # REST is a group-drilled UMBRELLA spanning ALL states (CORPORATE / STAFF / CASH
-                # SALE / …). A person tagged to REST owns the whole channel nationally (like
-                # E-Commerce/CSD): resolve every REST member group to them via group_owners, and
-                # do NOT build a per-state whitelist — that would otherwise restrict the REST
-                # card/modal to just the tagged state and drop all other-state REST sales.
+            if channel == 'REST' or channel in single_owner:
+                # REST (a group-drilled umbrella) OR any single-owner channel (e.g. HORECA handled
+                # only by RAVINDER): the person owns the WHOLE channel nationally (like E-Commerce/
+                # CSD). Resolve every member group to them via group_owners, and do NOT build a
+                # per-state whitelist — that would otherwise restrict the card/modal to just the
+                # tagged state and drop the channel's sales in every other state.
                 group_owners.setdefault(channel, person)
                 for raw in CHANNEL_MEMBERS.get(channel, [channel]):
                     group_owners.setdefault(_normalize_name(raw), person)
