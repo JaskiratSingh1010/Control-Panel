@@ -1348,6 +1348,7 @@
     var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
     return (RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
+      if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
       if(rawScope){
         if(rawScope.type==='sp'   && r.sp!==rawScope.sp)   return false;
         if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
