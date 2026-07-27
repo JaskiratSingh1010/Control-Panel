@@ -960,7 +960,7 @@
     selectedDays = all ? null : checked;
     var n = all ? 0 : Object.keys(checked).length;
     document.getElementById('agDaysLabel').textContent = all ? 'All days' : (n+' day'+(n===1?'':'s'));
-    renderPivotOnly();
+    refreshRawIfOpen();   // the age filter now narrows the RAW DATA workspace (per-invoice rows)
   }
 
   // Build the Remarks multi-select (split categories + any free-text remarks in use).
@@ -1217,6 +1217,8 @@
     document.getElementById('agRawTitle').textContent='RAW DATA'+suffix;
     renderRawHead();
     setTab(tab||'table');
+    populateDays();                                             // invoice-age (days) filter for the workspace
+    document.getElementById('agDays').style.display='';        // show it while the workspace is open
     var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
     if(card) card.style.display='none';
     if(foot) foot.style.display='none';
@@ -1224,6 +1226,8 @@
   }
   function closeRaw(){
     document.getElementById('agRawModal').classList.remove('show');
+    document.getElementById('agDays').style.display='none';    // age filter is workspace-only
+    document.getElementById('agDays').classList.remove('open');
     var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
     if(card) card.style.display='';
     if(foot) foot.style.display='';
