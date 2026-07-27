@@ -4917,6 +4917,7 @@ def get_customer_aging(aging_date=None):
 _bev_aging_cache = {}
 _mart_aging_cache = {}
 _oil_ar_cache = {}       # oil open-invoice RAW DATA (same shape as beverages; separate namespace)
+_bev_ar_cache = {}       # beverages open-invoice RAW DATA (the workspace; aging pivot is reconciliation)
 
 
 def _bev_cell(v):
@@ -5146,6 +5147,15 @@ def get_customer_aging_oil_ar(aging_date=None):
     B1 journal reconciliation), so the two need not tie exactly. Its own OILDOC:/OILSP: remark
     namespace keeps oil raw-invoice remarks apart from the per-document aging-detail remarks."""
     return _customer_aging_ar(aging_date, SAP_SCHEMA, 'oil', 'OILDOC:', 'OILSP:', _oil_ar_cache)
+
+
+def get_customer_aging_beverages_ar(aging_date=None):
+    """Open A/R invoice RAW DATA for Jivo Beverages (JIVO_BEVERAGES_HANADB) — the per-invoice
+    open-OINV list (dispatch/bilty, Actual Sales Person + Remarks) that backs the Beverages RAW
+    DATA workspace. Invoice-grained; a separate view from the Beverages aging pivot (which is B1
+    reconciliation), so the two need not tie. Its BEVDOC:/BEVSP: remark namespace is unchanged, so
+    remarks saved before the aging pivot moved to reconciliation are still shown here."""
+    return _customer_aging_ar(aging_date, BEVERAGES_SCHEMA, 'bev', 'BEVDOC:', 'BEVSP:', _bev_ar_cache)
 
 
 def get_customer_aging_mart(aging_date=None):

@@ -192,6 +192,23 @@ def api_customer_aging_oil_ar(request):
 
 @permission_flag_required('can_customer_aging', json_response=True)
 @require_http_methods(['GET'])
+def api_customer_aging_beverages_ar(request):
+    """Beverages open-invoice RAW DATA rows (dispatch/bilty, Actual Sales Person + Remarks) that
+    back the Beverages RAW DATA workspace on Customer Aging. Separate from the reconciliation aging
+    pivot. ?as_of=YYYY-MM-DD (default today)."""
+    from datetime import date, datetime
+    today = date.today()
+    try:
+        aging_date = datetime.strptime(request.GET.get('as_of', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        aging_date = today
+    if aging_date > today:
+        aging_date = today
+    return JsonResponse({'status': 'ok', **services.get_customer_aging_beverages_ar(aging_date)})
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['GET'])
 def api_customer_aging_mart(request):
     """Raw open-invoice aging rows for the Jivo Mart company, for the Mart toggle on Customer
     Aging. Same shape/behaviour as the Beverages endpoint. ?as_of=YYYY-MM-DD (default today)."""

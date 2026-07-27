@@ -458,10 +458,12 @@
   var CO_CFG = {
     // Oil keeps its B1 pivot as the main view; this config only feeds the on-demand RAW DATA
     // workspace (open-invoice list), so oil never uses the isAR() main-view A/R path.
-    oil:  {url:"{% url 'realise:api_customer_aging_oil_ar' %}", upload:"{% url 'realise:api_aging_remark_upload_oil' %}",
+    oil:  {url:"{% url 'realise:api_customer_aging_oil_ar' %}", rawUrl:"{% url 'realise:api_customer_aging_oil_ar' %}",
+           upload:"{% url 'realise:api_aging_remark_upload_oil' %}",
            clear:"{% url 'realise:api_aging_remark_clear_oil' %}",
            docPrefix:'OILDOC:', spPrefix:'OILSP:', pill:'Oil A/R', name:'Oil'},
-    bev:  {url:"{% url 'realise:api_customer_aging_beverages' %}", upload:"{% url 'realise:api_aging_remark_upload_beverages' %}",
+    bev:  {url:"{% url 'realise:api_customer_aging_beverages' %}", rawUrl:"{% url 'realise:api_customer_aging_beverages_ar' %}",
+           upload:"{% url 'realise:api_aging_remark_upload_beverages' %}",
            clear:"{% url 'realise:api_aging_remark_clear_beverages' %}",
            docPrefix:'BEVDOC:',  spPrefix:'BEVSP:',  pill:'Beverages A/R', name:'Beverages'}
   };
@@ -532,12 +534,13 @@
       .catch(function(){ if(company==='bev'){ applyBev({error:'load failed'}, asof); rerenderAll(); } });
   }
 
-  // Oil RAW DATA: fetch the open-invoice list into the shared RAW_BEV buffer on demand, WITHOUT
-  // rebuilding the main oil pivot (which stays the B1 reconciliation view). Feeds the workspace only.
+  // RAW DATA: fetch the company's open-invoice list into the shared RAW_BEV buffer on demand,
+  // WITHOUT rebuilding the main pivot (Oil & Beverages both keep their B1 view). Feeds the
+  // workspace only. Oil → oil A/R endpoint, Beverages → beverages A/R endpoint (rawUrl).
   function loadOilRaw(cb){
     var co=company, asof=document.getElementById('agAsOf').value||'';
     if(RAW_BEV && RAW_BEV_ASOF===asof && RAW_BEV_CO===co){ cb&&cb(); return; }
-    fetch(CO_CFG.oil.url+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
+    fetch((CO_CFG[co]||CO_CFG.oil).rawUrl+'?as_of='+encodeURIComponent(asof),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{};})
       .then(function(p){
         if(company!==co) return;
@@ -578,7 +581,7 @@
     document.getElementById('agDays').style.display = 'none';   // per-day multi-select was the old bev raw view only
     // RAW DATA workspace: Oil only now (fetched on demand; oil's pivot stays B1). Beverages moved
     // to the B1 reconciliation pivot + document detail drill, so it no longer has a raw workspace.
-    document.getElementById('agRawData').style.display = company==='oil' ? '' : 'none';
+    document.getElementById('agRawData').style.display = (company==='oil'||company==='bev') ? '' : 'none';
     // B2B/B2C segment split + filter is Mart-only (only Mart rows carry a GSTIN-based segment).
     document.getElementById('agSeg').style.display = company==='mart' ? '' : 'none';
     // Remarks filter + whole-book detail export are oil-only (built from oil's stored remarks / schema).
@@ -1501,8 +1504,7 @@
               // Refetch so the updated remarks show — oil only re-feeds the workspace (its main
               // view is the B1 pivot); beverages reloads its main A/R view.
               RAW_BEV=null;
-              if(company==='oil'){ loadOilRaw(function(){ refreshRawIfOpen(); }); }
-              else { loadBev(); }
+              loadOilRaw(function(){ refreshRawIfOpen(); });   // oil & bev both re-feed the RAW workspace
             } else { alert('Upload failed: '+((j&&j.error)||'unknown error')); }
           })
           .catch(function(){ alert('Upload failed — please try again.'); })
@@ -1530,8 +1532,7 @@
             if(j && j.status==='ok'){
               alert('Cleared '+j.cleared+' saved '+lbl+' value(s).');
               RAW_BEV=null;
-              if(company==='oil'){ loadOilRaw(function(){ refreshRawIfOpen(); }); }
-              else { loadBev(); }
+              loadOilRaw(function(){ refreshRawIfOpen(); });   // oil & bev both re-feed the RAW workspace
             } else { alert('Clear failed: '+((j&&j.error)||'unknown error')); }
           })
           .catch(function(){ alert('Clear failed — please try again.'); })
@@ -1555,12 +1556,12 @@
     document.getElementById('agExportDetail').addEventListener('click', exportAgingDetail);
     document.getElementById('agRawData').addEventListener('click', function(){
       if(document.getElementById('agRawModal').classList.contains('show')){ closeRaw(); return; }
-      if(company==='oil'){                       // oil: fetch open invoices on demand, then open
+      if(company==='oil'||company==='bev'){      // fetch the company's open invoices on demand, then open
         var b=this; b.disabled=true;
         loadOilRaw(function(){ b.disabled=false; openRawData(null,'table'); });
         return;
       }
-      openRawData(null, 'table');                // beverages already has RAW_BEV from its main view
+      openRawData(null, 'table');
     });
 
     document.getElementById('agSearch').addEventListener('input', applyFilters);

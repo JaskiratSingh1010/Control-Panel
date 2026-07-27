@@ -40,6 +40,7 @@ urlpatterns = [
     path('customer-aging/detail/',   views.customer_aging_detail,  name='customer_aging_detail'),
     path('api/customer-aging-beverages/', views.api_customer_aging_beverages, name='api_customer_aging_beverages'),
     path('api/customer-aging-oil-ar/', views.api_customer_aging_oil_ar, name='api_customer_aging_oil_ar'),
+    path('api/customer-aging-beverages-ar/', views.api_customer_aging_beverages_ar, name='api_customer_aging_beverages_ar'),
     path('api/customer-aging-mart/', views.api_customer_aging_mart, name='api_customer_aging_mart'),
     path('api/aging-remark/',        views.api_aging_remark,        name='api_aging_remark'),
     path('api/aging-due-days/',      views.api_aging_due_days,      name='api_aging_due_days'),
