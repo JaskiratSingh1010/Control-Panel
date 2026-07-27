@@ -204,7 +204,7 @@
   .agrx-pane.on{display:flex}
   /* Drill-by picker (Pivot tab) */
   .agrx-drill{flex:1 0 auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:150px}
-  #agRawSp{flex:0 0 auto}
+  #agRawSp,#agRawActSp{flex:0 0 auto}
   .agrx-drill .dlbl{font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#94a3b8;white-space:nowrap}
   .agrx-add{position:relative}
   .agrx-add>button{display:inline-flex;align-items:center;gap:8px;border:1px solid #e2e8f0;background:#fff;color:var(--rz-body);border-radius:9px;
@@ -387,6 +387,14 @@
           <div class="ag-ms-list" id="agRawSpList"></div>
         </div>
       </div>
+      <div class="ag-ms" id="agRawActSp" title="Show only the selected Actual Sales Persons" style="display:none">
+        <button type="button" class="agrx-btn" id="agRawActSpBtn"><span id="agRawActSpLabel">All actual SP</span><span class="agrx-caret">▾</span></button>
+        <div class="ag-ms-pop" id="agRawActSpPop">
+          <input type="text" id="agRawActSpSearch" placeholder="Search actual sales person…" style="width:100%;box-sizing:border-box;margin-bottom:6px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">
+          <div class="ag-ms-head"><a data-act="all">Select all</a><a data-act="clear">Clear</a></div>
+          <div class="ag-ms-list" id="agRawActSpList"></div>
+        </div>
+      </div>
       <span id="agPivTools" style="display:none">
         <span class="agrx-seg" id="agPivSign" title="Filter by Original Outstanding sign">
           <span class="agrx-seg-lbl">Outstanding</span>
@@ -486,6 +494,7 @@
   var BEV_DOCS_BY_CODE = {};           // customer code → joined doc-nos, for the main-search Doc No match
   var selectedDays = null;             // null = all; else {day:true} of INCLUDED days
   var rawSpFilter = null;              // null = all; else {salesPerson:true} of INCLUDED sales persons (RAW workspace)
+  var rawActSpFilter = null;          // same, for Actual Sales Person (effActualSp)
   var BUCKET_KEYS = BUCKETS.map(function(b){return b.key;});
 
   function emptyB(){ var o={original:0,balance_due:0}; BUCKET_KEYS.forEach(function(k){o[k]=0;}); return o; }
@@ -1003,6 +1012,37 @@
     document.getElementById('agRawSpLabel').textContent = all ? 'All sales persons' : (n+' sales person'+(n===1?'':'s'));
     refreshRawIfOpen();
   }
+  // Actual Sales Person multi-select (RAW DATA workspace) — pick which actual sales persons to show.
+  function rawActSpValues(){
+    var seen={}, out=[];
+    (RAW_BEV||[]).forEach(function(r){ var s=String(effActualSp(r)||''); if(s && !seen[s]){ seen[s]=1; out.push(s); } });
+    return out.sort(function(a,b){ return a.localeCompare(b); });
+  }
+  function populateRawActSp(){
+    var list=document.getElementById('agRawActSpList'); if(!list) return;
+    var vals=rawActSpValues();
+    list.innerHTML = vals.length
+      ? vals.map(function(s){ var on=!rawActSpFilter||!!rawActSpFilter[s];
+          return '<label data-sp="'+esc(s.toLowerCase())+'"><input type="checkbox" value="'+esc(s)+'"'+(on?' checked':'')+'>'+esc(s)+'</label>'; }).join('')
+      : '<div style="padding:8px;color:#94a3b8;font-size:12px">No actual sales persons</div>';
+    filterRawActSpList();
+  }
+  function filterRawActSpList(){
+    var q=(document.getElementById('agRawActSpSearch').value||'').trim().toLowerCase();
+    document.querySelectorAll('#agRawActSpList label').forEach(function(l){
+      l.style.display = (!q || l.getAttribute('data-sp').indexOf(q)!==-1) ? '' : 'none';
+    });
+  }
+  function syncRawActSp(){
+    var checked={}, all=true;
+    document.querySelectorAll('#agRawActSpList input').forEach(function(i){
+      if(i.checked) checked[i.value]=true; else all=false;
+    });
+    rawActSpFilter = all ? null : checked;
+    var n = all ? 0 : Object.keys(checked).length;
+    document.getElementById('agRawActSpLabel').textContent = all ? 'All actual SP' : (n+' actual SP');
+    refreshRawIfOpen();
+  }
 
   // Build the Remarks multi-select (split categories + any free-text remarks in use).
   function populateRem(){
@@ -1212,6 +1252,7 @@
     var rows=(RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
+      if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
         if(rawScope.type==='sp' && r.sp!==rawScope.sp) return false;
         if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
@@ -1263,6 +1304,8 @@
     document.getElementById('agDays').style.display='';        // show it while the workspace is open
     populateRawSp();                                            // Sales Person multi-select for the workspace
     document.getElementById('agRawSp').style.display='';
+    populateRawActSp();                                         // Actual Sales Person multi-select
+    document.getElementById('agRawActSp').style.display='';
     var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
     if(card) card.style.display='none';
     if(foot) foot.style.display='none';
@@ -1274,7 +1317,9 @@
     document.getElementById('agDays').classList.remove('open');
     document.getElementById('agRawSp').style.display='none';
     document.getElementById('agRawSp').classList.remove('open');
-    rawSpFilter=null;                                          // reset the sales-person filter on close
+    document.getElementById('agRawActSp').style.display='none';
+    document.getElementById('agRawActSp').classList.remove('open');
+    rawSpFilter=null; rawActSpFilter=null;                     // reset the sales-person filters on close
     var card=document.querySelector('.ag-card'), foot=document.querySelector('.ag-foot');
     if(card) card.style.display='';
     if(foot) foot.style.display='';
@@ -1349,6 +1394,7 @@
     return (RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
+      if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
         if(rawScope.type==='sp'   && r.sp!==rawScope.sp)   return false;
         if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
@@ -1666,6 +1712,19 @@
       var all = a.getAttribute('data-act')==='all';
       document.querySelectorAll('#agRawSpList input').forEach(function(i){ if(i.closest('label').style.display!=='none') i.checked = all; });
       syncRawSp();
+    });
+
+    // Actual Sales Person multi-select (RAW DATA workspace)
+    var rawActSp = document.getElementById('agRawActSp');
+    document.getElementById('agRawActSpBtn').addEventListener('click',function(e){ e.stopPropagation(); rawActSp.classList.toggle('open'); });
+    document.addEventListener('click',function(e){ if(!rawActSp.contains(e.target)) rawActSp.classList.remove('open'); });
+    document.getElementById('agRawActSpList').addEventListener('change', syncRawActSp);
+    document.getElementById('agRawActSpSearch').addEventListener('input', filterRawActSpList);
+    rawActSp.querySelector('.ag-ms-head').addEventListener('click',function(e){
+      var a = e.target.closest('a'); if(!a) return;
+      var all = a.getAttribute('data-act')==='all';
+      document.querySelectorAll('#agRawActSpList input').forEach(function(i){ if(i.closest('label').style.display!=='none') i.checked = all; });
+      syncRawActSp();
     });
 
     // RAW DATA workspace (Beverages) — tabs, table (search/filter/sort/CSV) + pivot (drill-by).
