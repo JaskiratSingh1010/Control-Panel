@@ -3133,6 +3133,7 @@ _COMPARE_LINE_SQL = '''
     ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+      AND I."ItemCode" LIKE 'FG%'
 '''
 
 

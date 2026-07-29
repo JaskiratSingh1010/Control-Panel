@@ -44,6 +44,8 @@
   .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef2f6;position:sticky;top:0;background:#fff}
   .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
   .com-dp-list{padding:4px 0}
+  .cs-itm-search{display:block;margin:8px 10px;padding:7px 10px;width:calc(100% - 20px);box-sizing:border-box;border:1px solid var(--rz-card-brd);border-radius:8px;font-size:12px;outline:none;background:#f8fafc}
+  .cs-itm-search:focus{border-color:var(--rz-indigo-deep);background:#fff}
   .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
   .com-dp-item:hover{background:#f4f7fb}
   .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
@@ -112,9 +114,6 @@
     <div class="cs-fld"><span class="cs-lbl">Customer</span>
       <input type="search" id="csCustSearch" placeholder="Search customer…" autocomplete="off">
     </div>
-    <div class="cs-fld"><span class="cs-lbl">Item</span>
-      <input type="search" id="csItemSearch" placeholder="Search item…" autocomplete="off">
-    </div>
     <div class="cs-fld"><span class="cs-lbl">Main Group</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="csMgBtn"><span id="csMgLabel">All groups</span><span class="com-caret">&#9662;</span></button>
@@ -150,6 +149,7 @@
         <button type="button" class="com-drill-btn" id="csItmBtn"><span id="csItmLabel">All items</span><span class="com-caret">&#9662;</span></button>
         <div class="com-drill-panel" id="csItmPanel">
           <div class="com-dp-head"><a id="csItmAll">Select All</a><a id="csItmClr">Clear All</a></div>
+          <input type="search" id="csItmSearch" class="cs-itm-search" placeholder="Search item…" autocomplete="off">
           <div class="com-dp-list" id="csItmList"></div>
           <div class="com-dp-foot"><button type="button" id="csItmApply">Apply</button></div>
         </div>
@@ -281,11 +281,11 @@
   var csAllNodes={};                                     // path -> pivot node (for the Calculate popup)
   var itemSel={};                                        // selected item paths (checkbox) → Calculate
   var csMonthsArr=[];                                    // current rendered months (for grand-total drill range)
-  var typeF='', compareMode='liters', custF='', itemF='', topN=0;
+  var typeF='', compareMode='liters', custF='', topN=0;
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
   var varAll=[], varSelected=[], varChosen=[];            // Variety filter (OITM.U_Variety)
-  var itmAll=[], itmSel=[], itmChosen=[];                 // Item picker (cascades off Type/Group/Variety/Pack Size)
+  var itmAll=[], itmSel=[], itmChosen=[], itmSearch='';   // Item picker (cascades off Type/Group/Variety/Pack Size) + in-panel search
 
   function rowVal(r,dim){
     var g=String(r.main_group||'').toUpperCase();
@@ -314,7 +314,6 @@
       if(!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
       if(!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
       if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
-      if(itemF&&String(r.item_name||'').toLowerCase().indexOf(itemF)===-1)continue;
       if(!r.ym)continue;
       if(!months[r.ym])months[r.ym]={ym:r.ym,label:r.mlabel||r.ym};
       out.push(r);
@@ -740,7 +739,10 @@
   function renderItemList(){
     var list=document.getElementById('csItmList'); list.innerHTML='';
     if(!itmAll.length){ list.innerHTML='<div class="com-dp-item" style="color:#94a3b8;cursor:default">No items</div>'; return; }
-    itmAll.forEach(function(n){
+    var q=(itmSearch||'').toLowerCase();
+    var shown=q?itmAll.filter(function(n){return n.toLowerCase().indexOf(q)!==-1;}):itmAll;
+    if(!shown.length){ list.innerHTML='<div class="com-dp-item" style="color:#94a3b8;cursor:default">No matches</div>'; return; }
+    shown.forEach(function(n){
       var on=itmChosen.indexOf(n)!==-1;
       var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
       item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(n)+'</span><span class="com-pos">&#10003;</span>';
@@ -781,7 +783,7 @@
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); if(!err)saveCache(); })
+      .then(function(p){ rows=(p.channel_month_rows||[]).filter(function(r){return r.is_fg;}); err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -789,7 +791,7 @@
   // Cache the fetched pivot for this browser session so leaving and returning to the tab
   // doesn't re-hit SAP. It is NOT auto-fetched: the cache lives until the user clicks Fetch
   // again (overwrites it) or does a full refresh / "Clear Cache & Refresh" (clears it).
-  var CS_CACHE_KEY='cs_compare_v1';
+  var CS_CACHE_KEY='cs_compare_v2';   // v2: rows are finished-goods only (drop PM/RM lines)
   function wasReload(){ try{var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0]; return nav&&nav.type==='reload';}catch(e){return false;} }
   function clearCacheOnReload(){
     var nocache=new URLSearchParams(location.search).get('nocache')==='1';
@@ -803,7 +805,7 @@
       var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
       var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
       if(c.months)document.getElementById('csMonths').value=c.months;
-      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); return true;
+      rows=(c.rows||[]).filter(function(r){return r.is_fg;}); err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); return true;
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
@@ -870,7 +872,6 @@
   document.getElementById('csType').addEventListener('change',function(){typeF=this.value;rebuildItemList();render();});
   var searchFilter=debounce(render,120);
   document.getElementById('csCustSearch').addEventListener('input',function(){custF=this.value.trim().toLowerCase();rebuildItemList();searchFilter();});
-  document.getElementById('csItemSearch').addEventListener('input',function(){itemF=this.value.trim().toLowerCase();searchFilter();});
   document.getElementById('csTopN').addEventListener('input',function(){var v=parseInt(this.value,10);topN=(!v||v<0)?0:v;searchFilter();});
   document.getElementById('csBody').addEventListener('click',function(e){
     var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
@@ -915,11 +916,12 @@
   })();
   // Items panel (cascades off the other filters)
   (function(){
-    var btn=document.getElementById('csItmBtn'), panel=document.getElementById('csItmPanel');
-    btn.addEventListener('click',function(e){e.stopPropagation();rebuildItemList();itmChosen=itmSel.slice();renderItemList();panel.classList.toggle('open');});
+    var btn=document.getElementById('csItmBtn'), panel=document.getElementById('csItmPanel'), srch=document.getElementById('csItmSearch');
+    btn.addEventListener('click',function(e){e.stopPropagation();itmSearch='';srch.value='';rebuildItemList();itmChosen=itmSel.slice();renderItemList();panel.classList.toggle('open');});
     panel.addEventListener('click',function(e){e.stopPropagation();});
     document.addEventListener('click',function(){panel.classList.remove('open');});
-    document.getElementById('csItmAll').addEventListener('click',function(){itmChosen=itmAll.slice();renderItemList();});
+    srch.addEventListener('input',function(){itmSearch=this.value.trim();renderItemList();});
+    document.getElementById('csItmAll').addEventListener('click',function(){itmChosen=itmAll.slice();renderItemList();});  // selects the full list, not just filtered
     document.getElementById('csItmClr').addEventListener('click',function(){itmChosen=[];renderItemList();});
     document.getElementById('csItmApply').addEventListener('click',function(){itmSel=itmChosen.slice();updateItemLabel();panel.classList.remove('open');render();});
   })();
