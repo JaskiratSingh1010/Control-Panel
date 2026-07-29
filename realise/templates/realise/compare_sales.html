@@ -4,17 +4,17 @@
 {% block extra_styles %}
 <style>
   .cp-main{background:var(--rz-bg) !important}
-  .cs-wrap{max-width:1500px;margin:0 auto}
+  .cs-wrap{max-width:1780px;margin:0 auto}
   .cs-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
   .cs-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
 
   /* Toolbar */
-  .cs-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:16px 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .cs-bar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:14px 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:12px 14px;box-shadow:var(--rz-shadow)}
   .cs-fld{display:flex;flex-direction:column;gap:5px}
   .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   .cs-bar input[type=number],.cs-bar input[type=search],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
-  .cs-bar input[type=number]{width:90px}
-  .cs-bar input[type=search]{min-width:190px}
+  .cs-bar input[type=number]{width:64px}
+  .cs-bar input[type=search]{min-width:150px}
   .cs-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .cs-bar input[type=number]:focus,.cs-bar input[type=search]:focus,.cs-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .cs-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -32,12 +32,12 @@
   .csd-tbl tr.csd-tot td{background:#eef2ff;font-weight:800;border-top:2px solid #c7d2fe}
   /* Compare segmented control */
   .cs-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:3px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-  .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 14px;border-radius:8px;cursor:pointer}
+  .cs-seg button{border:0;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);padding:7px 11px;border-radius:8px;cursor:pointer}
   .cs-seg button.active{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
 
   /* Dropdown panels (Main Group + Drill By) — shared with the Realise theme */
   .com-drill-box{position:relative}
-  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:8px;min-width:132px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
   .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
   .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:260px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
   .com-drill-panel.open{display:block}
@@ -95,7 +95,6 @@
 <div class="cs-wrap">
   <div>
     <h1 class="cs-h1">Compare Sales</h1>
-    <p class="cs-psub">Month-wise sales pivot — pick the period &amp; main group(s), then drill by any dimension. Compare Litres, Realise (₹/L), or both.</p>
   </div>
 
   <div class="cs-bar">
