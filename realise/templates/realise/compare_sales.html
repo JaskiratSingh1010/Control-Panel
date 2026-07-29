@@ -161,8 +161,9 @@
       </div>
     </div>
     <div class="cs-fld"><span class="cs-lbl">Compare</span>
-      <div class="cs-seg cs-metseg" id="csG1" title="Tick Litres and/or Realise — combine freely with the Pcs group">
+      <div class="cs-seg cs-metseg" id="csG1" title="Tick Litres / Revenue / Realise — combine freely with the Pcs group">
         <button type="button" data-metric="liters" class="active"><span class="cs-cb"></span>Litres</button>
+        <button type="button" data-metric="revenue"><span class="cs-cb"></span>Revenue</button>
         <button type="button" data-metric="realise"><span class="cs-cb"></span>Realise</button>
         <button type="button" data-both="g1" title="Litres + Realise">Both</button>
       </div>
@@ -298,22 +299,17 @@
   // fmt = on-screen cell text; xv = numeric value for the Excel export; lbl = small unit tag.
   var METRICS=[
     {k:'liters',  seg:'Litres',  lbl:'L',    hdr:'Litres',  fmt:function(L,R,P){return L?fN(Math.round(L)):'';},          xv:function(L,R,P){return Math.round(L);}},
-    {k:'revenue', seg:'Revenue', lbl:'₹',    hdr:'Revenue', fmt:function(L,R,P){return R?fRz(Math.round(R)):'';},         xv:function(L,R,P){return Math.round(R);}},
+    {k:'revenue', seg:'Revenue', lbl:'Rev',  hdr:'Revenue', fmt:function(L,R,P){return R?fRz(Math.round(R)):'';},         xv:function(L,R,P){return Math.round(R);}},
     {k:'realise', seg:'Realise', lbl:'₹/L',  hdr:'₹/L',     fmt:function(L,R,P){return L>0?fRz(R/L):'';},                 xv:function(L,R,P){return L>0?Math.round(R/L*100)/100:'';}},
     {k:'pieces',  seg:'Pieces',  lbl:'pcs',  hdr:'Pieces',  fmt:function(L,R,P){return P?fN(Math.round(P)):'';},          xv:function(L,R,P){return Math.round(P);}},
     {k:'rate',    seg:'Rate',    lbl:'₹/pc', hdr:'₹/Pc',    fmt:function(L,R,P){return P>0?fRz(R/P):'';},                 xv:function(L,R,P){return P>0?Math.round(R/P*100)/100:'';}}
   ];
   // Each metric pill has its own checkbox — tick any combination (Litres + Pieces + Rate, …).
-  // "Both" pills are shortcuts that toggle both metrics of their group. Revenue is not a pill;
-  // it rides along in the EXPORT whenever a group's Both (Litres+Realise or Pieces+Rate) is on.
-  var metricSel={liters:true, realise:false, pieces:false, rate:false};   // default: Litres
-  function _viewKeys(){ var ks=['liters','realise','pieces','rate'].filter(function(k){return metricSel[k];}); return ks.length?ks:['liters']; }
+  // "Both" pills are shortcuts that toggle both metrics of their group.
+  var metricSel={liters:true, revenue:false, realise:false, pieces:false, rate:false};   // default: Litres
+  function _viewKeys(){ var ks=['liters','revenue','realise','pieces','rate'].filter(function(k){return metricSel[k];}); return ks.length?ks:['liters']; }
   function activeMetrics(){ var ks=_viewKeys(); return METRICS.filter(function(m){return ks.indexOf(m.k)!==-1;}); }
-  function exportMetrics(){
-    var ks=_viewKeys();
-    if((metricSel.liters&&metricSel.realise)||(metricSel.pieces&&metricSel.rate))ks=ks.concat(['revenue']);
-    return METRICS.filter(function(m){return ks.indexOf(m.k)!==-1;});   // METRICS order keeps Revenue next to Litres
-  }
+  function exportMetrics(){ return activeMetrics(); }   // Revenue is its own checkbox — export mirrors the ticks exactly
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
   var varAll=[], varSelected=[], varChosen=[];            // Variety filter — OITM.U_Sub_Group (CANOLA / MUSTARD / SOYABEAN / …)
@@ -874,14 +870,16 @@
       }
       return cells;
     }
-    // Export the ticked metric columns (+ Revenue when a group's Both is on).
+    // Export the ticked metric columns; a left divider starts every month / grand / avg block.
     var mcols=exportMetrics().map(function(m){return {h:m.hdr, v:m.xv};}), nMet=mcols.length;
+    // metCells: one styled cell per metric for a block, with a left border on the block's first col.
+    function metCells(L,R,P,bold){ return mcols.map(function(c,i){ var o={value:c.v(L,R,P)}; if(bold)o.bold=true; if(i===0)o.border='l'; return o; }); }
     // Header row 1: month / Grand Total / Avg Sales names spanning the metric columns; row 2: the metric labels.
     var h1=dimCols.map(function(){return HD('');});
-    months.forEach(function(mo){ h1.push(HD(mo.label,{colspan:nMet,align:'center'})); });
-    h1.push(HD('Grand Total',{colspan:nMet,align:'center'})); h1.push(HD('Avg Sales',{colspan:nMet,align:'center'}));
+    months.forEach(function(mo){ h1.push(HD(mo.label,{colspan:nMet,align:'center',border:'l'})); });
+    h1.push(HD('Grand Total',{colspan:nMet,align:'center',border:'l'})); h1.push(HD('Avg Sales',{colspan:nMet,align:'center',border:'l'}));
     var h2=dimCols.map(function(l){return HD(l);});
-    for(var m=0;m<months.length+2;m++)mcols.forEach(function(c){h2.push(HD(c.h,{align:'center'}));});   // months + grand + avg
+    for(var m=0;m<months.length+2;m++)mcols.forEach(function(c,i){h2.push(HD(c.h,i===0?{align:'center',border:'l'}:{align:'center'}));});   // months + grand + avg
     var out=[h1,h2];
     // Emit ONLY leaf rows (deepest drill level) — every ancestor dimension is filled in on the leaf,
     // so no parent/child value duplication and the metric columns sum correctly.
@@ -890,18 +888,18 @@
         if(n.leaf){
           var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
           var row=dimCells(dc,false);
-          months.forEach(function(mo){ var L=n.byL[mo.ym]||0,R=n.byR[mo.ym]||0,P=n.byP[mo.ym]||0; mcols.forEach(function(c){row.push(c.v(L,R,P));}); });
-          mcols.forEach(function(c){row.push(c.v(n.totL||0,n.totR||0,n.totP||0));});
-          mcols.forEach(function(c){row.push(c.v((n.totL||0)/nMonths,(n.totR||0)/nMonths,(n.totP||0)/nMonths));});
+          months.forEach(function(mo){ var L=n.byL[mo.ym]||0,R=n.byR[mo.ym]||0,P=n.byP[mo.ym]||0; metCells(L,R,P,false).forEach(function(o){row.push(o);}); });
+          metCells(n.totL||0,n.totR||0,n.totP||0,false).forEach(function(o){row.push(o);});
+          metCells((n.totL||0)/nMonths,(n.totR||0)/nMonths,(n.totP||0)/nMonths,false).forEach(function(o){row.push(o);});
           out.push(row);
         } else walk(n.kids,depth+1,labels.concat([n.label]));
       });
     })(tree,0,[]);
     // TOTAL row
     var tr=dimCells(dims.map(function(k,i){return i===0?'TOTAL':'';}),true);
-    months.forEach(function(mo){ var L=colL[mo.ym]||0,R=colR[mo.ym]||0,P=colP[mo.ym]||0; mcols.forEach(function(c){tr.push({value:c.v(L,R,P),bold:true});}); });
-    mcols.forEach(function(c){tr.push({value:c.v(gL,gR,gP),bold:true});});
-    mcols.forEach(function(c){tr.push({value:c.v(gL/nMonths,gR/nMonths,gP/nMonths),bold:true});});
+    months.forEach(function(mo){ var L=colL[mo.ym]||0,R=colR[mo.ym]||0,P=colP[mo.ym]||0; metCells(L,R,P,true).forEach(function(o){tr.push(o);}); });
+    metCells(gL,gR,gP,true).forEach(function(o){tr.push(o);});
+    metCells(gL/nMonths,gR/nMonths,gP/nMonths,true).forEach(function(o){tr.push(o);});
     out.push(tr);
     var fn='Oil_Compare_Sales';
     fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
@@ -924,7 +922,7 @@
   });
   // Compare — pill-checkboxes across two groups; tick any combination. "Both" toggles a
   // group's pair. At least one metric always stays on.
-  function metCount(){ return ['liters','realise','pieces','rate'].filter(function(k){return metricSel[k];}).length; }
+  function metCount(){ return ['liters','revenue','realise','pieces','rate'].filter(function(k){return metricSel[k];}).length; }
   function syncMet(){
     ['csG1','csG2'].forEach(function(id){
       [].forEach.call(document.getElementById(id).children,function(b){
