@@ -858,13 +858,14 @@
     }
     // Only the metric(s) for the active Compare mode are exported (Litres → just Litres, etc.).
     var rate=function(rv,pc){ return pc>0?Math.round(rv/pc*100)/100:''; };   // ₹ per piece
+    var REV={h:'Revenue', v:function(L,R,P){return Math.round(R);}};   // Both modes include Revenue (full detail)
     var MODE_COLS={
       liters:  [{h:'Litres', v:function(L,R,P){return Math.round(L);}}],
       realise: [{h:'₹/L',    v:function(L,R,P){return rlz(R,L);}}],
-      both:    [{h:'Litres', v:function(L,R,P){return Math.round(L);}},{h:'₹/L', v:function(L,R,P){return rlz(R,L);}}],
+      both:    [{h:'Litres', v:function(L,R,P){return Math.round(L);}},REV,{h:'₹/L', v:function(L,R,P){return rlz(R,L);}}],
       pieces:  [{h:'Pieces', v:function(L,R,P){return Math.round(P);}}],
       rate:    [{h:'₹/Pc',   v:function(L,R,P){return rate(R,P);}}],
-      bothpcs: [{h:'Pieces', v:function(L,R,P){return Math.round(P);}},{h:'₹/Pc', v:function(L,R,P){return rate(R,P);}}]
+      bothpcs: [{h:'Pieces', v:function(L,R,P){return Math.round(P);}},REV,{h:'₹/Pc', v:function(L,R,P){return rate(R,P);}}]
     };
     var mcols=MODE_COLS[compareMode]||MODE_COLS.liters, nMet=mcols.length;
     // Header row 1: month / Grand Total / Avg Sales names spanning the metric columns; row 2: the metric labels.
