@@ -4082,7 +4082,7 @@ _OIH_LINE_SQL = f'''
 
 
 # Warehouses whose on-hand stock (in litres) is shown per item in the OIH popup.
-OIH_STOCK_WAREHOUSES = ['GP-FG', 'BH-EC', 'BH-PF']
+OIH_STOCK_WAREHOUSES = ['GP-FG', 'BH-EC', 'BH-PF', 'BH-BT']
 
 
 def _warehouse_stock_litres(item_codes):

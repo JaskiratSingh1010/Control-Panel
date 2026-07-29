@@ -88,7 +88,7 @@
   <div class="ois-topbar">
     <div>
       <h1 class="ois-h1">OIH vs Stock</h1>
-      <p class="ois-psub" id="oisSub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.</p>
+      <p class="ois-psub" id="oisSub">Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF / BH-BT.</p>
     </div>
     <div class="ois-drill">
       <div class="ois-cof" id="oisCo">
@@ -520,7 +520,7 @@
     var el=document.getElementById('oisSub'); if(!el)return;
     el.innerHTML = company==='bev'
       ? 'Open sales-order boxes (OIH) vs available stock per beverage. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Boxes = pieces &divide; pcs-per-box; stock is on-hand across the beverage godowns.'
-      : 'Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF.';
+      : 'Open sales-order litres (OIH) vs available stock per product. Required = Stock &minus; OIH (negative = shortfall to cover open orders; positive = surplus). Stock = on-hand across GP-FG / BH-EC / BH-PF / BH-BT.';
   }
 
   // Warehouse filter — which of GP-FG / BH-EC / BH-PF feed the Stock (and Required) columns.

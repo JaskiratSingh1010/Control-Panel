@@ -18,7 +18,7 @@ OWN_JOIN = 'LEFT JOIN {db}.OUSR U ON CAST({tbl}."U_Owner" AS VARCHAR(20))=CAST(U
 
 # Stock Available — finished-goods (ItmsGrpCod 102) stock by item, pivoted across these
 # warehouses (display order), classified into the canonical 16 Realise products.
-STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU']
+STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU', 'BH-BT']
 
 
 def get_stock_available(schema="jivo_oil"):
@@ -438,7 +438,7 @@ def get_not_billed(days=30,subgroup=None,item_type=None,schema="jivo_oil",
 # FG warehouses for the Non-Inventory report — a fixed set; everything else (e.g. BH-FU) is
 # excluded so "in stock" only counts these godowns. Applied to the oil/mart view (beverages,
 # which live in different warehouses, are left unrestricted).
-NON_INV_WHS = ['BH-PF', 'BH-FG', 'GP-FG', 'BH-EC']
+NON_INV_WHS = ['BH-PF', 'BH-FG', 'GP-FG', 'BH-EC', 'BH-BT']
 _NON_INV_WHS_IN = ",".join("'%s'" % w for w in NON_INV_WHS)
 
 
