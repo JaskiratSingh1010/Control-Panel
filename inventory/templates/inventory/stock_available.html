@@ -519,29 +519,33 @@
     function r2(v){ v=Number(v)||0; return Math.round(v*100)/100; }
     var groups=whs.concat(['Grand Total']);
     var out=[];
+    // A left divider ('border':'l') on the first column of every warehouse group keeps the
+    // Litres/Boxes/Pieces columns of adjacent warehouses visually separated in Excel.
     if(multi){
       var h1=[hc('U_Variety'),hc('ItemCode'),hc('ItemName'),hc('U_SKU')];
-      groups.forEach(function(g){ h1.push(hc(g,{colspan:nu,align:'center'})); });   // colspan merges; no filler cells
+      groups.forEach(function(g){ h1.push(hc(g,{colspan:nu,align:'center',border:'l'})); });   // colspan merges; no filler cells
       out.push(h1);
       var h2=[hc(''),hc(''),hc(''),hc('')];
-      groups.forEach(function(){ units.forEach(function(u){ h2.push(hc(u.lbl,{align:'right'})); }); });
+      groups.forEach(function(){ units.forEach(function(u,ui){ h2.push(hc(u.lbl, ui===0?{align:'right',border:'l'}:{align:'right'})); }); });
       out.push(h2);
     } else {
       var h=[hc('U_Variety'),hc('ItemCode'),hc('ItemName'),hc('U_SKU')];
-      whs.forEach(function(w){ h.push(hc(w,{align:'right'})); });
-      h.push(hc('Grand Total',{align:'right'}));
+      whs.forEach(function(w){ h.push(hc(w,{align:'right',border:'l'})); });
+      h.push(hc('Grand Total',{align:'right',border:'l'}));
       out.push(h);
     }
     var tot={}; whs.forEach(function(w){tot[w]=units.map(function(){return 0;});}); var gt=units.map(function(){return 0;});
     rows.forEach(function(it){
       var row=[it.variety||'—', it.item_code, it.item_name, it.sku||'—'];
-      whs.forEach(function(w){ units.forEach(function(u,ui){ var v=r2(u.get(it,w)); tot[w][ui]+=v; row.push(v||''); }); });
-      units.forEach(function(u,ui){ var v=r2(u.tot(it)); gt[ui]+=v; row.push(v); });
+      whs.forEach(function(w){ units.forEach(function(u,ui){ var v=r2(u.get(it,w)); tot[w][ui]+=v;
+        row.push(ui===0 ? {value:(v||''),align:'right',border:'l'} : (v||'')); }); });
+      units.forEach(function(u,ui){ var v=r2(u.tot(it)); gt[ui]+=v;
+        row.push(ui===0 ? {value:v,align:'right',border:'l'} : v); });
       out.push(row);
     });
-    var tr=[{value:'TOTAL',colspan:4,bold:true,fill:'FFF3E8'}];
-    whs.forEach(function(w){ units.forEach(function(u,ui){ tr.push({value:r2(tot[w][ui]),bold:true,fill:'FFF3E8',align:'right'}); }); });
-    units.forEach(function(u,ui){ tr.push({value:r2(gt[ui]),bold:true,fill:'FFF3E8',align:'right'}); });
+    var tr=[{value:'TOTAL',colspan:4,bold:true,fill:'FFF3E8',border:'l'}];
+    whs.forEach(function(w){ units.forEach(function(u,ui){ var c={value:r2(tot[w][ui]),bold:true,fill:'FFF3E8',align:'right'}; if(ui===0)c.border='l'; tr.push(c); }); });
+    units.forEach(function(u,ui){ var c={value:r2(gt[ui]),bold:true,fill:'FFF3E8',align:'right'}; if(ui===0)c.border='l'; tr.push(c); });
     out.push(tr);
     var fname='Stock '+selected.type+' '+selected.sub_group;
     fetch('/inventory/stock-available/view-export/',{method:'POST',

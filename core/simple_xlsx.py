@@ -40,16 +40,20 @@ _BASE_XFS = [
     '<xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>',    # 3
     '<xf numFmtId="0" fontId="1" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1"/>',    # 4
 ]
-_STYLE_KEYS = ('fill', 'color', 'bold', 'align', 'indent', 'numfmt')
+_BASE_BORDERS = [
+    '<border><left/><right/><top/><bottom/><diagonal/></border>',   # 0 (no border — matches legacy)
+]
+_STYLE_KEYS = ('fill', 'color', 'bold', 'align', 'indent', 'numfmt', 'border')
 
 
 class _Styles:
     def __init__(self):
         self.fonts = list(_BASE_FONTS)
         self.fills = list(_BASE_FILLS)
+        self.borders = list(_BASE_BORDERS)
         self.xfs = list(_BASE_XFS)
         self.numfmts = []          # [(numFmtId, formatCode)], ids start at 164
-        self._fonts, self._fills, self._nums, self._xfs = {}, {}, {}, {}
+        self._fonts, self._fills, self._nums, self._borders, self._xfs = {}, {}, {}, {}, {}
 
     @staticmethod
     def _rgb(hexstr):
@@ -87,6 +91,25 @@ class _Styles:
         self._fills[key] = idx
         return idx
 
+    def _border(self, sides):
+        """`border` cell key → a border id. `sides` is a string naming the edges that get a
+        medium grey rule, any of l/r/t/b (e.g. 'l' = left divider, 'lr', 'lrtb' = full box)."""
+        sides = str(sides or '').lower()
+        if not any(c in sides for c in 'lrtb'):
+            return 0
+        if sides in self._borders:
+            return self._borders[sides]
+        def edge(tag, ch):
+            return (f'<{tag} style="medium"><color rgb="FF64748B"/></{tag}>'
+                    if ch in sides else f'<{tag}/>')
+        xml = ('<border>' + edge('left', 'l') + edge('right', 'r')
+               + edge('top', 't') + edge('bottom', 'b') + '<diagonal/></border>')
+        idx = self.borders.index(xml) if xml in self.borders else len(self.borders)
+        if idx == len(self.borders):
+            self.borders.append(xml)
+        self._borders[sides] = idx
+        return idx
+
     def _numfmt(self, code):
         if not code:
             return 0               # 0 = General
@@ -105,11 +128,14 @@ class _Styles:
         font_id = self._font(spec.get('color'), spec.get('bold'))
         fill_id = self._fill(spec.get('fill'))
         num_id = self._numfmt(spec.get('numfmt'))
+        border_id = self._border(spec.get('border'))
         flags = ' applyFont="1"'
         if fill_id:
             flags += ' applyFill="1"'
         if num_id:
             flags += ' applyNumberFormat="1"'
+        if border_id:
+            flags += ' applyBorder="1"'
         align = spec.get('align')
         indent = spec.get('indent')
         align_xml = ''
@@ -122,9 +148,9 @@ class _Styles:
             align_xml = f'<alignment{attrs}/>'
             flags += ' applyAlignment="1"'
         if align_xml:
-            xf = f'<xf numFmtId="{num_id}" fontId="{font_id}" fillId="{fill_id}" borderId="0" xfId="0"{flags}>{align_xml}</xf>'
+            xf = f'<xf numFmtId="{num_id}" fontId="{font_id}" fillId="{fill_id}" borderId="{border_id}" xfId="0"{flags}>{align_xml}</xf>'
         else:
-            xf = f'<xf numFmtId="{num_id}" fontId="{font_id}" fillId="{fill_id}" borderId="0" xfId="0"{flags}/>'
+            xf = f'<xf numFmtId="{num_id}" fontId="{font_id}" fillId="{fill_id}" borderId="{border_id}" xfId="0"{flags}/>'
         idx = len(self.xfs)
         self.xfs.append(xf)
         self._xfs[key] = idx
@@ -141,7 +167,7 @@ class _Styles:
             f'{numfmts_xml}'
             f'<fonts count="{len(self.fonts)}">{"".join(self.fonts)}</fonts>'
             f'<fills count="{len(self.fills)}">{"".join(self.fills)}</fills>'
-            '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+            f'<borders count="{len(self.borders)}">{"".join(self.borders)}</borders>'
             '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
             f'<cellXfs count="{len(self.xfs)}">{"".join(self.xfs)}</cellXfs>'
             '</styleSheet>'
