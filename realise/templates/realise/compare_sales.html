@@ -145,6 +145,16 @@
         </div>
       </div>
     </div>
+    <div class="cs-fld"><span class="cs-lbl">Items</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="csItmBtn"><span id="csItmLabel">All items</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="csItmPanel">
+          <div class="com-dp-head"><a id="csItmAll">Select All</a><a id="csItmClr">Clear All</a></div>
+          <div class="com-dp-list" id="csItmList"></div>
+          <div class="com-dp-foot"><button type="button" id="csItmApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
     <div class="cs-fld"><span class="cs-lbl">Compare</span>
       <div class="cs-seg" id="csCompare">
         <button type="button" data-mode="liters" class="active">Litres</button>
@@ -275,6 +285,7 @@
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
   var varAll=[], varSelected=[], varChosen=[];            // Variety filter (OITM.U_Variety)
+  var itmAll=[], itmSel=[], itmChosen=[];                 // Item picker (cascades off Type/Group/Variety/Pack Size)
 
   function rowVal(r,dim){
     var g=String(r.main_group||'').toUpperCase();
@@ -294,11 +305,14 @@
     var skuset={}; skuSelected.forEach(function(s){skuset[s]=1;});
     var varAllSel=varSelected.length===0||varSelected.length===varAll.length;
     var varset={}; varSelected.forEach(function(v){varset[v]=1;});
+    var itmAllSel=itmSel.length===0||itmSel.length===itmAll.length;
+    var itmset={}; itmSel.forEach(function(n){itmset[n]=1;});
     for(var i=0;i<rows.length;i++){var r=rows[i];
       if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
       if(!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
       if(!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
+      if(!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
       if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
       if(itemF&&String(r.item_name||'').toLowerCase().indexOf(itemF)===-1)continue;
       if(!r.ym)continue;
@@ -689,6 +703,55 @@
     });
   }
 
+  // ── Item picker — cascades: lists only items that survive the Type / Main Group / Variety /
+  //    Pack Size / Customer filters (everything except the item picker itself), so after you
+  //    pick varieties this shows just those varieties' items to choose from. ──────────────────
+  function itemListSource(){
+    var mgAll=mgSelected.length===0||mgSelected.length===mgAllGroups.length;
+    var mgset={}; mgSelected.forEach(function(g){mgset[g]=1;});
+    var skuAllSel=skuSelected.length===0||skuSelected.length===skuAll.length;
+    var skuset={}; skuSelected.forEach(function(s){skuset[s]=1;});
+    var varAllSel=varSelected.length===0||varSelected.length===varAll.length;
+    var varset={}; varSelected.forEach(function(v){varset[v]=1;});
+    var out=[];
+    for(var i=0;i<rows.length;i++){var r=rows[i];
+      if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
+      if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
+      if(!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
+      if(!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
+      if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
+      out.push(r);
+    }
+    return out;
+  }
+  function rebuildItemList(){
+    var wasAll=(itmSel.length===0||itmSel.length===itmAll.length);   // preserve an "all" selection
+    var prev={}; itmSel.forEach(function(n){prev[n]=1;});
+    var seen={}; itmAll=[];
+    itemListSource().forEach(function(r){var n=String(r.item_name||'').trim().toUpperCase()||'—'; if(!seen[n]){seen[n]=1;itmAll.push(n);}});
+    itmAll.sort(function(a,b){return a.localeCompare(b);});
+    itmSel = wasAll ? itmAll.slice() : itmAll.filter(function(n){return prev[n];});   // keep explicit picks still in range
+    renderItemList(); updateItemLabel();
+  }
+  function updateItemLabel(){
+    document.getElementById('csItmLabel').textContent=
+      (itmSel.length===0||itmSel.length===itmAll.length)?'All items':(itmSel.length+' item(s)');
+  }
+  function renderItemList(){
+    var list=document.getElementById('csItmList'); list.innerHTML='';
+    if(!itmAll.length){ list.innerHTML='<div class="com-dp-item" style="color:#94a3b8;cursor:default">No items</div>'; return; }
+    itmAll.forEach(function(n){
+      var on=itmChosen.indexOf(n)!==-1;
+      var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(n)+'</span><span class="com-pos">&#10003;</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=itmChosen.indexOf(n); if(this.checked){if(i===-1)itmChosen.push(n);}else if(i!==-1)itmChosen.splice(i,1);
+        renderItemList();
+      });
+      list.appendChild(item);
+    });
+  }
+
   function renderDrillList(){
     var list=document.getElementById('csDrillList'); list.innerHTML='';
     DIMS.forEach(function(d){
@@ -718,7 +781,7 @@
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); render(); if(!err)saveCache(); })
+      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -740,7 +803,7 @@
       var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
       var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
       if(c.months)document.getElementById('csMonths').value=c.months;
-      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); render(); return true;
+      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); itmSel=[]; rebuildItemList(); render(); return true;
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
@@ -804,9 +867,9 @@
   document.getElementById('csFetch').addEventListener('click',load);
   document.getElementById('csExport').addEventListener('click',exportXlsx);
   document.getElementById('csMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
-  document.getElementById('csType').addEventListener('change',function(){typeF=this.value;render();});
+  document.getElementById('csType').addEventListener('change',function(){typeF=this.value;rebuildItemList();render();});
   var searchFilter=debounce(render,120);
-  document.getElementById('csCustSearch').addEventListener('input',function(){custF=this.value.trim().toLowerCase();searchFilter();});
+  document.getElementById('csCustSearch').addEventListener('input',function(){custF=this.value.trim().toLowerCase();rebuildItemList();searchFilter();});
   document.getElementById('csItemSearch').addEventListener('input',function(){itemF=this.value.trim().toLowerCase();searchFilter();});
   document.getElementById('csTopN').addEventListener('input',function(){var v=parseInt(this.value,10);topN=(!v||v<0)?0:v;searchFilter();});
   document.getElementById('csBody').addEventListener('click',function(e){
@@ -828,7 +891,7 @@
     document.addEventListener('click',function(){panel.classList.remove('open');});
     document.getElementById('csMgAll').addEventListener('click',function(){mgChosen=mgAllGroups.slice();renderMgList();});
     document.getElementById('csMgClr').addEventListener('click',function(){mgChosen=[];renderMgList();});
-    document.getElementById('csMgApply').addEventListener('click',function(){mgSelected=mgChosen.slice();updateMgLabel();panel.classList.remove('open');render();});
+    document.getElementById('csMgApply').addEventListener('click',function(){mgSelected=mgChosen.slice();updateMgLabel();rebuildItemList();panel.classList.remove('open');render();});
   })();
   // Pack Size (SKU) panel
   (function(){
@@ -838,7 +901,7 @@
     document.addEventListener('click',function(){panel.classList.remove('open');});
     document.getElementById('csSkuAll').addEventListener('click',function(){skuChosen=skuAll.slice();renderSkuList();});
     document.getElementById('csSkuClr').addEventListener('click',function(){skuChosen=[];renderSkuList();});
-    document.getElementById('csSkuApply').addEventListener('click',function(){skuSelected=skuChosen.slice();updateSkuLabel();panel.classList.remove('open');render();});
+    document.getElementById('csSkuApply').addEventListener('click',function(){skuSelected=skuChosen.slice();updateSkuLabel();rebuildItemList();panel.classList.remove('open');render();});
   })();
   // Variety panel
   (function(){
@@ -848,7 +911,17 @@
     document.addEventListener('click',function(){panel.classList.remove('open');});
     document.getElementById('csVarAll').addEventListener('click',function(){varChosen=varAll.slice();renderVarList();});
     document.getElementById('csVarClr').addEventListener('click',function(){varChosen=[];renderVarList();});
-    document.getElementById('csVarApply').addEventListener('click',function(){varSelected=varChosen.slice();updateVarLabel();panel.classList.remove('open');render();});
+    document.getElementById('csVarApply').addEventListener('click',function(){varSelected=varChosen.slice();updateVarLabel();rebuildItemList();panel.classList.remove('open');render();});
+  })();
+  // Items panel (cascades off the other filters)
+  (function(){
+    var btn=document.getElementById('csItmBtn'), panel=document.getElementById('csItmPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();rebuildItemList();itmChosen=itmSel.slice();renderItemList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('csItmAll').addEventListener('click',function(){itmChosen=itmAll.slice();renderItemList();});
+    document.getElementById('csItmClr').addEventListener('click',function(){itmChosen=[];renderItemList();});
+    document.getElementById('csItmApply').addEventListener('click',function(){itmSel=itmChosen.slice();updateItemLabel();panel.classList.remove('open');render();});
   })();
   // Drill By panel
   (function(){
