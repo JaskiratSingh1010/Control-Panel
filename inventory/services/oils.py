@@ -36,7 +36,7 @@ def get_stock_available(schema="jivo_oil"):
     rows = q(f"""SELECT
         I."ItemCode" AS "ItemCode", I."ItemName" AS "ItemName", O."Warehouse" AS "Warehouse",
         I."U_SKU" AS "U_SKU", I."U_Sub_Group" AS "U_Sub_Group", I."U_Variety" AS "U_Variety",
-        I."U_TYPE" AS "U_TYPE",
+        I."U_TYPE" AS "U_TYPE", MAX(I."SalFactor2") AS "SalFactor2",
         SUM(O."InQty" - O."OutQty") AS "Qty",
         CASE WHEN I."U_IsLitre" = 'Y' THEN SUM(O."InQty" - O."OutQty") * I."SalPackUn" ELSE 0 END AS "Litres"
     FROM {db}.OINM O
@@ -68,6 +68,7 @@ def get_stock_available(schema="jivo_oil"):
                 "wh": {w: 0.0 for w in STOCK_WAREHOUSES},
                 "wh_litres": {w: 0.0 for w in STOCK_WAREHOUSES},
                 "grand_total": 0.0, "litres": 0.0,
+                "pcs_per_box": float(r.get("SalFactor2") or 0),   # for Boxes = pieces / pcs_per_box
             }
         wcode = str(r.get("Warehouse") or "").strip().upper()
         qty = float(r.get("Qty") or 0)

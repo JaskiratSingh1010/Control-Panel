@@ -60,6 +60,12 @@
   .sa-sku{appearance:none;-webkit-appearance:none;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:9px;padding:7px 30px 7px 12px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;outline:none;
           background:rgba(255,255,255,.18) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='white' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>") no-repeat right 11px center}
   .sa-sku option{color:#1f2937;background:#fff}
+  /* Unit multi-select (Litres / Boxes / Pieces) — segmented multi-toggle */
+  .sa-unitsel{display:inline-flex;gap:0;border:1px solid rgba(255,255,255,.4);border-radius:9px;overflow:hidden}
+  .sa-unitsel button{border:0;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;outline:none;border-right:1px solid rgba(255,255,255,.25)}
+  .sa-unitsel button:last-child{border-right:0}
+  .sa-unitsel button:hover{background:rgba(255,255,255,.24)}
+  .sa-unitsel button.on{background:#fff;color:#0f172a}
   /* SKU multi-select (checkbox dropdown; pop is position:fixed to escape the card's overflow) */
   .sa-ms{position:relative}
   .sa-ms-btn{display:inline-flex;align-items:center;gap:8px;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:9px;
@@ -125,6 +131,11 @@
     <div class="sa-bar" id="saBar">
       <div><h2 id="saTableTitle">Stock</h2><div class="sa-meta" id="saTableMeta"></div></div>
       <div class="sa-bar-right">
+        <div class="sa-unitsel" id="saUnitSel" title="Show stock in these units (multi-select)">
+          <button type="button" data-u="litres" class="on">Litres</button>
+          <button type="button" data-u="boxes">Boxes</button>
+          <button type="button" data-u="pieces">Pieces</button>
+        </div>
         <label class="sa-sku-lbl" for="saSkuBtn">SKU</label>
         <div class="sa-ms" id="saSkuMs">
           <button type="button" class="sa-ms-btn" id="saSkuBtn">
@@ -279,6 +290,14 @@
 
   var DATA={warehouses:[],products:[],items:[]};
   var db='jivo_oil', typeF='', skuF=[], selected=null, selectedGrad='';   // skuF: selected SKUs; [] = all
+  // Stock table units (Jivo Oil): multi-select Litres / Boxes / Pieces. Boxes = pieces / pcs_per_box.
+  var unitSel={litres:true, boxes:false, pieces:false};
+  var UNIT_DEFS=[
+    {k:'litres', lbl:'L',   get:function(it,w){return Number((it.wh_litres||{})[w])||0;}, tot:function(it){return Number(it.litres)||0;}},
+    {k:'boxes',  lbl:'box', get:function(it,w){var p=Number(it.pcs_per_box)||0; return p>0?((Number((it.wh||{})[w])||0)/p):0;}, tot:function(it){var p=Number(it.pcs_per_box)||0; return p>0?((Number(it.grand_total)||0)/p):0;}},
+    {k:'pieces', lbl:'pcs', get:function(it,w){return Number((it.wh||{})[w])||0;}, tot:function(it){return Number(it.grand_total)||0;}}
+  ];
+  function activeUnits(){ var a=UNIT_DEFS.filter(function(u){return unitSel[u.k];}); return a.length?a:[UNIT_DEFS[0]]; }
   var grid=document.getElementById('saGrid');
   var panel=document.getElementById('saTableCard');
   var resizeTimer=null;
@@ -416,23 +435,35 @@
       .sort(function(a,b){return (Number(b.grand_total)||0)-(Number(a.grand_total)||0);});
     document.getElementById('saTableTitle').textContent=selected.type+' — '+selected.sub_group;
     document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items');
+    // Litres/Boxes/Pieces multi-select is oil-only (beverages carry boxes in the litres slot).
+    var oil=(db==='jivo_oil');
+    document.getElementById('saUnitSel').style.display = oil ? '' : 'none';
+    var units = oil ? activeUnits()
+                    : [{lbl:'', get:function(it,w){return Number((it.wh||{})[w])||0;}, tot:function(it){return Number(it.grand_total)||0;}}];
+    var multi = units.length>1;
+    function cellFmt(vals){ if(!vals.some(function(x){return x.v;})) return '';
+      return multi ? vals.map(function(x){return num(x.v)+' <span class="sa-unit">'+x.lbl+'</span>';}).join('<br>') : num(vals[0].v); }
+    function totFmt(vals){ return multi ? vals.map(function(x){return num(x.v)+' <span class="sa-unit">'+x.lbl+'</span>';}).join('<br>') : num(vals[0].v); }
     document.getElementById('saTableHead').innerHTML='<tr><th>U_Variety</th><th>ItemCode</th><th>ItemName</th><th>U_SKU</th>'
       +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total</th></tr>';
     if(!rows.length){
       document.getElementById('saTableBody').innerHTML='<tr><td colspan="'+(5+whs.length)+'" class="sa-empty">No stock for this product.</td></tr>';
       return;
     }
-    var tot={}; whs.forEach(function(w){tot[w]=0;}); var gt=0;
+    var tot={}; whs.forEach(function(w){tot[w]=units.map(function(){return 0;});}); var gt=units.map(function(){return 0;});
     var body=rows.map(function(it){
-      whs.forEach(function(w){tot[w]+=Number(it.wh[w])||0;}); gt+=Number(it.grand_total)||0;
+      var cells=whs.map(function(w){
+        var vals=units.map(function(u,ui){var v=u.get(it,w); tot[w][ui]+=v; return {v:v,lbl:u.lbl};});
+        return '<td class="num">'+cellFmt(vals)+'</td>';
+      }).join('');
+      var gvals=units.map(function(u,ui){var v=u.tot(it); gt[ui]+=v; return {v:v,lbl:u.lbl};});
       return '<tr><td><span class="sa-var">'+esc(it.variety||'—')+'</span></td>'
         +'<td>'+esc(it.item_code)+'</td><td>'+esc(it.item_name)+'</td><td>'+esc(it.sku||'—')+'</td>'
-        +whs.map(function(w){var v=Number(it.wh[w])||0;return '<td class="num">'+(v?num(v):'')+'</td>';}).join('')
-        +'<td class="num">'+num(it.grand_total)+'</td></tr>';
+        +cells+'<td class="num">'+totFmt(gvals)+'</td></tr>';
     }).join('');
     body+='<tr class="sa-total"><td colspan="4">TOTAL</td>'
-      +whs.map(function(w){return '<td class="num">'+num(tot[w])+'</td>';}).join('')
-      +'<td class="num">'+num(gt)+'</td></tr>';
+      +whs.map(function(w){return '<td class="num">'+totFmt(units.map(function(u,ui){return {v:tot[w][ui],lbl:u.lbl};}))+'</td>';}).join('')
+      +'<td class="num">'+totFmt(units.map(function(u,ui){return {v:gt[ui],lbl:u.lbl};}))+'</td></tr>';
     document.getElementById('saTableBody').innerHTML=body;
   }
 
@@ -448,6 +479,15 @@
     panel.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   document.getElementById('saClose').addEventListener('click',closeTable);
+  // Unit multi-toggle (Litres / Boxes / Pieces) — keeps at least one selected; re-renders the table.
+  document.getElementById('saUnitSel').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    var u=b.getAttribute('data-u'), n=Object.keys(unitSel).filter(function(k){return unitSel[k];}).length;
+    if(unitSel[u] && n<=1) return;          // don't allow zero units
+    unitSel[u]=!unitSel[u];
+    b.classList.toggle('on', unitSel[u]);
+    renderTable();
+  });
   // SKU multi-select: open/close (position:fixed so it escapes the card's overflow), per-checkbox
   // toggle, and Select all / Clear. skuF=[] means "all" (no filter).
   var saMs=document.getElementById('saSkuMs');
