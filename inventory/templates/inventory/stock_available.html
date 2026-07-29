@@ -92,6 +92,11 @@
   table.sa-table th,table.sa-table td{padding:10px 14px;text-align:left;border-bottom:1px solid #eef2f6;white-space:nowrap}
   table.sa-table th{position:sticky;top:0;background:#0f172a;color:#fff;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;z-index:1}
   table.sa-table td.num,table.sa-table th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  table.sa-table th.grp{text-align:center;border-left:2px solid rgba(255,255,255,.35)}
+  table.sa-table th.sub{top:36px;font-size:10px;padding-top:4px;padding-bottom:4px;opacity:.9}
+  table.sa-table td.grpstart{border-left:2px solid #d7dee7}
+  table.sa-table th.sub.grpstart{border-left:2px solid rgba(255,255,255,.35)}
+  table.sa-table tr.sa-total td.grpstart{border-left-color:#c3ccd8}
   table.sa-table tbody tr:nth-child(even) td{background:#f8fafc}
   table.sa-table tbody tr:hover td{background:#eef2ff}
   table.sa-table tbody tr.sa-total td,
@@ -440,30 +445,39 @@
     document.getElementById('saUnitSel').style.display = oil ? '' : 'none';
     var units = oil ? activeUnits()
                     : [{lbl:'', get:function(it,w){return Number((it.wh||{})[w])||0;}, tot:function(it){return Number(it.grand_total)||0;}}];
-    var multi = units.length>1;
-    function cellFmt(vals){ if(!vals.some(function(x){return x.v;})) return '';
-      return multi ? vals.map(function(x){return num(x.v)+' <span class="sa-unit">'+x.lbl+'</span>';}).join('<br>') : num(vals[0].v); }
-    function totFmt(vals){ return multi ? vals.map(function(x){return num(x.v)+' <span class="sa-unit">'+x.lbl+'</span>';}).join('<br>') : num(vals[0].v); }
-    document.getElementById('saTableHead').innerHTML='<tr><th>U_Variety</th><th>ItemCode</th><th>ItemName</th><th>U_SKU</th>'
-      +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total</th></tr>';
+    var nu = units.length, multi = nu>1;
+    // Each warehouse becomes a group of `nu` columns (Litres / Boxes / Pieces) when >1 unit is picked.
+    var groups = whs.concat(['Grand Total']);   // trailing Grand-Total group
+    if(multi){
+      var h1='<tr><th rowspan="2">U_Variety</th><th rowspan="2">ItemCode</th><th rowspan="2">ItemName</th><th rowspan="2">U_SKU</th>'
+        + groups.map(function(g){return '<th class="num grp" colspan="'+nu+'">'+esc(g)+'</th>';}).join('') + '</tr>';
+      var sub = units.map(function(u,ui){return '<th class="num sub'+(ui===0?' grpstart':'')+'">'+esc(u.lbl)+'</th>';}).join('');
+      document.getElementById('saTableHead').innerHTML=h1+'<tr>'+groups.map(function(){return sub;}).join('')+'</tr>';
+    } else {
+      document.getElementById('saTableHead').innerHTML='<tr><th>U_Variety</th><th>ItemCode</th><th>ItemName</th><th>U_SKU</th>'
+        +whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join('')+'<th class="num">Grand Total</th></tr>';
+    }
+    var NCOL = 4 + (whs.length+1)*nu;
     if(!rows.length){
-      document.getElementById('saTableBody').innerHTML='<tr><td colspan="'+(5+whs.length)+'" class="sa-empty">No stock for this product.</td></tr>';
+      document.getElementById('saTableBody').innerHTML='<tr><td colspan="'+NCOL+'" class="sa-empty">No stock for this product.</td></tr>';
       return;
+    }
+    function uCells(getV, accum, blankZero){   // one <td> per unit for a group
+      return units.map(function(u,ui){ var v=getV(u,ui); if(accum)accum(ui,v);
+        var show=(blankZero&&!v)?'':num(v);
+        return '<td class="num'+(multi&&ui===0?' grpstart':'')+'">'+show+'</td>'; }).join('');
     }
     var tot={}; whs.forEach(function(w){tot[w]=units.map(function(){return 0;});}); var gt=units.map(function(){return 0;});
     var body=rows.map(function(it){
-      var cells=whs.map(function(w){
-        var vals=units.map(function(u,ui){var v=u.get(it,w); tot[w][ui]+=v; return {v:v,lbl:u.lbl};});
-        return '<td class="num">'+cellFmt(vals)+'</td>';
-      }).join('');
-      var gvals=units.map(function(u,ui){var v=u.tot(it); gt[ui]+=v; return {v:v,lbl:u.lbl};});
+      var cells=whs.map(function(w){ return uCells(function(u){return u.get(it,w);}, function(ui,v){tot[w][ui]+=v;}, true); }).join('');
+      var gcells=uCells(function(u){return u.tot(it);}, function(ui,v){gt[ui]+=v;}, false);
       return '<tr><td><span class="sa-var">'+esc(it.variety||'—')+'</span></td>'
         +'<td>'+esc(it.item_code)+'</td><td>'+esc(it.item_name)+'</td><td>'+esc(it.sku||'—')+'</td>'
-        +cells+'<td class="num">'+totFmt(gvals)+'</td></tr>';
+        +cells+gcells+'</tr>';
     }).join('');
     body+='<tr class="sa-total"><td colspan="4">TOTAL</td>'
-      +whs.map(function(w){return '<td class="num">'+totFmt(units.map(function(u,ui){return {v:tot[w][ui],lbl:u.lbl};}))+'</td>';}).join('')
-      +'<td class="num">'+totFmt(units.map(function(u,ui){return {v:gt[ui],lbl:u.lbl};}))+'</td></tr>';
+      +whs.map(function(w){return uCells(function(u,ui){return tot[w][ui];},null,false);}).join('')
+      +uCells(function(u,ui){return gt[ui];},null,false)+'</tr>';
     document.getElementById('saTableBody').innerHTML=body;
   }
 
