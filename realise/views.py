@@ -828,14 +828,16 @@ def _aggregate_channel_month_rows(raw_rows):
                 'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
                 'card_name': card_name, 'sku': sku, 'u_variety': variety, 'is_fg': is_fg,
                 'ym': ym, 'mlabel': '%s %s' % (mon, year),
-                'liter': 0.0, 'line_total': 0.0,
+                'liter': 0.0, 'line_total': 0.0, 'pcs': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
         bucket['line_total'] += float(row.get('LineTotal', 0) or 0)
+        bucket['pcs'] += float(row.get('Quantity', 0) or 0)   # selling units (bottles/cans) → Pieces / Rate view
     out = list(agg.values())
     for b in out:
         b['liter'] = round(b['liter'], 2)
         b['line_total'] = round(b['line_total'], 2)
+        b['pcs'] = round(b['pcs'], 2)
     return out
 
 

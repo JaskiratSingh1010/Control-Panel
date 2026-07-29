@@ -161,6 +161,13 @@
         <button type="button" data-mode="both">Both</button>
       </div>
     </div>
+    <div class="cs-fld"><span class="cs-lbl">Compare (Pcs)</span>
+      <div class="cs-seg" id="csComparePcs">
+        <button type="button" data-mode="pieces">Pieces</button>
+        <button type="button" data-mode="rate">Rate</button>
+        <button type="button" data-mode="bothpcs">Both</button>
+      </div>
+    </div>
     <div class="cs-fld"><span class="cs-lbl">Drill By</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="csDrillBtn"><span id="csDrillLabel">Main Group</span><span class="com-caret">&#9662;</span></button>
@@ -324,9 +331,10 @@
     if(depth>=dims.length)return [];
     var dim=dims[depth], map={}, ord=[];
     for(var i=0;i<subset.length;i++){var r=subset[i],k=rowVal(r,dim);
-      var n=map[k]; if(!n){n=map[k]={label:k,dim:dim,byL:{},byR:{},totL:0,totR:0,_rows:[]};ord.push(k);}
-      var L=Number(r.liter)||0, R=Number(r.line_total)||0;
-      n.byL[r.ym]=(n.byL[r.ym]||0)+L; n.byR[r.ym]=(n.byR[r.ym]||0)+R; n.totL+=L; n.totR+=R; n._rows.push(r);
+      var n=map[k]; if(!n){n=map[k]={label:k,dim:dim,byL:{},byR:{},byP:{},totL:0,totR:0,totP:0,_rows:[]};ord.push(k);}
+      var L=Number(r.liter)||0, R=Number(r.line_total)||0, P=Number(r.pcs)||0;
+      n.byL[r.ym]=(n.byL[r.ym]||0)+L; n.byR[r.ym]=(n.byR[r.ym]||0)+R; n.byP[r.ym]=(n.byP[r.ym]||0)+P;
+      n.totL+=L; n.totR+=R; n.totP+=P; n._rows.push(r);
     }
     return ord.map(function(k){var n=map[k]; n.path=prefix+'>'+dim+':'+k;
       n.filters=Object.assign({},pfilters||{}); n.filters[dim]=k;   // accumulate dim→value down the path
@@ -335,14 +343,22 @@
     }).sort(function(a,b){return b.totL-a.totL||String(a.label).localeCompare(String(b.label));});
   }
 
-  // One cell for liters L and revenue R under the active Compare mode.
-  function cell(L,R){
+  // One cell for litres L, revenue R and pieces P under the active Compare mode.
+  //   liters/realise/both → Litres, ₹/L, or both;  pieces/rate/bothpcs → Pieces, ₹/piece, or both.
+  function cell(L,R,P){
+    P=Number(P)||0;
     if(compareMode==='realise')return L>0?fRz(R/L):'';
     if(compareMode==='both'){
       if(!L&&!R)return '';
       return '<div>'+(L?fN(Math.round(L)):'—')+'</div><div class="cs-r">'+(L>0?fRz(R/L):'')+'</div>';
     }
-    return L?fN(Math.round(L)):'';
+    if(compareMode==='pieces')return P?fN(Math.round(P)):'';
+    if(compareMode==='rate')return P>0?fRz(R/P):'';
+    if(compareMode==='bothpcs'){
+      if(!P&&!R)return '';
+      return '<div>'+(P?fN(Math.round(P)):'—')+'</div><div class="cs-r">'+(P>0?fRz(R/P):'')+'</div>';
+    }
+    return L?fN(Math.round(L)):'';   // liters
   }
 
   // Build the pivot tree, then — only when the FIRST drill dimension is the Item — keep the top N
@@ -365,11 +381,11 @@
       var chk=(n.dim==='item')?'<input type="checkbox" class="cs-isel" title="Select to compare" data-cspath="'+esc(n.path)+'"'+(itemSel[n.path]?' checked':'')+'>':'';
       var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-cstoggle="'+esc(n.path)+'"':'')+'>'+tw+chk+tag+esc(n.label)+'</td>';
       var cells=months.map(function(mo){
-        var L=n.byL[mo.ym]||0, R=n.byR[mo.ym]||0;
-        var clk=(L||R)?' class="cs-vcell" data-cspath="'+esc(n.path)+'" data-csym="'+esc(mo.ym)+'" data-cslabel="'+esc(mo.label)+'" title="Click to see the invoices behind this value"':'';
-        return '<td'+clk+'>'+cell(L,R)+'</td>';
+        var L=n.byL[mo.ym]||0, R=n.byR[mo.ym]||0, P=n.byP[mo.ym]||0;
+        var clk=(L||R||P)?' class="cs-vcell" data-cspath="'+esc(n.path)+'" data-csym="'+esc(mo.ym)+'" data-cslabel="'+esc(mo.label)+'" title="Click to see the invoices behind this value"':'';
+        return '<td'+clk+'>'+cell(L,R,P)+'</td>';
       }).join('');
-      html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR)+'</td><td class="cs-avg">'+cell(n.totL/nM,n.totR/nM)+'</td></tr>';
+      html+='<tr>'+name+cells+'<td class="cs-grand">'+cell(n.totL,n.totR,n.totP)+'</td><td class="cs-avg">'+cell(n.totL/nM,n.totR/nM,n.totP/nM)+'</td></tr>';
       if(hasKids&&open)html+=treeRows(n.kids,months,depth+1);
     });
     return html;
@@ -463,10 +479,10 @@
     if(!arows.length){body.innerHTML='<tr><td class="cs-empty" colspan="'+(months.length+3)+'">No sales in this selection.</td></tr>';return;}
     var tree=pivotTree(arows,dims);          // top-level nodes, sliced to Top N when Item is first
     // Totals row — summed over the DISPLAYED top-level nodes, so Top N totals reflect the shown items.
-    var colL={},colR={},gL=0,gR=0;
-    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);});gL+=n.totL;gR+=n.totR;});
-    var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0)+'</td>';}).join('');
-    var totRow='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths)+'</td></tr>';
+    var colL={},colR={},colP={},gL=0,gR=0,gP=0;
+    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);colP[mo.ym]=(colP[mo.ym]||0)+(n.byP[mo.ym]||0);});gL+=n.totL;gR+=n.totR;gP+=n.totP;});
+    var totCells=months.map(function(mo){return '<td>'+cell(colL[mo.ym]||0,colR[mo.ym]||0,colP[mo.ym]||0)+'</td>';}).join('');
+    var totRow='<tr class="cs-total"><td class="gc-name">TOTAL</td>'+totCells+'<td class="cs-grand">'+cell(gL,gR,gP)+'</td><td class="cs-avg">'+cell(gL/nMonths,gR/nMonths,gP/nMonths)+'</td></tr>';
     body.innerHTML=totRow+treeRows(tree,months,0);   // TOTAL pinned on top, then the drilldown rows
     updateCalcBtn();                                  // refresh the Calculate (N) button for valid selections
   }
@@ -815,17 +831,18 @@
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
-  // Excel export — ONE sheet with Litres + Revenue + Realise (₹/L) grouped under each month
-  // (two-row header). The Item dimension is split into separate Item Code + Item Name columns.
-  // Respects the drill order, Type / Main-Group / Customer / Item / Product-SKU filters.
+  // Excel export — ONE sheet, one metric block per month (two-row header) for whichever Compare
+  // mode is active (Litres / Realise / Both / Pieces / Rate / Both-pcs). Only LEAF rows are
+  // written (each ancestor dimension filled in) so nothing double-counts. The Item dimension is
+  // split into Item Code + Item Name. Respects the drill order and all active filters.
   function exportXlsx(){
     var a=activeRows(), months=a.months, dims=order.length?order:['group'];
     var arows=csRefine.filterRows(a.rows);
     if(!arows.length){ window.alert('No data to export — click Fetch first.'); return; }
     var nMonths=months.length||1;
     var tree=pivotTree(arows,dims);          // respects the Top N Items slice when Item is first
-    var colL={},colR={},gL=0,gR=0;
-    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);});gL+=n.totL;gR+=n.totR;});
+    var colL={},colR={},colP={},gL=0,gR=0,gP=0;
+    tree.forEach(function(n){months.forEach(function(mo){colL[mo.ym]=(colL[mo.ym]||0)+(n.byL[mo.ym]||0);colR[mo.ym]=(colR[mo.ym]||0)+(n.byR[mo.ym]||0);colP[mo.ym]=(colP[mo.ym]||0)+(n.byP[mo.ym]||0);});gL+=n.totL;gR+=n.totR;gP+=n.totP;});
     // Left dimension columns — the Item dim becomes TWO physical columns (Item Code + Item Name).
     var dimCols=[]; dims.forEach(function(k){ if(k==='item'){dimCols.push('Item Code');dimCols.push('Item Name');} else dimCols.push(DIM_LABEL[k]); });
     var HD=function(v,ex){ var o={value:v,bold:true,fill:'0F172A',color:'FFFFFF'}; if(ex)for(var k in ex)o[k]=ex[k]; return o; };
@@ -839,30 +856,43 @@
       }
       return cells;
     }
-    // Header row 1: month/group names spanning the 3 metric columns; row 2: Litres / Revenue / ₹/L.
-    var trip=['Litres','Revenue','₹/L'];
+    // Only the metric(s) for the active Compare mode are exported (Litres → just Litres, etc.).
+    var rate=function(rv,pc){ return pc>0?Math.round(rv/pc*100)/100:''; };   // ₹ per piece
+    var MODE_COLS={
+      liters:  [{h:'Litres', v:function(L,R,P){return Math.round(L);}}],
+      realise: [{h:'₹/L',    v:function(L,R,P){return rlz(R,L);}}],
+      both:    [{h:'Litres', v:function(L,R,P){return Math.round(L);}},{h:'₹/L', v:function(L,R,P){return rlz(R,L);}}],
+      pieces:  [{h:'Pieces', v:function(L,R,P){return Math.round(P);}}],
+      rate:    [{h:'₹/Pc',   v:function(L,R,P){return rate(R,P);}}],
+      bothpcs: [{h:'Pieces', v:function(L,R,P){return Math.round(P);}},{h:'₹/Pc', v:function(L,R,P){return rate(R,P);}}]
+    };
+    var mcols=MODE_COLS[compareMode]||MODE_COLS.liters, nMet=mcols.length;
+    // Header row 1: month / Grand Total / Avg Sales names spanning the metric columns; row 2: the metric labels.
     var h1=dimCols.map(function(){return HD('');});
-    months.forEach(function(mo){ h1.push(HD(mo.label,{colspan:3,align:'center'})); });
-    h1.push(HD('Grand Total',{colspan:3,align:'center'})); h1.push(HD('Avg Sales',{colspan:3,align:'center'}));
+    months.forEach(function(mo){ h1.push(HD(mo.label,{colspan:nMet,align:'center'})); });
+    h1.push(HD('Grand Total',{colspan:nMet,align:'center'})); h1.push(HD('Avg Sales',{colspan:nMet,align:'center'}));
     var h2=dimCols.map(function(l){return HD(l);});
-    for(var m=0;m<months.length+2;m++)trip.forEach(function(t){h2.push(HD(t,{align:'center'}));});   // months + grand + avg
+    for(var m=0;m<months.length+2;m++)mcols.forEach(function(c){h2.push(HD(c.h,{align:'center'}));});   // months + grand + avg
     var out=[h1,h2];
+    // Emit ONLY leaf rows (deepest drill level) — every ancestor dimension is filled in on the leaf,
+    // so no parent/child value duplication and the metric columns sum correctly.
     (function walk(nodes,depth,labels){
       nodes.forEach(function(n){
-        var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
-        var row=dimCells(dc,false);
-        months.forEach(function(mo){ var lt=n.byL[mo.ym]||0, rv=n.byR[mo.ym]||0; row.push(Math.round(lt)); row.push(Math.round(rv)); row.push(rlz(rv,lt)); });
-        row.push(Math.round(n.totL||0)); row.push(Math.round(n.totR||0)); row.push(rlz(n.totR||0,n.totL||0));
-        row.push(Math.round((n.totL||0)/nMonths)); row.push(Math.round((n.totR||0)/nMonths)); row.push(rlz(n.totR||0,n.totL||0));
-        out.push(row);
-        if(!n.leaf)walk(n.kids,depth+1,labels.concat([n.label]));
+        if(n.leaf){
+          var dc=[]; for(var i=0;i<dims.length;i++)dc.push(i<depth?labels[i]:(i===depth?n.label:''));
+          var row=dimCells(dc,false);
+          months.forEach(function(mo){ var L=n.byL[mo.ym]||0,R=n.byR[mo.ym]||0,P=n.byP[mo.ym]||0; mcols.forEach(function(c){row.push(c.v(L,R,P));}); });
+          mcols.forEach(function(c){row.push(c.v(n.totL||0,n.totR||0,n.totP||0));});
+          mcols.forEach(function(c){row.push(c.v((n.totL||0)/nMonths,(n.totR||0)/nMonths,(n.totP||0)/nMonths));});
+          out.push(row);
+        } else walk(n.kids,depth+1,labels.concat([n.label]));
       });
     })(tree,0,[]);
     // TOTAL row
     var tr=dimCells(dims.map(function(k,i){return i===0?'TOTAL':'';}),true);
-    months.forEach(function(mo){ var lt=colL[mo.ym]||0, rv=colR[mo.ym]||0; tr.push({value:Math.round(lt),bold:true}); tr.push({value:Math.round(rv),bold:true}); tr.push({value:rlz(rv,lt),bold:true}); });
-    tr.push({value:Math.round(gL),bold:true}); tr.push({value:Math.round(gR),bold:true}); tr.push({value:rlz(gR,gL),bold:true});
-    tr.push({value:Math.round(gL/nMonths),bold:true}); tr.push({value:Math.round(gR/nMonths),bold:true}); tr.push({value:rlz(gR,gL),bold:true});
+    months.forEach(function(mo){ var L=colL[mo.ym]||0,R=colR[mo.ym]||0,P=colP[mo.ym]||0; mcols.forEach(function(c){tr.push({value:c.v(L,R,P),bold:true});}); });
+    mcols.forEach(function(c){tr.push({value:c.v(gL,gR,gP),bold:true});});
+    mcols.forEach(function(c){tr.push({value:c.v(gL/nMonths,gR/nMonths,gP/nMonths),bold:true});});
     out.push(tr);
     var fn='Oil_Compare_Sales';
     fetch('/realise/api/export-xlsx/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
@@ -883,13 +913,21 @@
     var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
     var p=t.getAttribute('data-cstoggle'); expanded[p]=!expanded[p]; render();
   });
-  // Compare segmented control
-  document.getElementById('csCompare').addEventListener('click',function(e){
-    var b=e.target.closest('button'); if(!b)return;
-    compareMode=b.getAttribute('data-mode');
-    [].forEach.call(this.children,function(x){x.classList.toggle('active',x===b);});
-    render();
-  });
+  // Compare segmented controls — Litres/Realise/Both and Pieces/Rate/Both act as ONE metric
+  // selector: exactly one option is active across both groups.
+  function wireCompare(id){
+    var el=document.getElementById(id); if(!el)return;
+    el.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b)return;
+      compareMode=b.getAttribute('data-mode');
+      ['csCompare','csComparePcs'].forEach(function(gid){
+        var g=document.getElementById(gid); if(!g)return;
+        [].forEach.call(g.children,function(x){x.classList.toggle('active',x.getAttribute('data-mode')===compareMode);});
+      });
+      render();
+    });
+  }
+  wireCompare('csCompare'); wireCompare('csComparePcs');
   // Main Group panel
   (function(){
     var btn=document.getElementById('csMgBtn'), panel=document.getElementById('csMgPanel');
