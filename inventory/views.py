@@ -76,6 +76,37 @@ def stock_available_export(request):
     return resp
 
 
+@permission_flag_required('can_stock_available', json_response=True)
+@require_http_methods(['POST'])
+def stock_available_view_export(request):
+    """Build an .xlsx from the client-supplied grouped table currently on screen (honours the
+    Litres/Boxes/Pieces unit selection, SKU filter and per-warehouse column groups).
+    Body: {filename, sheets:[{name, rows:[[cell, ...], ...]}]} — cell is a scalar (numbers →
+    real numeric cells) or {value, colspan, bold, fill, color, align}."""
+    from core.simple_xlsx import build_workbook
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        body = {}
+    sheets_in = body.get('sheets') or []
+    sheets = []
+    for s in sheets_in:
+        if isinstance(s, dict) and isinstance(s.get('rows'), list) and s['rows']:
+            sheets.append((str(s.get('name') or 'Sheet'), s['rows']))
+    if not sheets:
+        return JsonResponse({'error': 'no rows to export'}, status=400)
+    import re as _re
+    content = build_workbook(sheets)
+    fname = _re.sub(r'[^A-Za-z0-9._ -]', '_', str(body.get('filename') or 'Stock'))[:120]
+    if not fname.lower().endswith('.xlsx'):
+        fname += '.xlsx'
+    resp = HttpResponse(
+        content,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    return resp
+
+
 @permission_flag_required('can_non_inventory')
 def non_inventory(request):
     """Standalone Finished-Goods 'Non-Inventory' report — in-stock FG as a non-moving aging

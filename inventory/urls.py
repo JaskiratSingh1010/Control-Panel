@@ -39,6 +39,7 @@ urlpatterns = [
     path('stock-available/', views.stock_available, name='stock_available'),
     path('stock-available/api/data/', views.stock_available_data, name='stock_available_data'),
     path('stock-available/export/', views.stock_available_export, name='stock_available_export'),
+    path('stock-available/view-export/', views.stock_available_view_export, name='stock_available_view_export'),
     path('non-inventory/', views.non_inventory, name='non_inventory'),
     path('non-inventory/api/data/', views.non_inventory_data, name='non_inventory_data'),
     path('non-inventory/api/drill/', views.non_inventory_drill, name='non_inventory_drill'),
