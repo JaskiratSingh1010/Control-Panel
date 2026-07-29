@@ -125,6 +125,16 @@
         </div>
       </div>
     </div>
+    <div class="cs-fld"><span class="cs-lbl">Variety</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="csVarBtn"><span id="csVarLabel">All varieties</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="csVarPanel">
+          <div class="com-dp-head"><a id="csVarAll">Select All</a><a id="csVarClr">Clear All</a></div>
+          <div class="com-dp-list" id="csVarList"></div>
+          <div class="com-dp-foot"><button type="button" id="csVarApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
     <div class="cs-fld"><span class="cs-lbl">Pack Size</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="csSkuBtn"><span id="csSkuLabel">All sizes</span><span class="com-caret">&#9662;</span></button>
@@ -264,6 +274,7 @@
   var typeF='', compareMode='liters', custF='', itemF='', topN=0;
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
+  var varAll=[], varSelected=[], varChosen=[];            // Variety filter (OITM.U_Variety)
 
   function rowVal(r,dim){
     var g=String(r.main_group||'').toUpperCase();
@@ -281,10 +292,13 @@
     var mgset={}; mgSelected.forEach(function(g){mgset[g]=1;});
     var skuAllSel=skuSelected.length===0||skuSelected.length===skuAll.length;
     var skuset={}; skuSelected.forEach(function(s){skuset[s]=1;});
+    var varAllSel=varSelected.length===0||varSelected.length===varAll.length;
+    var varset={}; varSelected.forEach(function(v){varset[v]=1;});
     for(var i=0;i<rows.length;i++){var r=rows[i];
       if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
       if(!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
+      if(!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
       if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
       if(itemF&&String(r.item_name||'').toLowerCase().indexOf(itemF)===-1)continue;
       if(!r.ym)continue;
@@ -641,6 +655,40 @@
     });
   }
 
+  // ── Variety filter (distinct OITM.U_Variety: KACCHI GHANI / REFINED / COLD PRESS / …) ──
+  function rebuildVarList(){
+    var seen={}, vtype={}; varAll=[];   // vtype: variety -> category rank (Premium first, then Commodity)
+    rows.forEach(function(r){
+      var v=String(r.u_variety||'').trim().toUpperCase()||'—';
+      if(!seen[v]){seen[v]=1;varAll.push(v);}
+      var t=String(r.u_type||'').trim().toUpperCase(), rank=(t==='PREMIUM')?0:(t==='COMMODITY')?1:2;
+      if(vtype[v]===undefined||rank<vtype[v])vtype[v]=rank;   // if a variety spans both, Premium wins
+    });
+    varAll.sort(function(a,b){
+      var ra=(vtype[a]===undefined?2:vtype[a]), rb=(vtype[b]===undefined?2:vtype[b]);
+      return ra-rb||a.localeCompare(b);     // Premium varieties first, then Commodity, then A–Z
+    });
+    varSelected=varAll.slice();               // default: all
+    renderVarList(); updateVarLabel();
+  }
+  function updateVarLabel(){
+    document.getElementById('csVarLabel').textContent=
+      (varSelected.length===0||varSelected.length===varAll.length)?'All varieties':(varSelected.length===1?varSelected[0]:varSelected.length+' varieties');
+  }
+  function renderVarList(){
+    var list=document.getElementById('csVarList'); list.innerHTML='';
+    varAll.forEach(function(v){
+      var on=varChosen.indexOf(v)!==-1;
+      var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(v)+'</span><span class="com-pos">&#10003;</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=varChosen.indexOf(v); if(this.checked){if(i===-1)varChosen.push(v);}else if(i!==-1)varChosen.splice(i,1);
+        renderVarList();
+      });
+      list.appendChild(item);
+    });
+  }
+
   function renderDrillList(){
     var list=document.getElementById('csDrillList'); list.innerHTML='';
     DIMS.forEach(function(d){
@@ -670,7 +718,7 @@
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
     fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); render(); if(!err)saveCache(); })
+      .then(function(p){ rows=p.channel_month_rows||[]; err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -692,7 +740,7 @@
       var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
       var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
       if(c.months)document.getElementById('csMonths').value=c.months;
-      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); render(); return true;
+      rows=c.rows; err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildSkuList(); rebuildVarList(); render(); return true;
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
@@ -791,6 +839,16 @@
     document.getElementById('csSkuAll').addEventListener('click',function(){skuChosen=skuAll.slice();renderSkuList();});
     document.getElementById('csSkuClr').addEventListener('click',function(){skuChosen=[];renderSkuList();});
     document.getElementById('csSkuApply').addEventListener('click',function(){skuSelected=skuChosen.slice();updateSkuLabel();panel.classList.remove('open');render();});
+  })();
+  // Variety panel
+  (function(){
+    var btn=document.getElementById('csVarBtn'), panel=document.getElementById('csVarPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();varChosen=varSelected.slice();renderVarList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('csVarAll').addEventListener('click',function(){varChosen=varAll.slice();renderVarList();});
+    document.getElementById('csVarClr').addEventListener('click',function(){varChosen=[];renderVarList();});
+    document.getElementById('csVarApply').addEventListener('click',function(){varSelected=varChosen.slice();updateVarLabel();panel.classList.remove('open');render();});
   })();
   // Drill By panel
   (function(){

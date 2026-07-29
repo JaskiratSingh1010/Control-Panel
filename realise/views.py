@@ -812,14 +812,16 @@ def _aggregate_channel_month_rows(raw_rows):
                                           str(row.get('ItemName', '') or '').strip().upper())
         card_name = str(row.get('CardName', '') or '').strip().upper()
         sku = str(row.get('SKU', '') or '').strip().upper()   # OITM.U_SKU pack size
+        variety = str(row.get('U_Variety', '') or '').strip().upper()   # OITM.U_Variety (KACCHI GHANI / REFINED / …)
         ym = '%s-%02d' % (year, mnum)
-        key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym, sku)
+        key = (u_type, u_main, state, sales_person, u_sub, item_name, card_name, ym, sku, variety)
         bucket = agg.get(key)
         if bucket is None:
             bucket = agg[key] = {
                 'u_type': u_type, 'main_group': u_main, 'state': state,
                 'sales_person': sales_person, 'u_sub_group': u_sub, 'item_name': item_name,
-                'card_name': card_name, 'sku': sku, 'ym': ym, 'mlabel': '%s %s' % (mon, year),
+                'card_name': card_name, 'sku': sku, 'u_variety': variety,
+                'ym': ym, 'mlabel': '%s %s' % (mon, year),
                 'liter': 0.0, 'line_total': 0.0,
             }
         bucket['liter'] += float(row.get('Liter', 0) or 0)
