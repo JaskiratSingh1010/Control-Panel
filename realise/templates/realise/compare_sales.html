@@ -283,7 +283,7 @@
   var typeF='', compareMode='liters', custF='', topN=0;
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
-  var varAll=[], varSelected=[], varChosen=[];            // Variety filter (OITM.U_Variety)
+  var varAll=[], varSelected=[], varChosen=[];            // Variety filter — OITM.U_Sub_Group (CANOLA / MUSTARD / SOYABEAN / …)
   var itmAll=[], itmSel=[], itmChosen=[], itmSearch='';   // Item picker (cascades off Type/Group/Variety/Pack Size) + in-panel search
 
   function rowVal(r,dim){
@@ -310,7 +310,7 @@
       if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
       if(!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
-      if(!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
+      if(!varAllSel&&!varset[String(r.u_sub_group||'').trim().toUpperCase()||'—'])continue;
       if(!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
       if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
       if(!r.ym)continue;
@@ -673,7 +673,7 @@
     var wasAll=(varSelected.length===0||varSelected.length===varAll.length), prev=setOf(varSelected);
     var seen={}, vtype={}; varAll=[];   // vtype: variety -> category rank (Premium first, then Commodity)
     facetRows('variety').forEach(function(r){
-      var v=String(r.u_variety||'').trim().toUpperCase()||'—';
+      var v=String(r.u_sub_group||'').trim().toUpperCase()||'—';
       if(!seen[v]){seen[v]=1;varAll.push(v);}
       var t=String(r.u_type||'').trim().toUpperCase(), rank=(t==='PREMIUM')?0:(t==='COMMODITY')?1:2;
       if(vtype[v]===undefined||rank<vtype[v])vtype[v]=rank;   // if a variety spans both, Premium wins
@@ -720,7 +720,7 @@
       if(except!=='type'&&typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(except!=='mg'&&!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
       if(except!=='sku'&&!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
-      if(except!=='variety'&&!varAllSel&&!varset[String(r.u_variety||'').trim().toUpperCase()||'—'])continue;
+      if(except!=='variety'&&!varAllSel&&!varset[String(r.u_sub_group||'').trim().toUpperCase()||'—'])continue;
       if(except!=='item'&&!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
       if(custF&&String(r.card_name||'').toLowerCase().indexOf(custF)===-1)continue;
       out.push(r);
@@ -736,7 +736,7 @@
     itmSel = wasAll ? itmAll.slice() : itmAll.filter(function(n){return prev[n];});   // keep explicit picks still in range
     renderItemList(); updateItemLabel();
   }
-  // Rebuild all three linked lists so a change in any one re-facets the others.
+  // Rebuild all linked lists so a change in any one re-facets the others.
   function refreshFacets(){ rebuildVarList(); rebuildSkuList(); rebuildItemList(); }
   function updateItemLabel(){
     document.getElementById('csItmLabel').textContent=
