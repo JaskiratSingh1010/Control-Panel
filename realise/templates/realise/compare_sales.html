@@ -3,13 +3,13 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:var(--rz-bg) !important}
+  .cp-main{background:var(--rz-bg) !important;padding:10px 20px !important}   /* tighter top/left gap on this page only */
   .cs-wrap{max-width:1780px;margin:0 auto}
   .cs-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
   .cs-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
 
   /* Toolbar */
-  .cs-bar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:14px 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:12px 14px;box-shadow:var(--rz-shadow)}
+  .cs-bar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:8px 0 12px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:12px 14px;box-shadow:var(--rz-shadow)}
   .cs-fld{display:flex;flex-direction:column;gap:5px}
   .cs-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   .cs-bar input[type=number],.cs-bar input[type=search],.cs-bar select{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
