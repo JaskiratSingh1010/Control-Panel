@@ -84,7 +84,13 @@
   .cs-tw{display:inline-block;width:13px;font-size:9px;color:var(--rz-muted);margin-right:7px;cursor:pointer;transition:transform .12s;vertical-align:middle}
   .cs-tw.open{transform:rotate(90deg)}
   .cs-tw-empty{display:inline-block;width:13px;margin-right:7px}
-  .cs-r{font-size:11px;color:#0d9488;font-weight:700;margin-top:1px}      /* realise line in 'Both' */
+  .cs-r{font-size:11px;color:#0d9488;font-weight:700;margin-top:1px}      /* secondary metric line(s) when combined */
+  .cs-mrow{line-height:1.25}
+  .cs-munit{font-size:.72em;color:var(--rz-faint,#94a3b8);font-weight:600}
+  .cs-metseg button{display:inline-flex;align-items:center;gap:6px}
+  .cs-cb{width:13px;height:13px;border:1.5px solid var(--rz-muted,#94a3b8);border-radius:3px;position:relative;flex:0 0 auto;box-sizing:border-box}
+  .cs-metseg button.active .cs-cb{background:var(--rz-indigo,#4f46e5);border-color:var(--rz-indigo,#4f46e5)}
+  .cs-metseg button.active .cs-cb::after{content:'';position:absolute;left:3px;top:0;width:3.5px;height:7px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
   table.cs-table tbody tr.cs-total .cs-r{color:#0d9488}
   .cs-empty{padding:40px;text-align:center;color:var(--rz-muted)}
   .cs-tag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--rz-soft);color:var(--rz-indigo-deep);margin-right:8px;vertical-align:middle}
@@ -155,17 +161,17 @@
       </div>
     </div>
     <div class="cs-fld"><span class="cs-lbl">Compare</span>
-      <div class="cs-seg" id="csCompare">
-        <button type="button" data-mode="liters" class="active">Litres</button>
-        <button type="button" data-mode="realise">Realise</button>
-        <button type="button" data-mode="both">Both</button>
+      <div class="cs-seg cs-metseg" id="csG1" title="Tick Litres and/or Realise — combine freely with the Pcs group">
+        <button type="button" data-metric="liters" class="active"><span class="cs-cb"></span>Litres</button>
+        <button type="button" data-metric="realise"><span class="cs-cb"></span>Realise</button>
+        <button type="button" data-both="g1" title="Litres + Realise">Both</button>
       </div>
     </div>
     <div class="cs-fld"><span class="cs-lbl">Compare (Pcs)</span>
-      <div class="cs-seg" id="csComparePcs">
-        <button type="button" data-mode="pieces">Pieces</button>
-        <button type="button" data-mode="rate">Rate</button>
-        <button type="button" data-mode="bothpcs">Both</button>
+      <div class="cs-seg cs-metseg" id="csG2" title="Tick Pieces and/or Rate — combine freely with the Litres group">
+        <button type="button" data-metric="pieces"><span class="cs-cb"></span>Pieces</button>
+        <button type="button" data-metric="rate"><span class="cs-cb"></span>Rate</button>
+        <button type="button" data-both="g2" title="Pieces + Rate">Both</button>
       </div>
     </div>
     <div class="cs-fld"><span class="cs-lbl">Drill By</span>
@@ -287,7 +293,27 @@
   var csAllNodes={};                                     // path -> pivot node (for the Calculate popup)
   var itemSel={};                                        // selected item paths (checkbox) → Calculate
   var csMonthsArr=[];                                    // current rendered months (for grand-total drill range)
-  var typeF='', compareMode='liters', custF='', topN=0;
+  var typeF='', custF='', topN=0;
+  // Compare metrics — multi-select. Pick any combination (Litres + Pieces, Litres + Rate, …).
+  // fmt = on-screen cell text; xv = numeric value for the Excel export; lbl = small unit tag.
+  var METRICS=[
+    {k:'liters',  seg:'Litres',  lbl:'L',    hdr:'Litres',  fmt:function(L,R,P){return L?fN(Math.round(L)):'';},          xv:function(L,R,P){return Math.round(L);}},
+    {k:'revenue', seg:'Revenue', lbl:'₹',    hdr:'Revenue', fmt:function(L,R,P){return R?fRz(Math.round(R)):'';},         xv:function(L,R,P){return Math.round(R);}},
+    {k:'realise', seg:'Realise', lbl:'₹/L',  hdr:'₹/L',     fmt:function(L,R,P){return L>0?fRz(R/L):'';},                 xv:function(L,R,P){return L>0?Math.round(R/L*100)/100:'';}},
+    {k:'pieces',  seg:'Pieces',  lbl:'pcs',  hdr:'Pieces',  fmt:function(L,R,P){return P?fN(Math.round(P)):'';},          xv:function(L,R,P){return Math.round(P);}},
+    {k:'rate',    seg:'Rate',    lbl:'₹/pc', hdr:'₹/Pc',    fmt:function(L,R,P){return P>0?fRz(R/P):'';},                 xv:function(L,R,P){return P>0?Math.round(R/P*100)/100:'';}}
+  ];
+  // Each metric pill has its own checkbox — tick any combination (Litres + Pieces + Rate, …).
+  // "Both" pills are shortcuts that toggle both metrics of their group. Revenue is not a pill;
+  // it rides along in the EXPORT whenever a group's Both (Litres+Realise or Pieces+Rate) is on.
+  var metricSel={liters:true, realise:false, pieces:false, rate:false};   // default: Litres
+  function _viewKeys(){ var ks=['liters','realise','pieces','rate'].filter(function(k){return metricSel[k];}); return ks.length?ks:['liters']; }
+  function activeMetrics(){ var ks=_viewKeys(); return METRICS.filter(function(m){return ks.indexOf(m.k)!==-1;}); }
+  function exportMetrics(){
+    var ks=_viewKeys();
+    if((metricSel.liters&&metricSel.realise)||(metricSel.pieces&&metricSel.rate))ks=ks.concat(['revenue']);
+    return METRICS.filter(function(m){return ks.indexOf(m.k)!==-1;});   // METRICS order keeps Revenue next to Litres
+  }
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
   var varAll=[], varSelected=[], varChosen=[];            // Variety filter — OITM.U_Sub_Group (CANOLA / MUSTARD / SOYABEAN / …)
@@ -343,22 +369,14 @@
     }).sort(function(a,b){return b.totL-a.totL||String(a.label).localeCompare(String(b.label));});
   }
 
-  // One cell for litres L, revenue R and pieces P under the active Compare mode.
-  //   liters/realise/both → Litres, ₹/L, or both;  pieces/rate/bothpcs → Pieces, ₹/piece, or both.
+  // One cell rendering every selected metric (Litres / Revenue / ₹L / Pieces / ₹pc), stacked.
   function cell(L,R,P){
-    P=Number(P)||0;
-    if(compareMode==='realise')return L>0?fRz(R/L):'';
-    if(compareMode==='both'){
-      if(!L&&!R)return '';
-      return '<div>'+(L?fN(Math.round(L)):'—')+'</div><div class="cs-r">'+(L>0?fRz(R/L):'')+'</div>';
-    }
-    if(compareMode==='pieces')return P?fN(Math.round(P)):'';
-    if(compareMode==='rate')return P>0?fRz(R/P):'';
-    if(compareMode==='bothpcs'){
-      if(!P&&!R)return '';
-      return '<div>'+(P?fN(Math.round(P)):'—')+'</div><div class="cs-r">'+(P>0?fRz(R/P):'')+'</div>';
-    }
-    return L?fN(Math.round(L)):'';   // liters
+    L=Number(L)||0; R=Number(R)||0; P=Number(P)||0;
+    var act=activeMetrics();
+    if(act.length===1)return act[0].fmt(L,R,P);
+    var lines=act.map(function(m,i){ var v=m.fmt(L,R,P); if(v==='')return '';
+      return '<div class="cs-mrow'+(i>0?' cs-r':'')+'">'+v+' <span class="cs-munit">'+m.lbl+'</span></div>'; }).filter(Boolean);
+    return lines.join('');
   }
 
   // Build the pivot tree, then — only when the FIRST drill dimension is the Item — keep the top N
@@ -856,18 +874,8 @@
       }
       return cells;
     }
-    // Only the metric(s) for the active Compare mode are exported (Litres → just Litres, etc.).
-    var rate=function(rv,pc){ return pc>0?Math.round(rv/pc*100)/100:''; };   // ₹ per piece
-    var REV={h:'Revenue', v:function(L,R,P){return Math.round(R);}};   // Both modes include Revenue (full detail)
-    var MODE_COLS={
-      liters:  [{h:'Litres', v:function(L,R,P){return Math.round(L);}}],
-      realise: [{h:'₹/L',    v:function(L,R,P){return rlz(R,L);}}],
-      both:    [{h:'Litres', v:function(L,R,P){return Math.round(L);}},REV,{h:'₹/L', v:function(L,R,P){return rlz(R,L);}}],
-      pieces:  [{h:'Pieces', v:function(L,R,P){return Math.round(P);}}],
-      rate:    [{h:'₹/Pc',   v:function(L,R,P){return rate(R,P);}}],
-      bothpcs: [{h:'Pieces', v:function(L,R,P){return Math.round(P);}},REV,{h:'₹/Pc', v:function(L,R,P){return rate(R,P);}}]
-    };
-    var mcols=MODE_COLS[compareMode]||MODE_COLS.liters, nMet=mcols.length;
+    // Export the ticked metric columns (+ Revenue when a group's Both is on).
+    var mcols=exportMetrics().map(function(m){return {h:m.hdr, v:m.xv};}), nMet=mcols.length;
     // Header row 1: month / Grand Total / Avg Sales names spanning the metric columns; row 2: the metric labels.
     var h1=dimCols.map(function(){return HD('');});
     months.forEach(function(mo){ h1.push(HD(mo.label,{colspan:nMet,align:'center'})); });
@@ -914,21 +922,38 @@
     var t=e.target&&e.target.closest?e.target.closest('[data-cstoggle]'):null; if(!t)return;
     var p=t.getAttribute('data-cstoggle'); expanded[p]=!expanded[p]; render();
   });
-  // Compare segmented controls — Litres/Realise/Both and Pieces/Rate/Both act as ONE metric
-  // selector: exactly one option is active across both groups.
-  function wireCompare(id){
-    var el=document.getElementById(id); if(!el)return;
-    el.addEventListener('click',function(e){
-      var b=e.target.closest('button'); if(!b)return;
-      compareMode=b.getAttribute('data-mode');
-      ['csCompare','csComparePcs'].forEach(function(gid){
-        var g=document.getElementById(gid); if(!g)return;
-        [].forEach.call(g.children,function(x){x.classList.toggle('active',x.getAttribute('data-mode')===compareMode);});
+  // Compare — pill-checkboxes across two groups; tick any combination. "Both" toggles a
+  // group's pair. At least one metric always stays on.
+  function metCount(){ return ['liters','realise','pieces','rate'].filter(function(k){return metricSel[k];}).length; }
+  function syncMet(){
+    ['csG1','csG2'].forEach(function(id){
+      [].forEach.call(document.getElementById(id).children,function(b){
+        var k=b.getAttribute('data-metric'); if(k)b.classList.toggle('active',!!metricSel[k]);
       });
-      render();
     });
+    document.querySelector('[data-both="g1"]').classList.toggle('active',metricSel.liters&&metricSel.realise);
+    document.querySelector('[data-both="g2"]').classList.toggle('active',metricSel.pieces&&metricSel.rate);
   }
-  wireCompare('csCompare'); wireCompare('csComparePcs');
+  function toggleMetric(k){
+    if(metricSel[k]&&metCount()<=1)return;   // keep ≥1
+    metricSel[k]=!metricSel[k]; syncMet(); render();
+  }
+  function setBoth(a,b){
+    if(metricSel[a]&&metricSel[b]){          // both on → turn the pair off (if something else stays on)
+      if(['liters','realise','pieces','rate'].filter(function(k){return k!==a&&k!==b&&metricSel[k];}).length){metricSel[a]=false;metricSel[b]=false;}
+    } else { metricSel[a]=true; metricSel[b]=true; }
+    syncMet(); render();
+  }
+  ['csG1','csG2'].forEach(function(id){
+    document.getElementById(id).addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b)return;
+      var k=b.getAttribute('data-metric');
+      if(k)toggleMetric(k);
+      else if(b.getAttribute('data-both')==='g1')setBoth('liters','realise');
+      else if(b.getAttribute('data-both')==='g2')setBoth('pieces','rate');
+    });
+  });
+  syncMet();
   // Main Group panel
   (function(){
     var btn=document.getElementById('csMgBtn'), panel=document.getElementById('csMgPanel');
