@@ -19,6 +19,8 @@ OWN_JOIN = 'LEFT JOIN {db}.OUSR U ON CAST({tbl}."U_Owner" AS VARCHAR(20))=CAST(U
 # Stock Available — finished-goods (ItmsGrpCod 102) stock by item, pivoted across these
 # warehouses (display order), classified into the canonical 16 Realise products.
 STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU', 'BH-BT']
+# Jivo Mart carries its stock in different warehouses — same six plus these two (mart only).
+MART_STOCK_WAREHOUSES = STOCK_WAREHOUSES + ['GP-FGM', 'DL-MP']
 
 
 def get_stock_available(schema="jivo_oil"):
@@ -32,7 +34,8 @@ def get_stock_available(schema="jivo_oil"):
     from realise.services import _reclassify, ALLOWED_SUB_GROUPS, DEFAULT_TARGETS
 
     db = get_schema(schema)
-    whs_in = ",".join("'%s'" % w for w in STOCK_WAREHOUSES)
+    whs = MART_STOCK_WAREHOUSES if schema == "jivo_mart" else STOCK_WAREHOUSES
+    whs_in = ",".join("'%s'" % w for w in whs)
     rows = q(f"""SELECT
         I."ItemCode" AS "ItemCode", I."ItemName" AS "ItemName", O."Warehouse" AS "Warehouse",
         I."U_SKU" AS "U_SKU", I."U_Sub_Group" AS "U_Sub_Group", I."U_Variety" AS "U_Variety",
@@ -65,8 +68,8 @@ def get_stock_available(schema="jivo_oil"):
                 "variety": str(r.get("U_Variety") or "").strip(),
                 "item_code": code, "item_name": name,
                 "sku": str(r.get("U_SKU") or "").strip(),
-                "wh": {w: 0.0 for w in STOCK_WAREHOUSES},
-                "wh_litres": {w: 0.0 for w in STOCK_WAREHOUSES},
+                "wh": {w: 0.0 for w in whs},
+                "wh_litres": {w: 0.0 for w in whs},
                 "grand_total": 0.0, "litres": 0.0,
                 "pcs_per_box": float(r.get("SalFactor2") or 0),   # for Boxes = pieces / pcs_per_box
             }
@@ -107,7 +110,7 @@ def get_stock_available(schema="jivo_oil"):
     # Premium block first, then Commodity; within each, most stock first.
     product_list.sort(key=lambda p: (0 if p["type"] == "PREMIUM" else 1, -p["qty"], p["sub_group"]))
 
-    return {"warehouses": STOCK_WAREHOUSES, "products": product_list, "items": item_list}
+    return {"warehouses": whs, "products": product_list, "items": item_list}
 
 
 def _beverages_stock(db):
