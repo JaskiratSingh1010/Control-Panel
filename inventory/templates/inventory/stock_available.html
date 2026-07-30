@@ -449,7 +449,7 @@
     document.getElementById('saTableTitle').textContent=selected.type+' — '+selected.sub_group;
     document.getElementById('saTableMeta').textContent=rows.length+(rows.length===1?' item':' items');
     // Litres/Boxes/Pieces multi-select is oil-only (beverages carry boxes in the litres slot).
-    var oil=(db==='jivo_oil');
+    var oil=(db==='jivo_oil'||db==='jivo_mart');   // oil + mart share the litres/box model; beverages differ
     document.getElementById('saUnitSel').style.display = oil ? '' : 'none';
     var units = oil ? activeUnits()
                     : [{lbl:'', get:function(it,w){return Number((it.wh||{})[w])||0;}, tot:function(it){return Number(it.grand_total)||0;}}];
@@ -510,7 +510,7 @@
     var rows=(DATA.items||[]).filter(function(it){return it.type===selected.type&&it.sub_group===selected.sub_group&&(!skuF.length||skuF.indexOf(it.sku)!==-1);})
       .sort(function(a,b){return (Number(b.grand_total)||0)-(Number(a.grand_total)||0);});
     if(!rows.length){ alert('No rows to export.'); return; }
-    var oil=(db==='jivo_oil');
+    var oil=(db==='jivo_oil'||db==='jivo_mart');   // oil + mart share the litres/box model; beverages differ
     var units = oil ? activeUnits()
                     : [{lbl:(DATA.unit||''), get:function(it,w){return Number((it.wh||{})[w])||0;}, tot:function(it){return Number(it.grand_total)||0;}}];
     var nu=units.length, multi=nu>1;
