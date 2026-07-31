@@ -60,8 +60,12 @@
   .rc-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:3px;
     box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-seg button{border:0;background:none;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);
-    padding:7px 15px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}
+    padding:7px 13px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s;
+    display:inline-flex;align-items:center;gap:6px}
   .rc-seg button.on{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .rc-cb{width:12px;height:12px;border:1.5px solid var(--rz-muted,#94a3b8);border-radius:3px;position:relative;flex:0 0 auto;box-sizing:border-box}
+  .rc-seg button.on .rc-cb{background:var(--rz-indigo,#4f46e5);border-color:var(--rz-indigo,#4f46e5)}
+  .rc-seg button.on .rc-cb::after{content:'';position:absolute;left:3px;top:0;width:3px;height:6.5px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 
   /* lock control + active-lock status pill */
   .rc-lock{position:relative}
@@ -210,11 +214,11 @@
   <div class="rc-kpis" id="rcKpis"></div>
 
   <div class="rc-tools">
-    <div class="rc-seg" id="rcType" title="Filter by Type (select one or more)">
+    <div class="rc-seg" id="rcType" title="Filter by Type — tick one or more (P / C / P+C); All clears">
       <button type="button" data-type="" class="on">All</button>
-      <button type="button" data-type="P">P</button>
-      <button type="button" data-type="C">C</button>
-      <button type="button" data-type="P+C">P+C</button>
+      <button type="button" data-type="P"><span class="rc-cb"></span>P</button>
+      <button type="button" data-type="C"><span class="rc-cb"></span>C</button>
+      <button type="button" data-type="P+C"><span class="rc-cb"></span>P+C</button>
     </div>
     <div class="rc-ms" id="rcAsm" title="Filter by ASM (select one or more)">
       <button type="button" class="rc-ms-btn" id="rcAsmBtn">
