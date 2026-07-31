@@ -2801,10 +2801,11 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             ledger = float(row['value'].get('ledger', 0) or 0)
             payment = float(row['value'].get('payment_done', 0) or 0)   # receipts on the selected date
             # Closing-sheet OUTSTANDING = PI TOTAL AMT (full SO) + Ledger; TOTAL OUTSTANDING = that
-            # minus the payment made (the "is this party cleared" figure). Required Limit = +2%.
+            # minus the payment made (the "is this party cleared" figure). Required Limit is that
+            # net TOTAL OUTSTANDING + 2% (matches the sheet: O = TOTAL OUTSTANDING * 1.02).
             outstanding = pi_total + ledger
-            required = outstanding * 1.02
             remaining = outstanding - payment
+            required = remaining * 1.02
             led_pay = ledger - payment                    # Ledger Amt − Payment Received (this date)
             if first:
                 put_text(r, 1, g['asm'], style=_ST_BTEXT)  # A SO NAME (ASM) — bold, heads the person's block
@@ -2821,7 +2822,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_num(r, 12, pi_total)                      # L PI TOTAL AMT (full SO total, matches SAP)
             put_num(r, 13, ledger)                        # M LEDGER AMT (+rec / -pay)
             put_formula(r, 14, 'L%d+M%d' % (r, r), outstanding, style=_ST_NUM)  # N OUTSTANDING = PI TOTAL AMT + Ledger
-            put_formula(r, 15, 'N%d*1.02' % r, required, style=_ST_NUM)         # O Required Limit = Outstanding + 2%
+            put_formula(r, 15, 'Q%d*1.02' % r, required, style=_ST_NUM)         # O Required Limit = TOTAL OUTSTANDING (net) + 2%
             put_num(r, 16, payment)                       # P PAYMENT DONE (receipts on the selected date)
             put_formula(r, 17, 'N%d-P%d' % (r, r), remaining, style=_ST_NUM)    # Q TOTAL OUTSTANDING = Outstanding − Payment (clear-check)
             put_formula(r, 18, 'M%d-P%d' % (r, r), led_pay, style=_ST_NUM)      # R LEDGER − PAYMENT
