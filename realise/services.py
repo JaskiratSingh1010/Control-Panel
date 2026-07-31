@@ -2776,7 +2776,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     put_text(1, 1, 'Sum of TOTAL LTR', style=_ST_TITLE)
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
                'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT', 'PI TOTAL AMT',
-               'LEDGER AMT', 'TOTAL OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'OUTSTANDING',
+               'LEDGER AMT', 'OUTSTANDING', 'Required Limit', 'PAYMENT DONE', 'TOTAL OUTSTANDING',
                'LEDGER - PAYMENT']
     for i, h in enumerate(headers, start=1):
         put_text(2, i, h, style=_ST_HEAD)
@@ -2799,10 +2799,12 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             val = float(row['value'].get('total', 0) or 0)
             pi_total = float(row['value'].get('pi_total', 0) or 0)   # full SO total (matches SAP)
             ledger = float(row['value'].get('ledger', 0) or 0)
-            outstanding = float(row['value'].get('outstanding', 0) or 0)
-            required = float(row['value'].get('required_limit', 0) or 0)
             payment = float(row['value'].get('payment_done', 0) or 0)   # receipts on the selected date
-            remaining = float(row['value'].get('remaining', 0) or 0)
+            # Closing-sheet OUTSTANDING = PI TOTAL AMT (full SO) + Ledger; TOTAL OUTSTANDING = that
+            # minus the payment made (the "is this party cleared" figure). Required Limit = +2%.
+            outstanding = pi_total + ledger
+            required = outstanding * 1.02
+            remaining = outstanding - payment
             led_pay = ledger - payment                    # Ledger Amt − Payment Received (this date)
             if first:
                 put_text(r, 1, g['asm'], style=_ST_BTEXT)  # A SO NAME (ASM) — bold, heads the person's block
@@ -2813,16 +2815,16 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             put_text(r, 6, row.get('remark'))             # F DELIVERY REMARK
             put_num(r, 7, prem)                           # G PREMIUM
             put_num(r, 8, commodity)                      # H COMMODITY
-            put_num(r, 9, total, style=_ST_BNUM)          # I Grand Total
+            put_formula(r, 9, 'G%d+H%d' % (r, r), total, style=_ST_BNUM)       # I Grand Total = Premium + Commodity
             put_text(r, 10, row.get('so_nos'))            # J SO NO
             put_num(r, 11, val)                           # K PI AMT (OIH revenue — open/undelivered)
             put_num(r, 12, pi_total)                      # L PI TOTAL AMT (full SO total, matches SAP)
             put_num(r, 13, ledger)                        # M LEDGER AMT (+rec / -pay)
-            put_num(r, 14, outstanding)                   # N TOTAL OUTSTANDING
-            put_num(r, 15, required)                      # O Required Limit (outstanding + 2%)
+            put_formula(r, 14, 'L%d+M%d' % (r, r), outstanding, style=_ST_NUM)  # N OUTSTANDING = PI TOTAL AMT + Ledger
+            put_formula(r, 15, 'N%d*1.02' % r, required, style=_ST_NUM)         # O Required Limit = Outstanding + 2%
             put_num(r, 16, payment)                       # P PAYMENT DONE (receipts on the selected date)
-            put_num(r, 17, remaining)                     # Q OUTSTANDING (= Total Outstanding − Payment)
-            put_num(r, 18, led_pay)                        # R LEDGER − PAYMENT (Ledger Amt − Payment Done)
+            put_formula(r, 17, 'N%d-P%d' % (r, r), remaining, style=_ST_NUM)    # Q TOTAL OUTSTANDING = Outstanding − Payment (clear-check)
+            put_formula(r, 18, 'M%d-P%d' % (r, r), led_pay, style=_ST_NUM)      # R LEDGER − PAYMENT
             s_prem += prem; s_com += commodity; s_tot += total
             s_val += val; s_pitot += pi_total; s_led += ledger; s_out += outstanding; s_req += required
             s_pay += payment; s_rem += remaining; s_ledpay += led_pay
