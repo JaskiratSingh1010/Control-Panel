@@ -3,7 +3,7 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:var(--rz-bg) !important}
+  .cp-main{background:var(--rz-bg) !important;padding:10px 22px !important}   /* tighter top/left gap on this page */
   .rc-wrap{max-width:1480px;margin:0 auto}
 
   /* ── Header band (light) ── */
@@ -13,8 +13,9 @@
   .rc-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
     background:radial-gradient(circle,rgba(124,58,237,.10),transparent 70%)}
   .rc-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
-  .rc-h1{font-size:28px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px;display:flex;align-items:center;gap:11px}
-  .rc-h1 .material-icons{font-size:30px;color:var(--rz-indigo)}
+  .rc-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:2px 0 16px;letter-spacing:-.5px;display:flex;align-items:center;gap:11px;
+    text-shadow:0 0 26px rgba(99,102,241,.55), 0 4px 14px rgba(79,70,229,.28)}   /* glowing title, no box */
+  .rc-h1 .material-icons{font-size:32px;color:var(--rz-indigo);text-shadow:0 0 20px rgba(99,102,241,.6)}
   .rc-srcpill{display:inline-flex;align-items:center;gap:7px;background:var(--rz-soft);color:var(--rz-indigo-deep);
     border:1px solid var(--rz-soft-brd);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
   .rc-srcpill .material-icons{font-size:15px;color:var(--rz-indigo)}
@@ -35,32 +36,40 @@
   .rc-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;color:var(--rz-ink);font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
   .rc-kpi-m{font-size:11.5px;font-weight:600;color:var(--rz-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rc-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;color:var(--kpi-ic,#6366f1);opacity:.08}
+  /* Smart hover + click-to-highlight */
+  .rc-kpi{cursor:pointer;transition:transform .16s ease, box-shadow .16s ease}
+  .rc-kpi:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(15,23,42,.17)}
+  .rc-kpi.active{box-shadow:0 12px 30px rgba(15,23,42,.2)}
+  .rc-kpi.active::before{height:5px}
+  .rc-kpi.active .rc-kpi-l{color:var(--kpi-ic,#6366f1)}
+  .rc-tb.rc-hl10 tbody td:nth-child(10),.rc-tb.rc-hl11 tbody td:nth-child(11),.rc-tb.rc-hl12 tbody td:nth-child(12),.rc-tb.rc-hl13 tbody td:nth-child(13){background:rgba(253,224,71,.32) !important;font-weight:800}
+  .rc-tb.rc-hl10 thead th:nth-child(10),.rc-tb.rc-hl11 thead th:nth-child(11),.rc-tb.rc-hl12 thead th:nth-child(12),.rc-tb.rc-hl13 thead th:nth-child(13){background:#fde047 !important;color:#78350f !important}
 
   /* ── Toolbar ── */
   .rc-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-  .rc-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
-    border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .rc-search{flex:0 1 300px;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+    border-radius:11px;padding:10px 14px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-search:focus-within{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-search .material-icons{font-size:19px;color:var(--rz-faint)}
-  .rc-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:var(--rz-ink);background:transparent}
+  .rc-search .material-icons{font-size:21px;color:var(--rz-faint)}
+  .rc-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:15px;font-weight:600;color:var(--rz-ink);background:transparent}
   .rc-search input::placeholder{color:var(--rz-faint)}
   .rc-date{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:8px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-date:focus-within{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-date .material-icons{font-size:19px;color:var(--rz-indigo)}
-  .rc-date .rc-date-lbl{font-size:11px;font-weight:800;color:var(--rz-muted);letter-spacing:.3px}
-  .rc-date input{border:0;outline:0;font-family:inherit;font-size:13px;font-weight:700;color:var(--rz-ink);background:transparent;cursor:pointer}
-  .rc-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);
-    font-family:inherit;font-size:12px;font-weight:700;padding:9px 14px;border-radius:11px;cursor:pointer;
+  .rc-date .material-icons{font-size:21px;color:var(--rz-indigo)}
+  .rc-date .rc-date-lbl{font-size:13px;font-weight:800;color:var(--rz-muted);letter-spacing:.3px}
+  .rc-date input{border:0;outline:0;font-family:inherit;font-size:15px;font-weight:800;color:var(--rz-ink);background:transparent;cursor:pointer}
+  .rc-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);
+    font-family:inherit;font-size:14px;font-weight:800;padding:11px 17px;border-radius:11px;cursor:pointer;
     transition:background .15s,border-color .15s,color .15s}
   .rc-btn:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
-  .rc-btn .material-icons{font-size:17px}
+  .rc-btn .material-icons{font-size:20px}
 
   /* segmented Prem/Comm filter */
   .rc-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:3px;
     box-shadow:0 1px 2px rgba(15,23,42,.05)}
-  .rc-seg button{border:0;background:none;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-muted);
-    padding:7px 13px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s;
+  .rc-seg button{border:0;background:none;font-family:inherit;font-size:14px;font-weight:800;color:var(--rz-muted);
+    padding:9px 15px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s;
     display:inline-flex;align-items:center;gap:6px}
   .rc-seg button.on{background:var(--rz-soft);color:var(--rz-indigo-deep);box-shadow:0 1px 2px rgba(15,23,42,.08)}
   .rc-cb{width:12px;height:12px;border:1.5px solid var(--rz-muted,#94a3b8);border-radius:3px;position:relative;flex:0 0 auto;box-sizing:border-box}
@@ -89,11 +98,11 @@
   /* ASM multi-select dropdown */
   .rc-ms{position:relative}
   .rc-ms-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;border-radius:11px;
-    padding:9px 13px;font-family:inherit;font-size:12px;font-weight:700;color:var(--rz-indigo-deep);cursor:pointer;outline:0;
-    box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:240px}
+    padding:11px 15px;font-family:inherit;font-size:14px;font-weight:800;color:var(--rz-indigo-deep);cursor:pointer;outline:0;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:260px}
   .rc-ms-btn:hover{border-color:var(--rz-soft-brd)}
   .rc-ms.open .rc-ms-btn{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-ms-btn .material-icons{font-size:17px}
+  .rc-ms-btn .material-icons{font-size:20px}
   .rc-ms-btn #rcAsmLabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rc-ms-chev{margin-left:auto;color:var(--rz-faint);transition:transform .16s}
   .rc-ms.open .rc-ms-chev{transform:rotate(180deg)}
@@ -116,7 +125,7 @@
   .rc-tw{overflow:auto;max-height:74vh}
   table.rc-tb{width:100%;border-collapse:collapse;font-size:13px}
   table.rc-tb thead th{position:sticky;top:0;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;
-    font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:12px 13px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+    font-size:13px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:13px 14px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.rc-tb thead th.lbl{text-align:left}
   table.rc-tb thead th.hot{color:var(--rz-teal)}
 
@@ -202,14 +211,7 @@
 {% block content %}
 <div class="rc-wrap">
 
-  <div class="rc-hero">
-    <div class="rc-hero-row">
-      <div>
-        <h1 class="rc-h1"><span class="material-icons">credit_score</span>Required Credit Limit</h1>
-      </div>
-      <span class="rc-srcpill"><span class="material-icons">bolt</span>Live &middot; SAP B1 &middot; Order-in-Hand</span>
-    </div>
-  </div>
+  <h1 class="rc-h1"><span class="material-icons">credit_score</span>Required Credit Limit</h1>
 
   <div class="rc-kpis" id="rcKpis"></div>
 
@@ -397,31 +399,40 @@
 
   // ── KPIs (respect the ASM + Type filters) ──
   function renderKpis(){
-    var parties = 0, lit = 0, val = 0, asmCount = 0;
+    // Credit + collection snapshot (respects the ASM + Type filters), matching the SELECTED
+    // TOTAL row: Total Outstanding → Required Limit → Payment Done → Net Outstanding (still due).
+    var out = 0, req = 0, pay = 0, rem = 0;
     asmGroups().forEach(function(g){
       var gv = groupView(g);
       if(!gv.rows.length) return;
-      // OIH KPIs count only parties that actually have an open order; dues-only parties add 0 litres/value.
-      var openParties = gv.rows.filter(hasOpenOrder).length;
-      if(openParties){ asmCount++; parties += openParties; lit += gv.lit; val += gv.val; }
+      out += gv.out; req += gv.req; pay += gv.pay; rem += gv.rem;
     });
     var cards = [
-      {c:'k-ltr',ic:'water_drop',l:'Order-in-Hand Litres',v:Math.round(lit).toLocaleString('en-IN')+' L',
-        m:typeLabel()},
-      {c:'k-rev',ic:'payments',l:'Order-in-Hand Value',v:abbr(val),
-        m:'Open order value (₹)'},
-      {c:'k-asm',ic:'badge',l:'ASMs',v:asmCount,
-        m:ASM_FILTER.length ? ('Filtered to '+ASM_FILTER.length+' ASM'+(ASM_FILTER.length>1?'s':'')) : 'Territory owners with open orders'},
-      {c:'k-prt',ic:'storefront',l:'Parties',v:parties,
-        m:(TYPE_FILTER.length?'Parties of type '+TYPE_FILTER.join(', '):'Customers with open orders')}
+      {c:'k-asm',ic:'account_balance_wallet',l:'Total Outstanding',v:abbr(out), col:10,
+        m:'Total owed — OIH + Ledger'},
+      {c:'k-rev',ic:'verified_user',l:'Required Limit',v:abbr(req), col:11,
+        m:'Credit limit needed (+2%)'},
+      {c:'k-prt',ic:'payments',l:'Payment Done',v:abbr(pay), col:12,
+        m:'Collected on the selected date'},
+      {c:'k-ltr',ic:'pending_actions',l:'Net Outstanding',v:abbr(rem), col:13,
+        m:'Still to collect (after payment)'}
     ];
     document.getElementById('rcKpis').innerHTML = cards.map(function(k){
-      return '<div class="rc-kpi '+k.c+'">'+
+      return '<div class="rc-kpi '+k.c+(kpiHlCol===k.col?' active':'')+'" data-col="'+k.col+'" '+
+        'title="Click to highlight its column in the table">'+
         '<div class="rc-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
         '<div class="rc-kpi-v">'+k.v+'</div>'+
         '<div class="rc-kpi-m">'+esc(k.m)+'</div>'+
         '<span class="material-icons rc-kpi-ic">'+k.ic+'</span></div>';
     }).join('');
+    applyKpiHighlight();
+  }
+  // KPI → table column highlight (persists across re-renders via a class on the <table>).
+  var kpiHlCol = 0;
+  function applyKpiHighlight(){
+    var tbl = document.querySelector('.rc-tb'); if(!tbl) return;
+    tbl.classList.remove('rc-hl10','rc-hl11','rc-hl12','rc-hl13');
+    if(kpiHlCol) tbl.classList.add('rc-hl'+kpiHlCol);
   }
 
   // SO No cell: bold; clickable to list all when a party has more than one SO.
@@ -614,6 +625,16 @@
   }
 
   function wire(){
+    // KPI tiles: click one to highlight its column in the table; click again to clear.
+    document.getElementById('rcKpis').addEventListener('click',function(e){
+      var card = e.target.closest('.rc-kpi'); if(!card) return;
+      var col = parseInt(card.getAttribute('data-col'), 10) || 0;
+      kpiHlCol = (kpiHlCol === col) ? 0 : col;
+      document.querySelectorAll('#rcKpis .rc-kpi').forEach(function(c){
+        c.classList.toggle('active', parseInt(c.getAttribute('data-col'), 10) === kpiHlCol);
+      });
+      applyKpiHighlight();
+    });
     // Type filter (All / P / C / P+C) — multi-select; filters rows on the Type column.
     // "All" clears the selection; P / C / P+C toggle independently and combine.
     document.getElementById('rcType').addEventListener('click',function(e){
