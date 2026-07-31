@@ -2437,12 +2437,14 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
                 'state': state_code,
                 'asm': person_for_group_state(group, state_name, _normalize_name(d.get('CITY'))) or '',
                 '_so': {},          # SO number -> its open value (₹, incl GST) for the SO-list popup
+                '_solit': {},       # SO number -> its open litres, for the popup's Litres column
                 '_sotot': {},       # SO number -> its FULL order total (ORDR.DocTotal, matches SAP)
                 **_blank_bucket(),
             }
         card_balance.setdefault(card_code, float(d.get('BAL') or 0))
         if docnum:
             bucket['_so'][docnum] = bucket['_so'].get(docnum, 0.0) + val
+            bucket['_solit'][docnum] = bucket['_solit'].get(docnum, 0.0) + qty   # open litres per SO
             bucket['_sotot'][docnum] = float(d.get('DOCTOTAL') or 0)   # full SO total, set once per SO
         # total counts every open line; premium / commodity are STRICT (a line whose type is
         # neither only lands in total). Canola / Olive are premium sub-group splits for the
@@ -2482,7 +2484,7 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
                 'state': state_code,
                 'asm': person_for_group_state(group, state_name, city) or '',
                 'no_open_order': True,          # dues but no live order — 0 OIH, excluded from OIH KPIs
-                '_so': {}, '_sotot': {},
+                '_so': {}, '_solit': {}, '_sotot': {},
                 **_blank_bucket(),
             }
             card_balance.setdefault(cc, bal)
@@ -2524,7 +2526,8 @@ def get_required_credit_rows(_apply_lock=True, as_of_date=None):
         # SO list, largest open value first: so_list carries each SO's amount for the popup;
         # so_nos stays a plain string for the export column and the search/cell display.
         so_items = sorted(bucket.pop('_so').items(), key=lambda kv: (-kv[1], kv[0]))
-        bucket['so_list'] = [{'no': n, 'value': round(v, 2)} for n, v in so_items]
+        solit = bucket.pop('_solit', {})
+        bucket['so_list'] = [{'no': n, 'value': round(v, 2), 'litres': round(solit.get(n, 0.0), 2)} for n, v in so_items]
         bucket['so_nos'] = ', '.join(n for n, _ in so_items)
         bucket['remark'] = remarks.get(bucket['card_code'], '')
         by_asm.setdefault(bucket['asm'] or 'UNASSIGNED', []).append(bucket)
