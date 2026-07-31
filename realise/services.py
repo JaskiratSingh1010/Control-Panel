@@ -2590,12 +2590,15 @@ def _xlsx_col_letter(idx):
 
 # Style ids — must match the cellXfs order in _render_single_sheet_xlsx's styles.xml.
 _ST_TITLE, _ST_HEAD, _ST_TEXT, _ST_NUM, _ST_BTEXT, _ST_BNUM = 0, 1, 2, 3, 4, 5
+# Highlighted subtotal (per-ASM) and grand-total rows, so each person's block and its total stand out.
+_ST_SUBTXT, _ST_SUBNUM, _ST_GTXT, _ST_GNUM = 6, 7, 8, 9
 
 
 def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_rows=0, grid_from_row=2):
     """Minimal pure-Python .xlsx writer (no third-party deps, mirrors core.simple_xlsx so it
     works on servers without openpyxl). `cells` maps (row, col)→(style, kind, value) where kind
-    is 't' (text) or 'n' (integer number). Supports per-column widths (1-based col→width), an
+    is 't' (text), 'n' (integer number), or 'f' (formula: value = (formula_str, cached_int)).
+    Supports per-column widths (1-based col→width), an
     integer format (#,##0), bold, a gray bold-black header, thin black borders, and freezing the
     top `freeze_rows` rows. Every cell from `grid_from_row` down is bordered (blanks included) so
     the body reads as a gridded table. Style ids match cellXfs: 0 title, 1 header, 2 text,
@@ -2614,6 +2617,11 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
                 style, kind, value = spec
                 if kind == 'n':
                     cell_xml.append('<c r="%s" s="%d"><v>%d</v></c>' % (ref, style, int(value)))
+                elif kind == 'f':
+                    # Live formula + a cached value (so it shows immediately and recalculates on edit).
+                    formula, cached = value
+                    cell_xml.append('<c r="%s" s="%d"><f>%s</f><v>%d</v></c>'
+                                    % (ref, style, escape(formula), int(cached)))
                 else:
                     cell_xml.append('<c r="%s" t="inlineStr" s="%d"><is><t xml:space="preserve">%s</t></is></c>'
                                     % (ref, style, escape(str(value))))
@@ -2647,14 +2655,16 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
         '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>'
         '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
         '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font></fonts>'
-        '<fills count="3"><fill><patternFill patternType="none"/></fill>'
+        '<fills count="5"><fill><patternFill patternType="none"/></fill>'
         '<fill><patternFill patternType="gray125"/></fill>'
-        '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/></patternFill></fill></fills>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/></patternFill></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/></patternFill></fill>'   # 3 subtotal light blue
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill></fills>'  # 4 grand gold
         '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
         + _thin +
         '</borders>'
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        '<cellXfs count="6">'
+        '<cellXfs count="10">'
         # 0 title (plain, no border)
         '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
         # 1 header — bold black on gray, bordered, centered
@@ -2667,6 +2677,14 @@ def _render_single_sheet_xlsx(title, cells, widths, max_row, max_col, freeze_row
         '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
         # 5 bold number (bordered, #,##0)
         '<xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>'
+        # 6 subtotal text — bold on light blue, bordered
+        '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+        # 7 subtotal number — bold, light blue, #,##0
+        '<xf numFmtId="164" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
+        # 8 grand-total text — bold on gold, bordered
+        '<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+        # 9 grand-total number — bold, gold, #,##0
+        '<xf numFmtId="164" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
         '</cellXfs></styleSheet>'
     )
     content_types = (
@@ -2744,6 +2762,17 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             return
         cells[(rr, cc)] = (style, 'n', v)
 
+    def put_formula(rr, cc, formula, cached, style=_ST_BNUM, blank_zero=True):
+        cv = int(round(cached or 0))
+        if blank_zero and cv == 0:
+            return
+        cells[(rr, cc)] = (style, 'f', (formula, cv))
+
+    # Numeric value columns — subtotals and the grand total are written as live SUM formulas
+    # over these so deleting any party row (or a whole ASM) re-totals automatically in Excel.
+    NUM_COLS = [7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18]
+    sub_rows = []   # subtotal row numbers (one per ASM) — the grand total sums these
+
     put_text(1, 1, 'Sum of TOTAL LTR', style=_ST_TITLE)
     headers = ['SO NAME', 'PARTY NAME', 'TYPE', 'MAIN GROUP', 'STATE', 'DELIVERY REMARK',
                'PREMIUM', 'COMMODITY', 'Grand Total', 'SO NO', 'PI AMT', 'PI TOTAL AMT',
@@ -2761,6 +2790,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
         if not rows:
             continue
         first = True
+        first_party_row = r
         s_prem = s_com = s_tot = s_val = s_pitot = s_led = s_out = s_req = s_pay = s_rem = s_ledpay = 0.0
         for row in rows:
             prem = float(row['litres'].get('premium', 0) or 0)
@@ -2775,7 +2805,7 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             remaining = float(row['value'].get('remaining', 0) or 0)
             led_pay = ledger - payment                    # Ledger Amt − Payment Received (this date)
             if first:
-                put_text(r, 1, g['asm'])                  # A SO NAME (ASM)
+                put_text(r, 1, g['asm'], style=_ST_BTEXT)  # A SO NAME (ASM) — bold, heads the person's block
             put_text(r, 2, row['party'])                  # B PARTY NAME
             put_text(r, 3, row.get('type'))               # C TYPE
             put_text(r, 4, row.get('main_group'))         # D MAIN GROUP
@@ -2798,25 +2828,34 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
             s_pay += payment; s_rem += remaining; s_ledpay += led_pay
             first = False
             r += 1
-        put_text(r, 1, f"{g['asm']} Total", style=_ST_BTEXT)
-        put_num(r, 7, s_prem, style=_ST_BNUM); put_num(r, 8, s_com, style=_ST_BNUM)
-        put_num(r, 9, s_tot, style=_ST_BNUM); put_num(r, 11, s_val, style=_ST_BNUM)
-        put_num(r, 12, s_pitot, style=_ST_BNUM); put_num(r, 13, s_led, style=_ST_BNUM)
-        put_num(r, 14, s_out, style=_ST_BNUM); put_num(r, 15, s_req, style=_ST_BNUM)
-        put_num(r, 16, s_pay, style=_ST_BNUM); put_num(r, 17, s_rem, style=_ST_BNUM)
-        put_num(r, 18, s_ledpay, style=_ST_BNUM)
+        last_party_row = r - 1
+        put_text(r, 1, f"{g['asm']} Total", style=_ST_SUBTXT)
+        for cc in range(2, MAX_COL + 1):        # fill the whole subtotal band so it reads as one row
+            cells.setdefault((r, cc), (_ST_SUBTXT, 't', ''))
+        subvals = {7: s_prem, 8: s_com, 9: s_tot, 11: s_val, 12: s_pitot, 13: s_led,
+                   14: s_out, 15: s_req, 16: s_pay, 17: s_rem, 18: s_ledpay}
+        for cc in NUM_COLS:
+            col = _xlsx_col_letter(cc)
+            put_formula(r, cc, 'SUM(%s%d:%s%d)' % (col, first_party_row, col, last_party_row),
+                        subvals[cc], style=_ST_SUBNUM)
+        sub_rows.append(r)
         g_prem += s_prem; g_com += s_com; g_tot += s_tot
         g_val += s_val; g_pitot += s_pitot; g_led += s_led; g_out += s_out; g_req += s_req
         g_pay += s_pay; g_rem += s_rem; g_ledpay += s_ledpay
         r += 1
 
-    put_text(r, 1, 'Grand Total', style=_ST_BTEXT)
-    put_num(r, 7, g_prem, style=_ST_BNUM); put_num(r, 8, g_com, style=_ST_BNUM)
-    put_num(r, 9, g_tot, style=_ST_BNUM); put_num(r, 11, g_val, style=_ST_BNUM)
-    put_num(r, 12, g_pitot, style=_ST_BNUM); put_num(r, 13, g_led, style=_ST_BNUM)
-    put_num(r, 14, g_out, style=_ST_BNUM); put_num(r, 15, g_req, style=_ST_BNUM)
-    put_num(r, 16, g_pay, style=_ST_BNUM); put_num(r, 17, g_rem, style=_ST_BNUM)
-    put_num(r, 18, g_ledpay, style=_ST_BNUM)
+    put_text(r, 1, 'Grand Total', style=_ST_GTXT)
+    for cc in range(2, MAX_COL + 1):
+        cells.setdefault((r, cc), (_ST_GTXT, 't', ''))
+    gvals = {7: g_prem, 8: g_com, 9: g_tot, 11: g_val, 12: g_pitot, 13: g_led,
+             14: g_out, 15: g_req, 16: g_pay, 17: g_rem, 18: g_ledpay}
+    for cc in NUM_COLS:
+        col = _xlsx_col_letter(cc)
+        if sub_rows:
+            refs = ','.join('%s%d' % (col, sr) for sr in sub_rows)
+            put_formula(r, cc, 'SUM(%s)' % refs, gvals[cc], style=_ST_GNUM)
+        else:
+            put_num(r, cc, gvals[cc], style=_ST_GNUM)
 
     return _render_single_sheet_xlsx('CLOSING SHEET', cells, widths, max_row=r, max_col=MAX_COL, freeze_rows=2)
 
