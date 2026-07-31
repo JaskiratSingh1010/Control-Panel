@@ -166,7 +166,11 @@
   .rc-so-item:last-child{border-bottom:0}
   .rc-so-n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;
     background:#ccfbf1;color:#0f766e;font-size:11px;font-weight:800}
-  .rc-so-no{flex:1}                                   /* SO number takes the row; litres + amount sit right */
+  .rc-so-main{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}   /* SO no + P/C split; litres + amount sit right */
+  .rc-so-sub{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700}
+  .rc-so-p{color:var(--rz-indigo-deep,#4338ca)}       /* premium litres */
+  .rc-so-c{color:#b45309}                              /* commodity litres */
+  .rc-so-dot{color:var(--rz-faint,#cbd5e1)}
   .rc-so-lit{margin-left:8px;font-weight:700;color:var(--rz-muted,#64748b);white-space:nowrap;font-variant-numeric:tabular-nums}
   .rc-so-amt{margin-left:12px;font-weight:800;color:#0f766e;white-space:nowrap;font-variant-numeric:tabular-nums}
 
@@ -437,7 +441,12 @@
     document.getElementById('rcModalBody').innerHTML = list.map(function(s,i){
       var lit = (s.litres) ? '<span class="rc-so-lit">'+Math.round(s.litres).toLocaleString('en-IN')+' L</span>' : '';
       var amt = (s.value==null) ? '' : '<span class="rc-so-amt">'+money(s.value)+'</span>';
-      return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span><span class="rc-so-no">'+esc(s.no)+'</span>'+lit+amt+'</div>';
+      var parts = [];
+      if(s.premium)   parts.push('<span class="rc-so-p">P '+Math.round(s.premium).toLocaleString('en-IN')+' L</span>');
+      if(s.commodity) parts.push('<span class="rc-so-c">C '+Math.round(s.commodity).toLocaleString('en-IN')+' L</span>');
+      var sub = parts.length ? '<div class="rc-so-sub">'+parts.join('<span class="rc-so-dot">·</span>')+'</div>' : '';
+      return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span>'+
+        '<div class="rc-so-main"><span class="rc-so-no">'+esc(s.no)+'</span>'+sub+'</div>'+lit+amt+'</div>';
     }).join('');
     document.getElementById('rcModal').classList.add('show');
   }
