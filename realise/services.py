@@ -2836,7 +2836,9 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
                    14: s_out, 15: s_req, 16: s_pay, 17: s_rem, 18: s_ledpay}
         for cc in NUM_COLS:
             col = _xlsx_col_letter(cc)
-            put_formula(r, cc, 'SUM(%s%d:%s%d)' % (col, first_party_row, col, last_party_row),
+            # SUBTOTAL(9,…) not SUM: the range auto-shrinks on row deletion (no #REF!), and the
+            # grand-total SUBTOTAL below ignores these nested SUBTOTAL cells (so no double count).
+            put_formula(r, cc, 'SUBTOTAL(9,%s%d:%s%d)' % (col, first_party_row, col, last_party_row),
                         subvals[cc], style=_ST_SUBNUM)
         sub_rows.append(r)
         g_prem += s_prem; g_com += s_com; g_tot += s_tot
@@ -2852,8 +2854,10 @@ def build_closing_sheet_xlsx(payload, type_filter=''):
     for cc in NUM_COLS:
         col = _xlsx_col_letter(cc)
         if sub_rows:
-            refs = ','.join('%s%d' % (col, sr) for sr in sub_rows)
-            put_formula(r, cc, 'SUM(%s)' % refs, gvals[cc], style=_ST_GNUM)
+            # One contiguous SUBTOTAL over the whole body (rows 3..r-1). SUBTOTAL(9) skips the
+            # nested per-ASM SUBTOTAL cells, so it sums only party rows; deleting any party row
+            # OR a whole person block just shrinks the range — it never breaks into #REF!.
+            put_formula(r, cc, 'SUBTOTAL(9,%s3:%s%d)' % (col, col, r - 1), gvals[cc], style=_ST_GNUM)
         else:
             put_num(r, cc, gvals[cc], style=_ST_GNUM)
 
