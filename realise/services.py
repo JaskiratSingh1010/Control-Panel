@@ -1637,6 +1637,21 @@ def _territory_derived():
             seen.add(person)
             d['persons_order'].append(person)
 
+    # Single-owner channels are NATIONAL: a channel whose per-state cells all name the same one
+    # person (e.g. HORECA handled only by RAVINDER) is owned by them in EVERY state — the exact
+    # rule get_territory_dashboard_payload() uses for the dashboard. Mirror it here so the Python
+    # attribution (Required Credit, Order-in-Hand rows, …) resolves a state with no explicit owner
+    # to that person too, instead of leaving it blank. setdefault never overrides an explicit
+    # blank-state (channel-level) owner.
+    _ch_owners = {}
+    for r in rows:
+        ch = _normalize_name(r['channel']); nm = _normalize_name(r['state_name']); pr = _normalize_name(r['sales_person'])
+        if nm and pr:
+            _ch_owners.setdefault(ch, set()).add(pr)
+    for ch, ps in _ch_owners.items():
+        if len(ps) == 1:
+            d['person_by_channel'].setdefault(ch, next(iter(ps)))
+
     # City-level overrides: a (channel, state) territory split among multiple ASMs by
     # ship-to city. A matching city wins over the territory's default owner.
     d['person_by_ch_state_city'] = {}   # (channel, state_name, city) -> person
