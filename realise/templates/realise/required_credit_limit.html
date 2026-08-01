@@ -21,29 +21,31 @@
   .rc-srcpill .material-icons{font-size:15px;color:var(--rz-indigo)}
 
   /* ── KPI cards ── */
-  .rc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
-  @media(max-width:920px){.rc-kpis{grid-template-columns:repeat(2,1fr)}}
-  .rc-kpi{position:relative;overflow:hidden;border-radius:16px;padding:17px 18px 16px;color:var(--rz-ink);
+  .rc-kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:16px}
+  @media(max-width:1300px){.rc-kpis{grid-template-columns:repeat(4,1fr)}}
+  @media(max-width:720px){.rc-kpis{grid-template-columns:repeat(2,1fr)}}
+  .rc-kpi{position:relative;overflow:hidden;border-radius:14px;padding:13px 13px 12px;color:var(--rz-ink);
     background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .rc-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .rc-kpi.k-ltr{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .rc-kpi.k-rev{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .rc-kpi.k-asm{--kpi-acc:var(--rz-acc-amber);--kpi-ic:#d97706}
   .rc-kpi.k-prt{--kpi-acc:var(--rz-acc-green);--kpi-ic:#16a34a}
-  .rc-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--rz-muted);
-    display:flex;align-items:center;gap:6px}
-  .rc-kpi-l .material-icons{font-size:15px;color:var(--kpi-ic,#6366f1)}
-  .rc-kpi-v{font-size:25px;font-weight:900;line-height:1.15;margin-top:7px;color:var(--rz-ink);font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  .rc-kpi-m{font-size:11.5px;font-weight:600;color:var(--rz-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc-kpi-l{font-size:12.5px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-ink);
+    display:flex;align-items:center;gap:6px;line-height:1.2}
+  .rc-kpi-l .material-icons{font-size:16px;color:var(--kpi-ic,#6366f1)}
+  .rc-kpi-v{font-size:22px;font-weight:900;line-height:1.15;margin-top:6px;color:var(--rz-ink);font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .rc-kpi-m{font-size:10.5px;font-weight:600;color:var(--rz-muted);margin-top:3px;line-height:1.3}
   .rc-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;color:var(--kpi-ic,#6366f1);opacity:.08}
   /* Smart hover + click-to-highlight */
   .rc-kpi{cursor:pointer;transition:transform .16s ease, box-shadow .16s ease}
   .rc-kpi:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(15,23,42,.17)}
-  .rc-kpi.active{box-shadow:0 12px 30px rgba(15,23,42,.2)}
+  .rc-kpi.active{box-shadow:0 12px 30px rgba(15,23,42,.2);outline:2.5px solid var(--kpi-ic,#6366f1);outline-offset:-2px}
   .rc-kpi.active::before{height:5px}
   .rc-kpi.active .rc-kpi-l{color:var(--kpi-ic,#6366f1)}
-  .rc-tb.rc-hl10 tbody td:nth-child(10),.rc-tb.rc-hl11 tbody td:nth-child(11),.rc-tb.rc-hl12 tbody td:nth-child(12),.rc-tb.rc-hl13 tbody td:nth-child(13){background:rgba(253,224,71,.32) !important;font-weight:800}
-  .rc-tb.rc-hl10 thead th:nth-child(10),.rc-tb.rc-hl11 thead th:nth-child(11),.rc-tb.rc-hl12 thead th:nth-child(12),.rc-tb.rc-hl13 thead th:nth-child(13){background:#fde047 !important;color:#78350f !important}
+  /* KPI click → highlight the matching table column (body + header) */
+  .rc-tb.rc-hl6 tbody td:nth-child(6),.rc-tb.rc-hl8 tbody td:nth-child(8),.rc-tb.rc-hl9 tbody td:nth-child(9),.rc-tb.rc-hl10 tbody td:nth-child(10),.rc-tb.rc-hl11 tbody td:nth-child(11),.rc-tb.rc-hl12 tbody td:nth-child(12),.rc-tb.rc-hl13 tbody td:nth-child(13){background:rgba(250,204,21,.55) !important;font-weight:800;color:#78350f !important}
+  .rc-tb.rc-hl6 thead th:nth-child(6),.rc-tb.rc-hl8 thead th:nth-child(8),.rc-tb.rc-hl9 thead th:nth-child(9),.rc-tb.rc-hl10 thead th:nth-child(10),.rc-tb.rc-hl11 thead th:nth-child(11),.rc-tb.rc-hl12 thead th:nth-child(12),.rc-tb.rc-hl13 thead th:nth-child(13){background:#facc15 !important;color:#713f12 !important}
 
   /* ── Toolbar ── */
   .rc-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -123,13 +125,13 @@
   /* ── Table ── */
   .rc-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:18px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .rc-tw{overflow:auto;max-height:74vh}
-  table.rc-tb{width:100%;border-collapse:collapse;font-size:13px}
+  table.rc-tb{width:100%;border-collapse:collapse;font-size:12px}
   table.rc-tb thead th{position:sticky;top:0;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;
-    font-size:13px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:13px 14px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+    font-size:12px;font-weight:900;letter-spacing:.2px;text-transform:uppercase;padding:11px 7px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
   table.rc-tb thead th.lbl{text-align:left}
   table.rc-tb thead th.hot{color:var(--rz-teal)}
 
-  table.rc-tb td{padding:10px 13px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
+  table.rc-tb td{padding:8px 7px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
   table.rc-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
 
   /* ASM group row */
@@ -146,7 +148,7 @@
   tr.rc-row{display:none}
   tr.rc-row.show{display:table-row}
   tr.rc-row:hover td{background:#f8fafc}
-  .rc-party{padding-left:30px;font-weight:600;color:#1f2937;max-width:300px;overflow:hidden;text-overflow:ellipsis}
+  .rc-party{padding-left:24px;font-weight:600;color:#1f2937;max-width:180px;overflow:hidden;text-overflow:ellipsis}
   .rc-code{font-size:10.5px;color:#a3aab8;font-weight:600;margin-left:7px}
   .rc-tag{display:inline-block;font-size:10px;font-weight:700;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;
     border-radius:6px;padding:2px 7px}
@@ -188,7 +190,7 @@
   .rc-so-amt{margin-left:12px;font-weight:800;color:#0f766e;white-space:nowrap;font-variant-numeric:tabular-nums}
 
   /* editable remark */
-  .rc-remark{width:160px;border:1px solid #e2e8f0;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:12px;
+  .rc-remark{width:96px;border:1px solid #e2e8f0;border-radius:8px;padding:5px 8px;font-family:inherit;font-size:12px;
     color:var(--rz-ink);background:#fff;outline:0;transition:border-color .15s,box-shadow .15s}
   .rc-remark::placeholder{color:var(--rz-faint)}
   .rc-remark:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
@@ -401,25 +403,33 @@
   function renderKpis(){
     // Credit + collection snapshot (respects the ASM + Type filters), matching the SELECTED
     // TOTAL row: Total Outstanding → Required Limit → Payment Done → Net Outstanding (still due).
-    var out = 0, req = 0, pay = 0, rem = 0;
+    var out = 0, req = 0, pay = 0, rem = 0, led = 0, val = 0, lit = 0, parties = 0, pending = 0;
     asmGroups().forEach(function(g){
       var gv = groupView(g);
       if(!gv.rows.length) return;
-      out += gv.out; req += gv.req; pay += gv.pay; rem += gv.rem;
+      out += gv.out; req += gv.req; pay += gv.pay; rem += gv.rem; led += gv.led; val += gv.val; lit += gv.lit;
+      gv.rows.forEach(function(r){ parties++; if(remOf(r) > 0.5) pending++; });
     });
+    var collPct = out > 0 ? (pay / out * 100) : 0;
     var cards = [
       {c:'k-asm',ic:'account_balance_wallet',l:'Total Outstanding',v:abbr(out), col:10,
         m:'Total owed — OIH + Ledger'},
       {c:'k-rev',ic:'verified_user',l:'Required Limit',v:abbr(req), col:11,
         m:'Credit limit needed (+2%)'},
-      {c:'k-prt',ic:'payments',l:'Payment Done',v:abbr(pay), col:12,
-        m:'Collected on the selected date'},
       {c:'k-ltr',ic:'pending_actions',l:'Net Outstanding',v:abbr(rem), col:13,
-        m:'Still to collect (after payment)'}
+        m:'Still to collect (after payment)'},
+      {c:'k-rev',ic:'inventory_2',l:'Order-in-Hand',v:abbr(val), col:8,
+        m:Math.round(lit).toLocaleString('en-IN')+' L open pipeline'},
+      {c:'k-asm',ic:'account_balance',l:'Receivables (Ledger)',v:abbr(led), col:9,
+        m:'Total ledger balance on the books'},
+      {c:'k-prt',ic:'savings',l:'Collection',v:abbr(pay), col:12,
+        m:collPct.toFixed(1)+'% of Total Outstanding'},
+      {c:'k-ltr',ic:'groups',l:'Pending Parties',v:pending+' / '+parties, col:0,
+        m:(parties-pending)+' cleared (net ≈ ₹0)'}
     ];
     document.getElementById('rcKpis').innerHTML = cards.map(function(k){
-      return '<div class="rc-kpi '+k.c+(kpiHlCol===k.col?' active':'')+'" data-col="'+k.col+'" '+
-        'title="Click to highlight its column in the table">'+
+      return '<div class="rc-kpi '+k.c+((kpiHlCol && kpiHlCol===k.col)?' active':'')+'" data-col="'+k.col+'" '+
+        'title="'+(k.col?'Click to highlight its column in the table':'')+'">'+
         '<div class="rc-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
         '<div class="rc-kpi-v">'+k.v+'</div>'+
         '<div class="rc-kpi-m">'+esc(k.m)+'</div>'+
@@ -431,7 +441,7 @@
   var kpiHlCol = 0;
   function applyKpiHighlight(){
     var tbl = document.querySelector('.rc-tb'); if(!tbl) return;
-    tbl.classList.remove('rc-hl10','rc-hl11','rc-hl12','rc-hl13');
+    tbl.classList.remove('rc-hl6','rc-hl8','rc-hl9','rc-hl10','rc-hl11','rc-hl12','rc-hl13');
     if(kpiHlCol) tbl.classList.add('rc-hl'+kpiHlCol);
   }
 
@@ -631,7 +641,7 @@
       var col = parseInt(card.getAttribute('data-col'), 10) || 0;
       kpiHlCol = (kpiHlCol === col) ? 0 : col;
       document.querySelectorAll('#rcKpis .rc-kpi').forEach(function(c){
-        c.classList.toggle('active', parseInt(c.getAttribute('data-col'), 10) === kpiHlCol);
+        c.classList.toggle('active', kpiHlCol !== 0 && parseInt(c.getAttribute('data-col'), 10) === kpiHlCol);
       });
       applyKpiHighlight();
     });
