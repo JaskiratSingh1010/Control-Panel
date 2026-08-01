@@ -424,12 +424,13 @@
         m:'Total ledger balance on the books'},
       {c:'k-prt',ic:'savings',l:'Collection',v:abbr(pay), col:12,
         m:collPct.toFixed(1)+'% of Total Outstanding'},
-      {c:'k-ltr',ic:'groups',l:'Pending Parties',v:pending+' / '+parties, col:0,
-        m:(parties-pending)+' cleared (net ≈ ₹0)'}
+      {c:'k-ltr',ic:'groups',l:'Pending Parties',v:pending+' / '+parties, col:0, act:'pending',
+        m:(parties-pending)+' cleared · click to view'}
     ];
     document.getElementById('rcKpis').innerHTML = cards.map(function(k){
-      return '<div class="rc-kpi '+k.c+((kpiHlCol && kpiHlCol===k.col)?' active':'')+'" data-col="'+k.col+'" '+
-        'title="'+(k.col?'Click to highlight its column in the table':'')+'">'+
+      var on = k.act ? false : (kpiHlCol && kpiHlCol===k.col);
+      return '<div class="rc-kpi '+k.c+(on?' active':'')+'" data-col="'+k.col+'"'+(k.act?' data-act="'+k.act+'"':'')+' '+
+        'title="'+(k.act==='pending'?'Click to list the pending parties':(k.col?'Click to highlight its column in the table':''))+'">'+
         '<div class="rc-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
         '<div class="rc-kpi-v">'+k.v+'</div>'+
         '<div class="rc-kpi-m">'+esc(k.m)+'</div>'+
@@ -476,6 +477,29 @@
     document.getElementById('rcModal').classList.add('show');
   }
   function closeSoModal(){ document.getElementById('rcModal').classList.remove('show'); }
+
+  // Pending Parties popup: every party still owing (net outstanding > 0), biggest first,
+  // with its ASM and net amount. Respects the current ASM + Type filters. Reuses rcModal.
+  function openPendingModal(){
+    var list = [];
+    asmGroups().forEach(function(g){
+      groupView(g).rows.forEach(function(r){
+        var net = remOf(r);
+        if(net > 0.5) list.push({party:r.party, code:r.card_code, asm:g.asm, net:net});
+      });
+    });
+    list.sort(function(a,b){ return b.net - a.net; });
+    document.getElementById('rcModalTitle').textContent = 'Pending Parties — ' + list.length;
+    document.getElementById('rcModalBody').innerHTML = list.length
+      ? list.map(function(p,i){
+          return '<div class="rc-so-item"><span class="rc-so-n">'+(i+1)+'</span>'+
+            '<div class="rc-so-main"><span class="rc-so-no">'+esc(p.party)+'</span>'+
+            '<div class="rc-so-sub"><span class="rc-so-p">'+esc(p.asm)+'</span></div></div>'+
+            '<span class="rc-so-amt">'+money(p.net)+'</span></div>';
+        }).join('')
+      : '<div style="padding:16px;color:var(--rz-muted);font-weight:600">All parties are cleared 🎉</div>';
+    document.getElementById('rcModal').classList.add('show');
+  }
 
   // ── Body ──
   function renderBody(){
@@ -638,6 +662,10 @@
     // KPI tiles: click one to highlight its column in the table; click again to clear.
     document.getElementById('rcKpis').addEventListener('click',function(e){
       var card = e.target.closest('.rc-kpi'); if(!card) return;
+      if(card.getAttribute('data-act') === 'pending'){    // list the pending parties in a popup
+        openPendingModal();
+        return;
+      }
       var col = parseInt(card.getAttribute('data-col'), 10) || 0;
       kpiHlCol = (kpiHlCol === col) ? 0 : col;
       document.querySelectorAll('#rcKpis .rc-kpi').forEach(function(c){
