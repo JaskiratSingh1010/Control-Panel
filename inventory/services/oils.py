@@ -16,10 +16,11 @@ def JSONResponse(content):
 # Owner join helper — handles int/varchar type mismatch
 OWN_JOIN = 'LEFT JOIN {db}.OUSR U ON CAST({tbl}."U_Owner" AS VARCHAR(20))=CAST(U."USERID" AS VARCHAR(20))'
 
-# Stock Available — finished-goods (ItmsGrpCod 102) stock by item, pivoted across these
-# warehouses (display order), classified into the canonical 16 Realise products.
-STOCK_WAREHOUSES = ['GP-FG', 'BH-FG', 'BH-PF', 'BH-EC', 'BH-FU', 'BH-BT']
-# Jivo Mart carries its stock in different warehouses — same six plus these two (mart only).
+# Stock Available — finished-goods (ItmsGrpCod 102) stock by item, pivoted across warehouses.
+# STOCK_WAREHOUSES is the DEFAULT set shown as columns; the warehouse filter offers every
+# warehouse that holds finished goods, so the rest can be toggled on.
+STOCK_WAREHOUSES = ['GP-FG', 'BH-PF', 'BH-EC', 'BH-FU', 'BH-BT', 'BH-SC']
+# Jivo Mart defaults to the same set plus these two.
 MART_STOCK_WAREHOUSES = STOCK_WAREHOUSES + ['GP-FGM', 'DL-MP']
 
 
@@ -34,8 +35,9 @@ def get_stock_available(schema="jivo_oil"):
     from realise.services import _reclassify, ALLOWED_SUB_GROUPS, DEFAULT_TARGETS
 
     db = get_schema(schema)
-    whs = MART_STOCK_WAREHOUSES if schema == "jivo_mart" else STOCK_WAREHOUSES
-    whs_in = ",".join("'%s'" % w for w in whs)
+    default_whs = MART_STOCK_WAREHOUSES if schema == "jivo_mart" else STOCK_WAREHOUSES
+    # No warehouse restriction — pull every warehouse holding finished goods, so the filter can
+    # offer them all. The table just defaults to `default_whs`; the rest are toggled on.
     rows = q(f"""SELECT
         I."ItemCode" AS "ItemCode", I."ItemName" AS "ItemName", O."Warehouse" AS "Warehouse",
         I."U_SKU" AS "U_SKU", I."U_Sub_Group" AS "U_Sub_Group", I."U_Variety" AS "U_Variety",
@@ -44,13 +46,14 @@ def get_stock_available(schema="jivo_oil"):
         CASE WHEN I."U_IsLitre" = 'Y' THEN SUM(O."InQty" - O."OutQty") * I."SalPackUn" ELSE 0 END AS "Litres"
     FROM {db}.OINM O
     INNER JOIN {db}.OITM I ON I."ItemCode" = O."ItemCode"
-    WHERE I."ItmsGrpCod" = 102 AND O."Warehouse" IN ({whs_in})
+    WHERE I."ItmsGrpCod" = 102
     GROUP BY I."ItemCode", I."ItemName", I."SalPackUn", O."Warehouse",
              I."U_SKU", I."U_Sub_Group", I."U_Variety", I."U_IsLitre", I."U_TYPE"
     HAVING SUM(O."InQty" - O."OutQty") <> 0
     ORDER BY I."U_Sub_Group", I."U_Variety", I."ItemName" """)
 
     items = {}
+    wh_totals = {}   # warehouse -> total net qty across items (to pick / order the non-default ones)
     for r in rows:
         code = r.get("ItemCode")
         name = str(r.get("ItemName") or "").strip()
@@ -68,24 +71,29 @@ def get_stock_available(schema="jivo_oil"):
                 "variety": str(r.get("U_Variety") or "").strip(),
                 "item_code": code, "item_name": name,
                 "sku": str(r.get("U_SKU") or "").strip(),
-                "wh": {w: 0.0 for w in whs},
-                "wh_litres": {w: 0.0 for w in whs},
+                "wh": {}, "wh_litres": {},
                 "grand_total": 0.0, "litres": 0.0,
                 "pcs_per_box": float(r.get("SalFactor2") or 0),   # for Boxes = pieces / pcs_per_box
             }
         wcode = str(r.get("Warehouse") or "").strip().upper()
         qty = float(r.get("Qty") or 0)
         lit = float(r.get("Litres") or 0)
-        if wcode in it["wh"]:
-            it["wh"][wcode] += qty
-            it["wh_litres"][wcode] += lit
+        it["wh"][wcode] = it["wh"].get(wcode, 0.0) + qty
+        it["wh_litres"][wcode] = it["wh_litres"].get(wcode, 0.0) + lit
         it["grand_total"] += qty
         it["litres"] += lit
+        wh_totals[wcode] = wh_totals.get(wcode, 0.0) + qty
+
+    # Column order for the filter: the default warehouses first (always offered, even at zero),
+    # then every other warehouse that actually holds stock — biggest first.
+    extras = sorted((w for w, t in wh_totals.items() if w not in default_whs and abs(t) > 1e-6),
+                    key=lambda w: -abs(wh_totals[w]))
+    all_whs = list(default_whs) + extras
 
     item_list = list(items.values())
     for it in item_list:
-        it["wh"] = {w: round(v, 2) for w, v in it["wh"].items()}
-        it["wh_litres"] = {w: round(v, 2) for w, v in it["wh_litres"].items()}
+        it["wh"] = {w: round(it["wh"].get(w, 0.0), 2) for w in all_whs}
+        it["wh_litres"] = {w: round(it["wh_litres"].get(w, 0.0), 2) for w in all_whs}
         it["grand_total"] = round(it["grand_total"], 2)
         it["litres"] = round(it["litres"], 2)
 
@@ -110,7 +118,8 @@ def get_stock_available(schema="jivo_oil"):
     # Premium block first, then Commodity; within each, most stock first.
     product_list.sort(key=lambda p: (0 if p["type"] == "PREMIUM" else 1, -p["qty"], p["sub_group"]))
 
-    return {"warehouses": whs, "products": product_list, "items": item_list}
+    return {"warehouses": all_whs, "default_warehouses": list(default_whs),
+            "products": product_list, "items": item_list}
 
 
 def _beverages_stock(db):

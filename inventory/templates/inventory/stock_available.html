@@ -145,6 +145,20 @@
           <button type="button" data-u="boxes">Boxes</button>
           <button type="button" data-u="pieces">Pieces</button>
         </div>
+        <label class="sa-sku-lbl" for="saWhBtn">Warehouse</label>
+        <div class="sa-ms" id="saWhMs">
+          <button type="button" class="sa-ms-btn" id="saWhBtn">
+            <span id="saWhLabel">All warehouses</span>
+            <svg class="sa-ms-chev" width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          </button>
+          <div class="sa-ms-pop" id="saWhPop">
+            <div class="sa-ms-head">
+              <button type="button" data-act="all">Select all</button>
+              <button type="button" data-act="none">Clear</button>
+            </div>
+            <div class="sa-ms-list" id="saWhList"></div>
+          </div>
+        </div>
         <label class="sa-sku-lbl" for="saSkuBtn">SKU</label>
         <div class="sa-ms" id="saSkuMs">
           <button type="button" class="sa-ms-btn" id="saSkuBtn">
@@ -302,7 +316,8 @@
   function motifFor(p){return MOTIFS[MOTIF_MAP[p.sub_group]||MOTIF_MAP[p.type]||'seeds']||'';}
 
   var DATA={warehouses:[],products:[],items:[]};
-  var db='jivo_oil', typeF='', skuF=[], selected=null, selectedGrad='';   // skuF: selected SKUs; [] = all
+  var db='jivo_oil', typeF='', skuF=[], whF=[], selected=null, selectedGrad='';   // skuF: SKUs, whF: warehouses; [] = all
+  function activeWhs(){ var all=DATA.warehouses||[]; return whF.length ? all.filter(function(w){return whF.indexOf(w)!==-1;}) : all; }
   // Stock table units (Jivo Oil): multi-select Litres / Boxes / Pieces. Boxes = pieces / pcs_per_box.
   var unitSel={litres:true, boxes:false, pieces:false};
   var UNIT_DEFS=[
@@ -327,7 +342,7 @@
     grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Loading…</div>';
     fetch('/inventory/stock-available/api/data/?schema='+encodeURIComponent(db),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{data:{}};})
-      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; renderSub(); renderTypeToggle(); renderSaKpis(); renderCards(); })
+      .then(function(p){ DATA=(p&&p.data)||{warehouses:[],products:[],items:[]}; whF=(DATA.default_warehouses||[]).slice(); renderSub(); renderTypeToggle(); renderSaKpis(); renderCards(); })
       .catch(function(){grid.innerHTML='<div class="sa-empty" style="grid-column:1/-1">Could not load stock.</div>';});
   }
 
@@ -403,8 +418,8 @@
   // Subheading reflects the active company's warehouses (they differ per company).
   function renderSub(){
     var el=document.getElementById('saSub'); if(!el)return;
-    var whs=DATA.warehouses||[];
-    el.textContent='Finished-goods stock by product & warehouse — live (In − Out across '+(whs.length?whs.join(' / '):'—')+')';
+    var def=DATA.default_warehouses||DATA.warehouses||[], all=(DATA.warehouses||[]).length;
+    el.textContent='Finished-goods stock by product & warehouse — live (In − Out). Default: '+(def.length?def.join(' / '):'—')+(all>def.length?(' · '+all+' warehouses in the filter'):'');
   }
 
   // Drop the table panel into the grid right after the LAST card of the clicked row.
@@ -419,7 +434,25 @@
     panel.style.display='';
     document.getElementById('saBar').style.background=selectedGrad||'linear-gradient(135deg,#1e293b,#4338ca)';
     populateSku();
+    populateWh();
     renderTable();
+  }
+
+  // Warehouse multi-select (whF=[] means all). Warehouses come from the payload (same for
+  // every product in a company), so the selection persists as you switch products.
+  function whLabel(){
+    var el=document.getElementById('saWhLabel'); if(!el)return;
+    var total=(DATA.warehouses||[]).length, n=whF.length;
+    el.textContent=(n===0||(total>0&&n===total))?'All warehouses':(n===1?whF[0]:n+' warehouses');
+  }
+  function populateWh(){
+    var list=document.getElementById('saWhList'); if(!list)return;
+    var whs=DATA.warehouses||[];
+    whF=whF.filter(function(w){return whs.indexOf(w)!==-1;});   // drop any not in this company
+    list.innerHTML=whs.length
+      ? whs.map(function(w){return '<label class="sa-ms-item"><input type="checkbox" value="'+esc(w)+'"'+(whF.indexOf(w)!==-1?' checked':'')+'>'+esc(w)+'</label>';}).join('')
+      : '<div class="sa-ms-item" style="color:#94a3b8;cursor:default">No warehouses</div>';
+    whLabel();
   }
 
   // Button label: "All SKUs" when nothing (or everything) is picked, else the SKU / a count.
@@ -443,7 +476,7 @@
   }
 
   function renderTable(){
-    var whs=DATA.warehouses||[];
+    var whs=activeWhs();
     var rows=(DATA.items||[]).filter(function(it){return selected&&it.type===selected.type&&it.sub_group===selected.sub_group&&(!skuF.length||skuF.indexOf(it.sku)!==-1);})
       .sort(function(a,b){return (Number(b.grand_total)||0)-(Number(a.grand_total)||0);});
     document.getElementById('saTableTitle').textContent=selected.type+' — '+selected.sub_group;
@@ -478,7 +511,8 @@
     var tot={}; whs.forEach(function(w){tot[w]=units.map(function(){return 0;});}); var gt=units.map(function(){return 0;});
     var body=rows.map(function(it){
       var cells=whs.map(function(w){ return uCells(function(u){return u.get(it,w);}, function(ui,v){tot[w][ui]+=v;}, true); }).join('');
-      var gcells=uCells(function(u){return u.tot(it);}, function(ui,v){gt[ui]+=v;}, false);
+      // Grand Total = sum across the SHOWN warehouses (so it matches the visible columns).
+      var gcells=uCells(function(u){var s=0;for(var wi=0;wi<whs.length;wi++)s+=u.get(it,whs[wi]);return s;}, function(ui,v){gt[ui]+=v;}, false);
       return '<tr><td><span class="sa-var">'+esc(it.variety||'—')+'</span></td>'
         +'<td>'+esc(it.item_code)+'</td><td>'+esc(it.item_name)+'</td><td>'+esc(it.sku||'—')+'</td>'
         +cells+gcells+'</tr>';
@@ -506,7 +540,7 @@
   // columns per warehouse), honouring the current unit selection and SKU filter.
   function exportTable(){
     if(!selected) return;
-    var whs=DATA.warehouses||[];
+    var whs=activeWhs();
     var rows=(DATA.items||[]).filter(function(it){return it.type===selected.type&&it.sub_group===selected.sub_group&&(!skuF.length||skuF.indexOf(it.sku)!==-1);})
       .sort(function(a,b){return (Number(b.grand_total)||0)-(Number(a.grand_total)||0);});
     if(!rows.length){ alert('No rows to export.'); return; }
@@ -539,7 +573,7 @@
       var row=[it.variety||'—', it.item_code, it.item_name, it.sku||'—'];
       whs.forEach(function(w){ units.forEach(function(u,ui){ var v=r2(u.get(it,w)); tot[w][ui]+=v;
         row.push(ui===0 ? {value:(v||''),align:'right',border:'l'} : (v||'')); }); });
-      units.forEach(function(u,ui){ var v=r2(u.tot(it)); gt[ui]+=v;
+      units.forEach(function(u,ui){ var s=0;for(var wi=0;wi<whs.length;wi++)s+=u.get(it,whs[wi]); var v=r2(s); gt[ui]+=v;
         row.push(ui===0 ? {value:v,align:'right',border:'l'} : v); });
       out.push(row);
     });
@@ -580,7 +614,7 @@
   });
   document.addEventListener('click',function(e){ if(!saMs.contains(e.target)) closeSkuPop(); });
   window.addEventListener('resize',closeSkuPop);
-  window.addEventListener('scroll',closeSkuPop,true);   // page or inner scroll → close (pop is fixed)
+  window.addEventListener('scroll',function(e){ if(!saMs.contains(e.target)) closeSkuPop(); },true);   // close on page scroll, not inner-list scroll
   document.getElementById('saSkuList').addEventListener('change',function(e){
     var cb=e.target; if(!cb||cb.type!=='checkbox')return;
     var i=skuF.indexOf(cb.value);
@@ -592,6 +626,31 @@
     var all=b.getAttribute('data-act')==='all'; skuF=[];
     document.querySelectorAll('#saSkuList input').forEach(function(i){ i.checked=all; if(all)skuF.push(i.value); });
     skuLabel(); renderTable();
+  });
+  // Warehouse multi-select — mirrors the SKU one; whF=[] means all warehouses.
+  var saWhMs=document.getElementById('saWhMs');
+  function closeWhPop(){ saWhMs.classList.remove('open'); }
+  document.getElementById('saWhBtn').addEventListener('click',function(e){
+    e.stopPropagation();
+    if(!saWhMs.classList.toggle('open')) return;
+    var pop=document.getElementById('saWhPop'), r=this.getBoundingClientRect();
+    pop.style.left=Math.max(8,r.right-pop.offsetWidth)+'px';
+    pop.style.top=(r.bottom+6)+'px';
+  });
+  document.addEventListener('click',function(e){ if(!saWhMs.contains(e.target)) closeWhPop(); });
+  window.addEventListener('resize',closeWhPop);
+  window.addEventListener('scroll',function(e){ if(!saWhMs.contains(e.target)) closeWhPop(); },true);   // don't close on inner-list scroll
+  document.getElementById('saWhList').addEventListener('change',function(e){
+    var cb=e.target; if(!cb||cb.type!=='checkbox')return;
+    var i=whF.indexOf(cb.value);
+    if(cb.checked){ if(i===-1)whF.push(cb.value); } else if(i!==-1){ whF.splice(i,1); }
+    whLabel(); renderTable();
+  });
+  saWhMs.querySelector('.sa-ms-head').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    var all=b.getAttribute('data-act')==='all'; whF=[];
+    document.querySelectorAll('#saWhList input').forEach(function(i){ i.checked=all; if(all)whF.push(i.value); });
+    whLabel(); renderTable();
   });
   document.getElementById('saDb').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
