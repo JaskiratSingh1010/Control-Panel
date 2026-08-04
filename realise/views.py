@@ -953,6 +953,11 @@ def api_sales_data(request):
     ))
 
     channel_rows, channel_month_rows = _channel_aggregates(start_date, end_date, raw_rows)
+    if body.get('include_hidden'):
+        # Fold hidden invoices (U_ARNO='H', normally excluded) into the month pivot when the
+        # Compare Sales "Hidden" toggle is ON. New list — the cached channel_month_rows is untouched.
+        hidden_month_rows = _aggregate_channel_month_rows(services._fetch_hidden_raw(start_date, end_date))
+        channel_month_rows = channel_month_rows + hidden_month_rows
     return JsonResponse({'status': 'ok', 'data': output, 'count': len(output),
                          'channel_rows': channel_rows, 'channel_month_rows': channel_month_rows})
 

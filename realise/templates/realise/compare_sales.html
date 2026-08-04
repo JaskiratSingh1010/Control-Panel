@@ -18,6 +18,8 @@
   .cs-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .cs-bar input[type=number]:focus,.cs-bar input[type=search]:focus,.cs-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .cs-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .cs-hidbtn{border:1px solid #e2e8f0;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:13px;font-weight:800;padding:8px 18px;border-radius:9px;cursor:pointer;min-width:58px;letter-spacing:.4px}
+  .cs-hidbtn.on{background:var(--rz-indigo,#4f46e5);border-color:var(--rz-indigo,#4f46e5);color:#fff}
   .cs-fetch:hover{background:var(--rz-indigo-deep)}
   .cs-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .cs-export:hover{background:#ecfdf5;border-color:#a7f3d0}
@@ -109,6 +111,10 @@
       <label class="cs-curm" title="Untick to exclude the running month — the window then ends at the previous complete month"><input type="checkbox" id="csInclCur" checked> Incl. current month</label>
     </div>
     <button class="cs-fetch" id="csFetch">&#9654; Fetch</button>
+    <div class="cs-fld"><span class="cs-lbl">Hidden Sales</span>
+      <button type="button" class="cs-hidbtn" id="csHiddenBtn" aria-pressed="false" title="Include hidden sales (U_ARNO='H') in the pivot — click to toggle ON/OFF">OFF</button>
+      <input type="checkbox" id="csHidden" hidden>
+    </div>
     <div class="cs-fld"><span class="cs-lbl">Type</span>
       <select id="csType">
         <option value="">All</option>
@@ -126,6 +132,16 @@
           <div class="com-dp-head"><a id="csMgAll">Select All</a><a id="csMgClr">Clear All</a></div>
           <div class="com-dp-list" id="csMgList"></div>
           <div class="com-dp-foot"><button type="button" id="csMgApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="cs-fld"><span class="cs-lbl">Person</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="csPsBtn"><span id="csPsLabel">All persons</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="csPsPanel">
+          <div class="com-dp-head"><a id="csPsAll">Select All</a><a id="csPsClr">Clear All</a></div>
+          <div class="com-dp-list" id="csPsList"></div>
+          <div class="com-dp-foot"><button type="button" id="csPsApply">Apply</button></div>
         </div>
       </div>
     </div>
@@ -311,6 +327,8 @@
   function activeMetrics(){ var ks=_viewKeys(); return METRICS.filter(function(m){return ks.indexOf(m.k)!==-1;}); }
   function exportMetrics(){ return activeMetrics(); }   // Revenue is its own checkbox — export mirrors the ticks exactly
   var mgAllGroups=[], mgSelected=[], mgChosen=[];         // main-group filter
+  var psAll=[], psSelected=[], psChosen=[];               // person (ASM) filter
+  function personOf(r){ return assignedPerson(String(r.main_group||'').toUpperCase(), r.state) || '—'; }
   var skuAll=[], skuSelected=[], skuChosen=[];            // SKU pack-size filter
   var varAll=[], varSelected=[], varChosen=[];            // Variety filter — OITM.U_Sub_Group (CANOLA / MUSTARD / SOYABEAN / …)
   var itmAll=[], itmSel=[], itmChosen=[], itmSearch='';   // Item picker (cascades off Type/Group/Variety/Pack Size) + in-panel search
@@ -335,9 +353,12 @@
     var varset={}; varSelected.forEach(function(v){varset[v]=1;});
     var itmAllSel=itmSel.length===0||itmSel.length===itmAll.length;
     var itmset={}; itmSel.forEach(function(n){itmset[n]=1;});
+    var psAllSel=psSelected.length===0||psSelected.length===psAll.length;
+    var psset={}; psSelected.forEach(function(p){psset[p]=1;});
     for(var i=0;i<rows.length;i++){var r=rows[i];
       if(typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
+      if(!psAllSel&&!psset[personOf(r)])continue;
       if(!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
       if(!varAllSel&&!varset[String(r.u_sub_group||'').trim().toUpperCase()||'—'])continue;
       if(!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
@@ -670,6 +691,31 @@
       list.appendChild(item);
     });
   }
+  // ── Person (ASM) filter — the territory owner for each row's group+state ──
+  function rebuildPsList(){
+    var seen={}; psAll=[];
+    rows.forEach(function(r){var p=personOf(r); if(!seen[p]){seen[p]=1;psAll.push(p);}});
+    psAll.sort();
+    psSelected=psAll.slice();                  // default: all
+    renderPsList(); updatePsLabel();
+  }
+  function updatePsLabel(){
+    var el=document.getElementById('csPsLabel');
+    el.textContent=(psSelected.length===0||psSelected.length===psAll.length)?'All persons':(psSelected.length===1?psSelected[0]:psSelected.length+' persons');
+  }
+  function renderPsList(){
+    var list=document.getElementById('csPsList'); list.innerHTML='';
+    psAll.forEach(function(p){
+      var on=psChosen.indexOf(p)!==-1;
+      var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(p)+'</span><span class="com-pos">&#10003;</span>';
+      item.querySelector('input').addEventListener('change',function(){
+        var i=psChosen.indexOf(p); if(this.checked){if(i===-1)psChosen.push(p);}else if(i!==-1)psChosen.splice(i,1);
+        renderPsList();
+      });
+      list.appendChild(item);
+    });
+  }
   // ── SKU pack-size filter (distinct OITM.U_SKU pack sizes: 1 LTR, 5 LTR, 700 GMS, …) ──
   function skuSortKey(s){ var m=/(\d+(?:\.\d+)?)/.exec(s); return m?parseFloat(m[1]):1e9; }
   function rebuildSkuList(){
@@ -742,6 +788,7 @@
   // variety → sizes & items narrow to it; pick a size → varieties & items narrow; and so on).
   function facetRows(except){
     var mgAll=mgSelected.length===0||mgSelected.length===mgAllGroups.length, mgset=setOf(mgSelected);
+    var psAllSel=psSelected.length===0||psSelected.length===psAll.length, psset=setOf(psSelected);
     var skuAllSel=skuSelected.length===0||skuSelected.length===skuAll.length, skuset=setOf(skuSelected);
     var varAllSel=varSelected.length===0||varSelected.length===varAll.length, varset=setOf(varSelected);
     var itmAllSel=itmSel.length===0||itmSel.length===itmAll.length, itmset=setOf(itmSel);
@@ -749,6 +796,7 @@
     for(var i=0;i<rows.length;i++){var r=rows[i];
       if(except!=='type'&&typeF&&String(r.u_type||'').toUpperCase()!==typeF)continue;
       if(except!=='mg'&&!mgAll&&!mgset[String(r.main_group||'').toUpperCase()])continue;
+      if(except!=='person'&&!psAllSel&&!psset[personOf(r)])continue;
       if(except!=='sku'&&!skuAllSel&&!skuset[String(r.sku||'').trim().toUpperCase()||'—'])continue;
       if(except!=='variety'&&!varAllSel&&!varset[String(r.u_sub_group||'').trim().toUpperCase()||'—'])continue;
       if(except!=='item'&&!itmAllSel&&!itmset[String(r.item_name||'').trim().toUpperCase()||'—'])continue;
@@ -817,9 +865,10 @@
     }
     var btn=document.getElementById('csFetch'); btn.disabled=true; btn.textContent='Loading…';
     document.getElementById('csBody').innerHTML='<tr><td class="cs-empty">Loading…</td></tr>';
-    fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed})})
+    var inclHidden=document.getElementById('csHidden').checked;
+    fetch('/realise/api/sales-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({start_date:sd,end_date:ed,include_hidden:inclHidden})})
       .then(function(r){return r.ok?r.json():{};})
-      .then(function(p){ rows=(p.channel_month_rows||[]).filter(function(r){return r.is_fg;}); err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); varSelected=[]; skuSelected=[]; itmSel=[]; refreshFacets(); render(); if(!err)saveCache(); })
+      .then(function(p){ rows=(p.channel_month_rows||[]).filter(function(r){return r.is_fg;}); err=p.status==='error'?(p.error||'error'):null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildPsList(); varSelected=[]; skuSelected=[]; itmSel=[]; refreshFacets(); render(); if(!err)saveCache(); })
       .catch(function(){ err='load failed'; loaded=true; render(); })
       .then(function(){ btn.disabled=false; btn.innerHTML='&#9654; Fetch'; });
   }
@@ -841,7 +890,7 @@
       var raw=sessionStorage.getItem(CS_CACHE_KEY); if(!raw)return false;
       var c=JSON.parse(raw); if(!c||!Array.isArray(c.rows))return false;
       if(c.months)document.getElementById('csMonths').value=c.months;
-      rows=(c.rows||[]).filter(function(r){return r.is_fg;}); err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); varSelected=[]; skuSelected=[]; itmSel=[]; refreshFacets(); render(); return true;
+      rows=(c.rows||[]).filter(function(r){return r.is_fg;}); err=null; loaded=true; expanded={}; csRefine.reset(); rebuildMgList(); rebuildPsList(); varSelected=[]; skuSelected=[]; itmSel=[]; refreshFacets(); render(); return true;
     }catch(e){ try{sessionStorage.removeItem(CS_CACHE_KEY);}catch(_e){} return false; }
   }
 
@@ -910,6 +959,12 @@
 
   // Wiring
   document.getElementById('csFetch').addEventListener('click',load);
+  // Hidden Sales ON/OFF — ON folds hidden invoices (U_ARNO='H') into the pivot; re-fetches.
+  document.getElementById('csHiddenBtn').addEventListener('click',function(){
+    var cb=document.getElementById('csHidden'); cb.checked=!cb.checked;
+    this.classList.toggle('on',cb.checked); this.textContent=cb.checked?'ON':'OFF'; this.setAttribute('aria-pressed',cb.checked);
+    if(loaded) load();   // only refetch once a period has been fetched
+  });
   document.getElementById('csExport').addEventListener('click',exportXlsx);
   document.getElementById('csMonths').addEventListener('keydown',function(e){if(e.key==='Enter')load();});
   document.getElementById('csType').addEventListener('change',function(){typeF=this.value;refreshFacets();render();});
@@ -961,6 +1016,16 @@
     document.getElementById('csMgAll').addEventListener('click',function(){mgChosen=mgAllGroups.slice();renderMgList();});
     document.getElementById('csMgClr').addEventListener('click',function(){mgChosen=[];renderMgList();});
     document.getElementById('csMgApply').addEventListener('click',function(){mgSelected=mgChosen.slice();updateMgLabel();refreshFacets();panel.classList.remove('open');render();});
+  })();
+  // Person panel
+  (function(){
+    var btn=document.getElementById('csPsBtn'), panel=document.getElementById('csPsPanel');
+    btn.addEventListener('click',function(e){e.stopPropagation();psChosen=psSelected.slice();renderPsList();panel.classList.toggle('open');});
+    panel.addEventListener('click',function(e){e.stopPropagation();});
+    document.addEventListener('click',function(){panel.classList.remove('open');});
+    document.getElementById('csPsAll').addEventListener('click',function(){psChosen=psAll.slice();renderPsList();});
+    document.getElementById('csPsClr').addEventListener('click',function(){psChosen=[];renderPsList();});
+    document.getElementById('csPsApply').addEventListener('click',function(){psSelected=psChosen.slice();updatePsLabel();refreshFacets();panel.classList.remove('open');render();});
   })();
   // Pack Size (SKU) panel
   (function(){

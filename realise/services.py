@@ -3446,6 +3446,52 @@ def get_sales_cn_report(start_date, end_date, company='oil'):
 _hidden_sales_cache = {}
 _HIDDEN_SALES_TTL = 90
 
+_hidden_raw_cache = {}
+_HIDDEN_RAW_TTL = 90
+
+
+def _fetch_hidden_raw(start_date, end_date):
+    """Hidden sales-invoice lines (OINV.U_ARNO='H') shaped like the sales-proc output — the same
+    keys _aggregate_channel_month_rows reads — so Compare Sales can fold them into the pivot when
+    the 'Hidden' toggle is ON. Ship-to state resolved to its name (OCST); Delhi-GT remap applied
+    to match the normal rows. Cached per range."""
+    key = (str(start_date), str(end_date))
+    now = time.time()
+    hit = _hidden_raw_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    S = SAP_SCHEMA
+    sql = f'''
+        SELECT H."DocDate" AS "DocDate", SP."SlpName" AS "U_SALES_PERSON",
+               COALESCE(TRIM(H."CardCode"),'') AS "CardCode",
+               COALESCE(TRIM(I."U_TYPE"),'')      AS "U_TYPE",
+               COALESCE(TRIM(C."U_Main_Group"),'') AS "U_Main_Group",
+               COALESCE(TRIM(I."U_Sub_Group"),'') AS "U_Sub_Group",
+               COALESCE(TRIM(I."U_Variety"),'')   AS "U_Variety",
+               COALESCE(TRIM(I."U_SKU"),'')        AS "SKU",
+               COALESCE(TRIM(I."ItemName"),'')     AS "ItemName",
+               COALESCE(TRIM(L."ItemCode"),'')     AS "ItemCode",
+               COALESCE(TRIM(C."CardName"),'')     AS "CardName",
+               (SELECT K."Name" FROM "{S}".OCST K WHERE K."Code"=A."State" AND K."Country"=A."Country") AS "State",
+               COALESCE(L."Quantity",0)*COALESCE(I."SalPackUn",0) AS "Liter",
+               COALESCE(L."LineTotal",0)           AS "LineTotal"
+        FROM "{S}"."OINV" H
+        JOIN "{S}"."INV1" L ON H."DocEntry"=L."DocEntry"
+        JOIN "{S}"."OITM" I ON L."ItemCode"=I."ItemCode"
+        LEFT JOIN "{S}"."OCRD" C ON C."CardCode"=H."CardCode"
+        LEFT JOIN "{S}"."OSLP" SP ON H."SlpCode"=SP."SlpCode"
+        LEFT JOIN "{S}"."CRD1" A ON A."CardCode"=H."CardCode" AND A."Address"=H."ShipToCode" AND A."AdresType"='S'
+        WHERE H."U_ARNO"='H' AND H."DocDate" BETWEEN ? AND ? AND H."CANCELED"='N'
+    '''
+    try:
+        rows = sap_connector.execute_query(sql, (start_date, end_date)) or []
+    except Exception as exc:
+        logger.error('[HIDDEN-RAW] fetch failed: %s', exc)
+        rows = []
+    rows = _apply_delhi_gt_remap(rows)
+    _hidden_raw_cache[key] = (now + _HIDDEN_RAW_TTL, rows)
+    return rows
+
 
 def get_hidden_customer_sales(start_date, end_date):
     """Hidden sales-invoice lines (OINV.U_ARNO='H') in [start_date, end_date]. Returns
