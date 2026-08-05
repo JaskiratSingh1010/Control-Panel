@@ -269,6 +269,51 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
                 WHERE I."CANCELED"='N' AND {WELL_CUST_IS_MART} AND I."DocNum" IN ({inv_in})
                 GROUP BY I."DocNum", I."DocDate" """, ar_ref_to_po, ar, ap, pos)
 
+        # 6) A/R Credit Memos (ORIN) that reverse a Wellness A/R invoice — keyed by the BASE
+        #    invoice's DocNum (RIN1.BaseType=13 → OINV). An invoice fully reversed by a credit note
+        #    never gets a Mart GRPO/A/P (the goods came back), so it shows as "pending"; attaching
+        #    its credit note explains the gap (number + amount + date). Scoped to the exact A/R
+        #    invoices already matched to a PO (built after all rescues), so a later-dated credit note
+        #    can never fall outside the window.
+        _ar_invs = sorted({d["num"] for docs in ar.values() for d in docs})
+        cn_by_inv = {}
+        if _ar_invs:
+            cn_by_inv = _agg_docs(cur, f"""
+                SELECT BI."DocNum" AS "K", R."DocNum" AS "Num",
+                       TO_VARCHAR(R."DocDate",'YYYY-MM-DD') AS "Dt", ROUND(SUM(L."GTotal"),2) AS "Amt"
+                FROM {WELL}.ORIN R JOIN {WELL}.RIN1 L ON R."DocEntry"=L."DocEntry"
+                JOIN {WELL}.OINV BI ON L."BaseType"=13 AND L."BaseEntry"=BI."DocEntry"
+                WHERE R."CANCELED"='N' AND BI."DocNum" IN ({_in_int_list(_ar_invs)})
+                GROUP BY BI."DocNum", R."DocNum", R."DocDate" """)
+
+        # 7) Base-document reference for each node — "kiske reference pe kata" — attached to every
+        #    doc as d['ref']: GRPO←PO (PDN1.BaseType=22→OPOR), A/P←GRPO (PCH1.BaseType=20→OPDN),
+        #    A/R←SO (INV1.BaseType=17→ORDR), Credit Note←Invoice (already the store key). Scoped by
+        #    the exact DocNums already collected, so no SUM is touched — pure lookups.
+        _gn, _pn, _an = _doc_nums(grpo), _doc_nums(ap), _ar_invs
+        if _gn:
+            _attach_ref(cur, grpo, f"""
+                SELECT D."DocNum" AS "Num", P."DocNum" AS "Ref"
+                FROM {MART}.OPDN D JOIN {MART}.PDN1 L ON D."DocEntry"=L."DocEntry"
+                JOIN {MART}.OPOR P ON L."BaseType"=22 AND L."BaseEntry"=P."DocEntry"
+                WHERE D."DocNum" IN ({_in_int_list(_gn)})
+                GROUP BY D."DocNum", P."DocNum" """)
+        if _pn:
+            _attach_ref(cur, ap, f"""
+                SELECT H."DocNum" AS "Num", GD."DocNum" AS "Ref"
+                FROM {MART}.OPCH H JOIN {MART}.PCH1 A ON H."DocEntry"=A."DocEntry"
+                JOIN {MART}.PDN1 G ON A."BaseEntry"=G."DocEntry" AND A."BaseLine"=G."LineNum"
+                JOIN {MART}.OPDN GD ON G."DocEntry"=GD."DocEntry"
+                WHERE H."DocNum" IN ({_in_int_list(_pn)}) AND A."BaseType"=20
+                GROUP BY H."DocNum", GD."DocNum" """)
+        if _an:
+            _attach_ref(cur, ar, f"""
+                SELECT I."DocNum" AS "Num", S."DocNum" AS "Ref"
+                FROM {WELL}.OINV I JOIN {WELL}.INV1 L ON I."DocEntry"=L."DocEntry"
+                JOIN {WELL}.ORDR S ON L."BaseType"=17 AND L."BaseEntry"=S."DocEntry"
+                WHERE I."DocNum" IN ({_in_int_list(_an)})
+                GROUP BY I."DocNum", S."DocNum" """)
+
         cur.close()
     finally:
         try:
@@ -279,7 +324,7 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
     chains = []
     for p in pos:
         ponum = str(p["PONum"]); entry = str(p["Entry"])
-        node = _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl)
+        node = _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl, cn_by_inv)
         status, detail = _classify(_num(p["POTotal"]), node)
         chains.append({
             "po": p["PONum"], "po_date": p["PODate"], "vendor": p["Vendor"],
@@ -289,6 +334,7 @@ def get_reconciliation(date_from=None, date_to=None, schema="oil"):
             "grpo": node["grpo"], "grpo_cnt": node["grpo_cnt"], "grpo_docs": node["grpo_docs"],
             "ap": node["ap"], "ap_cnt": node["ap_cnt"], "ap_docs": node["ap_docs"],
             "ar": node["ar"], "ar_cnt": node["ar_cnt"], "ar_docs": node["ar_docs"],
+            "cn": node["cn"], "cn_cnt": node["cn_cnt"], "cn_docs": node["cn_docs"],
             "delivery": node["dl"], "delivery_cnt": node["dl_cnt"], "delivery_docs": node["dl_docs"],
             "status": status, "detail": detail,
         })
@@ -308,6 +354,28 @@ def _agg_docs(cur, sql):
         out.setdefault(str(k).strip(), []).append(
             {"num": str(r.get("Num")), "date": r.get("Dt"), "amt": _num(r.get("Amt"))})
     return out
+
+
+def _doc_nums(store):
+    """Every distinct DocNum across a doc store (for scoping a follow-up ref query precisely)."""
+    return sorted({d["num"] for docs in store.values() for d in docs})
+
+
+def _attach_ref(cur, store, sql):
+    """Attach ``d['ref']`` — the base document number(s) each doc was copied from — to every doc in
+    ``store``. ``sql`` yields {Num, Ref}; a doc copied from more than one base gets them comma-joined.
+    Ref is a property of the document itself (its base), so it's matched globally by DocNum."""
+    ref = {}
+    for r in _rows(cur, sql):
+        base = r.get("Ref")
+        if base is None:
+            continue
+        ref.setdefault(str(r.get("Num")), set()).add(str(base))
+    for docs in store.values():
+        for d in docs:
+            s = ref.get(str(d["num"]))
+            if s:
+                d["ref"] = ", ".join(sorted(s))
 
 
 def _po_token_re(pos):
@@ -516,7 +584,7 @@ def _rescue_by_unique_amount(cur, sql, pos, ar, ap):
     return n
 
 
-def _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl):
+def _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl, cn_by_inv=None):
     def side(store, key):
         docs = store.get(key)
         if not docs:
@@ -528,11 +596,48 @@ def _build_nodes(p, ponum, entry, so, ar, grpo, ap, dl):
     dl_a, dl_c, dl_d = side(dl, ponum)
     grpo_a, grpo_c, grpo_d = side(grpo, entry)
     ap_a, ap_c, ap_d = side(ap, entry)
+    _annotate_ar_match(ar_d, grpo_d, ap_d)
+    cn_d = []  # every credit note reversing one of this PO's A/R invoices (own column, left of Status)
+    for d in ar_d:
+        creds = (cn_by_inv or {}).get(str(d["num"]), [])
+        for c in creds:  # a credit note is cut against the invoice it reverses
+            c.setdefault("ref", str(d["num"]))
+        d["credits"] = creds
+        cn_d.extend(creds)
+    cn_d = sorted(cn_d, key=lambda c: c["num"])
+    cn_a = round(sum(c["amt"] for c in cn_d), 2) if cn_d else None
     return {"so": so_a, "so_cnt": so_c, "so_docs": so_d,
             "ar": ar_a, "ar_cnt": ar_c, "ar_docs": ar_d,
             "dl": dl_a, "dl_cnt": dl_c, "dl_docs": dl_d,
             "grpo": grpo_a, "grpo_cnt": grpo_c, "grpo_docs": grpo_d,
-            "ap": ap_a, "ap_cnt": ap_c, "ap_docs": ap_d}
+            "ap": ap_a, "ap_cnt": ap_c, "ap_docs": ap_d,
+            "cn": cn_a, "cn_cnt": len(cn_d), "cn_docs": cn_d}
+
+
+def _annotate_ar_match(ar_docs, grpo_docs, ap_docs):
+    """Flag each A/R invoice ``matched=True`` when an inbound Mart document of the same
+    tax-inclusive amount exists — GRPO first (its total equals the A/R total exactly), else
+    the A/P (whose total can differ by a rupee or two of tax rounding, so a wider tolerance).
+    Each inbound doc is consumed once, so two same-amount A/R invoices need two GRPOs to both
+    clear. An A/R with no equal-amount GRPO/A/P is the "where's the missing doc" gap — matched
+    stays False so the popup can mark it Pending."""
+    pool = [d["amt"] for d in (grpo_docs or [])]
+    ap_pool = [d["amt"] for d in (ap_docs or [])]
+    for d in ar_docs:
+        amt = d["amt"]; hit = None
+        for i, g in enumerate(pool):
+            if abs(g - amt) <= TOLERANCE:
+                hit = i; break
+        if hit is not None:
+            pool.pop(hit); d["matched"] = True; continue
+        hit = None
+        for i, a in enumerate(ap_pool):
+            if abs(a - amt) <= max(TOLERANCE, amt * 0.005):
+                hit = i; break
+        if hit is not None:
+            ap_pool.pop(hit); d["matched"] = True
+        else:
+            d["matched"] = False
 
 
 def _classify(po_total, node):

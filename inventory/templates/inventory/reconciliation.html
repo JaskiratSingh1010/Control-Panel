@@ -130,6 +130,16 @@
   .rc-pop-row .dt{color:var(--rz-faint);font-size:11px;margin-left:auto;margin-right:2px}
   .rc-pop-row .da{color:var(--rz-body);min-width:74px;text-align:right}
   .rc-pop-tot{border-top:1px solid var(--rz-line);margin-top:6px;padding-top:6px;font-weight:800;color:var(--rz-amber)}
+  .rc-pop-row .mk{font-size:9.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:1px 6px;border-radius:9px;margin-left:2px;white-space:nowrap}
+  .rc-pop-row .mk.ok{background:#dcfce7;color:#15803d}
+  .rc-pop-row .mk.no{background:#fee2e2;color:#b91c1c}
+  .rc-pop-row .mk.cn{background:#fef3c7;color:#b45309}
+  .rc-pop-sub{font-size:10.5px;font-weight:700;color:var(--rz-faint);margin:-2px 0 6px}
+  .rc-pop-sub b.no{color:#b91c1c}
+  .rc-pop-sub b.cn{color:#b45309}
+  td.rc-cn .rc-amt{color:#b45309;font-weight:700;border-bottom-color:#e7c88a}
+  td.rc-cn:hover .rc-amt{color:#92400e;border-bottom-color:#b45309}
+  .rc-pop-ref{font-size:10.5px;color:var(--rz-faint);padding:0 0 3px 12px;letter-spacing:.2px}
   .rc-pop-empty{color:var(--rz-faint)}
 </style>
 {% endblock %}
@@ -205,9 +215,9 @@
         <thead><tr>
           <th>Mart PO</th><th>Date</th>
           <th class="num">PO Total</th><th class="num">SO</th><th class="num">GRPO</th>
-          <th class="num">A/P</th><th class="num">A/R</th><th>Status</th>
+          <th class="num">A/P</th><th class="num">A/R</th><th class="num">Credit Note</th><th>Status</th>
         </tr></thead>
-        <tbody id="rcBody"><tr><td colspan="8" class="rc-empty">Loading…</td></tr></tbody>
+        <tbody id="rcBody"><tr><td colspan="9" class="rc-empty">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -232,7 +242,9 @@
   var schema='oil';      // seller company: oil | beverages
   // Match driller: pick documents, show rows where they are equal / not equal.
   var NODE_KEYS={po:'po_total',so:'so',grpo:'grpo',ap:'ap',ar:'ar'};
-  var NODE_LBL={po:'PO',so:'SO',grpo:'GRPO',ap:'A/P',ar:'A/R'};
+  var NODE_LBL={po:'PO',so:'SO',grpo:'GRPO',ap:'A/P',ar:'A/R',cn:'Credit Note'};
+  // What base document each node is cut against — shown as "↳ <base> <num>" under every doc.
+  var REF_LBL={so:'PO',grpo:'PO',ap:'GRPO',ar:'SO',cn:'Invoice'};
   var drill={po:false,so:false,grpo:false,ap:false,ar:false};
   var drillMode='eq';    // eq | neq
   var popCell=null;
@@ -248,14 +260,14 @@
   function findChain(po){var a=DATA.chains||[];for(var i=0;i<a.length;i++){if(String(a[i].po)===String(po))return a[i];}return null;}
 
   function load(){
-    document.getElementById('rcBody').innerHTML='<tr><td colspan="8" class="rc-empty">Loading…</td></tr>';
+    document.getElementById('rcBody').innerHTML='<tr><td colspan="9" class="rc-empty">Loading…</td></tr>';
     fetch('/inventory/reconciliation/api/data/?'+qs(),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{data:{}};})
       .then(function(p){ DATA=(p&&p.data)||{summary:{},chains:[]};
         if(!document.getElementById('rcFrom').value)document.getElementById('rcFrom').value=DATA.date_from||'';
         if(!document.getElementById('rcTo').value)document.getElementById('rcTo').value=DATA.date_to||'';
         renderKpis(); renderChips(); renderDrill(); renderTable(); })
-      .catch(function(){document.getElementById('rcBody').innerHTML='<tr><td colspan="8" class="rc-empty">Could not load reconciliation.</td></tr>';});
+      .catch(function(){document.getElementById('rcBody').innerHTML='<tr><td colspan="9" class="rc-empty">Could not load reconciliation.</td></tr>';});
   }
 
   // ── Ledgers tab ────────────────────────────────────────────────────────────
@@ -393,12 +405,21 @@
     return '<td class="num rc-clk'+(off?' rc-off':'')+sel+'" data-po="'+esc(poNum)+'" data-node="'+node+'">'
       +'<span class="rc-amt">'+num(v)+'</span>'+badge+'</td>';
   }
+  // Credit Note column (own cell, left of Status): the credit note(s) reversing this PO's A/R
+  // invoices. Informational — no PO-total comparison, so it never shows the mismatch red. Click to
+  // see the credit note numbers (amounts shown negative, since they reverse the invoice).
+  function cnCell(x){
+    if(!x.cn_docs||!x.cn_docs.length) return '<td class="num rc-miss">—</td>';
+    var badge=x.cn_cnt>1?' <span class="rc-cnt">×'+x.cn_cnt+'</span>':'';
+    return '<td class="num rc-clk rc-cn" data-po="'+esc(x.po)+'" data-node="cn">'
+      +'<span class="rc-amt">−₹'+num(x.cn)+'</span>'+badge+'</td>';
+  }
 
   function renderTable(){
     hidePop();
     var rows=(DATA.chains||[]).filter(passes);
     var meta=document.getElementById('rcRowCount'); if(meta)meta.textContent=rows.length+' row'+(rows.length===1?'':'s');
-    if(!rows.length){document.getElementById('rcBody').innerHTML='<tr><td colspan="8" class="rc-empty">No chains in this view.</td></tr>';return;}
+    if(!rows.length){document.getElementById('rcBody').innerHTML='<tr><td colspan="9" class="rc-empty">No chains in this view.</td></tr>';return;}
     document.getElementById('rcBody').innerHTML=rows.map(function(x){
       var st='<span class="rc-badge b-'+x.status+'">'+x.status+'</span>'
         +(x.detail?' <span class="rc-detail">'+esc(x.detail)+'</span>':'');
@@ -410,6 +431,7 @@
         +cell(x.grpo,x.po_total,x.grpo_cnt,x.po,'grpo')
         +cell(x.ap,x.po_total,x.ap_cnt,x.po,'ap')
         +cell(x.ar,x.po_total,x.ar_cnt,x.po,'ar')
+        +cnCell(x)
         +'<td>'+st+'</td></tr>';
     }).join('');
   }
@@ -435,9 +457,31 @@
     var html='<div class="rc-pop-h">'+NODE_LBL[node]+' · PO '+esc(chain.po)+'</div>';
     if(!docs.length){ html+='<div class="rc-pop-empty">No '+NODE_LBL[node]+' document.</div>'; }
     else{
-      html+=docs.map(function(d){return '<div class="rc-pop-row"><span class="dn">'+esc(d.num)+'</span><span class="dt">'+esc(d.date||'')+'</span><span class="da">₹'+num(d.amt)+'</span></div>';}).join('');
+      // A/R: each invoice carries a `matched` flag (a GRPO/A/P of equal amount exists) — ✓ matched /
+      // ↩ credited (reversed by a credit note, see the Credit Note column) / ✗ pending, plus a tally.
+      // The credit note numbers themselves live in the dedicated Credit Note column, not here.
+      var isAr=(node==='ar'), isCn=(node==='cn'), sgn=isCn?'−':'';
+      function stateOf(d){ return d.matched!==false?'ok':((d.credits&&d.credits.length)?'cn':'no'); }
+      if(isAr&&docs.length){
+        var nOk=0,nCn=0,nNo=0;
+        docs.forEach(function(d){ var s=stateOf(d); if(s==='ok')nOk++; else if(s==='cn')nCn++; else nNo++; });
+        var bits=[nOk+' with GRPO/A/P'];
+        if(nCn)bits.push('<b class="cn">'+nCn+' credited</b>');
+        if(nNo)bits.push('<b class="no">'+nNo+' pending</b>');
+        html+='<div class="rc-pop-sub">'+bits.join(' · ')+'</div>';
+      }
+      var reflbl=REF_LBL[node];
+      html+=docs.map(function(d){
+        var mk='';
+        if(isAr){ var s=stateOf(d);
+          mk=s==='ok'?'<span class="mk ok">✓ matched</span>':(s==='cn'?'<span class="mk cn">↩ credited</span>':'<span class="mk no">✗ pending</span>'); }
+        // "kis reference pe kata" — the base document this one was copied from.
+        var refv=d.ref||(node==='so'?chain.po:''), rref='';
+        if(reflbl&&refv){ rref='<div class="rc-pop-ref">↳ '+reflbl+' '+esc(refv)+'</div>'; }
+        return '<div class="rc-pop-row"><span class="dn">'+esc(d.num)+'</span>'+mk+'<span class="dt">'+esc(d.date||'')+'</span><span class="da">'+sgn+'₹'+num(d.amt)+'</span></div>'+rref;
+      }).join('');
       if(docs.length>1){var t=0;docs.forEach(function(d){t+=Number(d.amt)||0;});
-        html+='<div class="rc-pop-row rc-pop-tot"><span>'+docs.length+' docs</span><span>₹'+num(t)+'</span></div>';}
+        html+='<div class="rc-pop-row rc-pop-tot"><span>'+docs.length+' docs</span><span>'+sgn+'₹'+num(t)+'</span></div>';}
     }
     pop.innerHTML=html; pop.style.display='block'; popCell=td;
     var r=td.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
