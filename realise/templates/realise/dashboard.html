@@ -350,13 +350,14 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-kpi-body>div.neg{color:#dc2626}
 .sc2-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;flex:1;min-height:0;align-content:start;overflow:auto;--sc2-main-card-height:clamp(220px,calc((100vh - 400px) / 2),290px)}
 .sc2-col{display:contents}
-.sc2-card{--accent:#7dd3fc;--accent-strong:#38bdf8;min-height:0;display:flex;flex-direction:column;border:1px solid var(--rz-card-brd);border-radius:20px;background:var(--rz-card);box-shadow:var(--rz-shadow);overflow:hidden;text-decoration:none;color:inherit;transition:transform .15s ease,box-shadow .15s ease}
-.sc2-card:hover{transform:translateY(-2px);box-shadow:var(--rz-shadow-lg)}
+.sc2-card{--accent:#7dd3fc;--accent-strong:#38bdf8;min-height:0;display:flex;flex-direction:column;border:1px solid var(--rz-card-brd);border-radius:20px;background:var(--rz-card);overflow:hidden;text-decoration:none;color:inherit;transition:transform .15s ease,box-shadow .15s ease;
+  box-shadow:0 4px 14px rgba(15,23,42,.06), 0 0 24px color-mix(in srgb, var(--accent-strong) 40%, transparent)}   /* per-channel glowing shadow */
+.sc2-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(15,23,42,.10), 0 0 36px color-mix(in srgb, var(--accent-strong) 58%, transparent)}
 .sc2-card-main{height:var(--sc2-main-card-height)}
 .sc2-titlebar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:linear-gradient(180deg,rgba(255,255,255,.78) 0%,rgba(248,251,255,.66) 100%);border-bottom:1px solid #e5edf5}
 .sc2-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent-strong);color:#fff;font-size:15px;font-weight:900;letter-spacing:.5px;box-shadow:0 6px 14px rgba(15,23,42,.12)}
 .sc2-titletext{display:flex;flex-direction:column;gap:2px;min-width:0}
-.sc2-titletext strong{font-size:19px;font-weight:900;letter-spacing:.45px;text-transform:uppercase;color:#111827}
+.sc2-titletext strong{font-size:22px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#111827;text-shadow:0 0 18px color-mix(in srgb, var(--accent-strong) 45%, transparent)}
 .sc2-titletext span{display:none}
 .sc2-card-rest{height:var(--sc2-main-card-height)}
 /* Compact channel panel — colored header (channel + TARGET/DONE/BAL) + scrollable area rows */
