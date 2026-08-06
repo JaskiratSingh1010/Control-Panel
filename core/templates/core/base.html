@@ -69,28 +69,16 @@
       letter-spacing: 0;
     }
 
-    /* ── Topbar ── */
-    .cp-topbar { display: flex; align-items: center; gap: 24px; padding: 0 20px; background: #ffffff; border-bottom: 1px solid #e5e7eb; height: 56px; position: sticky; top: 0; z-index: 100; }
-    .cp-topbar-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-    .cp-topbar-logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; box-shadow: 0 4px 12px rgba(99,102,241,0.35); }
-    .cp-topbar-title { font-size: 14px; font-weight: 700; line-height: 1.1; color: #111827; }
-    .cp-topbar-subtitle { font-size: 11px; color: #6b7280; }
-    .cp-topbar-ticker { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
-    .cp-live-pill { background: #d1fae5; color: #047857; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
-    .cp-live-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; animation: cp-pulse 2s infinite; }
-    @keyframes cp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .cp-ticker-item { padding: 4px 10px; background: #f3f4f6; border-radius: 20px; font-size: 11px; white-space: nowrap; flex-shrink: 0; color: #374151; }
-    .cp-ticker-item b { color: #4338ca; margin-right: 4px; }
 
     /* ── Shell ── */
-    .cp-shell { display: flex; min-height: calc(100vh - 56px); position: relative; }
+    .cp-shell { display: flex; min-height: 100vh; position: relative; }
 
     /* ── Sidebar ── */
     /* Frozen in place: sticky just below the 56px topbar and exactly viewport-tall, so the
        sidebar stays put while only .cp-main scrolls. align-self:flex-start stops the flex
        row from stretching it (which would break sticky); overflow-y lets a tall sidebar
        scroll on its own. */
-    .cp-sidebar { width: 240px; background: #f8fafc; color: #334155; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 56px; height: calc(100vh - 56px); align-self: flex-start; }
+    .cp-sidebar { width: 240px; background: #f8fafc; color: #334155; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: 100vh; align-self: flex-start; }
     /* Modern outlined icon set in the sidebar (Material Symbols) — lighter & cleaner than filled. */
     .cp-sidebar .material-icons, .cp-sidebar-open .material-icons { font-family: 'Material Symbols Outlined'; font-weight: normal; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
     /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
@@ -124,9 +112,10 @@
     body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek ~ .cp-sidebar-open { opacity: 0; pointer-events: none; }
     .cp-brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 18px 6px; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
     .cp-brand-copy { min-width: 0; flex: 1; }
-    .cp-brand-logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; box-shadow: 0 4px 12px rgba(99,102,241,0.45); }
-    .cp-brand-title { font-size: 13px; font-weight: 700; color: #0f172a; }
-    .cp-brand-subtitle { font-size: 10px; color: #94a3b8; }
+    .cp-brand-logo { width: 56px; height: 56px; border-radius: 12px; background: #fff; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.12); overflow: hidden; padding: 2px; flex-shrink: 0; }
+    .cp-brand-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .cp-brand-title { font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: -.2px; }
+    .cp-brand-subtitle { font-size: 12px; font-weight: 700; color: #64748b; }
     .cp-sidebar-close, .cp-sidebar-open { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .15s, transform .15s; }
     .cp-sidebar-close { width: 30px; height: 30px; border-radius: 8px; background: #f1f5f9; color: #64748b; flex-shrink: 0; }
     .cp-sidebar-close:hover { background: #e2e8f0; color: #334155; }
@@ -176,31 +165,14 @@
 </head>
 <body>
 
-  {# ── TOPBAR ── #}
-  <div class="cp-topbar">
-    <div class="cp-topbar-brand">
-      <div class="cp-topbar-logo">JG</div>
-      <div>
-        <div class="cp-topbar-title">Jivo Group</div>
-        <div class="cp-topbar-subtitle">Control Panel</div>
-      </div>
-    </div>
-    <div class="cp-topbar-ticker">
-      <span class="cp-live-pill"><span class="cp-live-dot"></span>LIVE</span>
-      {% for item in ticker_items %}
-        <span class="cp-ticker-item"><b>{{ item.label }}</b>{{ item.value }}</span>
-      {% empty %}
-        <span class="cp-ticker-item" style="opacity:0.5;">No live metrics yet</span>
-      {% endfor %}
-    </div>
-  </div>
+  {# ── TOPBAR removed — brand lives in the sidebar; company-wide ticker retired from the header ── #}
 
   {# ── SHELL (sidebar + main) ── #}
   <div class="cp-shell">
     <aside class="cp-sidebar">
 
       <div class="cp-brand">
-        <div class="cp-brand-logo">JG</div>
+        <div class="cp-brand-logo"><img src="{% static 'core/jivo-logo.jpg' %}" alt="Jivo" onerror="this.style.display='none';this.parentNode.textContent='JG';"></div>
         <div class="cp-brand-copy">
           <div class="cp-brand-title">Jivo Group</div>
           <div class="cp-brand-subtitle">Control Panel</div>
