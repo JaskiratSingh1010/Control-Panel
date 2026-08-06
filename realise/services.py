@@ -3103,14 +3103,16 @@ _SHIPTO_JOIN = ('LEFT JOIN "{S}"."CRD1" A ON A."CardCode" = H."CardCode" '
 # material (TreeType='S') items from their litre components, and converts a bulk 'MTS' UoM line by
 # ×1098.9. A naive Quantity×SalPackUn (the old formula) ignored all of that and inflated litres
 # several-fold for bulk customers like JIVO MART. Sales stream is +ve, the ORIN return stream −ve.
-def _done_sales_litexpr(schema):
+def _done_sales_litexpr(schema, ln='L', it='I'):
+    """The proc's per-line litre expression, with the INV1 line and OITM aliases parameterised so
+    it can be dropped into any invoice-line query (channel Done, Hidden Sales, …)."""
     return (
-        "CASE WHEN L.\"NoInvtryMv\"='Y' THEN 0 "
-        "WHEN L.\"TreeType\"='S' THEN (SELECT SUM(K1.\"Quantity\"*K2.\"SalPackUn\") "
+        f"CASE WHEN {ln}.\"NoInvtryMv\"='Y' THEN 0 "
+        f"WHEN {ln}.\"TreeType\"='S' THEN (SELECT SUM(K1.\"Quantity\"*K2.\"SalPackUn\") "
         f"FROM \"{schema}\".\"ITT1\" K1 JOIN \"{schema}\".\"OITM\" K2 ON K1.\"Code\"=K2.\"ItemCode\" "
-        "WHERE K1.\"Father\"=L.\"ItemCode\" AND K2.\"U_IsLitre\"='Y')*L.\"Quantity\" "
-        "ELSE (CASE WHEN I.\"U_IsLitre\"='Y' THEN CASE WHEN L.\"UomCode\"='MTS' "
-        "THEN L.\"Quantity\"*1098.9 ELSE L.\"Quantity\" END ELSE 0 END)*I.\"SalPackUn\" END")
+        f"WHERE K1.\"Father\"={ln}.\"ItemCode\" AND K2.\"U_IsLitre\"='Y')*{ln}.\"Quantity\" "
+        f"ELSE (CASE WHEN {it}.\"U_IsLitre\"='Y' THEN CASE WHEN {ln}.\"UomCode\"='MTS' "
+        f"THEN {ln}.\"Quantity\"*1098.9 ELSE {ln}.\"Quantity\" END ELSE 0 END)*{it}.\"SalPackUn\" END")
 
 
 _DONE_RETURN_LITEXPR = ("(CASE WHEN L.\"NoInvtryMv\"='N' THEN -L.\"Quantity\" ELSE 0 END)"
@@ -3496,7 +3498,7 @@ def _fetch_hidden_raw(start_date, end_date):
                COALESCE(TRIM(L."ItemCode"),'')     AS "ItemCode",
                COALESCE(TRIM(C."CardName"),'')     AS "CardName",
                (SELECT K."Name" FROM "{S}".OCST K WHERE K."Code"=A."State" AND K."Country"=A."Country") AS "State",
-               COALESCE(L."Quantity",0)*COALESCE(I."SalPackUn",0) AS "Liter",
+               {_done_sales_litexpr(S)}            AS "Liter",
                COALESCE(L."LineTotal",0)           AS "LineTotal"
         FROM "{S}"."OINV" H
         JOIN "{S}"."INV1" L ON H."DocEntry"=L."DocEntry"
@@ -3535,8 +3537,12 @@ def get_hidden_customer_sales(start_date, end_date):
                COALESCE(TRIM(T1."ItemCode"), '') AS "ICODE",
                COALESCE(TRIM(T2."ItemName"), '') AS "INAME",
                COALESCE(T1."Quantity", 0)                        AS "QTY",
-               COALESCE(T1."Quantity", 0) * COALESCE(T2."SalPackUn", 0) AS "LIT",
+               {_done_sales_litexpr(S, ln='T1', it='T2')}        AS "LIT",
                COALESCE(T1."LineTotal", 0)                       AS "VAL",
+               COALESCE(T1."Price", 0)                           AS "PRICE",
+               COALESCE(T1."NoInvtryMv", 'N')                    AS "NIM",
+               CASE WHEN EXISTS (SELECT 1 FROM "{S}"."INV1" X WHERE X."DocEntry"=T0."DocEntry"
+                    AND X."NoInvtryMv"='N') THEN 'N' ELSE 'Y' END AS "DNOTE",   -- no goods line = debit note (rate-diff etc.)
                COALESCE(TRIM(T2."U_TYPE"), '')  AS "UTYPE",
                COALESCE(TRIM(T1."OcrCode"), '') AS "OCR",
                COALESCE(NULLIF(TRIM(T4."State"), ''), TRIM(T3."State1")) AS "ST",
@@ -3578,6 +3584,9 @@ def get_hidden_customer_sales(start_date, end_date):
             'qty': float(r.get('QTY') or 0),
             'litres': round(float(r.get('LIT') or 0), 2),
             'value': round(float(r.get('VAL') or 0), 2),
+            'price': round(float(r.get('PRICE') or 0), 2),   # bill's own unit rate (INV1.Price)
+            'combo': str(r.get('NIM') or 'N').strip().upper() == 'Y',   # no-inventory-movement / combo split line
+            'debit_note': str(r.get('DNOTE') or 'N').strip().upper() == 'Y',   # whole invoice has no goods line
         })
     payload = {'status': 'ok', 'rows': rows, 'start': str(start_date), 'end': str(end_date)}
     if raw:

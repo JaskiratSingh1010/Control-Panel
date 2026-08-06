@@ -3,15 +3,37 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:var(--rz-bg) !important}
+  .cp-main{background:var(--rz-bg) !important;padding:10px 20px !important}
   .hs-wrap{max-width:1500px;margin:0 auto}
-  .hs-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .hs-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px;
+    text-shadow:0 0 26px rgba(99,102,241,.55), 0 4px 14px rgba(79,70,229,.28)}   /* glowing title */
   .hs-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
 
   /* ── KPI cards (white + thin colour accent) ── */
-  .hs-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:16px 0}
-  .hs-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);
-          background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
+  .hs-head{margin:0 0 12px}
+  .hs-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:0 0 14px}
+  .hs-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);cursor:pointer;
+          background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow);transition:transform .12s,box-shadow .12s,border-color .12s}
+  .hs-kpi:hover{transform:translateY(-3px);box-shadow:var(--rz-shadow-lg);border-color:var(--kpi-acc,var(--rz-soft-brd))}
+  .hs-kpi:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.28)}
+  /* KPI detail popup */
+  .hs-pop-ov{position:fixed;inset:0;background:rgba(15,23,42,.32);display:none;align-items:center;justify-content:center;z-index:2000}
+  .hs-pop-ov.show{display:flex}
+  .hs-pop{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:24px 28px;min-width:280px;max-width:92vw;position:relative;overflow:hidden}
+  .hs-pop::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--kpi-acc,var(--rz-acc-indigo))}
+  .hs-pop-l{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .hs-pop-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .hs-pop-v{font-size:44px;font-weight:900;letter-spacing:-1px;line-height:1.05;margin:12px 0 6px;color:var(--rz-ink);font-variant-numeric:tabular-nums}
+  .hs-pop-m{font-size:13px;font-weight:600;color:var(--rz-muted)}
+  .hs-pop-x{position:absolute;top:12px;right:14px;border:0;background:transparent;color:var(--rz-faint);font-size:22px;line-height:1;cursor:pointer}
+  .hs-pop-x:hover{color:var(--rz-body)}
+  .hs-pop-bdh{margin:16px 0 6px;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);border-top:1px solid var(--rz-line);padding-top:12px}
+  .hs-pop-bd{max-height:230px;overflow-y:auto;min-width:340px}
+  .hs-pop-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:5px 0;font-variant-numeric:tabular-nums}
+  .hs-pop-rl{font-size:12.5px;color:var(--rz-body);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hs-pop-rv{font-size:13px;font-weight:800;color:var(--rz-ink);white-space:nowrap;flex-shrink:0}
+  .hs-pop-more{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--rz-faint);text-align:center}
+  .hs-pop-empty{padding:10px 0;font-size:12.5px;color:var(--rz-faint)}
   .hs-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .hs-kpi .hs-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
   .hs-kpi .hs-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
@@ -42,11 +64,31 @@
   .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
   .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:250px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
   .com-drill-panel.open{display:block}
-  .hs-m{line-height:1.35;font-variant-numeric:tabular-nums}
-  .hs-m ~ .hs-m{font-size:11px}                 /* stacked extra metrics slightly smaller */
+  .hs-m{line-height:1.4;font-variant-numeric:tabular-nums;font-size:14px;font-weight:800}
+  .hs-m ~ .hs-m{font-size:12.5px;font-weight:700}   /* stacked extra metrics — readable, not tiny */
   .hs-m.hs-m-lit{color:#0d9488}
   .hs-m.hs-m-qty{color:#475569}
   .hs-m.hs-m-rlz{color:#7c3aed}
+  .hs-m.hs-m-rate{color:#c2410c}
+  .hs-m.hs-m-inv{color:#334155;font-weight:800}
+  /* "N bills" cue on a leaf item + its inline bill drop-down sub-rows */
+  .hs-billcue{font-size:10.5px;font-weight:800;color:var(--rz-indigo-deep);background:var(--rz-soft);border:1px solid var(--rz-soft-brd);border-radius:20px;padding:1px 8px;margin-left:8px;vertical-align:middle}
+  tr.hs-subrow td{background:#fbfcfe}
+  tr.hs-subrow:hover td{background:#f4f7fb}
+  td.hs-billname{color:var(--rz-body);font-weight:700}
+  .hs-tag-inv{background:#eef2ff!important;color:#4338ca!important}
+  .hs-tag-dn{background:#fef2f2!important;color:#b91c1c!important;border:1px solid #fecaca}
+  .hs-bill-dt{font-size:10.5px;color:var(--rz-faint);font-weight:600;margin-left:8px}
+  .hs-dn-note{font-size:10px;font-weight:700;color:#b91c1c;background:#fef2f2;border-radius:20px;padding:1px 8px;margin-left:8px;white-space:nowrap}
+  .hs-dn-inline{display:inline-block;font-size:9.5px;font-weight:800;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:20px;padding:0 6px;margin-left:6px;vertical-align:middle}
+  .hs-msuf{font-size:9.5px;font-weight:700;opacity:.6;margin-left:2px}   /* unit tag (/L, /Pc, L, pcs) */
+  /* small pill labelling each stacked metric — like the Debit Note chip */
+  .hs-chip{display:inline-block;font-size:9px;font-weight:800;border-radius:20px;padding:0 6px;margin-right:6px;vertical-align:middle;letter-spacing:.3px;text-transform:uppercase;min-width:38px;text-align:center}
+  .hs-chip.c-val{color:#334155;background:#f1f5f9;border:1px solid #e2e8f0}
+  .hs-chip.c-lit{color:#0d9488;background:#f0fdfa;border:1px solid #99f6e4}
+  .hs-chip.c-qty{color:#475569;background:#f1f5f9;border:1px solid #e2e8f0}
+  .hs-chip.c-rlz{color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe}
+  .hs-chip.c-rate{color:#c2410c;background:#fff7ed;border:1px solid #fed7aa}
   .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--rz-line);position:sticky;top:0;background:#fff}
   .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
   .com-dp-list{padding:4px 0}
@@ -84,12 +126,12 @@
 
 {% block content %}
 <div class="hs-wrap">
-  <div>
-    <h1 class="hs-h1">Hidden Customer Sales</h1>
-    <p class="hs-psub">Sales invoices flagged hidden in SAP (U_ARNO = 'H') — excluded from the dashboard's Done. Drill by customer, item, cost center, date or status; quantity, litres &amp; value shown.</p>
-  </div>
+  <div class="hs-head"><h1 class="hs-h1">Hidden Customer Sales</h1></div>
 
   <div class="hs-kpis" id="hsKpis"></div>
+
+  <!-- KPI detail popup: click any KPI to see its full value + meaning. -->
+  <div class="hs-pop-ov" id="hsPopOv"><div class="hs-pop" id="hsPop"></div></div>
 
   <div class="hs-bar">
     <div class="hs-fld"><span class="hs-lbl">From</span><input type="date" id="hsStart"></div>
@@ -154,6 +196,7 @@
 
   var DIMS=[
     {key:'customer',label:'Customer',sub:'CardName / buyer'},
+    {key:'doc',label:'Invoice',sub:'Bill / invoice no'},
     {key:'item_name',label:'Item Name',sub:'SAP item name'},
     {key:'state',label:'State',sub:'Ship-to state'},
     {key:'main_group',label:'Main Group',sub:'Channel'},
@@ -163,26 +206,43 @@
     {key:'status',label:'Status',sub:'Open / Closed'},
   ];
   var DIM_LABEL={}; DIMS.forEach(function(d){DIM_LABEL[d.key]=d.label;});
-  var rows=[], loaded=false, err=null, expanded={};
+  var rows=[], loaded=false, err=null, expanded={}, billsX={};   // billsX: inline bill drop-down per leaf item
   var order=['customer','item_name'], chosen=['customer','item_name'];
   var searchF='', typeF='', stateF='', groupF='';
-  var METRIC_DEFS=[{k:'val',l:'Value ₹'},{k:'lit',l:'Litres'},{k:'qty',l:'Quantity'},{k:'rlz',l:'Realise ₹/L'}];
+  var METRIC_DEFS=[{k:'val',l:'Value ₹'},{k:'lit',l:'Litres'},{k:'qty',l:'Quantity'},{k:'rlz',l:'Realise ₹/L'},{k:'rate',l:'Rate ₹/Pc'},{k:'inv',l:'Invoice No'}];
+  var RATE_METRICS={rlz:1,rate:1};   // per-unit rates: blended (never divided by #months) in Avg/export
+  var METRIC_SUF={val:'',lit:' L',qty:' pcs',rlz:' /L',rate:' /Pc',inv:''};   // unit tag so stacked metrics are self-labelling
+  var METRIC_CHIP={val:'Value',lit:'Litre',qty:'Qty',rlz:'Realise',rate:'Rate',inv:''};   // small pill labelling each stacked metric
+  // Invoice-No "metric": the bill number(s) behind a cell — the doc if one, else "N bills".
+  function invText(o){var ds=Object.keys((o&&o.docs)||{});return !ds.length?'':(ds.length===1?ds[0]:ds.length+' bills');}
   var METRIC_LBL={}; METRIC_DEFS.forEach(function(d){METRIC_LBL[d.k]=d.l;});
   var metrics=['val'];   // multi-select: any of val / lit / qty / rlz, shown stacked in each cell
 
-  function blank(){return {docs:{},qty:0,lit:0,val:0,byM:{}};}
+  function blank(){return {docs:{},dn:{},qty:0,lit:0,val:0,rq:0,rvp:0,byM:{}};}
   function addRow(n,r){
-    if(r.doc)n.docs[r.doc]=1;n.qty+=Number(r.qty)||0;n.lit+=Number(r.litres)||0;n.val+=Number(r.value)||0;
-    var ym=r.ym||'—', b=n.byM[ym]; if(!b)b=n.byM[ym]={qty:0,lit:0,val:0};   // per-month bucket for the pivot
-    b.qty+=Number(r.qty)||0;b.lit+=Number(r.litres)||0;b.val+=Number(r.value)||0;
+    // Rate ₹/Pc = the bill's OWN unit rate (INV1.Price), qty-weighted, over the REAL selling lines only.
+    // Combo / no-inventory-movement lines (r.combo) carry a nominal split price, so they're excluded.
+    // dn = the debit-note bills among this node's invoices (whole invoice has no goods line).
+    var q=Number(r.qty)||0, l=Number(r.litres)||0, v=Number(r.value)||0, p=Number(r.price)||0, real=!r.combo;
+    if(r.doc){n.docs[r.doc]=1;if(r.debit_note)n.dn[r.doc]=1;}n.qty+=q;n.lit+=l;n.val+=v;if(real){n.rq+=q;n.rvp+=p*q;}
+    var ym=r.ym||'—', b=n.byM[ym]; if(!b)b=n.byM[ym]={qty:0,lit:0,val:0,rq:0,rvp:0,docs:{},dn:{}};   // per-month bucket
+    b.qty+=q;b.lit+=l;b.val+=v;if(r.doc){b.docs[r.doc]=1;if(r.debit_note)b.dn[r.doc]=1;}if(real){b.rq+=q;b.rvp+=p*q;}
   }
   function vals(n){return {inv:Object.keys(n.docs).length,qty:n.qty,lit:n.lit,val:n.val};}
-  function metricRaw(o,k){o=o||{};if(k==='lit')return o.lit||0;if(k==='qty')return o.qty||0;if(k==='rlz')return (o.lit>0)?(o.val/o.lit):0;return o.val||0;}
-  function fmtMetricV(k,x){if(k==='rlz')return x?fRz(x):'';if(!x)return '';return k==='val'?money(Math.round(x)):fN(Math.round(x));}
+  function metricRaw(o,k){o=o||{};if(k==='lit')return o.lit||0;if(k==='qty')return o.qty||0;if(k==='rlz')return (o.lit>0)?(o.val/o.lit):0;if(k==='rate')return (o.rq>0)?(o.rvp/o.rq):0;return o.val||0;}
+  function fmtMetricV(k,x){if(k==='rlz'||k==='rate')return x?fRz(x):'';if(!x)return '';return k==='val'?money(Math.round(x)):fN(Math.round(x));}
   // Stacked cell of the selected metrics (grand-style: realise = value/litres of the bucket).
-  function metricCell(o){return metrics.map(function(k){return '<div class="hs-m hs-m-'+k+'">'+fmtMetricV(k,metricRaw(o,k))+'</div>';}).join('');}
-  // Avg cell: rate metrics (realise) don't divide by #months; counts do.
-  function metricCellAvg(o,nM){return metrics.map(function(k){var g=metricRaw(o,k),a=(k==='rlz')?g:(g/nM);return '<div class="hs-m hs-m-'+k+'">'+fmtMetricV(k,a)+'</div>';}).join('');}
+  function metricLine(k,o,valOverride){
+    if(k==='inv'){var ds=Object.keys((o&&o.docs)||{}), dn=Object.keys((o&&o.dn)||{});
+      var tag=(ds.length&&dn.length===ds.length)?'<span class="hs-dn-inline">Debit Note</span>'   // all bills are debit notes
+             :(dn.length?'<span class="hs-dn-inline">'+dn.length+' DN</span>':'');                // some are
+      return '<div class="hs-m hs-m-inv">'+esc(invText(o))+tag+'</div>';}
+    var x=(valOverride!==undefined)?valOverride:metricRaw(o,k), v=fmtMetricV(k,x);
+    return '<div class="hs-m hs-m-'+k+'"><span class="hs-chip c-'+k+'">'+METRIC_CHIP[k]+'</span>'+(v||'—')+'</div>';
+  }
+  function metricCell(o){return metrics.map(function(k){return metricLine(k,o);}).join('');}
+  // Avg cell: invoice-no + rate metrics (realise / rate ₹/Pc) don't divide by #months; counts do.
+  function metricCellAvg(o,nM){return metrics.map(function(k){return (k==='inv'||RATE_METRICS[k])?metricLine(k,o):metricLine(k,o,metricRaw(o,k)/nM);}).join('');}
   function activeMonths(a){var m={};a.forEach(function(r){if(r.ym)m[r.ym]={ym:r.ym,label:r.month||r.ym};});return Object.keys(m).sort().map(function(k){return m[k];});}
 
   function rowMatches(r){
@@ -221,13 +281,17 @@
   function monthRows(nodes,months,depth){
     var html='', nM=months.length||1;
     nodes.forEach(function(n){
-      var hasKids=!n.leaf, open=!!expanded[n.path], pad='padding-left:'+(12+depth*18)+'px';
-      var tw=hasKids?'<span class="hs-tw'+(open?' open':'')+'" data-hspath="'+esc(n.path)+'">&#9654;</span>':'<span class="hs-tw-empty"></span>';
+      var hasKids=!n.leaf, nDocs=Object.keys(n.docs||{}).length, hasBills=n.leaf&&nDocs>1;
+      var open=hasKids?!!expanded[n.path]:!!billsX[n.path], canExp=hasKids||hasBills, pad='padding-left:'+(12+depth*18)+'px';
+      var tw=canExp?'<span class="hs-tw'+(open?' open':'')+'">&#9654;</span>':'<span class="hs-tw-empty"></span>';
       var tag='<span class="hs-tag">'+esc(DIM_LABEL[n.dim]||n.dim)+'</span>';
-      var name='<td class="gc-name" style="'+pad+(hasKids?';cursor:pointer':'')+'" '+(hasKids?'data-hstoggle="'+esc(n.path)+'"':'')+'>'+tw+tag+esc(n.label)+'</td>';
+      var toggle=hasKids?'data-hstoggle="'+esc(n.path)+'"':(hasBills?'data-hsbills="'+esc(n.path)+'"':'');
+      var cue=hasBills?' <span class="hs-billcue">'+nDocs+' bills</span>':'';
+      var name='<td class="gc-name" style="'+pad+(canExp?';cursor:pointer':'')+'" '+toggle+'>'+tw+tag+esc(n.label)+cue+'</td>';
       var mc=months.map(function(mo){return '<td>'+metricCell(n.byM[mo.ym]||{})+'</td>';}).join('');
       html+='<tr>'+name+mc+'<td class="hs-hi">'+metricCell(n)+'</td><td>'+metricCellAvg(n,nM)+'</td></tr>';
       if(hasKids&&open)html+=monthRows(n.kids,months,depth+1);
+      else if(hasBills&&open)html+=billRows(n,months,depth+1);
     });
     return html;
   }
@@ -240,20 +304,67 @@
       var t=String(r.u_type||'').toUpperCase();
       if(t==='PREMIUM')prem+=Number(r.value)||0; else if(t==='COMMODITY')comm+=Number(r.value)||0;
     });
+    var nInv=fN(Object.keys(docs).length), nCust=fN(Object.keys(custs).length);
     var cards=[
-      {c:'k-val',ic:'payments',l:'Hidden Value',v:abbr(val),m:'Σ invoice line value (₹)'},
-      {c:'k-prem',ic:'workspace_premium',l:'Premium',v:abbr(prem),m:'Hidden premium value (₹)'},
-      {c:'k-comm',ic:'inventory_2',l:'Commodity',v:abbr(comm),m:'Hidden commodity value (₹)'},
-      {c:'k-ltr',ic:'water_drop',l:'Hidden Litres',v:abbrQ(lit),m:'Quantity × pack size'},
-      {c:'k-inv',ic:'visibility_off',l:'Invoices',v:fN(Object.keys(docs).length),m:'Hidden invoices'},
-      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'With hidden sales'}
+      {c:'k-val',ic:'payments',l:'Hidden Value',v:abbr(val),vf:'₹'+fN(val),m:'Σ invoice line value (₹)'},
+      {c:'k-prem',ic:'workspace_premium',l:'Premium',v:abbr(prem),vf:'₹'+fN(prem),m:'Hidden premium value (₹)'},
+      {c:'k-comm',ic:'inventory_2',l:'Commodity',v:abbr(comm),vf:'₹'+fN(comm),m:'Hidden commodity value (₹)'},
+      {c:'k-ltr',ic:'water_drop',l:'Hidden Litres',v:abbrQ(lit),vf:fN(Math.round(lit))+' L',m:'Quantity × pack size'},
+      {c:'k-inv',ic:'visibility_off',l:'Invoices',v:nInv,vf:nInv,m:'Hidden invoices'},
+      {c:'k-cust',ic:'storefront',l:'Customers',v:nCust,vf:nCust,m:'With hidden sales'}
     ];
-    document.getElementById('hsKpis').innerHTML=cards.map(function(k){
-      return '<div class="hs-kpi '+k.c+'"><div class="hs-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+    hsKpiCards=cards;
+    document.getElementById('hsKpis').innerHTML=cards.map(function(k,i){
+      return '<div class="hs-kpi '+k.c+'" role="button" tabindex="0" data-kpi="'+i+'" title="Click for detail">'
+        +'<div class="hs-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
         +'<div class="hs-kpi-v">'+k.v+'</div><div class="hs-kpi-m">'+esc(k.m)+'</div>'
         +'<span class="material-icons hs-kpi-bg">'+k.ic+'</span></div>';
     }).join('');
   }
+  // Click / keyboard-activate a KPI -> detail popup with its full value + meaning.
+  var hsKpiCards=[];
+  // Break the clicked KPI down into its contributors (grouped from the loaded rows) so the popup
+  // adds real detail instead of echoing the card. Value KPIs → by item/invoice/customer (₹);
+  // Litres → by item (L). Sorted biggest-first.
+  function hsBreakdown(cls){
+    var g={}, order=[], lit=(cls==='k-ltr');
+    (rows||[]).forEach(function(r){
+      var t=String(r.u_type||'').toUpperCase();
+      if(cls==='k-prem'&&t!=='PREMIUM')return;
+      if(cls==='k-comm'&&t!=='COMMODITY')return;
+      var key = cls==='k-inv'?(r.doc||'—') : cls==='k-cust'?(r.customer||'—') : (r.item_name||'—');
+      var val = lit?(Number(r.litres)||0):(Number(r.value)||0);
+      if(!(key in g)){g[key]=0;order.push(key);}
+      g[key]+=val;
+    });
+    var list=order.map(function(k){return {label:k,val:g[k]};}).filter(function(x){return Math.abs(x.val)>0.001;});
+    list.sort(function(a,b){return b.val-a.val;});
+    return {head: cls==='k-inv'?'Invoice':(cls==='k-cust'?'Customer':'Item'), lit:lit, list:list};
+  }
+  function openHsKpi(i){
+    var k=hsKpiCards[i]; if(!k)return;
+    var bd=hsBreakdown(k.c);
+    var body=bd.list.length
+      ? bd.list.slice(0,12).map(function(x){
+          return '<div class="hs-pop-row"><span class="hs-pop-rl">'+esc(x.label)+'</span>'
+            +'<span class="hs-pop-rv">'+(bd.lit?fN(Math.round(x.val))+' L':'₹'+fN(Math.round(x.val)))+'</span></div>';
+        }).join('')
+      : '<div class="hs-pop-empty">No breakdown available.</div>';
+    var more=bd.list.length>12?'<div class="hs-pop-more">+'+(bd.list.length-12)+' more</div>':'';
+    var pop=document.getElementById('hsPop');
+    pop.className='hs-pop '+k.c;
+    pop.innerHTML='<button class="hs-pop-x" onclick="closeHsKpi()" aria-label="Close">&times;</button>'
+      +'<div class="hs-pop-l"><span class="material-icons" style="font-size:17px">'+k.ic+'</span>'+esc(k.l)+'</div>'
+      +'<div class="hs-pop-v">'+k.vf+'</div><div class="hs-pop-m">'+esc(k.m)+'</div>'
+      +'<div class="hs-pop-bdh">'+esc(bd.head)+' breakdown</div>'
+      +'<div class="hs-pop-bd">'+body+'</div>'+more;
+    document.getElementById('hsPopOv').classList.add('show');
+  }
+  function closeHsKpi(){document.getElementById('hsPopOv').classList.remove('show');}
+  document.getElementById('hsKpis').addEventListener('click',function(e){var c=e.target.closest('.hs-kpi');if(c)openHsKpi(+c.getAttribute('data-kpi'));});
+  document.getElementById('hsKpis').addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){var c=e.target.closest('.hs-kpi');if(c){e.preventDefault();openHsKpi(+c.getAttribute('data-kpi'));}}});
+  document.getElementById('hsPopOv').addEventListener('click',function(e){if(e.target===this)closeHsKpi();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHsKpi();});
 
   function render(){
     document.getElementById('hsDrillLabel').textContent=order.length?order.map(function(k){return DIM_LABEL[k];}).join(' › '):'— none —';
@@ -318,8 +429,8 @@
     if(!a.length){ window.alert('No data to export — click Fetch first.'); return; }
     var dims=order.length?order:['customer'];
     var months=activeMonths(a), nM=months.length||1;
-    function xv(o,k){var v=metricRaw(o,k);return k==='rlz'?Math.round(v*100)/100:Math.round(v);}   // grand/cell value per metric
-    function av(o,k){return k==='rlz'?xv(o,k):Math.round(metricRaw(o,k)/nM);}                       // avg per metric (rate = blended)
+    function xv(o,k){if(k==='inv')return invText(o);var v=metricRaw(o,k);return RATE_METRICS[k]?Math.round(v*100)/100:Math.round(v);}   // grand/cell value per metric
+    function av(o,k){if(k==='inv')return invText(o);return RATE_METRICS[k]?xv(o,k):Math.round(metricRaw(o,k)/nM);}                       // avg per metric (rate = blended)
     var tree=buildTree(a,dims,0,'');
     // One sub-column per (month × selected metric), grouped by month, then Grand Total + Avg per metric.
     var hd=dims.map(function(k){return DIM_LABEL[k];});
@@ -388,9 +499,30 @@
     updateMetricLabel();
   })();
   document.getElementById('hsBody').addEventListener('click',function(e){
-    var t=e.target&&e.target.closest?e.target.closest('[data-hstoggle]'):null; if(!t)return;
-    var p=t.getAttribute('data-hstoggle'); expanded[p]=!expanded[p]; render();
+    if(!e.target||!e.target.closest)return;
+    var tb=e.target.closest('[data-hstoggle]'); if(tb){var p=tb.getAttribute('data-hstoggle');expanded[p]=!expanded[p];render();return;}
+    var bb=e.target.closest('[data-hsbills]'); if(bb){var q=bb.getAttribute('data-hsbills');billsX[q]=!billsX[q];render();return;}
   });
+  // Rebuild a node's own rows from its dimension path (nodes drop their _rows after building).
+  function rowsByPath(path){
+    var pairs=[]; String(path||'').split('>').forEach(function(seg){ if(!seg)return; var i=seg.indexOf(':'); if(i<0)return; pairs.push([seg.slice(0,i),seg.slice(i+1)]); });
+    return activeRows().filter(function(r){ return pairs.every(function(p){ return String(r[p[0]]||'—')===p[1]; }); });
+  }
+  // Inline "drop-down" of a leaf item's bills: one sub-row per invoice, with the same metric cells.
+  function billRows(node,months,depth){
+    var g={}, ord=[]; rowsByPath(node.path).forEach(function(r){var d=r.doc||'—',b=g[d];if(!b){g[d]=b=blank();b.label=d;b.date=r.date||'';b.dnote=!!r.debit_note;ord.push(d);}addRow(b,r);});
+    var subs=ord.map(function(d){return g[d];}).sort(function(a,b){return b.val-a.val;});
+    var nM=months.length||1, html='', pad='padding-left:'+(12+depth*18)+'px';
+    subs.forEach(function(b){
+      var tagLbl=b.dnote?'hs-tag-dn':'hs-tag-inv', tagTxt=b.dnote?'Debit Note':'Invoice';
+      var name='<td class="gc-name hs-billname" style="'+pad+'"><span class="hs-tw-empty"></span>'
+        +'<span class="hs-tag '+tagLbl+'">'+tagTxt+'</span>'+esc(b.label)+(b.date?'<span class="hs-bill-dt">'+esc(b.date)+'</span>':'')
+        +(b.dnote?'<span class="hs-dn-note">RATE DIFF DEBIT NOTE — no goods</span>':'')+'</td>';
+      var mc=months.map(function(mo){return '<td>'+metricCell(b.byM[mo.ym]||{})+'</td>';}).join('');
+      html+='<tr class="hs-subrow">'+name+mc+'<td class="hs-hi">'+metricCell(b)+'</td><td>'+metricCellAvg(b,nM)+'</td></tr>';
+    });
+    return html;
+  }
   (function(){
     var btn=document.getElementById('hsDrillBtn'), panel=document.getElementById('hsDrillPanel');
     btn.addEventListener('click',function(e){e.stopPropagation();chosen=order.slice();renderDrillList();panel.classList.toggle('open');});
