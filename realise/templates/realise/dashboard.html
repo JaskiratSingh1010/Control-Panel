@@ -19,11 +19,11 @@ body.slide-two-mode .rd-wrap .controls{display:none}
 .cp-main{padding:0!important}
 /* No extra left padding: the sidebar is a flex item that takes its own width and pushes
    the content, so the old 64px collapsed offset would just leave a dead gap. */
-/* Slide 2: pin the page to the viewport (topbar is 56px) so the toolbar + KPI row
-   stay fixed and only the channel-card grid (.sc2-grid) scrolls. Without a definite
-   height here, .rd-wrap's height:100% collapses to auto and the whole page — KPIs
-   included — scrolls inside .cp-main instead. */
-body.slide-two-mode .cp-main{height:calc(100vh - 56px);overflow:hidden}
+/* Slide 2: pin the page to the full viewport so the toolbar + KPI row stay fixed and
+   only the channel-card grid (.sc2-grid) scrolls. Without a definite height here,
+   .rd-wrap's height:100% collapses to auto and the whole page — KPIs included —
+   scrolls inside .cp-main instead. (Topbar removed, so no 56px to subtract.) */
+body.slide-two-mode .cp-main{height:100vh;overflow:hidden}
 .rd-wrap{display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;background:var(--bg);font-family:'Raleway',sans-serif;font-size:14px;color:var(--text);max-width:none;min-width:0}
 body.slide-two-mode .rd-wrap .header{display:none}
 .header{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between}
@@ -610,6 +610,33 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
           <a class="btn btn-edit" id="sc2TargetsLink" href="{% url 'realise:channel_targets' %}">Update Targets</a>
         </div>
       </div>
+      <!-- KPIs sit above all the filters/buttons per the requested layout. -->
+      <div class="sc2-kpis" id="channelKpis">
+        <div class="sc2-kpi">
+          <div class="sc2-kpi-ic"><span class="material-icons">outlined_flag</span></div>
+          <div class="sc2-kpi-body"><label>Target Ltr</label><div id="sc2KpiTarget">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('done')" title="Open Done breakdown">
+          <div class="sc2-kpi-ic"><span class="material-icons">local_shipping</span></div>
+          <div class="sc2-kpi-body"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openOihWindow()" title="Open OIH breakdown">
+          <div class="sc2-kpi-ic"><span class="material-icons">warehouse</span></div>
+          <div class="sc2-kpi-body"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
+          <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
+          <div class="sc2-kpi-body"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi sc2-range-card">
+          <div class="sc2-kpi-ic"><span class="material-icons">bar_chart</span></div>
+          <div class="sc2-kpi-body"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
+        </div>
+        <div class="sc2-kpi">
+          <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
+          <div class="sc2-kpi-body"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
+        </div>
+      </div>
       <div class="sc2-drillbar sc2-period-bar">
         <span id="sc2RangeCtl" style="display:contents">
           <label for="sc2From">From</label>
@@ -667,32 +694,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <button type="button" class="sc2-today-btn" id="sc2RawExportBtn" onclick="exportMainRawCSV()" title="Export the raw data behind this view (Excel/CSV)">
           <span class="material-icons">download</span>Export Excel
         </button>
-      </div>
-      <div class="sc2-kpis" id="channelKpis">
-        <div class="sc2-kpi">
-          <div class="sc2-kpi-ic"><span class="material-icons">outlined_flag</span></div>
-          <div class="sc2-kpi-body"><label>Target Ltr</label><div id="sc2KpiTarget">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click" onclick="openMetricWindow('done')" title="Open Done breakdown">
-          <div class="sc2-kpi-ic"><span class="material-icons">local_shipping</span></div>
-          <div class="sc2-kpi-body"><label>Done Ltr</label><div id="sc2KpiDone">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openOihWindow()" title="Open OIH breakdown">
-          <div class="sc2-kpi-ic"><span class="material-icons">warehouse</span></div>
-          <div class="sc2-kpi-body"><label>OIH Ltr</label><div id="sc2KpiOih">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-kpi-click sc2-range-card" onclick="openMetricWindow('balance')" title="Open Balance breakdown">
-          <div class="sc2-kpi-ic"><span class="material-icons">balance</span></div>
-          <div class="sc2-kpi-body"><label>Bal Ltr</label><div id="sc2KpiBal">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi sc2-range-card">
-          <div class="sc2-kpi-ic"><span class="material-icons">bar_chart</span></div>
-          <div class="sc2-kpi-body"><label>Target Realise</label><div id="sc2KpiTargetRealise">&mdash;</div></div>
-        </div>
-        <div class="sc2-kpi">
-          <div class="sc2-kpi-ic"><span class="material-icons">currency_rupee</span></div>
-          <div class="sc2-kpi-body"><label>Actual Realise</label><div id="sc2KpiCurrentRealise">&mdash;</div></div>
-        </div>
       </div>
       <div class="sc2-grid" id="channelGrid"></div>
     </div>
