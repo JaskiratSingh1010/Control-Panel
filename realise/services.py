@@ -3097,6 +3097,25 @@ _SHIPTO_JOIN = ('LEFT JOIN "{S}"."CRD1" A ON A."CardCode" = H."CardCode" '
 # The U_ARNO filter mirrors REPORT_SALES_COGS (the proc behind the dashboard's Done): the
 # SAP team marks invoices to hide with OINV/ORIN."U_ARNO" = 'H' (and 'T'); the proc excludes
 # them, so the Done popup must too or it over-counts hidden parties vs the channel cell.
+# Litres MUST be computed exactly as the REPORT_SALES_COGS proc does (the dashboard's Done source),
+# or the popup over-counts: the proc zeroes litres on no-inventory-movement lines (NoInvtryMv='Y',
+# e.g. combo / drop-ship billing), counts litres only for U_IsLitre='Y' items, expands bill-of-
+# material (TreeType='S') items from their litre components, and converts a bulk 'MTS' UoM line by
+# ×1098.9. A naive Quantity×SalPackUn (the old formula) ignored all of that and inflated litres
+# several-fold for bulk customers like JIVO MART. Sales stream is +ve, the ORIN return stream −ve.
+def _done_sales_litexpr(schema):
+    return (
+        "CASE WHEN L.\"NoInvtryMv\"='Y' THEN 0 "
+        "WHEN L.\"TreeType\"='S' THEN (SELECT SUM(K1.\"Quantity\"*K2.\"SalPackUn\") "
+        f"FROM \"{schema}\".\"ITT1\" K1 JOIN \"{schema}\".\"OITM\" K2 ON K1.\"Code\"=K2.\"ItemCode\" "
+        "WHERE K1.\"Father\"=L.\"ItemCode\" AND K2.\"U_IsLitre\"='Y')*L.\"Quantity\" "
+        "ELSE (CASE WHEN I.\"U_IsLitre\"='Y' THEN CASE WHEN L.\"UomCode\"='MTS' "
+        "THEN L.\"Quantity\"*1098.9 ELSE L.\"Quantity\" END ELSE 0 END)*I.\"SalPackUn\" END")
+
+
+_DONE_RETURN_LITEXPR = ("(CASE WHEN L.\"NoInvtryMv\"='N' THEN -L.\"Quantity\" ELSE 0 END)"
+                        "*(CASE WHEN I.\"U_IsLitre\"='Y' THEN I.\"SalPackUn\" ELSE 0 END)")
+
 _DONE_LINE_SQL = '''
     SELECT H."DocNum" AS "DOCNUM", H."DocDate" AS "DOCDATE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
@@ -3109,7 +3128,7 @@ _DONE_LINE_SQL = '''
            COALESCE(TRIM(I."ItemName"), '')     AS "ITEM",
            COALESCE(TRIM(I."ItemCode"), '')     AS "ICODE",
            COALESCE(TRIM(I."U_TYPE"), '')       AS "UTYPE",
-           {sign} * L."Quantity" * COALESCE(I."SalPackUn", 0) AS "LIT"
+           {litexpr} AS "LIT"
     FROM "{S}"."{hdr}" H
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
@@ -3117,6 +3136,7 @@ _DONE_LINE_SQL = '''
     ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" BETWEEN ? AND ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+      AND L."TreeType" <> 'I' AND C."GroupCode" <> 100 {extrawhere}
 '''
 
 
@@ -3129,8 +3149,11 @@ def get_channel_done_documents(start_date, end_date, channel, seg, filters):
     the same conversion REPORT_SALES_ANALYSIS uses."""
     members = CHANNEL_MEMBERS.get(channel)  # None -> all groups (commodity / all-channel)
     seg = str(seg or '').strip().upper()
-    inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1', sign='1')
-    crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1', sign='-1')
+    inv = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='OINV', ln='INV1',
+                                litexpr=_done_sales_litexpr(SAP_SCHEMA),
+                                extrawhere="AND I.\"U_Sub_Group\" NOT IN ('GIFT PACK')")
+    crd = _DONE_LINE_SQL.format(S=SAP_SCHEMA, hdr='ORIN', ln='RIN1',
+                                litexpr=_DONE_RETURN_LITEXPR, extrawhere='')
     sql = (f'SELECT "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE", '
            f'MAX("BAL") AS "BAL", SUM("LIT") AS "LIT" FROM ( {inv} UNION ALL {crd} ) T '
            f'GROUP BY "DOCNUM","DOCDATE","GRP","ST","CCODE","CUST","CITY","SUBG","ITEM","ICODE","UTYPE"')
