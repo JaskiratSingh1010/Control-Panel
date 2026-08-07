@@ -53,6 +53,8 @@
   .ad-pc.c{background:#fef3c7;color:#92400e;border-color:#fde68a}
   .ad-pc.pc{background:#e0e7ff;color:#3730a3;border-color:#c7d2fe}
   .ad-pc.none{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
+  .ad-pc.doc{min-width:0;font-size:10.5px;font-weight:700;letter-spacing:.2px;background:#eef2ff;color:#4338ca;border-color:#c7d2fe;white-space:nowrap}
+  .ad-pc.unc{min-width:0;font-size:10.5px;font-weight:800;letter-spacing:.2px;background:#fff7ed;color:#c2410c;border-color:#fed7aa;white-space:nowrap}
   .ad-cd{width:70px;text-align:center;border:1px solid #e2e8f0;border-radius:7px;padding:5px 6px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
   .ad-cd:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .ad-rmk{width:100%;min-width:150px;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12.5px;color:#0f172a;outline:none}
@@ -74,6 +76,14 @@
     text-align:center;color:#0f172a;outline:none;font-weight:700}
   .ad-days input:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.14)}
   .ad-days .ad-days-hint{color:#94a3b8;font-weight:600}
+  .ad-pcdays{gap:8px}
+  .ad-pcd{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+  .ad-pcd input[type=checkbox]{width:15px;height:15px;accent-color:#6366f1;cursor:pointer;margin:0}
+  .ad-pcd b{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid transparent}
+  .ad-pcd b.p{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+  .ad-pcd b.c{background:#fef3c7;color:#92400e;border-color:#fde68a}
+  .ad-pcd b.pc{background:#e0e7ff;color:#3730a3;border-color:#c7d2fe}
+  .ad-pcd b.unc{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
   .neg{color:#e11d48;font-weight:700}
   .v0{color:#cbd5e1}
   .bal{font-weight:800;color:#0f172a}
@@ -155,6 +165,16 @@
       <label for="adDays">Credit Period</label>
       <input type="number" id="adDays" min="0" step="1" inputmode="numeric" placeholder="0">
       <span class="ad-days-hint">days (default for non-P/C rows)</span>
+    </span>
+    <!-- Bulk-set the credit period: type the days, tick the P/C types, Apply → every matching invoice fills. -->
+    <span class="ad-days ad-pcdays" title="Type the days, tick which P/C types to apply to, then Apply — every matching invoice is filled (and saved). Blank days = reset to default.">
+      <label>P/C credit period</label>
+      <input type="number" id="adPCDays" min="0" step="1" inputmode="numeric" placeholder="days">
+      <label class="ad-pcd"><input type="checkbox" class="pcchk" value="P" checked><b class="p">P</b></label>
+      <label class="ad-pcd"><input type="checkbox" class="pcchk" value="C" checked><b class="c">C</b></label>
+      <label class="ad-pcd"><input type="checkbox" class="pcchk" value="P+C"><b class="pc">P+C</b></label>
+      <label class="ad-pcd"><input type="checkbox" class="pcchk" value="U"><b class="unc">U</b></label>
+      <button type="button" class="ad-btn" id="adPCApply">Apply</button>
     </span>
     <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
     <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
@@ -288,11 +308,18 @@
 
   // ── Data view ──
   // Item-type badge: Premium / Commodity / both; blank (—) for non-invoice or unclassified docs.
-  function pcBadge(t){
+  // Non-invoice documents carry no P/C — show what the document actually is instead of a blank.
+  var TYPE_NAME={IN:'Invoice',CN:'Credit Note',DN:'Debit Note',RC:'Receipt',JE:'Journal Entry',
+                 PU:'A/P Invoice',GR:'Goods Receipt',PS:'Payment'};
+  function pcBadge(t, docType){
     if(t==='P')   return '<span class="ad-pc p">P</span>';
     if(t==='C')   return '<span class="ad-pc c">C</span>';
     if(t==='P+C') return '<span class="ad-pc pc">P+C</span>';
-    return '<span class="ad-pc none">—</span>';
+    var dt=String(docType||'').trim().toUpperCase();
+    // An invoice with no classifiable oil item (items missing from OITM / opening-balance docs).
+    if(dt==='IN') return '<span class="ad-pc unc" title="Invoice with no classifiable oil item (not in item master)">Unclassified</span>';
+    var nm=TYPE_NAME[dt];
+    return nm ? '<span class="ad-pc doc">'+esc(nm)+'</span>' : '<span class="ad-pc none">—</span>';
   }
   function renderDataHead(){
     var th = '<th class="lbl"></th>';                     // expander column — not sortable
@@ -362,7 +389,7 @@
         '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><span class="material-icons">chevron_right</span></button>'+
           '<span class="ad-cnt"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></td>'+
         '<td>'+esc(r.type)+'</td><td>'+esc(r.doc_no)+'</td><td>'+esc(r.posting_date)+'</td><td>'+esc(r.due_date)+'</td>'+
-        '<td>'+pcBadge(r.item_type)+'</td><td>'+cdInput+'</td>'+
+        '<td>'+pcBadge(r.item_type, r.type)+'</td><td>'+cdInput+'</td>'+
         '<td class="num">'+money(r.original)+'</td><td class="num bal">'+money(r.balance_due)+'</td>'+
         '<td>'+rmkCell+'</td>'+
         BUCKETS.map(function(b,bi){return '<td class="num bk'+bi+'">'+money(r[b.key])+'</td>';}).join('')+
@@ -554,6 +581,32 @@
       body:JSON.stringify({code:CODE, row_key:'CREDITDAYS:'+key, remark:(ov==null?'':String(ov))})}).catch(function(){});
     renderData(); if(!pivot) filterData();
   }
+  // Does a row belong to a P/C-type bucket? 'U' = an invoice with no P/C classification.
+  function rowIsKind(r, kind){
+    if(kind==='U') return !((r.item_type||'').trim()) && String(r.type||'').toUpperCase()==='IN';
+    return r.item_type===kind;
+  }
+  // Bulk-fill the credit period for every invoice of the ticked P/C types (blank days = reset to default).
+  (function(){
+    var applyBtn=document.getElementById('adPCApply'), daysEl=document.getElementById('adPCDays');
+    function apply(){
+      var raw=(daysEl.value||'').trim(), ov=parseInt(raw,10);
+      ov=(raw!=='' && isFinite(ov) && ov>=0) ? ov : null;
+      var kinds=[].slice.call(document.querySelectorAll('.pcchk:checked')).map(function(c){return c.value;});
+      if(!kinds.length){ if(applyBtn) applyBtn.title='Tick at least one P/C type first.'; return; }
+      var n=0;
+      ROWS.forEach(function(r){
+        if(!kinds.some(function(k){return rowIsKind(r,k);})) return;
+        r._cd = ov; n++;
+        fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+          body:JSON.stringify({code:CODE, row_key:'CREDITDAYS:'+r.row_key, remark:(ov==null?'':String(ov))})}).catch(function(){});
+      });
+      renderData(); if(!pivot) filterData();
+      if(applyBtn) applyBtn.title=n+' invoice'+(n===1?'':'s')+' ('+kinds.join(', ')+') set to '+(ov==null?'default':ov+' days');
+    }
+    if(applyBtn) applyBtn.addEventListener('click', apply);
+    if(daysEl) daysEl.addEventListener('keydown', function(e){ if(e.key==='Enter'){ apply(); } });
+  })();
 
   function filterData(){
     if(pivot) return;
