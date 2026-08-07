@@ -81,6 +81,30 @@
   tr.ad-tot .neg{color:var(--rz-neg)}
   td.bk0{background:#f0fdf4}td.bk1{background:#f0fdfa}td.bk2{background:#fffbeb}td.bk3{background:#fff7ed}td.bk4{background:#fef2f2}
   .ad-empty{padding:40px;text-align:center;color:#7b8794}
+  /* Clickable pivot rows → documents-behind-it popup */
+  tr.ad-piv-row{cursor:pointer}
+  tr.ad-piv-row:hover td{background:#eef2ff}
+  .apd-ov{position:fixed;inset:0;background:rgba(15,23,42,.34);display:none;align-items:center;justify-content:center;z-index:3000;padding:24px}
+  .apd-ov.show{display:flex}
+  .apd-box{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.30);width:min(920px,96vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+  .apd-h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid #eef2f6}
+  .apd-tt b{font-size:18px;font-weight:900;color:#111827}
+  .apd-sub{display:block;font-size:12px;font-weight:700;color:#64748b;margin-top:3px}
+  .apd-x{border:0;background:transparent;color:#94a3b8;font-size:24px;line-height:1;cursor:pointer;padding:0 2px}
+  .apd-x:hover{color:#334155}
+  .apd-warn{margin:12px 20px 0;padding:9px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;color:#b91c1c;font-size:12px;font-weight:700}
+  .apd-wrap{overflow:auto;margin:12px 0 4px}
+  table.apd-tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+  table.apd-tbl th{position:sticky;top:0;background:#f8fafc;color:#475569;text-align:right;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+  table.apd-tbl th.lbl{text-align:left}
+  table.apd-tbl td{padding:8px 14px;border-bottom:1px solid #eef2f6;color:#334155;text-align:right;white-space:nowrap}
+  table.apd-tbl td.lbl{text-align:left}
+  table.apd-tbl td.apd-no{font-weight:800;color:#111827}
+  table.apd-tbl td.apd-amt{font-weight:800;color:#1f2937}
+  table.apd-tbl td.apd-sp{white-space:normal;font-size:11.5px;color:#64748b;max-width:280px}
+  .apd-dash{color:#cbd5e1}
+  table.apd-tbl tbody tr:hover td{background:#f8fafc}
+  .apd-empty{padding:22px;text-align:center;color:#94a3b8}
 
   /* ── Expandable split breakdown (TDS / RTV / Claim …) ── */
   .ad-exp{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:0;background:transparent;cursor:pointer;color:#64748b;border-radius:6px;vertical-align:middle}
@@ -359,10 +383,11 @@
   // that uses splits is broken down by split Category (each split inheriting its invoice's age
   // bucket) with any leftover under '(unallocated)'. Grand Total still equals total Balance Due.
   function buildCategoryPivot(){
-    var map={}, order=[], gt={balance_due:0}; BUCKETS.forEach(function(b){gt[b.key]=0;});
+    var map={}, order=[], gt={balance_due:0}, detail={}; BUCKETS.forEach(function(b){gt[b.key]=0;});
     function add(key, amt, r){
-      if(!map[key]){ map[key]={balance_due:0}; BUCKETS.forEach(function(b){map[key][b.key]=0;}); order.push(key); }
+      if(!map[key]){ map[key]={balance_due:0}; BUCKETS.forEach(function(b){map[key][b.key]=0;}); order.push(key); detail[key]=[]; }
       map[key].balance_due += amt; gt.balance_due += amt;
+      detail[key].push({r:r, amt:amt});   // the document contributing to this category, and how much
       var bal = Number(r.balance_due)||0;
       BUCKETS.forEach(function(b){
         var share = (Math.abs(bal)>0.005) ? amt*((Number(r[b.key])||0)/bal) : 0;
@@ -385,8 +410,10 @@
       }
     });
     order.sort(function(a,b){ return map[b].balance_due - map[a].balance_due; });
-    return {order:order, map:map, gt:gt};
+    return {order:order, map:map, gt:gt, detail:detail};
   }
+  var PIVOT_DETAIL={};   // {category: [{r, amt}]} for the click-through detail popup
+  var PIVOT_ALL=' ALL';   // sentinel data-cat for the Grand Total row (all documents)
   function renderPivot(){
     var pcols = [{key:'label', label:'Remark / Category (Row Labels)', lbl:true},
                  {key:'balance_due', label:'Sum of Balance Due', num:true}]
@@ -398,7 +425,7 @@
     }).join('');
     document.getElementById('adHead').innerHTML = head;
     var body = document.getElementById('adBody');
-    var P = buildCategoryPivot();
+    var P = buildCategoryPivot(); PIVOT_DETAIL = P.detail;
     if(!P.order.length){ body.innerHTML='<tr><td class="ad-empty" colspan="'+(2+BUCKETS.length)+'">No data to pivot.</td></tr>'; return; }
     // Re-order rows by the clicked pivot column (label = numeric-aware text; else the summed value).
     var ps = pivotSort;
@@ -407,11 +434,12 @@
       return ((P.map[a][ps.key]||0) - (P.map[b][ps.key]||0)) * ps.dir;
     });
     var html = P.order.map(function(k){
-      return '<tr><td class="lbl" style="font-weight:700;color:#1f2937">'+esc(k)+'</td>'+
+      return '<tr class="ad-piv-row" data-cat="'+esc(k)+'" title="Click to see the documents behind this row">'+
+        '<td class="lbl" style="font-weight:700;color:#1f2937">'+esc(k)+'</td>'+
         '<td class="num bal">'+money(P.map[k].balance_due)+'</td>'+
         BUCKETS.map(function(b){return '<td class="num">'+money(P.map[k][b.key])+'</td>';}).join('')+'</tr>';
     }).join('');
-    html += '<tr class="ad-tot"><td>Grand Total</td><td class="num">'+money(P.gt.balance_due)+'</td>'+
+    html += '<tr class="ad-tot ad-piv-row" data-cat="'+PIVOT_ALL+'" title="Click to see all documents"><td>Grand Total</td><td class="num">'+money(P.gt.balance_due)+'</td>'+
       BUCKETS.map(function(b){return '<td class="num">'+money(P.gt[b.key])+'</td>';}).join('')+'</tr>';
     body.innerHTML = html;
   }
@@ -685,6 +713,8 @@
     sp.category = t.value; reconcile(i); saveSplits(i);
   });
   document.getElementById('adBody').addEventListener('click', function(e){
+    var pv = e.target.closest && e.target.closest('.ad-piv-row');
+    if(pv){ openPivotDetail(pv.getAttribute('data-cat')); return; }
     var exp = e.target.closest && e.target.closest('.ad-exp');
     if(exp){ toggleRow(exp.closest('tr')); return; }
     var add = e.target.closest && e.target.closest('.sp-add');
@@ -696,6 +726,48 @@
     if(del){ var w = del.closest('.sp-wrap'), id = +w.getAttribute('data-i'), jd = +del.closest('.sp-line').getAttribute('data-j');
       ROWS[id].splits.splice(jd,1); renderSplits(id); saveSplits(id); return; }
   });
+
+  // ── Pivot category → documents-behind-it popup ──
+  function splitSummary(r){
+    return (r.splits||[]).filter(function(s){return Math.abs(Number(s.amount)||0)>0.005;})
+      .map(function(s){return esc((s.category||'').trim()||'—')+' '+money(Number(s.amount)||0);}).join(' · ');
+  }
+  function ensureApd(){
+    var ov=document.getElementById('apdOv'); if(ov) return ov;
+    ov=document.createElement('div'); ov.id='apdOv'; ov.className='apd-ov';
+    ov.innerHTML='<div class="apd-box" id="apdBox"></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) closePivotDetail(); });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape') closePivotDetail(); });
+    return ov;
+  }
+  function closePivotDetail(){ var ov=document.getElementById('apdOv'); if(ov) ov.classList.remove('show'); }
+  function openPivotDetail(cat){
+    ensureApd();
+    var isAll=(cat===PIVOT_ALL);
+    var list = isAll ? ROWS.map(function(r){return {r:r, amt:Number(r.balance_due)||0};}) : (PIVOT_DETAIL[cat]||[]).slice();
+    list.sort(function(a,b){ return Math.abs(b.amt)-Math.abs(a.amt); });
+    var tot=0; list.forEach(function(x){ tot+=x.amt; });
+    var title=isAll?'All documents':cat;
+    var over=(cat==='(unallocated)');
+    var rowsH=list.map(function(x){ var r=x.r, sp=splitSummary(r);
+      return '<tr><td class="lbl apd-no">'+esc(r.doc_no||'—')+'</td><td class="lbl">'+esc(r.type||'')+'</td>'
+        +'<td class="lbl">'+esc(r.posting_date||'')+'</td><td class="lbl">'+esc(r.due_date||'')+'</td>'
+        +'<td class="num">'+money(r.balance_due)+'</td>'
+        +'<td class="num apd-amt">'+money(x.amt)+'</td>'
+        +'<td class="lbl apd-sp">'+(sp||'<span class="apd-dash">—</span>')+'</td></tr>';
+    }).join('');
+    document.getElementById('apdBox').innerHTML=
+      '<div class="apd-h"><div class="apd-tt"><b>'+esc(title)+'</b>'
+        +'<span class="apd-sub">'+list.length+' document'+(list.length===1?'':'s')+' &middot; '+money(tot)+'</span></div>'
+        +'<button class="apd-x" type="button" onclick="closePivotDetail()" aria-label="Close">&times;</button></div>'
+      +(over?'<div class="apd-warn">These invoices\' category splits add up to more than their balance — the remainder shows here. Reduce the over-entered splits to clear it.</div>':'')
+      +'<div class="apd-wrap"><table class="apd-tbl"><thead><tr>'
+        +'<th class="lbl">Doc No</th><th class="lbl">Type</th><th class="lbl">Posting</th><th class="lbl">Due</th>'
+        +'<th class="num">Doc Balance</th><th class="num">In this row</th><th class="lbl">Category splits</th></tr></thead>'
+      +'<tbody>'+(rowsH||'<tr><td colspan="7" class="apd-empty">No documents.</td></tr>')+'</tbody></table></div>';
+    document.getElementById('apdOv').classList.add('show');
+  }
 
   // ── NOT DUE grace-days control: reclassify every row live, persist per customer ──
   var daysInput = document.getElementById('adDays');
