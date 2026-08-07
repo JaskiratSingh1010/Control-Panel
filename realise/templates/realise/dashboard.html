@@ -154,6 +154,7 @@ td.ccell{font-weight:500}
 #cdBoxEl{width:100vw;height:100vh;max-width:none;border-radius:0}
 .cd-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 22px;border-bottom:1px solid var(--rz-card-brd);background:linear-gradient(120deg,#ffffff 0%,#fbfbff 55%,#f4f1ff 100%);color:var(--rz-ink);flex-wrap:wrap}
 .cd-header h3{margin:0;font-size:16px;color:var(--rz-ink)}
+#cdTitle{font-size:23px;font-weight:900;letter-spacing:.2px}   /* channel-card detail heading — bigger & bold */
 .cd-header p{margin:2px 0 0;font-size:11px;color:var(--rz-muted)}
 .cd-controls{display:flex;align-items:center;gap:12px}
 .cd-search{display:flex;align-items:center;gap:7px;width:200px;max-width:38%;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px;box-sizing:border-box}
@@ -321,6 +322,8 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
 .sc2-nav .slide-indicator{min-width:auto;font-size:12px}
 .sc2-pill{padding:8px 14px;border-radius:999px;border:1px solid #d8e0ea;background:#fff;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.55px;box-shadow:0 4px 12px rgba(15,23,42,.04)}
 .sc2-drillbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Update Targets: pinned far-right + sized to match the Export Excel button (sc2-today-btn) */
+.sc2-drillbar .sc2-targets-right{margin-left:auto;padding:8px 14px;font-size:12px;font-weight:800;letter-spacing:.3px;border-radius:10px;gap:6px}
 /* Wrap instead of scroll: overflow-x:auto here forces overflow-y to clip too, which cut off
    the Drill-Order dropdown that opens below the bar. Wrapping lets it overflow freely. */
 .sc2-period-bar{flex-wrap:wrap;padding-bottom:3px}
@@ -607,7 +610,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
             <span id="arUpdated" class="ar-updated" title="Last data refresh">&mdash;</span>
           </div>
           <button type="button" class="btn btn-ghost" id="sc2ExportBtn" onclick="exportChannelCSV()">&#11015; Export CSV</button>
-          <a class="btn btn-edit" id="sc2TargetsLink" href="{% url 'realise:channel_targets' %}">Update Targets</a>
         </div>
       </div>
       <!-- KPIs sit above all the filters/buttons per the requested layout. -->
@@ -694,6 +696,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
         <button type="button" class="sc2-today-btn" id="sc2RawExportBtn" onclick="exportMainRawCSV()" title="Export the raw data behind this view (Excel/CSV)">
           <span class="material-icons">download</span>Export Excel
         </button>
+        <a class="btn btn-edit sc2-targets-right" id="sc2TargetsLink" href="{% url 'realise:channel_targets' %}">Update Targets</a>
       </div>
       <div class="sc2-grid" id="channelGrid"></div>
     </div>
@@ -1215,7 +1218,6 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     <div class="cd-header" id="cdHeaderEl">
       <div>
         <h3 id="cdTitle">Channel</h3>
-        <p id="cdSub">Target, Done, Order in Hand (open SO) &amp; Balance — litres</p>
       </div>
       <div class="cd-search">
         <span class="material-icons">search</span>
