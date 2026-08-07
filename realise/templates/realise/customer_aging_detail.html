@@ -161,11 +161,6 @@
       <span class="material-icons">search</span>
       <input type="text" id="adSearch" placeholder="Search doc no, remark, branch…" autocomplete="off">
     </label>
-    <span class="ad-days" title="Default credit period for rows with NO P/C item type (credit notes, JEs, etc.). Invoices use their own per-invoice credit period (P=30, C=7, P+C=you set it). Within the period a document is NOT DUE (Remarks locked); past it, OVERDUE and editable. Set 0 to turn the fallback off.">
-      <label for="adDays">Credit Period</label>
-      <input type="number" id="adDays" min="0" step="1" inputmode="numeric" placeholder="0">
-      <span class="ad-days-hint">days (default for non-P/C rows)</span>
-    </span>
     <!-- Bulk-set the credit period: type the days, tick the P/C types, Apply → every matching invoice fills. -->
     <span class="ad-days ad-pcdays" title="Type the days, tick which P/C types to apply to, then Apply — every matching invoice is filled (and saved). Blank days = reset to default.">
       <label>P/C credit period</label>
