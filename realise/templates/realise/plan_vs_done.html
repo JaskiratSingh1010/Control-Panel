@@ -40,74 +40,83 @@
      collapsed borders on sticky cells stop painting once they lift off. */
   .pd-tbl-wrap{max-height:72vh;overflow:auto;border:1px solid #eef2f6;border-radius:12px}
   table.pd-tbl{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0;font-size:13px}
-  table.pd-tbl thead th{position:sticky;top:26px;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
-  table.pd-tbl thead th.l{text-align:left}
-  table.pd-tbl thead th.sep{border-left:2px solid var(--rz-line)}
+  /* EVERY rule below uses child combinators on purpose. The drill-down renders a whole table
+     inside a tbody cell, so a descendant selector like `table.pd-tbl thead th` would also match
+     the nested table's header — which made it sticky and it covered its own first invoice row. */
+  table.pd-tbl>thead>tr>th{position:sticky;top:26px;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+  table.pd-tbl>thead>tr>th.l{text-align:left}
+  table.pd-tbl>thead>tr>th.sep{border-left:2px solid var(--rz-line)}
   /* Banner row that splits the saved plan's columns from the month's actuals. Fixed height so
      the column-name row below it can be offset by exactly that much. */
-  table.pd-tbl thead tr.grp th{position:sticky;top:0;z-index:3;box-sizing:border-box;height:26px;text-align:center;font-size:10px;padding:5px 12px;border-bottom:1px solid var(--rz-line)}
+  table.pd-tbl>thead>tr.grp>th{position:sticky;top:0;z-index:3;box-sizing:border-box;height:26px;text-align:center;font-size:10px;padding:5px 12px;border-bottom:1px solid var(--rz-line)}
 
   /* Item column pinned left — with 17 columns you otherwise lose the row's identity the moment
      you scroll right. Every pinned cell needs its own opaque background or the columns
      underneath show through. The colspan'd "N more items" cell is excluded: a sticky cell
      spanning 7 columns would slide over its neighbours. */
-  table.pd-tbl th.l,table.pd-tbl td.l{position:sticky;left:0;z-index:2;background:#fff;box-shadow:inset -1px 0 0 #eef2f6}
-  table.pd-tbl thead th.l{z-index:4}
-  table.pd-tbl tbody tr:nth-child(even) td.l{background:#fafcff}
-  table.pd-tbl tbody.pd-xrows tr.x td.l{background:#fcfdff}
-  table.pd-tbl tfoot td.l{background:#f8fafc}
-  table.pd-tbl tfoot tr.all td.l{background:#eef2ff}
-  table.pd-tbl tr.pd-more td.l{position:static;background:#f1f5f9;box-shadow:none}
-  table.pd-tbl thead tr.grp th.pl{background:#eef2ff;color:#4338ca}
-  table.pd-tbl thead tr.grp th.dn{background:#ecfdf5;color:#047857}
-  table.pd-tbl thead tr.grp th.es{background:#fff7ed;color:#c2410c}
-  table.pd-tbl tbody td{padding:8px 12px;border-bottom:1px solid #eef2f6;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--rz-body)}
-  table.pd-tbl tbody td.l{text-align:left;color:var(--rz-ink);font-weight:600}
-  table.pd-tbl tbody td.sep{border-left:2px solid #eef2f6}
-  table.pd-tbl tbody tr:nth-child(even) td{background:#fafcff}
+  table.pd-tbl>thead>tr>th.l,
+  table.pd-tbl>tbody>tr>td.l,
+  table.pd-tbl>tfoot>tr>td.l{position:sticky;left:0;z-index:2;background:#fff;box-shadow:inset -1px 0 0 #eef2f6}
+  table.pd-tbl>thead>tr>th.l{z-index:4}
+  table.pd-tbl>tbody>tr:nth-child(even)>td.l{background:#fafcff}
+  table.pd-tbl>tbody.pd-xrows>tr.x>td.l{background:#fcfdff}
+  table.pd-tbl>tfoot>tr>td.l{background:#f8fafc}
+  table.pd-tbl>tfoot>tr.all>td.l{background:#eef2ff}
+  table.pd-tbl>tbody>tr.pd-more>td.l{position:static;background:#f1f5f9;box-shadow:none}
+  table.pd-tbl>thead>tr.grp>th.pl{background:#eef2ff;color:#4338ca}
+  table.pd-tbl>thead>tr.grp>th.dn{background:#ecfdf5;color:#047857}
+  table.pd-tbl>thead>tr.grp>th.es{background:#fff7ed;color:#c2410c}
+  table.pd-tbl>tbody>tr>td{padding:8px 12px;border-bottom:1px solid #eef2f6;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--rz-body)}
+  table.pd-tbl>tbody>tr>td.l{text-align:left;color:var(--rz-ink);font-weight:600}
+  table.pd-tbl>tbody>tr>td.sep{border-left:2px solid #eef2f6}
+  table.pd-tbl>tbody>tr:nth-child(even)>td{background:#fafcff}
   /* Plan block keeps the Rate List's colours so the two tabs read the same; Done litres get
      their own indigo so the eye lands on the column this tab exists for. */
-  table.pd-tbl .pd-rl{font-weight:800;color:#0e7490}
-  table.pd-tbl .pd-rev{font-weight:800;color:#065f46}
-  table.pd-tbl .pd-done{font-weight:800;color:#4338ca}
-  table.pd-tbl .g{color:#15803d;font-weight:800}
-  table.pd-tbl .a{color:#b45309;font-weight:800}
-  table.pd-tbl .r{color:#be123c;font-weight:800}
-  table.pd-tbl .mute{color:var(--rz-faint)}
-  table.pd-tbl tfoot td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
-  table.pd-tbl tfoot td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
-  table.pd-tbl tfoot td.sep{border-left:2px solid var(--rz-line)}
-  table.pd-tbl tfoot tr.all td{background:#eef2ff;border-top:1px solid #c7d2fe}
-  table.pd-tbl tfoot tr.all td.l{color:#4338ca}
+  table.pd-tbl>tbody>tr>td.pd-rl,table.pd-tbl>tfoot>tr>td.pd-rl{font-weight:800;color:#0e7490}
+  table.pd-tbl>tbody>tr>td.pd-rev,table.pd-tbl>tfoot>tr>td.pd-rev{font-weight:800;color:#065f46}
+  table.pd-tbl>tbody>tr>td.pd-done,table.pd-tbl>tfoot>tr>td.pd-done{font-weight:800;color:#4338ca}
+  table.pd-tbl>tbody>tr>td.g,table.pd-tbl>tfoot>tr>td.g{color:#15803d;font-weight:800}
+  table.pd-tbl>tbody>tr>td.a,table.pd-tbl>tfoot>tr>td.a{color:#b45309;font-weight:800}
+  table.pd-tbl>tbody>tr>td.r,table.pd-tbl>tfoot>tr>td.r{color:#be123c;font-weight:800}
+  table.pd-tbl>tbody>tr>td.mute,table.pd-tbl>tfoot>tr>td.mute{color:var(--rz-faint)}
+  /* the inline "—" spans inside a cell, not the cell itself */
+  table.pd-tbl>tbody>tr>td .mute,table.pd-tbl>tfoot>tr>td .mute{color:var(--rz-faint)}
+  table.pd-tbl>tfoot>tr>td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
+  table.pd-tbl>tfoot>tr>td.sep{border-left:2px solid var(--rz-line)}
+  table.pd-tbl>tfoot>tr.all>td{background:#eef2ff;border-top:1px solid #c7d2fe}
+  table.pd-tbl>tfoot>tr.all>td.l{color:#4338ca}
 
   /* "N more items sold, not in this plan" — always visible, rows behind a click. */
-  table.pd-tbl tr.pd-more td{background:#f1f5f9;cursor:pointer;font-weight:800;color:#475569;border-top:2px solid var(--rz-line)}
-  table.pd-tbl tr.pd-more:hover td{background:#e6ecf3}
-  table.pd-tbl tr.pd-more td.l{font-size:12.5px}
+  table.pd-tbl>tbody>tr.pd-more>td{background:#f1f5f9;cursor:pointer;font-weight:800;color:#475569;border-top:2px solid var(--rz-line)}
+  table.pd-tbl>tbody>tr.pd-more:hover>td{background:#e6ecf3}
+  table.pd-tbl>tbody>tr.pd-more>td.l{font-size:12.5px}
   /* Inline-block, not flex: a flex `td` with colspan collapses the column widths in Safari. */
-  table.pd-tbl tr.pd-more .material-icons{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
-  table.pd-tbl tr.pd-more.open .material-icons{transform:rotate(180deg)}
-  table.pd-tbl tbody.pd-xrows tr.x td{background:#fcfdff;color:var(--rz-muted)}
-  table.pd-tbl tbody.pd-xrows tr.x td.l{color:var(--rz-body);font-weight:600}
-  table.pd-tbl .pd-bal{font-weight:700;color:#9a3412}
-  table.pd-tbl .pd-req{font-weight:800;color:#c2410c}
+  table.pd-tbl>tbody>tr.pd-more>td .material-icons{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
+  table.pd-tbl>tbody>tr.pd-more.open>td .material-icons{transform:rotate(180deg)}
+  table.pd-tbl>tbody.pd-xrows>tr.x>td{background:#fcfdff;color:var(--rz-muted)}
+  table.pd-tbl>tbody.pd-xrows>tr.x>td.l{color:var(--rz-body);font-weight:600}
+  table.pd-tbl>tbody>tr>td.pd-bal,table.pd-tbl>tfoot>tr>td.pd-bal{font-weight:700;color:#9a3412}
+  table.pd-tbl>tbody>tr>td.pd-req,table.pd-tbl>tfoot>tr>td.pd-req{font-weight:800;color:#c2410c}
 
   /* Editable Scheme / To-be-sale on the unplanned rows. */
-  table.pd-tbl td.pd-in{padding:4px 6px}
-  table.pd-tbl td.pd-in input{width:100%;min-width:86px;box-sizing:border-box;font-family:inherit;
+  table.pd-tbl>tbody>tr>td.pd-in{padding:4px 6px}
+  table.pd-tbl>tbody>tr>td.pd-in input{width:100%;min-width:86px;box-sizing:border-box;font-family:inherit;
     font-size:12.5px;font-weight:700;text-align:right;color:var(--rz-ink);background:#fff;
     border:1px solid #cbd5e1;border-radius:7px;padding:5px 7px;outline:none;font-variant-numeric:tabular-nums}
-  table.pd-tbl td.pd-in input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  table.pd-tbl td.pd-in input::placeholder{font-weight:600;color:#cbd5e1}
+  table.pd-tbl>tbody>tr>td.pd-in input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  table.pd-tbl>tbody>tr>td.pd-in input::placeholder{font-weight:600;color:#cbd5e1}
 
   /* Item = drill-down handle */
-  table.pd-tbl td.pd-item{cursor:pointer}
-  table.pd-tbl td.pd-item:hover{color:var(--rz-indigo)}
-  table.pd-tbl td.pd-item .pd-ichev{font-size:16px;color:#94a3b8;vertical-align:-3px;margin-right:2px;display:inline-block;transition:transform .18s}
-  table.pd-tbl td.pd-item.open .pd-ichev{transform:rotate(90deg);color:var(--rz-indigo)}
+  table.pd-tbl>tbody>tr>td.pd-item{cursor:pointer}
+  table.pd-tbl>tbody>tr>td.pd-item:hover{color:var(--rz-indigo)}
+  table.pd-tbl>tbody>tr>td.pd-item .pd-ichev{font-size:16px;color:#94a3b8;vertical-align:-3px;margin-right:2px;display:inline-block;transition:transform .18s}
+  table.pd-tbl>tbody>tr>td.pd-item.open .pd-ichev{transform:rotate(90deg);color:var(--rz-indigo)}
 
-  /* Nested party/invoice table. Its cell spans the row, so it is never pinned left. */
-  table.pd-tbl tr.pd-docs>td{padding:0;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+  /* Nested party/invoice table. Its cell spans the row, so it is never pinned left, and it
+     resets the inherited numeric alignment the outer table imposes on every td. */
+  table.pd-tbl>tbody>tr.pd-docs>td{padding:0;background:#f8fafc;border-bottom:1px solid #e2e8f0;
+    text-align:left;white-space:normal;position:static}
   .pd-dwrap{padding:12px 16px;max-width:1100px}
   .pd-dmsg{font-size:12.5px;font-weight:600;color:var(--rz-muted);padding:6px 2px}
   table.pd-dtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
