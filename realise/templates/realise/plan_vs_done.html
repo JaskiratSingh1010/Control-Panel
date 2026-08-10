@@ -49,6 +49,8 @@
   .pd-card-h .pd-name{font-size:16px;font-weight:800;color:var(--rz-ink)}
   .pd-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;letter-spacing:.3px}
   .pd-chip.state{background:#eef2ff;color:#4338ca}
+  .pd-guess{margin-left:5px;font-size:9px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;
+    color:#b45309;background:#fef3c7;border-radius:5px;padding:1px 4px}
   .pd-chip.scope{background:#ecfdf5;color:#047857}
   .pd-chip.ach{background:#f1f5f9;color:#475569}
   .pd-chip.ach.good{background:#dcfce7;color:#15803d}
@@ -253,9 +255,29 @@
   function typeOk(code){ return !TYPEF || (ITEM_TYPES[String(code||'').toUpperCase()]||'')===TYPEF; }
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
   function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
-  /* Channel is whatever the result was saved with — set in the calculator's Save dialog.
-     No tag means the result covers every channel in its state. */
-  function scopeChanOf(o){ return (SCOPE==='all'||!o.state)?'':(o.channel||''); }
+  /* Channel comes from the saved tag when there is one. Untagged results fall back to their
+     NAME: "Delhi GT" is a GT plan and measuring it across Corporate and E-Commerce is wrong.
+     Whole-word match only, and an ambiguous name (two channels, or none) guesses nothing
+     rather than picking one. The card flags an inferred channel, and setting the tag on the
+     Rate List tab overrides it — a guess must be visible and correctable. */
+  function channelFromName(name){
+    var toks=String(name||'').toUpperCase().split(/[^A-Z]+/), hits={};
+    var CH={GT:1,MT:1,ROI:1,HORECA:1,CSD:1,REST:1,ECOM:1};
+    toks.forEach(function(t){
+      if(!t)return;
+      if(t==='ECOM'||t==='ECOMMERCE'||t==='COMMERCE')hits.ECOM=1;   // ECOM / E-COM / E-COMMERCE
+      else if(CH[t])hits[t]=1;
+    });
+    var k=Object.keys(hits);
+    return k.length===1?k[0]:'';
+  }
+  function chanInfo(o){
+    if(SCOPE==='all'||!o.state)return {ch:'',guess:false};
+    if(o.channel)return {ch:o.channel,guess:false};
+    var g=channelFromName(o.name);
+    return {ch:g,guess:!!g};
+  }
+  function scopeChanOf(o){ return chanInfo(o).ch; }
   /* No state => all-India. State but no channel tag => every channel in that state. Both => the
      one bucket, which is what a "Delhi GT" plan should actually be measured against. */
   function doneMapFor(st,ch){
@@ -717,7 +739,7 @@
 
   function cardHtml(o,idx){
     var pl=(o.payload&&o.payload.plans)||[];
-    var st=scopeStateOf(o), ch=scopeChanOf(o), D=doneMapFor(st,ch);
+    var st=scopeStateOf(o), ci=chanInfo(o), ch=ci.ch, D=doneMapFor(st,ch);
     var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
     var a=resultAch(o,D);
     var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl);}).join('');
@@ -732,7 +754,9 @@
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
         +(o.state?'<span class="pd-chip state">'+esc(o.state)
-            +(st?(ch?' · '+esc(ch):' · all channels'):' · not scoped')+'</span>':'')
+            +(st?(ch?' · '+esc(ch):' · all channels'):' · not scoped')
+            +(ci.guess?'<span class="pd-guess" title="Taken from the result name — set it on the Rate List tab to make it explicit">from name</span>':'')
+            +'</span>':'')
         +'<span class="pd-chip scope">'+esc(scope)+'</span>'
         +'<span class="pd-chip ach '+(a.plan?chipCls(a.pct):'')+'">'
           +fN(Math.round(a.done))+' / '+fN(Math.round(a.plan))+' L'
