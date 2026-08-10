@@ -162,9 +162,10 @@
 {% block content %}
 <div class="pd-wrap">
   <h1 class="pd-h1">Plan vs Done</h1>
-  <p class="pd-psub">Every saved Rate List result against the month's actual sales. Done litres are
-    <strong>all-India</strong> per item code (not scoped to the result's state or channel), net of returns,
-    hidden and cancelled documents excluded — same basis as the dashboard's Done.</p>
+  <p class="pd-psub">Every saved Rate List result against the month's actual sales. Done is scoped to the
+    <strong>state and channel the result was saved for</strong> — by ship-to address, the same attribution the
+    Sales dashboard uses — or switch the scope to all-India. Net of returns; hidden and cancelled documents
+    excluded.</p>
 
   <div class="pd-bar">
     <div class="pd-fld"><span class="pd-lbl">Done scope</span>
@@ -172,8 +173,6 @@
         <button type="button" data-scope="state" class="on">Result’s state + channel</button>
         <button type="button" data-scope="all">All India</button>
       </div></div>
-    <div class="pd-fld"><span class="pd-lbl">Channel</span>
-      <select id="pdChannel"><option value="">Auto — each result’s own</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Month</span><input type="month" id="pdMonth"></div>
     <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
@@ -195,20 +194,15 @@
   function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
   var ALL=[], DONE_ALL={}, DONE_BY={}, DONE_SC={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
-  var CHANNELS=[];
   /* SCOPE decides which Done map a card reads: the state it was planned for, or all-India.
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
   var SCOPE='state';
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
   function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
-  /* CHAN_PICK '' means Auto: each result uses the channel it was saved with. Anything else
-     overrides every card, which is how an older result with no saved channel gets scoped. */
-  var CHAN_PICK='';
-  function scopeChanOf(o){
-    if(SCOPE==='all'||!o.state)return '';
-    return CHAN_PICK||o.channel||'';
-  }
+  /* Channel is whatever the result was saved with — set in the calculator's Save dialog.
+     No tag means the result covers every channel in its state. */
+  function scopeChanOf(o){ return (SCOPE==='all'||!o.state)?'':(o.channel||''); }
   /* No state => all-India. State but no channel tag => every channel in that state. Both => the
      one bucket, which is what a "Delhi GT" plan should actually be measured against. */
   function doneMapFor(st,ch){
@@ -587,13 +581,6 @@
     list.innerHTML=rows.map(cardHtml).join('');
   }
 
-  function fillChannels(){
-    var sel=document.getElementById('pdChannel'), cur=sel.value;
-    sel.innerHTML='<option value="">Auto — each result’s own</option>'
-      +CHANNELS.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('');
-    if(CHANNELS.indexOf(cur)>=0)sel.value=cur;
-  }
-
   function fillStates(states){
     var sel=document.getElementById('pdState'), cur=sel.value;
     sel.innerHTML='<option value="">All states</option>'+states.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
@@ -610,7 +597,6 @@
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
       .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{}; DONE_SC=p.by_state_channel||{};
-                         CHANNELS=p.channels||[]; fillChannels();
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
       .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; });
   }
@@ -663,12 +649,6 @@
   var now=new Date();
   mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   mEl.addEventListener('change',loadDone);
-  document.getElementById('pdChannel').addEventListener('change',function(){
-    CHAN_PICK=this.value;
-    DOCS={};                                   // drill-downs were scoped to the old channel
-    render();
-  });
-
   document.getElementById('pdScope').addEventListener('click',function(e){
     var b=e.target.closest?e.target.closest('[data-scope]'):null;
     if(!b || b.getAttribute('data-scope')===SCOPE)return;
