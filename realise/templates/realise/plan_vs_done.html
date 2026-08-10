@@ -204,6 +204,16 @@
         </div>
       </div>
     </div>
+    <div class="pd-fld"><span class="pd-lbl">Person</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="pdPersBtn"><span id="pdPersLabel">All persons</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="pdPersPanel">
+          <div class="com-dp-head"><a id="pdPersAll">Select All</a><a id="pdPersClr">Clear All</a></div>
+          <div class="com-dp-list" id="pdPersList"></div>
+          <div class="com-dp-foot"><button type="button" id="pdPersApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
     <div class="pd-fld"><span class="pd-lbl">Type</span>
       <select id="pdType">
         <option value="">All</option>
@@ -249,10 +259,50 @@
   /* No state => all-India. State but no channel tag => every channel in that state. Both => the
      one bucket, which is what a "Delhi GT" plan should actually be measured against. */
   function doneMapFor(st,ch){
-    if(!st)return DONE_ALL;
-    if(ch)return DONE_SC[normState(st)+'|'+ch]||{};
-    return DONE_BY[normState(st)]||{};
+    if(!PSEL.length){                                   // fast path: no person filter
+      if(!st)return DONE_ALL;
+      if(ch)return DONE_SC[normState(st)+'|'+ch]||{};
+      return DONE_BY[normState(st)]||{};
+    }
+    var want=st?normState(st):'', keep=[];
+    Object.keys(DONE_SC).forEach(function(k){
+      var p=k.split('|'), kst=p[0], kch=p[1];
+      if(want&&kst!==want)return;
+      if(ch&&kch!==ch)return;
+      if(!personOk(kst,kch))return;
+      keep.push(DONE_SC[k]);
+    });
+    return mergeMaps(keep);
   }
+  /* Person filter. A person owns a (channel, state) cell, so filtering is a question about
+     which by_state_channel buckets to add up — never about individual invoices. An empty
+     selection means no filter rather than "show nothing", so Clear All cannot blank the page. */
+  var PERSONS=[], PSEL=[];
+  function personOf(st,ch){ return assignedPerson(ch,st); }
+  function personOk(st,ch){ return !PSEL.length || PSEL.indexOf(personOf(st,ch))>=0; }
+
+  /* Sum item cells across buckets, then re-derive the rates — averaging the rates would be
+     wrong, they have to come from the pooled revenue and volume. */
+  function mergeMaps(maps){
+    var out={};
+    maps.forEach(function(m){
+      Object.keys(m).forEach(function(code){
+        var src=m[code], c=out[code];
+        if(!c)c=out[code]={item_name:src.item_name,pcsbox:src.pcsbox,ltr_per_pc:src.ltr_per_pc,
+                           boxltr:src.boxltr,litres:0,pcs:0,boxes:0,revenue:0};
+        c.litres+=num(src.litres); c.pcs+=num(src.pcs);
+        c.boxes+=num(src.boxes);   c.revenue+=num(src.revenue);
+      });
+    });
+    Object.keys(out).forEach(function(code){
+      var c=out[code];
+      c.realise_l=c.litres?c.revenue/c.litres:0;
+      c.rate_pc  =c.pcs   ?c.revenue/c.pcs   :0;
+      c.rate_box =c.boxes ?c.revenue/c.boxes :0;
+    });
+    return out;
+  }
+
   function mapForNode(el){
     var card=el.closest?el.closest('.pd-card'):null;
     return doneMapFor(card?card.getAttribute('data-state'):'',
@@ -610,12 +660,18 @@
   function docsTable(p){
     if(p.status!=='ok')return '<div class="pd-dmsg">'+esc(p.error||'Could not load invoices.')+'</div>';
     if(!p.rows.length)return '<div class="pd-dmsg">No invoices for this item in '+esc(MONTH_LABEL)+'.</div>';
-    var t=p.totals;
+    var rows=p.rows.filter(function(r){return personOk(normState(r.state),r.channel);});
+    if(!rows.length)return '<div class="pd-dmsg">No invoices for the selected person(s) in '+esc(MONTH_LABEL)+'.</div>';
+    // Totals come from the rows on screen, not the payload, so a filter can never leave a
+    // footer that disagrees with what is above it.
+    var t={qty:0,litres:0,revenue:0};
+    rows.forEach(function(r){t.qty+=num(r.qty);t.litres+=num(r.litres);t.revenue+=num(r.revenue);});
+    t.realise_l=t.litres?t.revenue/t.litres:0;
     return '<table class="pd-dtbl"><thead><tr>'
       +'<th class="l">Party</th><th class="l">Channel</th><th class="l">Doc No</th><th class="l">Date</th>'
       +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
-      +treeRows(buildTree(p.rows,DRILL),0,[]).join('')
-      +'</tbody><tfoot><tr><td class="l" colspan="4">'+p.rows.length+' document'+(p.rows.length===1?'':'s')+'</td>'
+      +treeRows(buildTree(rows,DRILL),0,[]).join('')
+      +'</tbody><tfoot><tr><td class="l" colspan="4">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
       +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
       +'<td>'+fN(Math.round(t.revenue))+'</td><td>'+f2(t.realise_l)+'</td></tr></tfoot></table>';
   }
@@ -791,6 +847,44 @@
       if(box&&DOCS[k])box.innerHTML=docsTable(DOCS[k]);
     });
   }
+  function renderPersList(){
+    document.getElementById('pdPersList').innerHTML=PERSONS.map(function(n){
+      var on=persPick.indexOf(n)>=0;
+      return '<div class="com-dp-item'+(on?' checked':'')+'" data-p="'+esc(n)+'">'
+        +'<input type="checkbox"'+(on?' checked':'')+'>'
+        +'<span class="com-dp-name">'+(n==='—'?'Unassigned':esc(n))+'</span>'
+        +'<span class="com-pos">✓</span></div>';
+    }).join('');
+  }
+  function persLabel(){
+    document.getElementById('pdPersLabel').textContent=
+      (!PSEL.length||PSEL.length===PERSONS.length)?'All persons':(PSEL.length+' selected');
+  }
+  var persPick=[];
+  document.getElementById('pdPersBtn').addEventListener('click',function(e){
+    e.stopPropagation();
+    document.getElementById('pdPersPanel').classList.toggle('open');
+  });
+  document.getElementById('pdPersList').addEventListener('click',function(e){
+    var it=e.target.closest?e.target.closest('.com-dp-item'):null;
+    if(!it)return;
+    var n=it.getAttribute('data-p'), i=persPick.indexOf(n);
+    if(i>=0)persPick.splice(i,1); else persPick.push(n);
+    renderPersList();
+  });
+  document.getElementById('pdPersAll').addEventListener('click',function(){
+    persPick=PERSONS.slice(); renderPersList();
+  });
+  document.getElementById('pdPersClr').addEventListener('click',function(){
+    persPick=[]; renderPersList();
+  });
+  document.getElementById('pdPersApply').addEventListener('click',function(){
+    // every person ticked == no filter, so the fast path stays in play
+    PSEL=(persPick.length===PERSONS.length)?[]:persPick.slice();
+    document.getElementById('pdPersPanel').classList.remove('open');
+    persLabel(); DOCS={}; render();
+  });
+
   document.getElementById('pdDrillBtn').addEventListener('click',function(e){
     e.stopPropagation();
     document.getElementById('pdDrillPanel').classList.toggle('open');
@@ -814,8 +908,9 @@
     drillLabel(); refreshOpenDocs();
   });
   document.addEventListener('click',function(e){
-    if(!e.target.closest||!e.target.closest('.com-drill-box'))
-      document.getElementById('pdDrillPanel').classList.remove('open');
+    if(e.target.closest&&e.target.closest('.com-drill-box'))return;
+    document.getElementById('pdDrillPanel').classList.remove('open');
+    document.getElementById('pdPersPanel').classList.remove('open');
   });
 
   document.getElementById('pdScope').addEventListener('click',function(e){
@@ -931,7 +1026,11 @@
     if(h){ h.parentNode.classList.toggle('open'); }
   });
 
-  renderDrillList(); drillLabel();
+  /* '—' is what assignedPerson returns for a (channel, state) with no owner — e.g. ROI in
+     Jammu and Kashmir. It carries real volume, so it has to be selectable or a person filter
+     would silently drop it. */
+  PERSONS=(TERRITORY_DATA.persons||[]).slice().sort().concat(['—']);
+  renderDrillList(); drillLabel(); renderPersList(); persLabel();
 
   loading=true; render();
   Promise.all([loadSaved(), fetchDone()]).then(function(){ loading=false; render(); });
