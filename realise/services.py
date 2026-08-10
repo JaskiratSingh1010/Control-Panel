@@ -3984,6 +3984,7 @@ _DONE_ITEM_SQL = '''
            COALESCE(I."SalFactor2", 0)         AS "PCSBOX",
            COALESCE(I."SalPackUn", 0)          AS "LTRPP",
            COALESCE(TRIM(H."CardCode"), '')    AS "CCODE",
+           COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
            ''' + _SHIPTO_STATE + '''           AS "ST",
            SUM({litexpr})                      AS "LIT",
            SUM({sign} * L."Quantity")          AS "PCS",
@@ -3997,7 +3998,7 @@ _DONE_ITEM_SQL = '''
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
       AND I."ItemCode" LIKE 'FG%'
     GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn",
-             H."CardCode", ''' + _SHIPTO_STATE + '''
+             H."CardCode", C."U_Main_Group", ''' + _SHIPTO_STATE + '''
 '''
 
 
@@ -4006,6 +4007,16 @@ def norm_state(name):
     STATE_CODE_NAMES' 'JAMMU AND KASHMIR'."""
     s = str(name or '').upper().replace('&', ' AND ')
     return ' '.join(s.split())
+
+
+def _raw_group_to_channel():
+    """Raw OCRD.U_Main_Group -> one of the 7 dashboard channels, so Plan vs Done buckets sales
+    exactly the way the Sales dashboard does (CORPORATE/BRANCH/STAFF/... all fold into REST)."""
+    out = {}
+    for channel, members in CHANNEL_MEMBERS.items():
+        for raw in members:
+            out[_normalize_name(raw)] = channel
+    return out
 
 
 def _done_accum(bucket, code, r):
@@ -4072,23 +4083,29 @@ def get_done_by_item(start_date, end_date):
         return {'status': 'error', 'rows': {}, 'error': 'Could not read sales from SAP.',
                 'start': sd.isoformat(), 'end': ed.isoformat()}
 
-    agg, by_state = {}, {}
+    raw2ch = _raw_group_to_channel()
+    agg, by_state, by_sc = {}, {}, {}
     for r in raw or []:
         code = (r.get('ICODE') or '').strip().upper()
         if not code:
             continue
         st_raw = (r.get('ST') or '').strip()
-        state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
+        state = norm_state(_delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw)))
+        channel = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         _done_accum(agg, code, r)
         if state:
-            _done_accum(by_state.setdefault(norm_state(state), {}), code, r)
+            _done_accum(by_state.setdefault(state, {}), code, r)
+            _done_accum(by_sc.setdefault(state + '|' + channel, {}), code, r)
 
     _done_finalize(agg)
     for bucket in by_state.values():
         _done_finalize(bucket)
+    for bucket in by_sc.values():
+        _done_finalize(bucket)
 
     payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
                'by_state': by_state, 'states': sorted(by_state),
+               'by_state_channel': by_sc, 'channels': sorted(CHANNEL_MEMBERS),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
         _done_item_cache[key] = (now + _DONE_ITEM_TTL, payload)
@@ -4121,7 +4138,7 @@ _DONE_DOCS_SQL = '''
 '''
 
 
-def get_done_item_documents(item_code, start_date, end_date, state=None):
+def get_done_item_documents(item_code, start_date, end_date, state=None, channel=None):
     """Who bought one item in a month: the invoices (and credit notes) behind its Done figure,
     with party, ship-to state, document, litres, pieces and value. Same filters and litre
     formula as get_done_by_item, so the rows sum exactly to that item's Done row — and with
@@ -4129,13 +4146,14 @@ def get_done_item_documents(item_code, start_date, end_date, state=None):
     'INV' or 'CN' (returns, negative). Cached _DONE_DOCS_TTL seconds per (item, range, state)."""
     code = str(item_code or '').strip().upper()
     want_state = norm_state(state) if state else ''
+    want_chan = _normalize_name(channel) if channel else ''
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not code or not sd or not ed:
         return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
                 'error': 'item code and dates required'}
     if ed < sd:
         sd, ed = ed, sd
-    key = (code, sd.isoformat(), ed.isoformat(), want_state)
+    key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan)
     now = time.time()
     hit = _done_docs_cache.get(key)
     if hit and hit[0] > now:
@@ -4155,6 +4173,7 @@ def get_done_item_documents(item_code, start_date, end_date, state=None):
         return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
                 'error': 'Could not read invoices from SAP.'}
 
+    raw2ch = _raw_group_to_channel()
     rows, t_lit, t_qty, t_val = [], 0.0, 0.0, 0.0
     for r in raw or []:
         lit, qty, val = (float(r.get(k) or 0) for k in ('LIT', 'QTY', 'VAL'))
@@ -4162,13 +4181,16 @@ def get_done_item_documents(item_code, start_date, end_date, state=None):
             continue
         st_raw = (r.get('ST') or '').strip()
         row_state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
+        row_chan = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         if want_state and norm_state(row_state) != want_state:
+            continue
+        if want_chan and row_chan != want_chan:
             continue
         rows.append({
             'doc_num': r.get('DOCNUM'), 'doc_date': r.get('DOCDATE'),
             'card_code': (r.get('CCODE') or '').strip(),
             'customer': (r.get('CUST') or '').strip().upper() or (r.get('CCODE') or ''),
-            'channel': (r.get('GRP') or '').strip().upper(),
+            'channel': row_chan, 'raw_group': (r.get('GRP') or '').strip().upper(),
             'state': row_state,
             'kind': r.get('KIND'), 'litres': round(lit, 2), 'qty': round(qty, 2),
             'revenue': round(val, 2), 'realise_l': round(val / lit, 2) if lit else 0.0,

@@ -1495,6 +1495,7 @@ def api_rate_list_save(request):
     obj = RateList.objects.create(
         name=name[:200],
         state=(body.get('state') or '').strip()[:100],
+        channel=(body.get('channel') or '').strip().upper()[:20],
         scope=(str(body.get('scope') or 'BOTH').upper())[:10],
         payload=payload,
         created_by=(request.user.username if request.user.is_authenticated else ''),
@@ -1518,7 +1519,7 @@ def api_rate_list(request):
     if state:
         qs = qs.filter(state=state)
     rows = [{
-        'id': o.id, 'name': o.name, 'state': o.state, 'scope': o.scope,
+        'id': o.id, 'name': o.name, 'state': o.state, 'channel': o.channel, 'scope': o.scope,
         'payload': o.payload, 'created_by': o.created_by,
         'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
     } for o in qs[:500]]
@@ -1719,10 +1720,34 @@ def api_done_item_documents(request):
         return JsonResponse({'status': 'error', 'error': 'code is required'}, status=400)
     start, end, month = _month_bounds(request.GET.get('month'))
     state = (request.GET.get('state') or '').strip()      # blank = all-India
-    payload = services.get_done_item_documents(code, start, end, state=state)
+    channel = (request.GET.get('channel') or '').strip()  # blank = every channel
+    payload = services.get_done_item_documents(code, start, end, state=state, channel=channel)
     payload['month'] = month
     payload['state'] = state
+    payload['channel'] = channel
     return JsonResponse(payload)
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_set_channel(request):
+    """Tag a saved result with the channel it was planned for. Body: {id, channel}. Results
+    saved before the calculator offered a channel have none, so Plan vs Done lets one be set
+    in place rather than guessing it from the result's name. '' clears the tag."""
+    from .models import RateList
+    body = _parse_body(request)
+    try:
+        obj = RateList.objects.filter(id=int(body.get('id'))).first()
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
+    if obj is None:
+        return JsonResponse({'status': 'error', 'error': 'Saved result not found.'}, status=404)
+    channel = (body.get('channel') or '').strip().upper()[:20]
+    if channel and channel not in services.CHANNEL_MEMBERS:
+        return JsonResponse({'status': 'error', 'error': 'Unknown channel.'}, status=400)
+    obj.channel = channel
+    obj.save(update_fields=['channel'])
+    return JsonResponse({'status': 'ok', 'channel': obj.channel})
 
 
 @permission_flag_required('can_customer_master')

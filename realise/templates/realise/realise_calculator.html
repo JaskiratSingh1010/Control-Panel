@@ -432,6 +432,12 @@
         </div>
       </div>
       <div class="rc-save-f"><span class="rc-save-l">State</span><select id="svState"></select></div>
+      <div class="rc-save-f"><span class="rc-save-l">Channel</span><select id="svChannel">
+        <option value="">— all channels —</option>
+        <option value="GT">GT</option><option value="MT">MT</option><option value="ROI">ROI</option>
+        <option value="ECOM">ECOM</option><option value="HORECA">HORECA</option>
+        <option value="CSD">CSD</option><option value="REST">REST</option>
+      </select></div>
       <div class="rc-save-f"><span class="rc-save-l">Result name</span><input type="text" id="svName" placeholder="e.g. Delhi GT — July plan"></div>
       <button type="button" class="rc-choice-b both" id="svSave" style="margin-top:16px;width:100%">Save to Rate List</button>
       <button type="button" class="rc-choice-cancel" id="svCancel">Cancel</button>
@@ -902,6 +908,7 @@
   saveModal.addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
   document.getElementById('svSave').addEventListener('click',function(){
     var state=document.getElementById('svState').value;
+    var channel=document.getElementById('svChannel').value;
     var name=document.getElementById('svName').value.trim();
     if(!name){window.alert('Please enter a result name.');return;}
     var scope, plans, compare=null;
@@ -928,7 +935,7 @@
     }
     var btn=document.getElementById('svSave');btn.disabled=true;btn.textContent='Saving…';
     fetch('/realise/api/rate-list/save/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-      body:JSON.stringify({name:name,state:state,scope:scope,payload:{plans:plans,compare:compare}})})
+      body:JSON.stringify({name:name,state:state,channel:channel,scope:scope,payload:{plans:plans,compare:compare}})})
       .then(function(r){return r.json().catch(function(){return {status:'error',error:'HTTP '+r.status};});})
       .then(function(p){ btn.disabled=false;btn.textContent='Save to Rate List';
         if(p.status==='ok'){ saveModal.hidden=true; window.alert('Saved to Rate List. Open the Rate List tab to view it.'); }
@@ -969,6 +976,7 @@
   function loadSavedResult(o){
     var plans=(o.payload&&o.payload.plans)||[], scope=o.scope||'BOTH';
     if(o.state){document.getElementById('svState').value=o.state;}   // prefill Save dialog
+    if(o.channel){document.getElementById('svChannel').value=o.channel;}
     document.getElementById('svName').value=o.name||'';
     if(scope==='GRID'){                                              // saved from the Planning Grid
       grid=savedRows(plans[0]&&plans[0].rows, blankRow);

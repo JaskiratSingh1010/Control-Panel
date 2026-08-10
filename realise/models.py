@@ -414,6 +414,9 @@ class RateList(models.Model):
     A-vs-B comparison. Viewed from the Rate List sidebar tab. scope = 'BOTH' / 'A' / 'B'."""
     name = models.CharField(max_length=200)
     state = models.CharField(max_length=100, blank=True)
+    # Dashboard channel (GT/MT/ROI/ECOM/HORECA/CSD/REST). Blank = the result is not tied to one,
+    # so Plan vs Done measures it across every channel in its state.
+    channel = models.CharField(max_length=20, blank=True)
     scope = models.CharField(max_length=10, default='BOTH')
     payload = models.JSONField(default=dict)
     created_by = models.CharField(max_length=150, blank=True)

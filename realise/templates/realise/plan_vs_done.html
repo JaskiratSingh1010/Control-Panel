@@ -30,6 +30,9 @@
   .pd-chip.ach.mid{background:#fef3c7;color:#b45309}
   .pd-chip.ach.bad{background:#ffe4e6;color:#be123c}
   .pd-meta{font-size:11.5px;color:var(--rz-muted);font-weight:600}
+  .pd-ch{font-family:inherit;font-size:11px;font-weight:800;color:#c2410c;background:#fff7ed;
+    border:1px solid #fed7aa;border-radius:7px;padding:3px 6px;outline:none;cursor:pointer}
+  .pd-ch:focus{border-color:#fb923c;box-shadow:0 0 0 3px rgba(251,146,60,.18)}
   .pd-card-h .pd-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
   .pd-chev{font-size:20px;color:#94a3b8;transition:transform .18s}
   .pd-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
@@ -191,17 +194,26 @@
   function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
   function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
-  var ALL=[], DONE_ALL={}, DONE_BY={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+  var ALL=[], DONE_ALL={}, DONE_BY={}, DONE_SC={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+  var CHANNELS=[];
   /* SCOPE decides which Done map a card reads: the state it was planned for, or all-India.
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
   var SCOPE='state';
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
   function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
-  function doneMapFor(st){ return st?(DONE_BY[normState(st)]||{}):DONE_ALL; }
+  function scopeChanOf(o){ return (SCOPE==='all'||!o.state)?'':(o.channel||''); }
+  /* No state => all-India. State but no channel tag => every channel in that state. Both => the
+     one bucket, which is what a "Delhi GT" plan should actually be measured against. */
+  function doneMapFor(st,ch){
+    if(!st)return DONE_ALL;
+    if(ch)return DONE_SC[normState(st)+'|'+ch]||{};
+    return DONE_BY[normState(st)]||{};
+  }
   function mapForNode(el){
     var card=el.closest?el.closest('.pd-card'):null;
-    return doneMapFor(card?card.getAttribute('data-state'):'');
+    return doneMapFor(card?card.getAttribute('data-state'):'',
+                      card?card.getAttribute('data-channel'):'');
   }
 
   /* Unsaved edits on the unplanned rows, keyed result|plan|item so they survive a re-render
@@ -501,7 +513,8 @@
       nxt.parentNode.removeChild(nxt); cell.classList.remove('open'); return;
     }
     var card=cell.closest('.pd-card'), st=card?(card.getAttribute('data-state')||''):'';
-    var month=document.getElementById('pdMonth').value, key=code+'|'+month+'|'+st;
+    var ch=card?(card.getAttribute('data-channel')||''):'';
+    var month=document.getElementById('pdMonth').value, key=code+'|'+month+'|'+st+'|'+ch;
     var row=document.createElement('tr');
     row.className='pd-docs';
     row.innerHTML='<td colspan="17"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
@@ -510,7 +523,8 @@
     var box=row.querySelector('.pd-dwrap');
     if(DOCS[key]){ box.innerHTML=docsTable(DOCS[key]); return; }
     fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)
-          +'&month='+encodeURIComponent(month)+'&state='+encodeURIComponent(st),
+          +'&month='+encodeURIComponent(month)+'&state='+encodeURIComponent(st)
+          +'&channel='+encodeURIComponent(ch),
           {headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
       .then(function(p){ DOCS[key]=p; box.innerHTML=docsTable(p); })
@@ -528,7 +542,8 @@
 
   function cardHtml(o,idx){
     var pl=(o.payload&&o.payload.plans)||[];
-    var st=scopeStateOf(o), D=doneMapFor(st), lbl=st?st:'all-India';
+    var st=scopeStateOf(o), ch=scopeChanOf(o), D=doneMapFor(st,ch);
+    var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
     var a=resultAch(o,D);
     var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
@@ -536,12 +551,16 @@
     // Scoped to a state that billed nothing this month reads identically to a broken join;
     // say which it is rather than leaving a card of dashes.
     var dry=(st && !Object.keys(D).length)
-      ? '<div class="pd-note">Nothing shipped to '+esc(st)+' this month. Switch the scope to All India to see where these items did sell.</div>'
+      ? '<div class="pd-note">Nothing shipped to '+esc(lbl)+' this month. Switch the scope to All India, or clear the channel, to see where these items did sell.</div>'
       : '';
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'" data-state="'+esc(st)+'">'
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
         +(o.state?'<span class="pd-chip state">'+esc(o.state)+(st?'':' · not scoped')+'</span>':'')
+        +'<select class="pd-ch" data-ch="'+o.id+'" title="Channel this plan was made for">'
+          +'<option value="">All channels</option>'
+          +CHANNELS.map(function(c){return '<option value="'+esc(c)+'"'+((o.channel||'')===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')
+        +'</select>'
         +'<span class="pd-chip scope">'+esc(scope)+'</span>'
         +'<span class="pd-chip ach '+(a.plan?chipCls(a.pct):'')+'">'
           +fN(Math.round(a.done))+' / '+fN(Math.round(a.plan))+' L'
@@ -580,9 +599,10 @@
 
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
-      .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{};
+      .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{}; DONE_SC=p.by_state_channel||{};
+                         CHANNELS=p.channels||[];
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
-      .catch(function(){ DONE_ALL={}; DONE_BY={}; });
+      .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; });
   }
   function loadDone(){
     loading=true; render();
@@ -633,6 +653,27 @@
   var now=new Date();
   mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   mEl.addEventListener('change',loadDone);
+  document.getElementById('pdList').addEventListener('click',function(e){
+    if(e.target.closest && e.target.closest('.pd-ch'))e.stopPropagation();   // don't collapse the card
+  },true);
+  document.getElementById('pdList').addEventListener('change',function(e){
+    var sel=e.target.closest?e.target.closest('.pd-ch'):null;
+    if(!sel)return;
+    e.stopPropagation();
+    var id=sel.getAttribute('data-ch'), ch=sel.value;
+    fetch('/realise/api/rate-list/set-channel/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({id:id, channel:ch})})
+      .then(function(r){return r.json().catch(function(){return {status:'error'};});})
+      .then(function(p){
+        if(p.status!=='ok'){ window.alert('Could not set the channel: '+(p.error||'error')); return; }
+        ALL.forEach(function(o){ if(String(o.id)===String(id))o.channel=p.channel; });
+        DOCS={};                                  // drill-downs were scoped to the old channel
+        render();
+      })
+      .catch(function(){ window.alert('Could not set the channel.'); });
+  });
+
   document.getElementById('pdScope').addEventListener('click',function(e){
     var b=e.target.closest?e.target.closest('[data-scope]'):null;
     if(!b || b.getAttribute('data-scope')===SCOPE)return;
