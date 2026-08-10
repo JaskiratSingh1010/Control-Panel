@@ -13,6 +13,10 @@
   .pd-bar select,.pd-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .pd-bar select:focus,.pd-bar input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .pd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+  .pd-seg{display:inline-flex;border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;background:#fff}
+  .pd-seg button{font-family:inherit;font-size:12.5px;font-weight:700;color:var(--rz-muted);background:#fff;border:0;padding:8px 12px;cursor:pointer}
+  .pd-seg button+button{border-left:1px solid #e2e8f0}
+  .pd-seg button.on{background:#eef2ff;color:#4338ca;font-weight:800}
 
   .pd-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
   .pd-card-h{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;border-bottom:1px solid transparent;flex-wrap:wrap}
@@ -162,6 +166,11 @@
     hidden and cancelled documents excluded — same basis as the dashboard's Done.</p>
 
   <div class="pd-bar">
+    <div class="pd-fld"><span class="pd-lbl">Done scope</span>
+      <div class="pd-seg" id="pdScope">
+        <button type="button" data-scope="state" class="on">Result’s state</button>
+        <button type="button" data-scope="all">All India</button>
+      </div></div>
     <div class="pd-fld"><span class="pd-lbl">Month</span><input type="month" id="pdMonth"></div>
     <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
@@ -182,7 +191,18 @@
   function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
   function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
-  var ALL=[], DONE={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+  var ALL=[], DONE_ALL={}, DONE_BY={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+  /* SCOPE decides which Done map a card reads: the state it was planned for, or all-India.
+     A saved result with no state tag can only ever be all-India. Ship-to state, matching the
+     sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
+  var SCOPE='state';
+  function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
+  function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
+  function doneMapFor(st){ return st?(DONE_BY[normState(st)]||{}):DONE_ALL; }
+  function mapForNode(el){
+    var card=el.closest?el.closest('.pd-card'):null;
+    return doneMapFor(card?card.getAttribute('data-state'):'');
+  }
 
   /* Unsaved edits on the unplanned rows, keyed result|plan|item so they survive a re-render
      (state filter, search) and so two plans can plan the same SKU independently. */
@@ -233,11 +253,11 @@
   function chipCls(pct){ return pct>=100?'good':(pct>=75?'mid':'bad'); }
 
   /* Join one saved plan's rows to the month's Done map, keyed by item code. */
-  function joinPlan(p){
+  function joinPlan(p,D){
     var out={rows:[],codes:{},planLtr:0,planRev:0,doneLtr:0,doneRev:0,pcs:0,boxes:0,nocode:0,nosale:0};
     (p.rows||[]).forEach(function(r){
       var code=String(r.code||'').trim().toUpperCase();
-      var d=code?DONE[code]:null;
+      var d=code?D[code]:null;
       var planLtr=num(r.sell), planRev=num(r.revenue);
       var doneLtr=d?num(d.litres):0, doneRev=d?num(d.revenue):0;
       if(!code)out.nocode++; else if(!d)out.nosale++;
@@ -255,11 +275,11 @@
   /* Everything that SOLD this month but is absent from this plan. Without these the tab only
      ever shows the handful of SKUs someone planned, while the company bills far more — so the
      "how much have we actually sold" question stays unanswered. Zero-net items are dropped. */
-  function extrasFor(codes){
+  function extrasFor(codes,D){
     var out={rows:[],doneLtr:0,doneRev:0,pcs:0,boxes:0};
-    Object.keys(DONE).forEach(function(code){
+    Object.keys(D).forEach(function(code){
       if(codes[code])return;
-      var d=DONE[code], lt=num(d.litres), rv=num(d.revenue);
+      var d=D[code], lt=num(d.litres), rv=num(d.revenue);
       if(!Math.round(lt) && !Math.round(rv))return;
       out.rows.push({item:d.item_name||code,code:code,doneLtr:lt,doneRev:rv});
       out.doneLtr+=lt; out.doneRev+=rv; out.pcs+=num(d.pcs); out.boxes+=num(d.boxes);
@@ -317,8 +337,8 @@
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
   }
 
-  function planTable(p,pidx,rid){
-    var j=joinPlan(p);
+  function planTable(p,pidx,rid,D,scopeLbl){
+    var j=joinPlan(p,D);
     var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
     var body=j.rows.map(function(r){
       var pct=r.planLtr?(r.doneLtr/r.planLtr*100):0;
@@ -334,7 +354,7 @@
         +'<td class="'+(r.planLtr?achCls(pct):'mute')+'">'+(r.planLtr?f2(pct)+'%':'—')+'</td>'
         +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
-        +ratePcCell(r.code?DONE[r.code]:null)
+        +ratePcCell(r.code?D[r.code]:null)
         // No sale this month => no revenue to state. A literal 0 reads as a measurement; it isn't.
         +'<td class="'+(r.matched?'pd-rev':'mute')+'">'+(r.matched?fN(Math.round(r.doneRev)):'—')+'</td>'
         +estCells(r.planLtr,r.planRev,r.doneLtr,r.doneRev,r.planRl)+'</tr>';
@@ -348,7 +368,7 @@
     /* Items sold outside this plan: a summary row that is always visible (so the size of what
        the plan misses is never hidden) and the detail rows behind a toggle. Scheme and To-be-sale
        are editable there — typing a volume plans the item, and Save writes it into this result. */
-    var x=extrasFor(j.codes), xid='x'+(++UID), extraHtml='', pend=0;
+    var x=extrasFor(j.codes,D), xid='x'+(++UID), extraHtml='', pend=0;
     if(x.rows.length){
       extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="7">'
         +'<span class="material-icons">expand_more</span>'
@@ -360,7 +380,7 @@
         +'<td class="sep"></td><td></td><td></td><td></td></tr></tbody>'
         +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
         +x.rows.map(function(r){
-            var d=DONE[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
+            var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
             if(sell>0)pend++;
@@ -396,7 +416,7 @@
     return '<div class="pd-plan-h">'+esc(p.name||'Plan')+'</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
       +'<tr class="grp"><th class="l"></th><th class="pl" colspan="6">Plan — as saved</th>'
-      +'<th class="dn sep" colspan="6">Done — '+esc(MONTH_LABEL)+' · all-India</th>'
+      +'<th class="dn sep" colspan="6">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
       +'<th class="es sep" colspan="4">Estimate — left to hit plan</th></tr><tr>'
       +'<th class="l">Item</th><th>Retailer ₹</th><th>Box Ltrs</th><th>Scheme</th>'
       +'<th>To be sale</th><th>Relise ₹/L</th><th>Revenue ₹</th>'
@@ -480,7 +500,8 @@
     if(nxt && nxt.classList.contains('pd-docs')){        // already open -> close
       nxt.parentNode.removeChild(nxt); cell.classList.remove('open'); return;
     }
-    var month=document.getElementById('pdMonth').value, key=code+'|'+month;
+    var card=cell.closest('.pd-card'), st=card?(card.getAttribute('data-state')||''):'';
+    var month=document.getElementById('pdMonth').value, key=code+'|'+month+'|'+st;
     var row=document.createElement('tr');
     row.className='pd-docs';
     row.innerHTML='<td colspan="17"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
@@ -488,7 +509,8 @@
     cell.classList.add('open');
     var box=row.querySelector('.pd-dwrap');
     if(DOCS[key]){ box.innerHTML=docsTable(DOCS[key]); return; }
-    fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)+'&month='+encodeURIComponent(month),
+    fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)
+          +'&month='+encodeURIComponent(month)+'&state='+encodeURIComponent(st),
           {headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
       .then(function(p){ DOCS[key]=p; box.innerHTML=docsTable(p); })
@@ -496,24 +518,30 @@
   }
 
   /* Card-header achievement chip = every plan in the result, pooled. */
-  function resultAch(o){
+  function resultAch(o,D){
     var pl=0,dn=0;
     ((o.payload&&o.payload.plans)||[]).forEach(function(p){
-      var j=joinPlan(p); pl+=j.planLtr; dn+=j.doneLtr;
+      var j=joinPlan(p,D); pl+=j.planLtr; dn+=j.doneLtr;
     });
     return {plan:pl,done:dn,pct:pl?(dn/pl*100):0};
   }
 
   function cardHtml(o,idx){
     var pl=(o.payload&&o.payload.plans)||[];
-    var a=resultAch(o);
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id);}).join('');
+    var st=scopeStateOf(o), D=doneMapFor(st), lbl=st?st:'all-India';
+    var a=resultAch(o,D);
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'">'
+    // Scoped to a state that billed nothing this month reads identically to a broken join;
+    // say which it is rather than leaving a card of dashes.
+    var dry=(st && !Object.keys(D).length)
+      ? '<div class="pd-note">Nothing shipped to '+esc(st)+' this month. Switch the scope to All India to see where these items did sell.</div>'
+      : '';
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'" data-state="'+esc(st)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
-        +(o.state?'<span class="pd-chip state">'+esc(o.state)+'</span>':'')
+        +(o.state?'<span class="pd-chip state">'+esc(o.state)+(st?'':' · not scoped')+'</span>':'')
         +'<span class="pd-chip scope">'+esc(scope)+'</span>'
         +'<span class="pd-chip ach '+(a.plan?chipCls(a.pct):'')+'">'
           +fN(Math.round(a.done))+' / '+fN(Math.round(a.plan))+' L'
@@ -521,7 +549,7 @@
         +'<div class="pd-sp"><span class="pd-meta">saved '+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
         +'<button class="pd-del" title="Delete this saved result" data-del="'+o.id+'">✕</button>'
         +'<span class="material-icons pd-chev">expand_more</span></div>'
-      +'</div><div class="pd-body">'+tables+'</div></div>';
+      +'</div><div class="pd-body">'+dry+tables+'</div></div>';
   }
 
   function render(){
@@ -552,8 +580,9 @@
 
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
-      .then(function(p){ DONE=p.rows||{}; if(p.month)MONTH_LABEL=monthLabel(p.month); })
-      .catch(function(){ DONE={}; });
+      .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{};
+                         if(p.month)MONTH_LABEL=monthLabel(p.month); })
+      .catch(function(){ DONE_ALL={}; DONE_BY={}; });
   }
   function loadDone(){
     loading=true; render();
@@ -564,12 +593,12 @@
      block, totals and the header chip all come back from the server — never from local state. */
   function saveAdditions(bar){
     var parts=bar.getAttribute('data-save').split('|'), rid=parts[0], pidx=parts[1];
-    var pfx=rid+'|'+pidx+'|', rows=[];
+    var pfx=rid+'|'+pidx+'|', rows=[], D=mapForNode(bar);
     Object.keys(PENDING).forEach(function(k){
       if(k.indexOf(pfx)!==0)return;
       var code=k.split('|')[2], e=PENDING[k], sell=num(e.sell);
       if(sell<=0)return;
-      var d=DONE[code]||{}, lt=num(d.litres), rv=num(d.revenue);
+      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue);
       // `realise` is only the price-less fallback; when a retailer price is sent the server
       // recomputes from the plan's own SS/DM/GST/disc rather than trusting this number.
       rows.push({code:code, item:d.item_name||code, retailer:num(e.retailer),
@@ -604,6 +633,16 @@
   var now=new Date();
   mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   mEl.addEventListener('change',loadDone);
+  document.getElementById('pdScope').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('[data-scope]'):null;
+    if(!b || b.getAttribute('data-scope')===SCOPE)return;
+    SCOPE=b.getAttribute('data-scope');
+    Array.prototype.forEach.call(this.querySelectorAll('[data-scope]'),function(x){
+      x.classList.toggle('on',x.getAttribute('data-scope')===SCOPE);
+    });
+    DOCS={};                                 // drill-downs are scope-specific too
+    render();
+  });
   document.getElementById('pdState').addEventListener('change',function(){stateF=this.value;render();});
   var sd=debounce(render,120);
   document.getElementById('pdSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});
@@ -620,7 +659,7 @@
     if(!String(e0.sell||'').trim() && !String(e0.scheme||'').trim() && !String(e0.retailer||'').trim())
       delete PENDING[k];
 
-    var d=DONE[code]||{}, doneLtr=num(d.litres), doneRev=num(d.revenue);
+    var d=mapForNode(tr)[code]||{}, doneLtr=num(d.litres), doneRev=num(d.revenue);
     var actRl=doneLtr?(doneRev/doneLtr):0, sell=num(e0.sell);
     var A=ASSUME[parts[0]+'|'+parts[1]]||{ss:0,dm:0,gst:5,disc:0};
     var rl=addedRealise(num(e0.retailer),num(d.pcsbox),num(d.boxltr),num(e0.scheme),actRl,A);

@@ -1718,8 +1718,10 @@ def api_done_item_documents(request):
     if not code:
         return JsonResponse({'status': 'error', 'error': 'code is required'}, status=400)
     start, end, month = _month_bounds(request.GET.get('month'))
-    payload = services.get_done_item_documents(code, start, end)
+    state = (request.GET.get('state') or '').strip()      # blank = all-India
+    payload = services.get_done_item_documents(code, start, end, state=state)
     payload['month'] = month
+    payload['state'] = state
     return JsonResponse(payload)
 
 

@@ -3983,25 +3983,69 @@ _DONE_ITEM_SQL = '''
            COALESCE(TRIM(I."ItemName"), '')    AS "ITEM",
            COALESCE(I."SalFactor2", 0)         AS "PCSBOX",
            COALESCE(I."SalPackUn", 0)          AS "LTRPP",
+           COALESCE(TRIM(H."CardCode"), '')    AS "CCODE",
+           ''' + _SHIPTO_STATE + '''           AS "ST",
            SUM({litexpr})                      AS "LIT",
            SUM({sign} * L."Quantity")          AS "PCS",
            SUM({sign} * L."LineTotal")         AS "REV"
     FROM "{S}"."{hdr}" H
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    LEFT JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+    ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
       AND I."ItemCode" LIKE 'FG%'
-    GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn"
+    GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn",
+             H."CardCode", ''' + _SHIPTO_STATE + '''
 '''
 
 
+def norm_state(name):
+    """Fold a state name to one spelling so a saved Rate List's 'Jammu & Kashmir' matches
+    STATE_CODE_NAMES' 'JAMMU AND KASHMIR'."""
+    s = str(name or '').upper().replace('&', ' AND ')
+    return ' '.join(s.split())
+
+
+def _done_accum(bucket, code, r):
+    cell = bucket.get(code)
+    if cell is None:
+        # pcsbox / ltr_per_pc come off the item master, so they are per-item constants,
+        # not sums: SalFactor2 = pieces per box, SalPackUn = litres per piece.
+        cell = bucket[code] = {'item_name': (r.get('ITEM') or code).strip().upper(),
+                               'pcsbox': float(r.get('PCSBOX') or 0),
+                               'ltr_per_pc': float(r.get('LTRPP') or 0),
+                               'litres': 0.0, 'pcs': 0.0, 'revenue': 0.0}
+    cell['litres']  += float(r.get('LIT') or 0)
+    cell['pcs']     += float(r.get('PCS') or 0)
+    cell['revenue'] += float(r.get('REV') or 0)
+
+
+def _done_finalize(bucket):
+    for cell in bucket.values():
+        pcs, rev, lit = cell['pcs'], cell['revenue'], cell['litres']
+        boxes = (pcs / cell['pcsbox']) if cell['pcsbox'] else 0.0
+        cell['litres']    = round(lit, 2)
+        cell['pcs']       = round(pcs, 2)               # INV1.Quantity — PIECES, not cartons
+        cell['boxes']     = round(boxes, 2)
+        cell['revenue']   = round(rev, 2)
+        cell['realise_l'] = round(rev / lit, 2) if lit else 0.0
+        cell['rate_pc']   = round(rev / pcs, 2) if pcs else 0.0
+        cell['rate_box']  = round(rev / boxes, 2) if boxes else 0.0
+        # Litres per box — what the calculator grid calls "Box Ltrs".
+        cell['boxltr']    = round(cell['ltr_per_pc'] * cell['pcsbox'], 2)
+    return bucket
+
+
 def get_done_by_item(start_date, end_date):
-    """All-India Done sales per item for [start_date, end_date], net of returns. Returns
-    {status, rows, start, end} where rows is {ITEM_CODE: {item_name, litres, pcs, revenue,
-    realise_l}} — keyed by code so the Plan vs Done page can join it to a saved Rate List
-    row's `code`. Hidden (U_ARNO 'T'/'H') and cancelled documents excluded, matching the
-    dashboard's Done. Cached _DONE_ITEM_TTL seconds; {} rows on any SAP error."""
+    """Done sales per item for [start_date, end_date], net of returns. Returns {status, rows,
+    by_state, states, start, end}: `rows` is the all-India map {ITEM_CODE: {...}} and
+    `by_state` the same shape per SHIP-TO state, so the Plan vs Done page can scope a saved
+    Rate List to the state it was planned for without a second round trip. State is the
+    ship-to address state (CRD1), not the customer's billing state, and carries the Delhi-GT
+    remap — the same attribution the sales dashboard uses, so the two agree. Hidden
+    (U_ARNO 'T'/'H') and cancelled documents excluded. Cached _DONE_ITEM_TTL seconds."""
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not sd or not ed:
         return {'status': 'error', 'rows': {}, 'error': 'start_date and end_date required',
@@ -4028,37 +4072,23 @@ def get_done_by_item(start_date, end_date):
         return {'status': 'error', 'rows': {}, 'error': 'Could not read sales from SAP.',
                 'start': sd.isoformat(), 'end': ed.isoformat()}
 
-    agg = {}
+    agg, by_state = {}, {}
     for r in raw or []:
         code = (r.get('ICODE') or '').strip().upper()
         if not code:
             continue
-        cell = agg.get(code)
-        if cell is None:
-            # pcsbox / ltr_per_pc come off the item master, so they are per-item constants,
-            # not sums: SalFactor2 = pieces per box, SalPackUn = litres per piece.
-            cell = agg[code] = {'item_name': (r.get('ITEM') or code).strip().upper(),
-                                'pcsbox': float(r.get('PCSBOX') or 0),
-                                'ltr_per_pc': float(r.get('LTRPP') or 0),
-                                'litres': 0.0, 'pcs': 0.0, 'revenue': 0.0}
-        cell['litres']  += float(r.get('LIT') or 0)
-        cell['pcs']     += float(r.get('PCS') or 0)
-        cell['revenue'] += float(r.get('REV') or 0)
+        st_raw = (r.get('ST') or '').strip()
+        state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
+        _done_accum(agg, code, r)
+        if state:
+            _done_accum(by_state.setdefault(norm_state(state), {}), code, r)
 
-    for cell in agg.values():
-        pcs, rev, lit = cell['pcs'], cell['revenue'], cell['litres']
-        boxes = (pcs / cell['pcsbox']) if cell['pcsbox'] else 0.0
-        cell['litres']    = round(lit, 2)
-        cell['pcs']       = round(pcs, 2)               # INV1.Quantity — PIECES, not cartons
-        cell['boxes']     = round(boxes, 2)
-        cell['revenue']   = round(rev, 2)
-        cell['realise_l'] = round(rev / lit, 2) if lit else 0.0
-        cell['rate_pc']   = round(rev / pcs, 2) if pcs else 0.0
-        cell['rate_box']  = round(rev / boxes, 2) if boxes else 0.0
-        # Litres per box — what the calculator grid calls "Box Ltrs".
-        cell['boxltr']    = round(cell['ltr_per_pc'] * cell['pcsbox'], 2)
+    _done_finalize(agg)
+    for bucket in by_state.values():
+        _done_finalize(bucket)
 
     payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
+               'by_state': by_state, 'states': sorted(by_state),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
         _done_item_cache[key] = (now + _DONE_ITEM_TTL, payload)
@@ -4074,6 +4104,7 @@ _DONE_DOCS_SQL = '''
            COALESCE(TRIM(H."CardCode"), '')                      AS "CCODE",
            COALESCE(TRIM(C."CardName"), '')                      AS "CUST",
            COALESCE(TRIM(C."U_Main_Group"), '')                  AS "GRP",
+           ''' + _SHIPTO_STATE + '''                             AS "ST",
            '{kind}'                                              AS "KIND",
            SUM({litexpr})                                        AS "LIT",
            SUM({sign} * L."Quantity")                            AS "QTY",
@@ -4082,26 +4113,29 @@ _DONE_DOCS_SQL = '''
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
     LEFT JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+    ''' + _SHIPTO_JOIN + '''
     WHERE L."ItemCode" = ? AND H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
-    GROUP BY H."DocNum", H."DocDate", H."CardCode", C."CardName", C."U_Main_Group"
+    GROUP BY H."DocNum", H."DocDate", H."CardCode", C."CardName", C."U_Main_Group",
+             ''' + _SHIPTO_STATE + '''
 '''
 
 
-def get_done_item_documents(item_code, start_date, end_date):
+def get_done_item_documents(item_code, start_date, end_date, state=None):
     """Who bought one item in a month: the invoices (and credit notes) behind its Done figure,
-    with party, document, litres, pieces and value. Same filters and litre formula as
-    get_done_by_item, so the rows sum exactly to that item's Done row. Returns
-    {status, code, rows, totals}; rows carry kind 'INV' or 'CN' (returns, negative). Cached
-    _DONE_DOCS_TTL seconds per (item, range)."""
+    with party, ship-to state, document, litres, pieces and value. Same filters and litre
+    formula as get_done_by_item, so the rows sum exactly to that item's Done row — and with
+    `state` set, to that state's row. Returns {status, code, rows, totals}; rows carry kind
+    'INV' or 'CN' (returns, negative). Cached _DONE_DOCS_TTL seconds per (item, range, state)."""
     code = str(item_code or '').strip().upper()
+    want_state = norm_state(state) if state else ''
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not code or not sd or not ed:
         return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
                 'error': 'item code and dates required'}
     if ed < sd:
         sd, ed = ed, sd
-    key = (code, sd.isoformat(), ed.isoformat())
+    key = (code, sd.isoformat(), ed.isoformat(), want_state)
     now = time.time()
     hit = _done_docs_cache.get(key)
     if hit and hit[0] > now:
@@ -4126,11 +4160,16 @@ def get_done_item_documents(item_code, start_date, end_date):
         lit, qty, val = (float(r.get(k) or 0) for k in ('LIT', 'QTY', 'VAL'))
         if not (round(lit, 2) or round(qty, 2) or round(val, 2)):
             continue
+        st_raw = (r.get('ST') or '').strip()
+        row_state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
+        if want_state and norm_state(row_state) != want_state:
+            continue
         rows.append({
             'doc_num': r.get('DOCNUM'), 'doc_date': r.get('DOCDATE'),
             'card_code': (r.get('CCODE') or '').strip(),
             'customer': (r.get('CUST') or '').strip().upper() or (r.get('CCODE') or ''),
             'channel': (r.get('GRP') or '').strip().upper(),
+            'state': row_state,
             'kind': r.get('KIND'), 'litres': round(lit, 2), 'qty': round(qty, 2),
             'revenue': round(val, 2), 'realise_l': round(val / lit, 2) if lit else 0.0,
         })
