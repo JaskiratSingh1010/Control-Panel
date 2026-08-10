@@ -3,11 +3,11 @@
 
 {% block extra_styles %}
 <style>
-  .cp-main{background:var(--rz-bg) !important}
-  .pd-wrap{max-width:1600px;margin:0 auto}
-  .pd-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
-  .pd-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
-  .pd-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:16px 0;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .cp-main{background:var(--rz-bg) !important;padding:10px 16px !important}
+  .pd-wrap{max-width:1600px;margin:0}
+  .pd-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px;
+    text-shadow:0 0 26px rgba(99,102,241,.55), 0 4px 14px rgba(79,70,229,.28)}   /* glowing title */
+  .pd-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:10px 0 14px;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
   .pd-fld{display:flex;flex-direction:column;gap:5px}
   .pd-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   .pd-bar select,.pd-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
@@ -187,10 +187,6 @@
 {% block content %}
 <div class="pd-wrap">
   <h1 class="pd-h1">Plan vs Done</h1>
-  <p class="pd-psub">Every saved Rate List result against the month's actual sales. Done is scoped to the
-    <strong>state and channel the result was saved for</strong> — by ship-to address, the same attribution the
-    Sales dashboard uses — or switch the scope to all-India. Net of returns; hidden and cancelled documents
-    excluded.</p>
 
   <div class="pd-bar">
     <div class="pd-fld"><span class="pd-lbl">Done scope</span>
