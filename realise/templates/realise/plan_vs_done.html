@@ -652,26 +652,24 @@
   function docsTable(p){
     if(p.status!=='ok')return '<div class="pd-dmsg">'+esc(p.error||'Could not load invoices.')+'</div>';
     if(!p.rows.length)return '<div class="pd-dmsg">No invoices for this item in '+esc(MONTH_LABEL)+'.</div>';
+    if(!DRILL.length)return '<div class="pd-dmsg">Pick a Drill By dimension to break this item down.</div>';
     var rows=p.rows.filter(function(r){ return personOk(normState(r.state),r.channel); });
     if(!rows.length)return '<div class="pd-dmsg">No invoices for the selected person(s) in '+esc(MONTH_LABEL)+'.</div>';
     // Totals come from the rows on screen, not the payload, so a filter can never leave a
     // footer that disagrees with what is above it.
     var t={qty:0,litres:0,revenue:0};
     rows.forEach(function(r){ t.qty+=num(r.qty); t.litres+=num(r.litres); t.revenue+=num(r.revenue); });
-    var cols=activeCols(), grouped=groupRows(rows,cols), span=Math.max(cols.length,1);
+    var cols=activeCols(), grouped=groupRows(rows,cols), span=cols.length;
     return '<table class="pd-dtbl"><thead><tr>'
-      +(cols.length?cols.map(function(c){return '<th class="l">'+esc(c.h)+'</th>';}).join('')
-                   :'<th class="l">All documents</th>')
+      +cols.map(function(c){return '<th class="l">'+esc(c.h)+'</th>';}).join('')
       +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
-      // No dimensions selected: the footer already IS the single total, so emit no body row
-      // rather than printing the same numbers twice.
-      +(cols.length?grouped.map(function(g){
+      +grouped.map(function(g){
           return '<tr'+(g.cn?' class="cn"':'')+'>'
             +g.vals.map(function(v){return '<td class="l">'+esc(v)+'</td>';}).join('')
             +'<td>'+fN(Math.round(g.qty))+'</td><td>'+fN(Math.round(g.litres))+'</td>'
             +'<td>'+fN(Math.round(g.revenue))+'</td>'
             +'<td>'+(g.litres?f2(g.revenue/g.litres):'<span class="mute">—</span>')+'</td></tr>';
-        }).join(''):'')
+        }).join('')
       +'</tbody><tfoot><tr><td class="l" colspan="'+span+'">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
       +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
       +'<td>'+fN(Math.round(t.revenue))+'</td>'
@@ -872,14 +870,17 @@
   document.getElementById('pdPersList').addEventListener('click',function(e){
     var it=e.target.closest?e.target.closest('.com-dp-item'):null;
     if(!it)return;
+    e.stopPropagation();          // this row is about to be replaced; keep the panel open
     var n=it.getAttribute('data-p'), i=persPick.indexOf(n);
     if(i>=0)persPick.splice(i,1); else persPick.push(n);
     renderPersList();
   });
-  document.getElementById('pdPersAll').addEventListener('click',function(){
+  document.getElementById('pdPersAll').addEventListener('click',function(e){
+    e.stopPropagation();
     persPick=PERSONS.slice(); renderPersList();
   });
-  document.getElementById('pdPersClr').addEventListener('click',function(){
+  document.getElementById('pdPersClr').addEventListener('click',function(e){
+    e.stopPropagation();
     persPick=[]; renderPersList();
   });
   document.getElementById('pdPersApply').addEventListener('click',function(){
@@ -896,14 +897,17 @@
   document.getElementById('pdDrillList').addEventListener('click',function(e){
     var it=e.target.closest?e.target.closest('.com-dp-item'):null;
     if(!it)return;
+    e.stopPropagation();          // this row is about to be replaced; keep the panel open
     var k=it.getAttribute('data-k'), i=drillPick.indexOf(k);
     if(i>=0)drillPick.splice(i,1); else drillPick.push(k);   // click order = nesting order
     renderDrillList();
   });
-  document.getElementById('pdDrillAll').addEventListener('click',function(){
+  document.getElementById('pdDrillAll').addEventListener('click',function(e){
+    e.stopPropagation();
     drillPick=PD_DIMS.map(function(d){return d.key;}); renderDrillList();
   });
-  document.getElementById('pdDrillClr').addEventListener('click',function(){
+  document.getElementById('pdDrillClr').addEventListener('click',function(e){
+    e.stopPropagation();
     drillPick=[]; renderDrillList();
   });
   document.getElementById('pdDrillApply').addEventListener('click',function(){
