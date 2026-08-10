@@ -1728,28 +1728,6 @@ def api_done_item_documents(request):
     return JsonResponse(payload)
 
 
-@any_permission_flag('can_realise_calculator', json_response=True)
-@require_http_methods(['POST'])
-def api_rate_list_set_channel(request):
-    """Tag a saved result with the channel it was planned for. Body: {id, channel}. Results
-    saved before the calculator offered a channel have none, so Plan vs Done lets one be set
-    in place rather than guessing it from the result's name. '' clears the tag."""
-    from .models import RateList
-    body = _parse_body(request)
-    try:
-        obj = RateList.objects.filter(id=int(body.get('id'))).first()
-    except (TypeError, ValueError):
-        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
-    if obj is None:
-        return JsonResponse({'status': 'error', 'error': 'Saved result not found.'}, status=404)
-    channel = (body.get('channel') or '').strip().upper()[:20]
-    if channel and channel not in services.CHANNEL_MEMBERS:
-        return JsonResponse({'status': 'error', 'error': 'Unknown channel.'}, status=400)
-    obj.channel = channel
-    obj.save(update_fields=['channel'])
-    return JsonResponse({'status': 'ok', 'channel': obj.channel})
-
-
 @permission_flag_required('can_customer_master')
 def customer_master(request):
     """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /
