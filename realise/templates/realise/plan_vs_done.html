@@ -648,34 +648,32 @@
     return root;
   }
 
-  /* One document = one row, party and invoice side by side in their own columns — the layout
-     this drill-down had before grouping existed. */
-  function docRow(r,depth){
+  /* A document row shows the document and nothing else. Party, Channel, State and Person are
+     attributes you ask for through Drill By — printing a Party column when Customer is not
+     ticked shows a breakdown nobody selected. With no dimensions at all this is a plain list
+     of invoices; tick Customer and the party arrives as the group above them. */
+  function docRow(r,depth,lead){
     return '<tr'+(r.kind==='CN'?' class="cn"':'')+' data-depth="'+depth+'">'
-      +'<td class="l" style="padding-left:'+(10+depth*18)+'px">'
-        // Grouped by Customer already? Then the group row states the party; repeating it on
-        // every document underneath is the noise this drill-down had before.
-        +(DRILL.indexOf('customer')>=0 ? '' : esc(r.customer))
-        +'<span class="pd-code">'+esc(r.card_code)+'</span></td>'
-      +'<td class="l">'+esc(r.channel||'—')+'</td>'
-      +'<td class="l">'+esc(r.doc_num)+(r.kind==='CN'?' <span class="pd-cn">CN</span>':'')+'</td>'
+      +(lead?'<td class="l"></td>':'')
+      +'<td class="l" style="padding-left:'+(10+depth*18)+'px">'+esc(r.doc_num)
+        +(r.kind==='CN'?' <span class="pd-cn">CN</span>':'')+'</td>'
       +'<td class="l">'+esc(r.doc_date)+'</td>'
       +'<td>'+fN(Math.round(num(r.qty)))+'</td><td>'+fN(Math.round(num(r.litres)))+'</td>'
       +'<td>'+fN(Math.round(num(r.revenue)))+'</td><td>'+f2(r.realise_l)+'</td></tr>';
   }
 
-  function treeRows(node,depth,out){
+  function treeRows(node,depth,out,lead){
     node.order.forEach(function(k){
       var n=node.children[k];
       out.push('<tr class="grp" data-depth="'+depth+'">'
-        +'<td class="l" colspan="4" style="padding-left:'+(10+depth*18)+'px">'
+        +'<td class="l" colspan="'+(lead+2)+'" style="padding-left:'+(10+depth*18)+'px">'
           +'<span class="pd-gcar">▾</span>'+esc(n.label)+'</td>'
         +'<td>'+fN(Math.round(n.qty))+'</td><td>'+fN(Math.round(n.litres))+'</td>'
         +'<td>'+fN(Math.round(n.revenue))+'</td>'
         +'<td>'+(n.litres?f2(n.revenue/n.litres):'<span class="mute">—</span>')+'</td></tr>');
-      treeRows(n,depth+1,out);
+      treeRows(n,depth+1,out,lead);
     });
-    node.docs.forEach(function(r){ out.push(docRow(r,depth)); });
+    node.docs.forEach(function(r){ out.push(docRow(r,depth,lead)); });
     return out;
   }
 
@@ -689,11 +687,13 @@
     var t={qty:0,litres:0,revenue:0};
     rows.forEach(function(r){t.qty+=num(r.qty);t.litres+=num(r.litres);t.revenue+=num(r.revenue);});
     t.realise_l=t.litres?t.revenue/t.litres:0;
+    var lead=DRILL.length?1:0;
     return '<table class="pd-dtbl"><thead><tr>'
-      +'<th class="l">Party</th><th class="l">Channel</th><th class="l">Doc No</th><th class="l">Date</th>'
+      +(lead?'<th class="l">'+esc(DRILL.map(labelOf).join(' › '))+'</th>':'')
+      +'<th class="l">Doc No</th><th class="l">Date</th>'
       +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
-      +treeRows(buildTree(rows,DRILL),0,[]).join('')
-      +'</tbody><tfoot><tr><td class="l" colspan="4">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
+      +treeRows(buildTree(rows,DRILL),0,[],lead).join('')
+      +'</tbody><tfoot><tr><td class="l" colspan="'+(lead+2)+'">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
       +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
       +'<td>'+fN(Math.round(t.revenue))+'</td><td>'+f2(t.realise_l)+'</td></tr></tfoot></table>';
   }
