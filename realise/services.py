@@ -4065,6 +4065,87 @@ def get_done_by_item(start_date, end_date):
     return payload
 
 
+_done_docs_cache = {}
+_DONE_DOCS_TTL = 90               # seconds
+
+_DONE_DOCS_SQL = '''
+    SELECT H."DocNum"                                            AS "DOCNUM",
+           TO_VARCHAR(CAST(H."DocDate" AS DATE), 'YYYY-MM-DD')   AS "DOCDATE",
+           COALESCE(TRIM(H."CardCode"), '')                      AS "CCODE",
+           COALESCE(TRIM(C."CardName"), '')                      AS "CUST",
+           COALESCE(TRIM(C."U_Main_Group"), '')                  AS "GRP",
+           '{kind}'                                              AS "KIND",
+           SUM({litexpr})                                        AS "LIT",
+           SUM({sign} * L."Quantity")                            AS "QTY",
+           SUM({sign} * L."LineTotal")                           AS "VAL"
+    FROM "{S}"."{hdr}" H
+    JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
+    JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    LEFT JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
+    WHERE L."ItemCode" = ? AND H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
+      AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+    GROUP BY H."DocNum", H."DocDate", H."CardCode", C."CardName", C."U_Main_Group"
+'''
+
+
+def get_done_item_documents(item_code, start_date, end_date):
+    """Who bought one item in a month: the invoices (and credit notes) behind its Done figure,
+    with party, document, litres, pieces and value. Same filters and litre formula as
+    get_done_by_item, so the rows sum exactly to that item's Done row. Returns
+    {status, code, rows, totals}; rows carry kind 'INV' or 'CN' (returns, negative). Cached
+    _DONE_DOCS_TTL seconds per (item, range)."""
+    code = str(item_code or '').strip().upper()
+    sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
+    if not code or not sd or not ed:
+        return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
+                'error': 'item code and dates required'}
+    if ed < sd:
+        sd, ed = ed, sd
+    key = (code, sd.isoformat(), ed.isoformat())
+    now = time.time()
+    hit = _done_docs_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    S = SAP_SCHEMA
+    next_day = ed + timedelta(days=1)
+    inv = _DONE_DOCS_SQL.format(S=S, hdr='OINV', ln='INV1', sign='1', kind='INV',
+                                litexpr=_done_sales_litexpr(S))
+    ret = _DONE_DOCS_SQL.format(S=S, hdr='ORIN', ln='RIN1', sign='-1', kind='CN',
+                                litexpr=_DONE_RETURN_LITEXPR)
+    try:
+        raw = sap_connector.execute_query(inv, (code, sd, next_day))
+        raw += sap_connector.execute_query(ret, (code, sd, next_day))
+    except Exception as exc:
+        logger.error('[DONE-DOCS] fetch failed for %s: %s', code, exc)
+        return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
+                'error': 'Could not read invoices from SAP.'}
+
+    rows, t_lit, t_qty, t_val = [], 0.0, 0.0, 0.0
+    for r in raw or []:
+        lit, qty, val = (float(r.get(k) or 0) for k in ('LIT', 'QTY', 'VAL'))
+        if not (round(lit, 2) or round(qty, 2) or round(val, 2)):
+            continue
+        rows.append({
+            'doc_num': r.get('DOCNUM'), 'doc_date': r.get('DOCDATE'),
+            'card_code': (r.get('CCODE') or '').strip(),
+            'customer': (r.get('CUST') or '').strip().upper() or (r.get('CCODE') or ''),
+            'channel': (r.get('GRP') or '').strip().upper(),
+            'kind': r.get('KIND'), 'litres': round(lit, 2), 'qty': round(qty, 2),
+            'revenue': round(val, 2), 'realise_l': round(val / lit, 2) if lit else 0.0,
+        })
+        t_lit += lit; t_qty += qty; t_val += val
+
+    rows.sort(key=lambda x: x['revenue'], reverse=True)
+    payload = {'status': 'ok', 'code': code, 'rows': rows, 'count': len(rows),
+               'totals': {'litres': round(t_lit, 2), 'qty': round(t_qty, 2),
+                          'revenue': round(t_val, 2),
+                          'realise_l': round(t_val / t_lit, 2) if t_lit else 0.0},
+               'start': sd.isoformat(), 'end': ed.isoformat()}
+    _done_docs_cache[key] = (now + _DONE_DOCS_TTL, payload)
+    return payload
+
+
 _realise_calc_items_cache = {}     # {'t': expiry, 'v': items}
 _REALISE_CALC_ITEMS_TTL = 600      # seconds — the item master barely changes
 

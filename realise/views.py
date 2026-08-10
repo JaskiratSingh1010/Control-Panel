@@ -1710,6 +1710,19 @@ def api_done_by_item(request):
     return JsonResponse(payload)
 
 
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['GET'])
+def api_done_item_documents(request):
+    """Party + invoice drill-down for one item: ?code=FG0000030&month=YYYY-MM."""
+    code = (request.GET.get('code') or '').strip()
+    if not code:
+        return JsonResponse({'status': 'error', 'error': 'code is required'}, status=400)
+    start, end, month = _month_bounds(request.GET.get('month'))
+    payload = services.get_done_item_documents(code, start, end)
+    payload['month'] = month
+    return JsonResponse(payload)
+
+
 @permission_flag_required('can_customer_master')
 def customer_master(request):
     """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /

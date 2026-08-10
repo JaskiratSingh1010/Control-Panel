@@ -100,6 +100,27 @@
   table.pd-tbl td.pd-in input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   table.pd-tbl td.pd-in input::placeholder{font-weight:600;color:#cbd5e1}
 
+  /* Item = drill-down handle */
+  table.pd-tbl td.pd-item{cursor:pointer}
+  table.pd-tbl td.pd-item:hover{color:var(--rz-indigo)}
+  table.pd-tbl td.pd-item .pd-ichev{font-size:16px;color:#94a3b8;vertical-align:-3px;margin-right:2px;display:inline-block;transition:transform .18s}
+  table.pd-tbl td.pd-item.open .pd-ichev{transform:rotate(90deg);color:var(--rz-indigo)}
+
+  /* Nested party/invoice table. Its cell spans the row, so it is never pinned left. */
+  table.pd-tbl tr.pd-docs>td{padding:0;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+  .pd-dwrap{padding:12px 16px;max-width:1100px}
+  .pd-dmsg{font-size:12.5px;font-weight:600;color:var(--rz-muted);padding:6px 2px}
+  table.pd-dtbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+  table.pd-dtbl th{background:#eef2f6;color:#475569;text-align:right;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:7px 10px;white-space:nowrap}
+  table.pd-dtbl th.l{text-align:left}
+  table.pd-dtbl td{padding:6px 10px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;border-top:1px solid #f1f5f9;color:var(--rz-body)}
+  table.pd-dtbl td.l{text-align:left}
+  table.pd-dtbl tbody tr:nth-child(even) td{background:#fafcff}
+  table.pd-dtbl tbody tr.cn td{color:#be123c}
+  .pd-cn{font-size:9px;font-weight:800;background:#ffe4e6;color:#be123c;border-radius:4px;padding:1px 4px;letter-spacing:.3px}
+  table.pd-dtbl tfoot td{background:#f8fafc;font-weight:900;border-top:2px solid #e2e8f0;padding:8px 10px;text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-dtbl tfoot td.l{text-align:left;text-transform:uppercase;font-size:10.5px;color:var(--rz-muted)}
+
   .pd-save{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:10px}
   .pd-save-n{font-size:12px;font-weight:700;color:var(--rz-muted)}
   .pd-save-b{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:9px;
@@ -240,6 +261,15 @@
 
   /* Rate ₹/Pc sits in the DONE block, next to the other achieved rates (₹/L, Diff ₹/L) — it is
      a realisation figure, not a quantity. */
+  /* Item cell doubles as the drill-down handle — click it for the parties and invoices behind
+     that item's Done figure. Rows without a code cannot be looked up, so they stay plain. */
+  function itemCell(item,code){
+    if(!code)return '<td class="l">'+esc(item)+'</td>';
+    return '<td class="l pd-item" data-code="'+esc(code)+'">'
+      +'<span class="material-icons pd-ichev">chevron_right</span>'
+      +esc(item)+'<span class="pd-code">'+esc(code)+'</span></td>';
+  }
+
   function ratePcCell(d){
     return d ? '<td>'+f2(d.rate_pc)+'</td>' : '<td class="mute">—</td>';
   }
@@ -286,7 +316,7 @@
       var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
       var diff=actRl&&r.planRl?(actRl-r.planRl):0;
       return '<tr>'
-        +'<td class="l">'+esc(r.item)+(r.code?'<span class="pd-code">'+esc(r.code)+'</span>':'')+'</td>'
+        +itemCell(r.item,r.code)
         +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td>'
         +'<td>'+fN(Math.round(r.planLtr))+'</td>'
         +'<td class="pd-rl">'+f2(r.planRl)+'</td>'
@@ -328,7 +358,7 @@
             var rl=addedRealise(ret,num(d&&d.pcsbox),num(d&&d.boxltr),sch,actRl,A);
             var rev=rl*sell, bal=sell-r.doneLtr, ap=sell?(r.doneLtr/sell*100):0;
             return '<tr class="x" data-k="'+esc(k)+'">'
-              +'<td class="l">'+esc(r.item)+'<span class="pd-code">'+esc(r.code)+'</span></td>'
+              +itemCell(r.item,r.code)
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="retailer" value="'+esc(e.retailer==null?'':e.retailer)+'" placeholder="retailer"></td>'
               +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
@@ -410,6 +440,52 @@
       +(notes.length?'<div class="pd-note">'+esc(notes.join(' '))+'</div>':'');
   }
 
+  /* ── Item drill-down: the parties and invoices behind one item's Done figure ── */
+  var DOCS={};        // 'code|month' -> payload, so reopening a row costs nothing
+
+  function docsTable(p){
+    if(p.status!=='ok')return '<div class="pd-dmsg">'+esc(p.error||'Could not load invoices.')+'</div>';
+    if(!p.rows.length)return '<div class="pd-dmsg">No invoices for this item in '+esc(MONTH_LABEL)+'.</div>';
+    var t=p.totals;
+    return '<table class="pd-dtbl"><thead><tr>'
+      +'<th class="l">Party</th><th class="l">Channel</th><th class="l">Doc No</th><th class="l">Date</th>'
+      +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
+      +p.rows.map(function(r){
+          return '<tr'+(r.kind==='CN'?' class="cn"':'')+'>'
+            +'<td class="l">'+esc(r.customer)+'<span class="pd-code">'+esc(r.card_code)+'</span></td>'
+            +'<td class="l">'+esc(r.channel||'—')+'</td>'
+            +'<td class="l">'+esc(r.doc_num)+(r.kind==='CN'?' <span class="pd-cn">CN</span>':'')+'</td>'
+            +'<td class="l">'+esc(r.doc_date)+'</td>'
+            +'<td>'+fN(Math.round(r.qty))+'</td><td>'+fN(Math.round(r.litres))+'</td>'
+            +'<td>'+fN(Math.round(r.revenue))+'</td><td>'+f2(r.realise_l)+'</td></tr>';
+        }).join('')
+      +'</tbody><tfoot><tr><td class="l">'+p.rows.length+' document'+(p.rows.length===1?'':'s')+'</td>'
+      +'<td></td><td></td><td></td>'
+      +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
+      +'<td>'+fN(Math.round(t.revenue))+'</td><td>'+f2(t.realise_l)+'</td></tr></tfoot></table>';
+  }
+
+  function toggleDocs(cell){
+    var tr=cell.closest('tr'), code=cell.getAttribute('data-code');
+    var nxt=tr.nextElementSibling;
+    if(nxt && nxt.classList.contains('pd-docs')){        // already open -> close
+      nxt.parentNode.removeChild(nxt); cell.classList.remove('open'); return;
+    }
+    var month=document.getElementById('pdMonth').value, key=code+'|'+month;
+    var row=document.createElement('tr');
+    row.className='pd-docs';
+    row.innerHTML='<td colspan="17"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
+    tr.parentNode.insertBefore(row,tr.nextSibling);
+    cell.classList.add('open');
+    var box=row.querySelector('.pd-dwrap');
+    if(DOCS[key]){ box.innerHTML=docsTable(DOCS[key]); return; }
+    fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)+'&month='+encodeURIComponent(month),
+          {headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
+      .then(function(p){ DOCS[key]=p; box.innerHTML=docsTable(p); })
+      .catch(function(){ box.innerHTML='<div class="pd-dmsg">Could not load invoices.</div>'; });
+  }
+
   /* Card-header achievement chip = every plan in the result, pooled. */
   function resultAch(o){
     var pl=0,dn=0;
@@ -463,6 +539,8 @@
   function fetchDone(){
     var m=document.getElementById('pdMonth').value;
     MONTH_LABEL=monthLabel(m);
+    DOCS={};                                   // drill-downs are month-scoped
+
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
       .then(function(p){ DONE=p.rows||{}; if(p.month)MONTH_LABEL=monthLabel(p.month); })
@@ -574,6 +652,8 @@
   });
 
   document.getElementById('pdList').addEventListener('click',function(e){
+    var it=e.target.closest?e.target.closest('.pd-item'):null;
+    if(it){ toggleDocs(it); return; }
     var sv=e.target.closest?e.target.closest('.pd-save-b'):null;
     if(sv){ saveAdditions(sv.closest('.pd-save')); return; }
     var del=e.target.closest?e.target.closest('[data-del]'):null;

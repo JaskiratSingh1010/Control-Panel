@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/rate-list/add-items/', views.api_rate_list_add_items, name='api_rate_list_add_items'),
     path('plan-vs-done/',            views.plan_vs_done,            name='plan_vs_done'),
     path('api/done-by-item/',        views.api_done_by_item,        name='api_done_by_item'),
+    path('api/done-by-item/docs/',   views.api_done_item_documents, name='api_done_item_documents'),
     path('customer-master/export/',  views.export_customer_master, name='export_customer_master'),
     path('sales-flow/',              views.sales_document_flow,    name='sales_flow'),
     path('api/sales-flow/',          views.api_sales_flow_data,    name='api_sales_flow_data'),
