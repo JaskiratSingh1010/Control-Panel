@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/rate-list/save/',      views.api_rate_list_save,      name='api_rate_list_save'),
     path('api/rate-list/delete/',    views.api_rate_list_delete,    name='api_rate_list_delete'),
     path('api/rate-list/add-items/', views.api_rate_list_add_items, name='api_rate_list_add_items'),
+    path('api/rate-list/set-channel/', views.api_rate_list_set_channel, name='api_rate_list_set_channel'),
     path('plan-vs-done/',            views.plan_vs_done,            name='plan_vs_done'),
     path('api/done-by-item/',        views.api_done_by_item,        name='api_done_by_item'),
     path('api/done-by-item/docs/',   views.api_done_item_documents, name='api_done_item_documents'),

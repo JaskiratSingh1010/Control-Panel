@@ -21,6 +21,12 @@
   .rl-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;letter-spacing:.3px}
   .rl-chip.state{background:#eef2ff;color:#4338ca}
   .rl-chip.scope{background:#ecfdf5;color:#047857}
+  /* Channel this result was planned for. Blank means Plan vs Done measures it across every
+     channel in its state, so it is worth setting even though nothing else here uses it. */
+  .rl-ch{font-family:inherit;font-size:11px;font-weight:800;color:#4338ca;background:transparent;
+    border:1px dashed #c7d2fe;border-radius:7px;padding:2px 5px;outline:none;cursor:pointer}
+  .rl-ch:hover{background:#eef2ff}
+  .rl-ch:focus{border-style:solid;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .rl-meta{font-size:11.5px;color:var(--rz-muted);font-weight:600}
   .rl-card-h .rl-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
   .rl-chev{font-size:20px;color:#94a3b8;transition:transform .18s}
@@ -84,6 +90,7 @@
   function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
 
   var ALL=[], stateF='', searchF='';
+  var RL_CHANNELS=['GT','MT','ROI','ECOM','HORECA','CSD','REST'];
 
   function planTable(p){
     var rows=(p.rows||[]).map(function(r){
@@ -122,6 +129,10 @@
       +'<div class="rl-card-h">'
         +'<span class="rl-name">'+esc(o.name)+'</span>'
         +(o.state?'<span class="rl-chip state">'+esc(o.state)+'</span>':'')
+        +'<select class="rl-ch" data-ch="'+o.id+'" title="Channel this plan was made for — used by Plan vs Done">'
+          +'<option value="">all channels</option>'
+          +RL_CHANNELS.map(function(c){return '<option value="'+esc(c)+'"'+((o.channel||'')===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')
+        +'</select>'
         +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))))+'</span>'
         +'<div class="rl-sp"><span class="rl-meta">'+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
         +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><span class="material-icons" style="font-size:14px">edit</span>Load &amp; Edit</button>'
@@ -155,6 +166,24 @@
       .catch(function(){ document.getElementById('rlList').innerHTML='<div class="rl-empty">Could not load saved results.</div>'; });
   }
 
+  document.getElementById('rlList').addEventListener('click',function(e){
+    if(e.target.closest&&e.target.closest('.rl-ch'))e.stopPropagation();   // don't collapse the card
+  },true);
+  document.getElementById('rlList').addEventListener('change',function(e){
+    var sel=e.target.closest?e.target.closest('.rl-ch'):null;
+    if(!sel)return;
+    e.stopPropagation();
+    var id=sel.getAttribute('data-ch');
+    fetch('/realise/api/rate-list/set-channel/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({id:id, channel:sel.value})})
+      .then(function(r){return r.json().catch(function(){return {status:'error'};});})
+      .then(function(p){
+        if(p.status!=='ok'){ window.alert('Could not set the channel: '+(p.error||'error')); return; }
+        ALL.forEach(function(o){ if(String(o.id)===String(id))o.channel=p.channel; });
+      })
+      .catch(function(){ window.alert('Could not set the channel.'); });
+  });
   document.getElementById('rlState').addEventListener('change',function(){stateF=this.value;render();});
   var sd=debounce(render,120);
   document.getElementById('rlSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});

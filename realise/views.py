@@ -1734,6 +1734,32 @@ def api_done_item_documents(request):
     return JsonResponse(payload)
 
 
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_set_channel(request):
+    """Tag a saved result with the channel it was planned for. Body: {id, channel}; '' clears it.
+
+    Lives on the Rate List tab, where saved results are managed. Results created before the
+    calculator offered a channel carry none, and Plan vs Done then measures them across every
+    channel in their state — so "Delhi GT" counts Corporate sales, because GT is only in the
+    name. The channel is never inferred from that name: a result called "Delhi — July plan"
+    would be scoped wrongly and silently."""
+    from .models import RateList
+    body = _parse_body(request)
+    try:
+        obj = RateList.objects.filter(id=int(body.get('id'))).first()
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
+    if obj is None:
+        return JsonResponse({'status': 'error', 'error': 'Saved result not found.'}, status=404)
+    channel = (body.get('channel') or '').strip().upper()[:20]
+    if channel and channel not in services.CHANNEL_MEMBERS:
+        return JsonResponse({'status': 'error', 'error': 'Unknown channel.'}, status=400)
+    obj.channel = channel
+    obj.save(update_fields=['channel'])
+    return JsonResponse({'status': 'ok', 'channel': obj.channel})
+
+
 @permission_flag_required('can_customer_master')
 def customer_master(request):
     """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /
