@@ -1,0 +1,610 @@
+{% extends "core/base.html" %}
+{% block title %}Plan vs Done — Jivo Group{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .cp-main{background:var(--rz-bg) !important}
+  .pd-wrap{max-width:1600px;margin:0 auto}
+  .pd-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:0;letter-spacing:-.5px}
+  .pd-psub{margin:6px 0 0;font-size:13px;color:var(--rz-muted)}
+  .pd-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:16px 0;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;padding:14px 16px;box-shadow:var(--rz-shadow)}
+  .pd-fld{display:flex;flex-direction:column;gap:5px}
+  .pd-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .pd-bar select,.pd-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
+  .pd-bar select:focus,.pd-bar input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .pd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+
+  .pd-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
+  .pd-card-h{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;border-bottom:1px solid transparent;flex-wrap:wrap}
+  .pd-card.open .pd-card-h{border-bottom-color:#eef2f6}
+  .pd-card-h .pd-name{font-size:16px;font-weight:800;color:var(--rz-ink)}
+  .pd-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;letter-spacing:.3px}
+  .pd-chip.state{background:#eef2ff;color:#4338ca}
+  .pd-chip.scope{background:#ecfdf5;color:#047857}
+  .pd-chip.ach{background:#f1f5f9;color:#475569}
+  .pd-chip.ach.good{background:#dcfce7;color:#15803d}
+  .pd-chip.ach.mid{background:#fef3c7;color:#b45309}
+  .pd-chip.ach.bad{background:#ffe4e6;color:#be123c}
+  .pd-meta{font-size:11.5px;color:var(--rz-muted);font-weight:600}
+  .pd-card-h .pd-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .pd-chev{font-size:20px;color:#94a3b8;transition:transform .18s}
+  .pd-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+  .pd-del:hover{background:#fff1f3}
+  .pd-card.open .pd-chev{transform:rotate(180deg)}
+  .pd-body{display:none;padding:6px 18px 18px}
+  .pd-card.open .pd-body{display:block}
+
+  .pd-plan-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--rz-indigo);margin:14px 0 8px}
+  /* Scroll box, not the page: the header can only stick to its own scroll container, so the
+     table gets a max-height and owns both axes. border-collapse must be `separate` or the
+     collapsed borders on sticky cells stop painting once they lift off. */
+  .pd-tbl-wrap{max-height:72vh;overflow:auto;border:1px solid #eef2f6;border-radius:12px}
+  table.pd-tbl{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0;font-size:13px}
+  table.pd-tbl thead th{position:sticky;top:26px;z-index:3;background:var(--rz-head-bg);color:var(--rz-head-ink);text-align:right;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--rz-line)}
+  table.pd-tbl thead th.l{text-align:left}
+  table.pd-tbl thead th.sep{border-left:2px solid var(--rz-line)}
+  /* Banner row that splits the saved plan's columns from the month's actuals. Fixed height so
+     the column-name row below it can be offset by exactly that much. */
+  table.pd-tbl thead tr.grp th{position:sticky;top:0;z-index:3;box-sizing:border-box;height:26px;text-align:center;font-size:10px;padding:5px 12px;border-bottom:1px solid var(--rz-line)}
+
+  /* Item column pinned left — with 17 columns you otherwise lose the row's identity the moment
+     you scroll right. Every pinned cell needs its own opaque background or the columns
+     underneath show through. The colspan'd "N more items" cell is excluded: a sticky cell
+     spanning 7 columns would slide over its neighbours. */
+  table.pd-tbl th.l,table.pd-tbl td.l{position:sticky;left:0;z-index:2;background:#fff;box-shadow:inset -1px 0 0 #eef2f6}
+  table.pd-tbl thead th.l{z-index:4}
+  table.pd-tbl tbody tr:nth-child(even) td.l{background:#fafcff}
+  table.pd-tbl tbody.pd-xrows tr.x td.l{background:#fcfdff}
+  table.pd-tbl tfoot td.l{background:#f8fafc}
+  table.pd-tbl tfoot tr.all td.l{background:#eef2ff}
+  table.pd-tbl tr.pd-more td.l{position:static;background:#f1f5f9;box-shadow:none}
+  table.pd-tbl thead tr.grp th.pl{background:#eef2ff;color:#4338ca}
+  table.pd-tbl thead tr.grp th.dn{background:#ecfdf5;color:#047857}
+  table.pd-tbl thead tr.grp th.es{background:#fff7ed;color:#c2410c}
+  table.pd-tbl tbody td{padding:8px 12px;border-bottom:1px solid #eef2f6;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--rz-body)}
+  table.pd-tbl tbody td.l{text-align:left;color:var(--rz-ink);font-weight:600}
+  table.pd-tbl tbody td.sep{border-left:2px solid #eef2f6}
+  table.pd-tbl tbody tr:nth-child(even) td{background:#fafcff}
+  /* Plan block keeps the Rate List's colours so the two tabs read the same; Done litres get
+     their own indigo so the eye lands on the column this tab exists for. */
+  table.pd-tbl .pd-rl{font-weight:800;color:#0e7490}
+  table.pd-tbl .pd-rev{font-weight:800;color:#065f46}
+  table.pd-tbl .pd-done{font-weight:800;color:#4338ca}
+  table.pd-tbl .g{color:#15803d;font-weight:800}
+  table.pd-tbl .a{color:#b45309;font-weight:800}
+  table.pd-tbl .r{color:#be123c;font-weight:800}
+  table.pd-tbl .mute{color:var(--rz-faint)}
+  table.pd-tbl tfoot td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-tbl tfoot td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
+  table.pd-tbl tfoot td.sep{border-left:2px solid var(--rz-line)}
+  table.pd-tbl tfoot tr.all td{background:#eef2ff;border-top:1px solid #c7d2fe}
+  table.pd-tbl tfoot tr.all td.l{color:#4338ca}
+
+  /* "N more items sold, not in this plan" — always visible, rows behind a click. */
+  table.pd-tbl tr.pd-more td{background:#f1f5f9;cursor:pointer;font-weight:800;color:#475569;border-top:2px solid var(--rz-line)}
+  table.pd-tbl tr.pd-more:hover td{background:#e6ecf3}
+  table.pd-tbl tr.pd-more td.l{font-size:12.5px}
+  /* Inline-block, not flex: a flex `td` with colspan collapses the column widths in Safari. */
+  table.pd-tbl tr.pd-more .material-icons{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
+  table.pd-tbl tr.pd-more.open .material-icons{transform:rotate(180deg)}
+  table.pd-tbl tbody.pd-xrows tr.x td{background:#fcfdff;color:var(--rz-muted)}
+  table.pd-tbl tbody.pd-xrows tr.x td.l{color:var(--rz-body);font-weight:600}
+  table.pd-tbl .pd-bal{font-weight:700;color:#9a3412}
+  table.pd-tbl .pd-req{font-weight:800;color:#c2410c}
+
+  /* Editable Scheme / To-be-sale on the unplanned rows. */
+  table.pd-tbl td.pd-in{padding:4px 6px}
+  table.pd-tbl td.pd-in input{width:100%;min-width:86px;box-sizing:border-box;font-family:inherit;
+    font-size:12.5px;font-weight:700;text-align:right;color:var(--rz-ink);background:#fff;
+    border:1px solid #cbd5e1;border-radius:7px;padding:5px 7px;outline:none;font-variant-numeric:tabular-nums}
+  table.pd-tbl td.pd-in input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  table.pd-tbl td.pd-in input::placeholder{font-weight:600;color:#cbd5e1}
+
+  .pd-save{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:10px}
+  .pd-save-n{font-size:12px;font-weight:700;color:var(--rz-muted)}
+  .pd-save-b{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:9px;
+    padding:8px 14px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:800}
+  .pd-save-b:hover:not(:disabled){background:#e0e7ff}
+  .pd-save-b:disabled{opacity:.45;cursor:default}
+  .pd-code{font-size:10px;color:var(--rz-faint);font-weight:700;margin-left:6px}
+
+  .pd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px}
+  .pd-kpi{border-radius:12px;padding:12px 14px;background:#f8fafc;border:1px solid #eef2f6}
+  .pd-kpi .k-l{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-muted)}
+  .pd-kpi .k-v{font-size:20px;font-weight:900;color:var(--rz-ink);margin-top:3px;line-height:1;font-variant-numeric:tabular-nums}
+  .pd-kpi.acc{background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-color:#c7d2fe}
+  .pd-kpi.acc .k-l{color:#4338ca}.pd-kpi.acc .k-v{color:#312e81}
+  .pd-kpi.opp{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-color:#a7f3d0}
+  .pd-kpi.opp .k-l{color:#047857}.pd-kpi.opp .k-v{color:#065f46}
+  .pd-kpi.req{background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa}
+  .pd-kpi.req .k-l{color:#c2410c}.pd-kpi.req .k-v{color:#9a3412}
+  .pd-note{margin-top:10px;font-size:11.5px;color:var(--rz-muted);font-weight:600}
+
+  .pd-empty{padding:44px;text-align:center;color:var(--rz-muted);background:var(--rz-card);border:1px dashed var(--rz-card-brd);border-radius:16px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pd-wrap">
+  <h1 class="pd-h1">Plan vs Done</h1>
+  <p class="pd-psub">Every saved Rate List result against the month's actual sales. Done litres are
+    <strong>all-India</strong> per item code (not scoped to the result's state or channel), net of returns,
+    hidden and cancelled documents excluded — same basis as the dashboard's Done.</p>
+
+  <div class="pd-bar">
+    <div class="pd-fld"><span class="pd-lbl">Month</span><input type="month" id="pdMonth"></div>
+    <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
+    <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
+    <span class="pd-count" id="pdCount"></span>
+  </div>
+
+  <div id="pdList"><div class="pd-empty">Loading…</div></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  function csrf(){var m=document.querySelector('meta[name=csrf-token]');return m?m.content:'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fN(n){return (Number(n)||0).toLocaleString('en-IN');}
+  function f2(n){return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+  function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
+
+  var ALL=[], DONE={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+
+  /* Unsaved edits on the unplanned rows, keyed result|plan|item so they survive a re-render
+     (state filter, search) and so two plans can plan the same SKU independently. */
+  var PENDING={};
+  function pkey(rid,pidx,code){ return rid+'|'+pidx+'|'+code; }
+
+  /* SS%/DM%/GST%/Disc are not global — they are whatever the person who built THAT plan used
+     (these saved plans run 3/5/5/0; the live Delhi GT plan runs 0/0/5/0). An added row must
+     follow its own plan's commercial terms, so take the most common value across the plan's
+     already-priced rows. Only rows with a retailer price count — a blank row's zeros are not
+     a decision. Mirrors _plan_assumptions() in views.py. */
+  var ASSUME={};
+  function planAssumptions(p){
+    var f=['ss','dm','gst','disc'], tally={ss:{},dm:{},gst:{},disc:{}}, n=0;
+    (p.rows||[]).forEach(function(r){
+      if(num(r.retailer)<=0)return;
+      n++; f.forEach(function(k){ var v=num(r[k]); tally[k][v]=(tally[k][v]||0)+1; });
+    });
+    var out={ss:0,dm:0,gst:5,disc:0};
+    if(!n)return out;
+    f.forEach(function(k){
+      var best=null,bn=-1;
+      Object.keys(tally[k]).forEach(function(v){ if(tally[k][v]>bn){bn=tally[k][v];best=Number(v);} });
+      if(best!==null)out[k]=best;
+    });
+    return out;
+  }
+
+  /* Planned realise for an added row: the calculator's own formula when a retailer price is
+     given, otherwise the month's actual realisation (the fallback agreed for price-less rows). */
+  function addedRealise(retailer,pcsbox,boxltr,scheme,actRl,a){
+    var tot=boxltr+scheme;
+    if(retailer>0 && pcsbox>0 && tot>0){
+      var exgst=retailer/(1+a.ss/100)/(1+a.dm/100)/(1+a.gst/100);
+      return ((exgst*pcsbox)-a.disc)/tot;
+    }
+    return actRl;
+  }
+
+  var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function monthLabel(m){                       // 'YYYY-MM' -> 'Jul 2026'
+    var p=String(m||'').split('-');
+    return (p.length===2 && MONTHS[+p[1]-1]) ? MONTHS[+p[1]-1]+' '+p[0] : String(m||'');
+  }
+
+  /* Achievement colour band: on/over plan, within 25% short, worse. */
+  function achCls(pct){ return pct>=100?'g':(pct>=75?'a':'r'); }
+  function chipCls(pct){ return pct>=100?'good':(pct>=75?'mid':'bad'); }
+
+  /* Join one saved plan's rows to the month's Done map, keyed by item code. */
+  function joinPlan(p){
+    var out={rows:[],codes:{},planLtr:0,planRev:0,doneLtr:0,doneRev:0,pcs:0,boxes:0,nocode:0,nosale:0};
+    (p.rows||[]).forEach(function(r){
+      var code=String(r.code||'').trim().toUpperCase();
+      var d=code?DONE[code]:null;
+      var planLtr=num(r.sell), planRev=num(r.revenue);
+      var doneLtr=d?num(d.litres):0, doneRev=d?num(d.revenue):0;
+      if(!code)out.nocode++; else if(!d)out.nosale++;
+      out.rows.push({item:r.item||'',code:code,
+        retailer:num(r.retailer),boxltr:num(r.boxltr),scheme:num(r.scheme),
+        planLtr:planLtr,planRev:planRev,planRl:num(r.realise),
+        doneLtr:doneLtr,doneRev:doneRev,matched:!!d});
+      out.planLtr+=planLtr; out.planRev+=planRev; out.doneLtr+=doneLtr; out.doneRev+=doneRev;
+      if(d){ out.pcs+=num(d.pcs); out.boxes+=num(d.boxes); }
+      if(code)out.codes[code]=1;
+    });
+    return out;
+  }
+
+  /* Everything that SOLD this month but is absent from this plan. Without these the tab only
+     ever shows the handful of SKUs someone planned, while the company bills far more — so the
+     "how much have we actually sold" question stays unanswered. Zero-net items are dropped. */
+  function extrasFor(codes){
+    var out={rows:[],doneLtr:0,doneRev:0,pcs:0,boxes:0};
+    Object.keys(DONE).forEach(function(code){
+      if(codes[code])return;
+      var d=DONE[code], lt=num(d.litres), rv=num(d.revenue);
+      if(!Math.round(lt) && !Math.round(rv))return;
+      out.rows.push({item:d.item_name||code,code:code,doneLtr:lt,doneRev:rv});
+      out.doneLtr+=lt; out.doneRev+=rv; out.pcs+=num(d.pcs); out.boxes+=num(d.boxes);
+    });
+    out.rows.sort(function(a,b){return b.doneLtr-a.doneLtr;});
+    return out;
+  }
+
+  /* Rate ₹/Pc sits in the DONE block, next to the other achieved rates (₹/L, Diff ₹/L) — it is
+     a realisation figure, not a quantity. */
+  function ratePcCell(d){
+    return d ? '<td>'+f2(d.rate_pc)+'</td>' : '<td class="mute">—</td>';
+  }
+
+  /* ESTIMATE — what is still needed to land the plan.
+       Bal Ltr  = plan litres  − done litres      (kitna volume bacha)
+       Bal Rev  = plan revenue − done revenue     (kitna paisa bacha)
+       Req ₹/L  = Bal Rev ÷ Bal Ltr               (bachi litres is rate par bechni padengi)
+     Sell the balance at Req ₹/L and the plan's revenue lands exactly. Two states are NOT a
+     rate: revenue target already made ("met"), and revenue short with no planned litres left
+     to earn it on ("no vol") — a number there would imply a catch-up that cannot happen. */
+  function estParts(planLtr,planRev,doneLtr,doneRev,planRl){
+    if(planLtr<=0)return null;
+    var balL=planLtr-doneLtr, balR=planRev-doneRev, o={balL:balL,balR:balR,req:null,gap:0};
+    if(balR<=0){ o.label='met';    o.cls='g'; }
+    else if(balL<=0){ o.label='no vol'; o.cls='r'; }
+    else {
+      o.req=balR/balL;
+      // Guard the float: an untouched item's required rate IS its plan rate, and the residue
+      // would otherwise render as a meaningless "-0.00" in the red/green gap column.
+      var g=planRl?(o.req-planRl):0;
+      o.gap=Math.abs(g)<0.005?0:g;
+    }
+    return o;
+  }
+  function estCells(planLtr,planRev,doneLtr,doneRev,planRl){
+    var e=estParts(planLtr,planRev,doneLtr,doneRev,planRl);
+    if(!e)return '<td class="mute sep" data-c="ebal">—</td><td class="mute" data-c="erev">—</td>'
+      +'<td class="mute" data-c="ereq">—</td><td class="mute" data-c="egap">—</td>';
+    return '<td class="pd-bal sep" data-c="ebal">'+fN(Math.round(e.balL))+'</td>'
+      +'<td class="pd-bal" data-c="erev">'+fN(Math.round(e.balR))+'</td>'
+      +(e.req===null
+        ? '<td class="'+e.cls+'" data-c="ereq">'+e.label+'</td><td class="mute" data-c="egap">—</td>'
+        : '<td class="pd-req" data-c="ereq">'+f2(e.req)+'</td>'
+          +'<td class="'+(e.gap?(e.gap<=0?'g':'r'):'mute')+'" data-c="egap">'
+            +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
+  }
+
+  function planTable(p,pidx,rid){
+    var j=joinPlan(p);
+    var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
+    var body=j.rows.map(function(r){
+      var pct=r.planLtr?(r.doneLtr/r.planLtr*100):0;
+      var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
+      var diff=actRl&&r.planRl?(actRl-r.planRl):0;
+      return '<tr>'
+        +'<td class="l">'+esc(r.item)+(r.code?'<span class="pd-code">'+esc(r.code)+'</span>':'')+'</td>'
+        +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td>'
+        +'<td>'+fN(Math.round(r.planLtr))+'</td>'
+        +'<td class="pd-rl">'+f2(r.planRl)+'</td>'
+        +'<td class="pd-rev">'+fN(Math.round(r.planRev))+'</td>'
+        +'<td class="pd-done sep">'+(r.matched?fN(Math.round(r.doneLtr)):'<span class="mute">—</span>')+'</td>'
+        +'<td class="'+(r.planLtr?achCls(pct):'mute')+'">'+(r.planLtr?f2(pct)+'%':'—')+'</td>'
+        +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
+        +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
+        +ratePcCell(r.code?DONE[r.code]:null)
+        // No sale this month => no revenue to state. A literal 0 reads as a measurement; it isn't.
+        +'<td class="'+(r.matched?'pd-rev':'mute')+'">'+(r.matched?fN(Math.round(r.doneRev)):'—')+'</td>'
+        +estCells(r.planLtr,r.planRev,r.doneLtr,r.doneRev,r.planRl)+'</tr>';
+    }).join('');
+
+    var pct=j.planLtr?(j.doneLtr/j.planLtr*100):0;
+    var blendPlan=j.planLtr?(j.planRev/j.planLtr):0;
+    var blendAct=j.doneLtr?(j.doneRev/j.doneLtr):0;
+    var bdiff=(blendAct&&blendPlan)?(blendAct-blendPlan):0;
+
+    /* Items sold outside this plan: a summary row that is always visible (so the size of what
+       the plan misses is never hidden) and the detail rows behind a toggle. Scheme and To-be-sale
+       are editable there — typing a volume plans the item, and Save writes it into this result. */
+    var x=extrasFor(j.codes), xid='x'+(++UID), extraHtml='', pend=0;
+    if(x.rows.length){
+      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="7">'
+        +'<span class="material-icons">expand_more</span>'
+        +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
+        +' — <em>open to plan them</em></td>'
+        +'<td class="pd-done sep">'+fN(Math.round(x.doneLtr))+'</td><td></td><td></td><td></td>'
+        +'<td>'+(x.pcs?f2(x.doneRev/x.pcs):'')+'</td>'
+        +'<td class="pd-rev">'+fN(Math.round(x.doneRev))+'</td>'
+        +'<td class="sep"></td><td></td><td></td><td></td></tr></tbody>'
+        +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
+        +x.rows.map(function(r){
+            var d=DONE[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
+            var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
+            var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
+            if(sell>0)pend++;
+            var rl=addedRealise(ret,num(d&&d.pcsbox),num(d&&d.boxltr),sch,actRl,A);
+            var rev=rl*sell, bal=sell-r.doneLtr, ap=sell?(r.doneLtr/sell*100):0;
+            return '<tr class="x" data-k="'+esc(k)+'">'
+              +'<td class="l">'+esc(r.item)+'<span class="pd-code">'+esc(r.code)+'</span></td>'
+              +'<td class="pd-in"><input type="number" step="any" min="0" data-f="retailer" value="'+esc(e.retailer==null?'':e.retailer)+'" placeholder="retailer"></td>'
+              +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+              +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
+              +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
+              +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
+              +'<td class="pd-rev" data-c="rev">'+(sell>0?fN(Math.round(rev)):'<span class="mute">—</span>')+'</td>'
+              +'<td class="pd-done sep">'+fN(Math.round(r.doneLtr))+'</td>'
+              +'<td data-c="ach" class="'+(sell>0?achCls(ap):'mute')+'">'+(sell>0?f2(ap)+'%':'—')+'</td>'
+              +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
+              +'<td class="mute">—</td>'
+              +ratePcCell(d)
+              +'<td class="pd-rev">'+fN(Math.round(r.doneRev))+'</td>'
+              +estCells(sell,rev,r.doneLtr,r.doneRev,rl)+'</tr>';
+          }).join('')
+        +'</tbody>';
+    }
+    var allLtr=j.doneLtr+x.doneLtr, allRev=x.doneRev+j.doneRev;
+
+    var notes=[];
+    if(j.nocode)notes.push(j.nocode+' row'+(j.nocode===1?'':'s')+' have no item code — cannot be matched to sales.');
+    if(j.nosale)notes.push(j.nosale+' planned item'+(j.nosale===1?'':'s')+' had no sale this month.');
+    notes.push('Added items: enter a Retailer ₹ and Relise ₹/L is calculated on this plan’s own terms '
+      +'(SS '+f2(A.ss)+'% · DM '+f2(A.dm)+'% · GST '+f2(A.gst)+'% · Disc '+f2(A.disc)+'). '
+      +'Leave it blank and the month’s actual realisation is used instead, with the price inputs left empty.');
+
+    return '<div class="pd-plan-h">'+esc(p.name||'Plan')+'</div>'
+      +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
+      +'<tr class="grp"><th class="l"></th><th class="pl" colspan="6">Plan — as saved</th>'
+      +'<th class="dn sep" colspan="6">Done — '+esc(MONTH_LABEL)+' · all-India</th>'
+      +'<th class="es sep" colspan="4">Estimate — left to hit plan</th></tr><tr>'
+      +'<th class="l">Item</th><th>Retailer ₹</th><th>Box Ltrs</th><th>Scheme</th>'
+      +'<th>To be sale</th><th>Relise ₹/L</th><th>Revenue ₹</th>'
+      +'<th class="sep">Done Ltr</th><th>Ach %</th>'
+      +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th><th>Done Revenue ₹</th>'
+      +'<th class="sep">Bal Ltr</th><th>Bal Revenue ₹</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
+      +'</tr></thead><tbody>'+body+'</tbody>'
+      +extraHtml
+      +'<tfoot><tr><td class="l">Blended ('+j.rows.length+')</td>'
+      +'<td></td><td></td><td></td>'
+      +'<td>'+fN(Math.round(j.planLtr))+'</td>'
+      +'<td class="pd-rl">'+f2(blendPlan)+'</td>'
+      +'<td class="pd-rev">'+fN(Math.round(j.planRev))+'</td>'
+      +'<td class="pd-done sep">'+fN(Math.round(j.doneLtr))+'</td>'
+      +'<td class="'+(j.planLtr?achCls(pct):'mute')+'">'+(j.planLtr?f2(pct)+'%':'—')+'</td>'
+      +'<td>'+f2(blendAct)+'</td>'
+      +'<td class="'+(bdiff?(bdiff>=0?'g':'r'):'mute')+'">'+(bdiff?((bdiff>=0?'+':'')+f2(bdiff)):'—')+'</td>'
+      +'<td>'+(j.pcs?f2(j.doneRev/j.pcs):'')+'</td>'
+      +'<td class="pd-rev">'+fN(Math.round(j.doneRev))+'</td>'
+      +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr>'
+      +(x.rows.length
+        ? '<tr class="all"><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
+          +'<td></td><td></td><td></td><td></td><td></td><td></td>'
+          +'<td class="pd-done sep">'+fN(Math.round(allLtr))+'</td><td></td>'
+          +'<td>'+f2(allLtr?allRev/allLtr:0)+'</td><td></td>'
+          +'<td>'+((j.pcs+x.pcs)?f2(allRev/(j.pcs+x.pcs)):'')+'</td>'
+          +'<td class="pd-rev">'+fN(Math.round(allRev))+'</td>'
+          +'<td class="sep"></td><td></td><td></td><td></td></tr>'
+        : '')
+      +'</tfoot></table></div>'
+      +(x.rows.length
+        ? '<div class="pd-save" data-save="'+rid+'|'+pidx+'"><span class="pd-save-n">'
+          +(pend?pend+' item'+(pend===1?'':'s')+' ready to add':'Fill “To be sale” on any unplanned item to add it to this plan')
+          +'</span><button class="pd-save-b"'+(pend?'':' disabled')+'>Add to this plan</button></div>'
+        : '')
+      +'<div class="pd-kpis">'
+      +'<div class="pd-kpi acc"><div class="k-l">Plan · Litres</div><div class="k-v">'+fN(Math.round(j.planLtr))+'</div></div>'
+      +'<div class="pd-kpi acc"><div class="k-l">Done · Litres</div><div class="k-v">'+fN(Math.round(j.doneLtr))+'</div></div>'
+      +'<div class="pd-kpi opp"><div class="k-l">Achievement</div><div class="k-v">'+(j.planLtr?f2(pct)+'%':'—')+'</div></div>'
+      +'<div class="pd-kpi opp"><div class="k-l">Relise ₹/L · Plan → Actual</div><div class="k-v">'+f2(blendPlan)+' → '+f2(blendAct)+'</div></div>'
+      +'<div class="pd-kpi acc"><div class="k-l">Plan · Revenue</div><div class="k-v">₹'+fN(Math.round(j.planRev))+'</div></div>'
+      +'<div class="pd-kpi opp"><div class="k-l">Done · Revenue</div><div class="k-v">₹'+fN(Math.round(j.doneRev))+'</div></div>'
+      +(function(){                       // the headline: what the balance must fetch
+          var e=estParts(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan);
+          if(!e)return '';
+          return '<div class="pd-kpi req"><div class="k-l">Balance '+fN(Math.round(e.balL))+' L · needs</div>'
+            +'<div class="k-v">'+(e.req===null?e.label:'₹'+f2(e.req)+' /L')+'</div></div>';
+        })()
+      +'</div>'
+      +(notes.length?'<div class="pd-note">'+esc(notes.join(' '))+'</div>':'');
+  }
+
+  /* Card-header achievement chip = every plan in the result, pooled. */
+  function resultAch(o){
+    var pl=0,dn=0;
+    ((o.payload&&o.payload.plans)||[]).forEach(function(p){
+      var j=joinPlan(p); pl+=j.planLtr; dn+=j.doneLtr;
+    });
+    return {plan:pl,done:dn,pct:pl?(dn/pl*100):0};
+  }
+
+  function cardHtml(o,idx){
+    var pl=(o.payload&&o.payload.plans)||[];
+    var a=resultAch(o);
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id);}).join('');
+    var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
+               (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'">'
+      +'<div class="pd-card-h">'
+        +'<span class="pd-name">'+esc(o.name)+'</span>'
+        +(o.state?'<span class="pd-chip state">'+esc(o.state)+'</span>':'')
+        +'<span class="pd-chip scope">'+esc(scope)+'</span>'
+        +'<span class="pd-chip ach '+(a.plan?chipCls(a.pct):'')+'">'
+          +fN(Math.round(a.done))+' / '+fN(Math.round(a.plan))+' L'
+          +(a.plan?' · '+f2(a.pct)+'%':'')+'</span>'
+        +'<div class="pd-sp"><span class="pd-meta">saved '+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
+        +'<button class="pd-del" title="Delete this saved result" data-del="'+o.id+'">✕</button>'
+        +'<span class="material-icons pd-chev">expand_more</span></div>'
+      +'</div><div class="pd-body">'+tables+'</div></div>';
+  }
+
+  function render(){
+    var list=document.getElementById('pdList'), cnt=document.getElementById('pdCount');
+    if(loading){ list.innerHTML='<div class="pd-empty">Loading…</div>'; cnt.textContent=''; return; }
+    var rows=ALL.filter(function(o){
+      if(stateF && o.state!==stateF)return false;
+      if(searchF && String(o.name||'').toLowerCase().indexOf(searchF)===-1)return false;
+      return true;
+    });
+    cnt.textContent=fN(rows.length)+' saved result'+(rows.length===1?'':'s');
+    if(!rows.length){ list.innerHTML='<div class="pd-empty">No saved results'+(stateF?(' for '+esc(stateF)):'')+'. Save one from the Realise Calculator, then come back here.</div>'; return; }
+    list.innerHTML=rows.map(cardHtml).join('');
+  }
+
+  function fillStates(states){
+    var sel=document.getElementById('pdState'), cur=sel.value;
+    sel.innerHTML='<option value="">All states</option>'+states.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
+    if(states.indexOf(cur)>=0)sel.value=cur;
+  }
+
+  /* Done map for the picked month — refetched on every month change. The server echoes the
+     month it actually used, so an unparseable input still labels the columns correctly. */
+  function fetchDone(){
+    var m=document.getElementById('pdMonth').value;
+    MONTH_LABEL=monthLabel(m);
+    return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{rows:{}};})
+      .then(function(p){ DONE=p.rows||{}; if(p.month)MONTH_LABEL=monthLabel(p.month); })
+      .catch(function(){ DONE={}; });
+  }
+  function loadDone(){
+    loading=true; render();
+    return fetchDone().then(function(){ loading=false; render(); });
+  }
+
+  /* Write the filled-in unplanned items into the saved Rate List, then reload so the plan
+     block, totals and the header chip all come back from the server — never from local state. */
+  function saveAdditions(bar){
+    var parts=bar.getAttribute('data-save').split('|'), rid=parts[0], pidx=parts[1];
+    var pfx=rid+'|'+pidx+'|', rows=[];
+    Object.keys(PENDING).forEach(function(k){
+      if(k.indexOf(pfx)!==0)return;
+      var code=k.split('|')[2], e=PENDING[k], sell=num(e.sell);
+      if(sell<=0)return;
+      var d=DONE[code]||{}, lt=num(d.litres), rv=num(d.revenue);
+      // `realise` is only the price-less fallback; when a retailer price is sent the server
+      // recomputes from the plan's own SS/DM/GST/disc rather than trusting this number.
+      rows.push({code:code, item:d.item_name||code, retailer:num(e.retailer),
+                 scheme:num(e.scheme), sell:sell, realise:lt?(rv/lt):0,
+                 pcsbox:num(d.pcsbox), boxltr:num(d.boxltr)});
+    });
+    if(!rows.length)return;
+    var btn=bar.querySelector('.pd-save-b');
+    btn.disabled=true; btn.textContent='Saving…';
+    fetch('/realise/api/rate-list/add-items/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({id:rid, plan:pidx, rows:rows})})
+      .then(function(r){return r.json().catch(function(){return {status:'error',error:'HTTP '+r.status};});})
+      .then(function(p){
+        btn.textContent='Add to this plan';
+        if(p.status!=='ok'){ btn.disabled=false; window.alert('Could not add: '+(p.error||'error')); return; }
+        Object.keys(PENDING).forEach(function(k){ if(k.indexOf(pfx)===0)delete PENDING[k]; });
+        loading=true; render();
+        loadSaved().then(function(){ loading=false; render(); });
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Add to this plan'; window.alert('Could not add.'); });
+  }
+
+  function loadSaved(){
+    return fetch('/realise/api/rate-list/',{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{rows:[],states:[]};})
+      .then(function(p){ ALL=p.rows||[]; fillStates(p.states||[]); })
+      .catch(function(){ ALL=[]; });
+  }
+
+  var mEl=document.getElementById('pdMonth');
+  var now=new Date();
+  mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  mEl.addEventListener('change',loadDone);
+  document.getElementById('pdState').addEventListener('change',function(){stateF=this.value;render();});
+  var sd=debounce(render,120);
+  document.getElementById('pdSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});
+  /* Typing recomputes only the edited row + its Save bar. Card/plan totals deliberately do NOT
+     move until Save — an unsaved number must never read as part of the plan. */
+  document.getElementById('pdList').addEventListener('input',function(e){
+    var inp=e.target;
+    if(!inp.matches||!inp.matches('.pd-in input'))return;
+    var tr=inp.closest('tr.x'); if(!tr)return;
+    var parts=k=tr.getAttribute('data-k'), code=k.split('|')[2];
+    parts=k.split('|');
+    var e0=PENDING[k]||(PENDING[k]={});
+    e0[inp.getAttribute('data-f')]=inp.value;
+    if(!String(e0.sell||'').trim() && !String(e0.scheme||'').trim() && !String(e0.retailer||'').trim())
+      delete PENDING[k];
+
+    var d=DONE[code]||{}, doneLtr=num(d.litres), doneRev=num(d.revenue);
+    var actRl=doneLtr?(doneRev/doneLtr):0, sell=num(e0.sell);
+    var A=ASSUME[parts[0]+'|'+parts[1]]||{ss:0,dm:0,gst:5,disc:0};
+    var rl=addedRealise(num(e0.retailer),num(d.pcsbox),num(d.boxltr),num(e0.scheme),actRl,A);
+    var on=sell>0, ap=on?(doneLtr/sell*100):0;
+    function set(c,html,cls){
+      var td=tr.querySelector('[data-c="'+c+'"]'); if(!td)return;
+      td.innerHTML=html; if(cls!=null)td.className=cls;
+    }
+    set('rl', on?f2(rl):'<span class="mute">—</span>', 'pd-rl');
+    set('rev',on?fN(Math.round(rl*sell)):'<span class="mute">—</span>', 'pd-rev');
+    set('ach',on?f2(ap)+'%':'—', on?achCls(ap):'mute');
+
+    var e=on?estParts(sell,rl*sell,doneLtr,doneRev,rl):null;
+    if(!e){
+      set('ebal','—','mute sep'); set('erev','—','mute');
+      set('ereq','—','mute');     set('egap','—','mute');
+    }else{
+      set('ebal',fN(Math.round(e.balL)),'pd-bal sep');
+      set('erev',fN(Math.round(e.balR)),'pd-bal');
+      if(e.req===null){ set('ereq',e.label,e.cls); set('egap','—','mute'); }
+      else{
+        set('ereq',f2(e.req),'pd-req');
+        set('egap',e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—',e.gap?(e.gap<=0?'g':'r'):'mute');
+      }
+    }
+
+    var wrap=tr.closest('.pd-tbl-wrap'), bar=wrap&&wrap.parentNode.querySelector('.pd-save');
+    if(bar){
+      var pfx=k.split('|')[0]+'|'+k.split('|')[1]+'|', n=0;
+      Object.keys(PENDING).forEach(function(key){
+        if(key.indexOf(pfx)===0 && num(PENDING[key].sell)>0)n++;
+      });
+      bar.querySelector('.pd-save-n').textContent = n
+        ? n+' item'+(n===1?'':'s')+' ready to add'
+        : 'Fill “To be sale” on any unplanned item to add it to this plan';
+      bar.querySelector('.pd-save-b').disabled=!n;
+    }
+  });
+
+  document.getElementById('pdList').addEventListener('click',function(e){
+    var sv=e.target.closest?e.target.closest('.pd-save-b'):null;
+    if(sv){ saveAdditions(sv.closest('.pd-save')); return; }
+    var del=e.target.closest?e.target.closest('[data-del]'):null;
+    if(del){
+      e.stopPropagation();                       // don't also collapse the card
+      var id=del.getAttribute('data-del');
+      var o=ALL.filter(function(r){return String(r.id)===String(id);})[0];
+      if(!window.confirm('Delete the saved result “'+((o&&o.name)||id)+'”?\n\nIt disappears from the Rate List tab too. This cannot be undone.'))return;
+      fetch('/realise/api/rate-list/delete/',{method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body:JSON.stringify({id:id})})
+        .then(function(){
+          ALL=ALL.filter(function(r){return String(r.id)!==String(id);});
+          Object.keys(PENDING).forEach(function(k){ if(k.indexOf(id+'|')===0)delete PENDING[k]; });
+          render();
+        })
+        .catch(function(){ window.alert('Could not delete.'); });
+      return;
+    }
+    var more=e.target.closest?e.target.closest('[data-more]'):null;
+    if(more){
+      var tb=document.getElementById(more.getAttribute('data-more'));
+      if(tb){ tb.hidden=!tb.hidden; more.classList.toggle('open',!tb.hidden); }
+      return;
+    }
+    var h=e.target.closest?e.target.closest('.pd-card-h'):null;
+    if(h){ h.parentNode.classList.toggle('open'); }
+  });
+
+  loading=true; render();
+  Promise.all([loadSaved(), fetchDone()]).then(function(){ loading=false; render(); });
+})();
+</script>
+{% endblock %}

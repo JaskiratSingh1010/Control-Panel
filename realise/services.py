@@ -3966,6 +3966,105 @@ def get_realise_calculator(start_date, end_date):
     return payload
 
 
+# ══════════════════════ Plan vs Done (Rate List achievement) ══════════════════════
+# Per-item Done litres/revenue for one month, ALL-INDIA (no state / channel scoping) —
+# the actual side of the Plan vs Done tab, joined to a saved Rate List by ItemCode.
+# FINISHED GOODS ONLY (ItemCode LIKE 'FG%'), same as _COMPARE_LINE_SQL: invoices also carry
+# packaging (PM — glass jars, caps, cartons) and raw material (RM) lines, which are not
+# sellable SKUs and have no place in a sales plan.
+# Litres use _done_sales_litexpr (the REPORT_SALES_COGS formula the dashboard's Done runs
+# on), NOT Quantity x SalPackUn: the naive form ignores combo/BOM expansion, the
+# NoInvtryMv='Y' zeroing and the MTS bulk conversion, and inflates litres several-fold.
+_done_item_cache = {}
+_DONE_ITEM_TTL = 90               # seconds
+
+_DONE_ITEM_SQL = '''
+    SELECT COALESCE(TRIM(I."ItemCode"), '')    AS "ICODE",
+           COALESCE(TRIM(I."ItemName"), '')    AS "ITEM",
+           COALESCE(I."SalFactor2", 0)         AS "PCSBOX",
+           COALESCE(I."SalPackUn", 0)          AS "LTRPP",
+           SUM({litexpr})                      AS "LIT",
+           SUM({sign} * L."Quantity")          AS "PCS",
+           SUM({sign} * L."LineTotal")         AS "REV"
+    FROM "{S}"."{hdr}" H
+    JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
+    JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
+    WHERE H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
+      AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
+      AND I."ItemCode" LIKE 'FG%'
+    GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn"
+'''
+
+
+def get_done_by_item(start_date, end_date):
+    """All-India Done sales per item for [start_date, end_date], net of returns. Returns
+    {status, rows, start, end} where rows is {ITEM_CODE: {item_name, litres, pcs, revenue,
+    realise_l}} — keyed by code so the Plan vs Done page can join it to a saved Rate List
+    row's `code`. Hidden (U_ARNO 'T'/'H') and cancelled documents excluded, matching the
+    dashboard's Done. Cached _DONE_ITEM_TTL seconds; {} rows on any SAP error."""
+    sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
+    if not sd or not ed:
+        return {'status': 'error', 'rows': {}, 'error': 'start_date and end_date required',
+                'start': start_date, 'end': end_date}
+    if ed < sd:
+        sd, ed = ed, sd
+    key = (sd.isoformat(), ed.isoformat())
+    now = time.time()
+    hit = _done_item_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    S = SAP_SCHEMA
+    next_day = ed + timedelta(days=1)          # half-open: safe for date or timestamp DocDate
+    inv = _DONE_ITEM_SQL.format(S=S, hdr='OINV', ln='INV1', sign='1',
+                                litexpr=_done_sales_litexpr(S))
+    ret = _DONE_ITEM_SQL.format(S=S, hdr='ORIN', ln='RIN1', sign='-1',
+                                litexpr=_DONE_RETURN_LITEXPR)
+    try:
+        raw = sap_connector.execute_query(inv, (sd, next_day))
+        raw += sap_connector.execute_query(ret, (sd, next_day))
+    except Exception as exc:
+        logger.error('[DONE-BY-ITEM] fetch failed: %s', exc)
+        return {'status': 'error', 'rows': {}, 'error': 'Could not read sales from SAP.',
+                'start': sd.isoformat(), 'end': ed.isoformat()}
+
+    agg = {}
+    for r in raw or []:
+        code = (r.get('ICODE') or '').strip().upper()
+        if not code:
+            continue
+        cell = agg.get(code)
+        if cell is None:
+            # pcsbox / ltr_per_pc come off the item master, so they are per-item constants,
+            # not sums: SalFactor2 = pieces per box, SalPackUn = litres per piece.
+            cell = agg[code] = {'item_name': (r.get('ITEM') or code).strip().upper(),
+                                'pcsbox': float(r.get('PCSBOX') or 0),
+                                'ltr_per_pc': float(r.get('LTRPP') or 0),
+                                'litres': 0.0, 'pcs': 0.0, 'revenue': 0.0}
+        cell['litres']  += float(r.get('LIT') or 0)
+        cell['pcs']     += float(r.get('PCS') or 0)
+        cell['revenue'] += float(r.get('REV') or 0)
+
+    for cell in agg.values():
+        pcs, rev, lit = cell['pcs'], cell['revenue'], cell['litres']
+        boxes = (pcs / cell['pcsbox']) if cell['pcsbox'] else 0.0
+        cell['litres']    = round(lit, 2)
+        cell['pcs']       = round(pcs, 2)               # INV1.Quantity — PIECES, not cartons
+        cell['boxes']     = round(boxes, 2)
+        cell['revenue']   = round(rev, 2)
+        cell['realise_l'] = round(rev / lit, 2) if lit else 0.0
+        cell['rate_pc']   = round(rev / pcs, 2) if pcs else 0.0
+        cell['rate_box']  = round(rev / boxes, 2) if boxes else 0.0
+        # Litres per box — what the calculator grid calls "Box Ltrs".
+        cell['boxltr']    = round(cell['ltr_per_pc'] * cell['pcsbox'], 2)
+
+    payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
+               'start': sd.isoformat(), 'end': ed.isoformat()}
+    if agg:
+        _done_item_cache[key] = (now + _DONE_ITEM_TTL, payload)
+    return payload
+
+
 _realise_calc_items_cache = {}     # {'t': expiry, 'v': items}
 _REALISE_CALC_ITEMS_TTL = 600      # seconds — the item master barely changes
 

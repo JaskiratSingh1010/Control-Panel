@@ -1540,6 +1540,176 @@ def api_rate_list_delete(request):
     return JsonResponse({'status': 'ok'})
 
 
+def _f(v):
+    """Loose float: the saved payload stores calculator inputs as strings ('40000', '')."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _plan_assumptions(plan):
+    """SS%/DM%/GST%/Disc for a plan, taken as the most common value across its already-priced
+    rows. These are per-plan commercial terms, not constants — the saved 'both A & B' plans run
+    3/5/5/0 while the live Delhi GT grid runs 0/0/5/0 — so an added row must inherit its own
+    plan's. Rows without a retailer price are ignored: their zeros are a blank, not a decision.
+    Mirrors planAssumptions() in plan_vs_done.html."""
+    fields = ('ss', 'dm', 'gst', 'disc')
+    tally = {k: {} for k in fields}
+    priced = 0
+    for r in (plan.get('rows') or []):
+        if not isinstance(r, dict) or _f(r.get('retailer')) <= 0:
+            continue
+        priced += 1
+        for k in fields:
+            v = _f(r.get(k))
+            tally[k][v] = tally[k].get(v, 0) + 1
+    out = {'ss': 0.0, 'dm': 0.0, 'gst': 5.0, 'disc': 0.0}
+    if not priced:
+        return out
+    for k in fields:
+        if tally[k]:
+            out[k] = max(tally[k].items(), key=lambda kv: kv[1])[0]
+    return out
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_add_items(request):
+    """Append items to a saved result's plan from the Plan vs Done tab — the SKUs that sold this
+    month but were never planned. Body: {id, plan, rows:[{item, code, scheme, sell, realise,
+    pcsbox, boxltr}]}. `realise` is the item's ACTUAL ₹/L for the month (the tab uses the
+    achieved realisation as the plan rate, since scheme + volume alone cannot derive one), so
+    revenue = realise × sell. The price inputs stay blank — nothing is invented. Rows are written
+    in the same shape the calculator saves, and the plan's totals are recomputed."""
+    from .models import RateList
+    body = _parse_body(request)
+    try:
+        obj = RateList.objects.filter(id=int(body.get('id'))).first()
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
+    if obj is None:
+        return JsonResponse({'status': 'error', 'error': 'Saved result not found.'}, status=404)
+
+    payload = obj.payload if isinstance(obj.payload, dict) else {}
+    plans = payload.get('plans')
+    if not isinstance(plans, list) or not plans:
+        return JsonResponse({'status': 'error', 'error': 'This result has no plan to add to.'},
+                            status=400)
+    try:
+        idx = int(body.get('plan') or 0)
+    except (TypeError, ValueError):
+        idx = 0
+    if not (0 <= idx < len(plans)) or not isinstance(plans[idx], dict):
+        return JsonResponse({'status': 'error', 'error': 'bad plan index'}, status=400)
+
+    plan = plans[idx]
+    rows = plan.get('rows')
+    if not isinstance(rows, list):
+        rows = plan['rows'] = []
+    have = {str(r.get('code') or '').strip().upper() for r in rows if isinstance(r, dict)}
+
+    incoming = body.get('rows')
+    if not isinstance(incoming, list) or not incoming:
+        return JsonResponse({'status': 'error', 'error': 'Nothing to add.'}, status=400)
+    if len(incoming) > 200:
+        return JsonResponse({'status': 'error', 'error': 'Too many rows in one save (max 200).'},
+                            status=400)
+
+    a = _plan_assumptions(plan)
+    added = no_volume = duplicate = 0
+    for src in incoming:
+        if not isinstance(src, dict):
+            continue
+        code = str(src.get('code') or '').strip().upper()
+        sell = _f(src.get('sell'))
+        if not code or sell <= 0:
+            no_volume += 1
+            continue
+        if code in have:                       # already planned — never duplicate a row
+            duplicate += 1
+            continue
+        scheme, boxltr = _f(src.get('scheme')), _f(src.get('boxltr'))
+        pcsbox, retailer = _f(src.get('pcsbox')), _f(src.get('retailer'))
+        tot = boxltr + scheme
+        if retailer > 0 and pcsbox > 0 and tot > 0:
+            # Priced row: run the calculator's own formula on the plan's terms, so reloading the
+            # result in the calculator reproduces this realise exactly instead of showing 0.
+            ss_rate = retailer / (1 + a['ss'] / 100)
+            dm_rate = ss_rate / (1 + a['dm'] / 100)
+            exgst = dm_rate / (1 + a['gst'] / 100)
+            box_val = exgst * pcsbox
+            net_box = box_val - a['disc']
+            realise = net_box / tot
+            row = {'retailer': retailer, 'ss': a['ss'], 'dm': a['dm'], 'gst': a['gst'],
+                   'disc': a['disc'], 'ssRate': ss_rate, 'dmRate': dm_rate, 'exgst': exgst,
+                   'boxVal': box_val, 'netBox': net_box}
+        else:
+            # No price given: fall back to the month's actual realisation and leave the price
+            # inputs blank — nothing is invented.
+            realise = _f(src.get('realise'))
+            row = {'retailer': '', 'ss': '', 'dm': '', 'gst': '', 'disc': '',
+                   'ssRate': 0, 'dmRate': 0, 'exgst': 0, 'boxVal': 0, 'netBox': 0}
+        row.update({
+            'item': str(src.get('item') or code)[:200], 'code': code,
+            'pcsbox': pcsbox or '', 'boxltr': boxltr or '',
+            'scheme': scheme, 'sell': sell,
+            'realise': realise, 'revenue': realise * sell, 'totLtr': tot,
+        })
+        rows.append(row)
+        have.add(code)
+        added += 1
+
+    if not added:
+        why = ('Those items are already in this plan.' if duplicate and not no_volume else
+               'Enter a “To be sale” volume first.' if no_volume and not duplicate else
+               'Nothing to add — items are already planned or have no volume.')
+        return JsonResponse({'status': 'error', 'error': why}, status=400)
+
+    tot_sell = sum(_f(r.get('sell')) for r in rows)
+    rev_sum = sum(_f(r.get('revenue')) for r in rows)
+    plan['totals'] = {'totSell': tot_sell, 'revSum': rev_sum,
+                      'blend': (rev_sum / tot_sell) if tot_sell else 0}
+    obj.payload = payload
+    obj.save(update_fields=['payload'])
+    return JsonResponse({'status': 'ok', 'added': added, 'duplicate': duplicate,
+                         'no_volume': no_volume, 'rows': len(rows)})
+
+
+# ══════════════════════ Plan vs Done ══════════════════════
+
+def _month_bounds(month):
+    """'YYYY-MM' -> (first_day, last_day) as 'YYYY-MM-DD'. Falls back to the current month."""
+    import calendar
+    today = datetime.now().date()
+    try:
+        y, m = str(month or '').split('-')
+        y, m = int(y), int(m)
+        if not (1 <= m <= 12 and 2000 <= y <= 2999):
+            raise ValueError
+    except (ValueError, AttributeError):
+        y, m = today.year, today.month
+    last = calendar.monthrange(y, m)[1]
+    return f'{y:04d}-{m:02d}-01', f'{y:04d}-{m:02d}-{last:02d}', f'{y:04d}-{m:02d}'
+
+
+@permission_flag_required('can_realise_calculator')
+def plan_vs_done(request):
+    """Plan vs Done tab — every saved Rate List result with the month's actual (all-India)
+    Done litres and realisation alongside each planned item."""
+    return render(request, 'realise/plan_vs_done.html', {'sidebar_active': 'plan_vs_done'})
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['GET'])
+def api_done_by_item(request):
+    """All-India Done litres/revenue per item code for ?month=YYYY-MM (default: this month)."""
+    start, end, month = _month_bounds(request.GET.get('month'))
+    payload = services.get_done_by_item(start, end)
+    payload['month'] = month
+    return JsonResponse(payload)
+
+
 @permission_flag_required('can_customer_master')
 def customer_master(request):
     """Standalone tab: the customer master — every customer (OCRD) with contact details, GSTIN /

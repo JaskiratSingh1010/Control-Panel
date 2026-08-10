@@ -205,7 +205,7 @@
           {% endif %}
           {# ── Sales reports ── #}
           {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow or can_dispatch_details or can_realise_calculator %}
-          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' or sidebar_active == 'realise_calculator' or sidebar_active == 'rate_list' %} open{% endif %}" data-group="reports-sales">
+          <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' or sidebar_active == 'realise_calculator' or sidebar_active == 'rate_list' or sidebar_active == 'plan_vs_done' %} open{% endif %}" data-group="reports-sales">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Sales" aria-label="Toggle Sales reports">
               <span class="cp-nav-group-lead"><span class="material-icons">trending_up</span>Sales</span>
               <span class="material-icons cp-nav-group-chev">expand_more</span>
@@ -242,6 +242,9 @@
               </a>
               <a class="cp-nav-item {% if sidebar_active == 'rate_list' %}active{% endif %}" href="{% url 'realise:rate_list' %}" title="Rate List">
                 <span class="material-icons">sell</span>Rate List
+              </a>
+              <a class="cp-nav-item {% if sidebar_active == 'plan_vs_done' %}active{% endif %}" href="{% url 'realise:plan_vs_done' %}" title="Plan vs Done">
+                <span class="material-icons">fact_check</span>Plan vs Done
               </a>
               {% endif %}
             </div>
