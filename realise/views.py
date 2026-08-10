@@ -1694,11 +1694,17 @@ def _month_bounds(month):
     return f'{y:04d}-{m:02d}-01', f'{y:04d}-{m:02d}-{last:02d}', f'{y:04d}-{m:02d}'
 
 
+@never_cache
 @permission_flag_required('can_realise_calculator')
 def plan_vs_done(request):
-    """Plan vs Done tab — every saved Rate List result with the month's actual (all-India)
-    Done litres and realisation alongside each planned item."""
-    return render(request, 'realise/plan_vs_done.html', {'sidebar_active': 'plan_vs_done'})
+    """Plan vs Done tab — every saved Rate List result with the month's actual Done litres and
+    realisation alongside each planned item. never_cache for the same reason as the dashboard:
+    territory_payload (the person map behind the drill-down's Contact Person dimension) is baked
+    into the HTML, so a mapping change must not be served from a stale copy."""
+    return render(request, 'realise/plan_vs_done.html', {
+        'sidebar_active': 'plan_vs_done',
+        'territory_payload': json.dumps(services.get_territory_dashboard_payload()),
+    })
 
 
 @any_permission_flag('can_realise_calculator', json_response=True)

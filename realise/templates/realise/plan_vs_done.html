@@ -18,6 +18,31 @@
   .pd-seg button+button{border-left:1px solid #e2e8f0}
   .pd-seg button.on{background:#eef2ff;color:#4338ca;font-weight:800}
 
+  /* Drill By panel — same markup/styles as Sales CN, Claims and Compare Sales. */
+  .com-drill-box{position:relative}
+  .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:180px;justify-content:space-between;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .com-drill-btn .com-caret{color:var(--rz-muted);font-size:10px}
+  .com-drill-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:250px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--rz-card-brd);border-radius:12px;box-shadow:var(--rz-shadow-lg)}
+  .com-drill-panel.open{display:block}
+  .com-dp-head{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--rz-line);position:sticky;top:0;background:#fff}
+  .com-dp-head a{color:var(--rz-indigo-deep);font-size:12px;font-weight:700;cursor:pointer}
+  .com-dp-list{padding:4px 0}
+  .com-dp-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .com-dp-item:hover{background:var(--rz-head-bg)}
+  .com-dp-item input{width:16px;height:16px;cursor:pointer;flex:0 0 auto}
+  .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:var(--rz-body)}
+  .com-dp-item .com-dp-sub{font-size:10px;color:var(--rz-faint);font-weight:600}
+  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--rz-indigo);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
+  .com-dp-item.checked .com-pos{display:inline-flex}
+  .com-dp-foot{padding:9px 12px;border-top:1px solid var(--rz-line);position:sticky;bottom:0;background:#fff}
+  .com-dp-foot button{width:100%;background:var(--rz-indigo);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  /* grouped rows inside the drill-down */
+  table.pd-dtbl tr.grp>td{font-weight:800;cursor:pointer}
+  table.pd-dtbl tr.grp>td.l{color:var(--rz-ink)}
+  table.pd-dtbl tr.grp:hover>td{background:#f1f5f9}
+  table.pd-dtbl .pd-gcar{display:inline-block;width:12px;color:#94a3b8;font-size:10px;margin-right:4px}
+
   .pd-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
   .pd-card-h{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;border-bottom:1px solid transparent;flex-wrap:wrap}
   .pd-card.open .pd-card-h{border-bottom-color:#eef2f6}
@@ -173,6 +198,23 @@
         <button type="button" data-scope="state" class="on">Result’s state + channel</button>
         <button type="button" data-scope="all">All India</button>
       </div></div>
+    <div class="pd-fld"><span class="pd-lbl">Drill By</span>
+      <div class="com-drill-box">
+        <button type="button" class="com-drill-btn" id="pdDrillBtn"><span id="pdDrillLabel">Customer</span><span class="com-caret">&#9662;</span></button>
+        <div class="com-drill-panel" id="pdDrillPanel">
+          <div class="com-dp-head"><a id="pdDrillAll">Select All</a><a id="pdDrillClr">Clear All</a></div>
+          <div class="com-dp-list" id="pdDrillList"></div>
+          <div class="com-dp-foot"><button type="button" id="pdDrillApply">Apply</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="pd-fld"><span class="pd-lbl">Type</span>
+      <select id="pdType">
+        <option value="">All</option>
+        <option value="PREMIUM">Premium</option>
+        <option value="COMMODITY">Commodity</option>
+        <option value="OTHERS">Others</option>
+      </select></div>
     <div class="pd-fld"><span class="pd-lbl">Month</span><input type="month" id="pdMonth"></div>
     <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
@@ -198,6 +240,11 @@
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
   var SCOPE='state';
+  /* Segment filter. Type comes from OITM.U_TYPE for the whole FG master, not just what sold,
+     so a planned item with no sale this month is still filtered correctly instead of vanishing
+     because we could not tell what it was. */
+  var ITEM_TYPES={}, TYPEF='';
+  function typeOk(code){ return !TYPEF || (ITEM_TYPES[String(code||'').toUpperCase()]||'')===TYPEF; }
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
   function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
   /* Channel is whatever the result was saved with — set in the calculator's Save dialog.
@@ -270,6 +317,8 @@
     (p.rows||[]).forEach(function(r){
       var code=String(r.code||'').trim().toUpperCase();
       var d=code?D[code]:null;
+      if(code)out.codes[code]=1;          // claimed by the plan whatever the type filter says
+      if(!typeOk(code))return;
       var planLtr=num(r.sell), planRev=num(r.revenue);
       var doneLtr=d?num(d.litres):0, doneRev=d?num(d.revenue):0;
       if(!code)out.nocode++; else if(!d)out.nosale++;
@@ -279,7 +328,6 @@
         doneLtr:doneLtr,doneRev:doneRev,matched:!!d});
       out.planLtr+=planLtr; out.planRev+=planRev; out.doneLtr+=doneLtr; out.doneRev+=doneRev;
       if(d){ out.pcs+=num(d.pcs); out.boxes+=num(d.boxes); }
-      if(code)out.codes[code]=1;
     });
     return out;
   }
@@ -290,7 +338,7 @@
   function extrasFor(codes,D){
     var out={rows:[],doneLtr:0,doneRev:0,pcs:0,boxes:0};
     Object.keys(D).forEach(function(code){
-      if(codes[code])return;
+      if(codes[code]||!typeOk(code))return;
       var d=D[code], lt=num(d.litres), rv=num(d.revenue);
       if(!Math.round(lt) && !Math.round(rv))return;
       out.rows.push({item:d.item_name||code,code:code,doneLtr:lt,doneRev:rv});
@@ -484,26 +532,86 @@
   /* ── Item drill-down: the parties and invoices behind one item's Done figure ── */
   var DOCS={};        // 'code|month' -> payload, so reopening a row costs nothing
 
+  /* Territory map (channel|state -> assigned owner), baked in at render like the dashboard,
+     so the Contact Person dimension shows the ASSIGNED owner rather than the invoice's
+     sales-person UDF. person_map is keyed by both the channel and its raw groups. */
+  var TERRITORY_DATA={{ territory_payload|safe }};
+  var TERRITORY=TERRITORY_DATA.map||{}, GROUP_OWNERS=TERRITORY_DATA.group_owners||{};
+  function assignedPerson(group,state){
+    group=String(group||'').trim().toUpperCase(); state=String(state||'').trim().toUpperCase();
+    return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||'—';
+  }
+
+  /* Product / Item Name are deliberately absent: the drill-down already sits inside one item. */
+  var PD_DIMS=[
+    {key:'customer', label:'Customer',       sub:'CardName / buyer'},
+    {key:'doc',      label:'Document',       sub:'Invoice / CN number'},
+    {key:'state',    label:'State',          sub:'Ship-to state'},
+    {key:'channel',  label:'Channel',        sub:'GT / MT / ROI / …'},
+    {key:'person',   label:'Contact Person', sub:'Assigned territory owner'}
+  ];
+  var DRILL=['customer','doc'], drillPick=['customer','doc'];
+
+  function dimValue(r,key){
+    if(key==='customer')return (r.customer||r.card_code||'—');
+    if(key==='doc')return String(r.doc_num||'—')+' · '+(r.doc_date||'');
+    if(key==='state')return r.state||'—';
+    if(key==='channel')return r.channel||'—';
+    if(key==='person')return assignedPerson(r.channel,r.state);
+    return '—';
+  }
+
+  /* Roll the document rows into a nested tree over the chosen dimensions. Totals are summed at
+     every level, so a collapsed group still states its own litres and value. */
+  function buildTree(rows,dims){
+    var root={children:{},order:[],qty:0,litres:0,revenue:0,cn:false};
+    rows.forEach(function(r){
+      var node=root;
+      node.qty+=num(r.qty); node.litres+=num(r.litres); node.revenue+=num(r.revenue);
+      dims.forEach(function(k){
+        var v=dimValue(r,k), kid=node.children[v];
+        if(!kid){ kid=node.children[v]={label:v,dim:k,children:{},order:[],qty:0,litres:0,revenue:0,cn:false};
+                  node.order.push(v); }
+        kid.qty+=num(r.qty); kid.litres+=num(r.litres); kid.revenue+=num(r.revenue);
+        if(r.kind==='CN')kid.cn=true;
+        if(k==='customer'&&r.card_code)kid.code=r.card_code;
+        node=kid;
+      });
+    });
+    return root;
+  }
+
+  function treeRows(node,depth,out){
+    node.order.forEach(function(k){
+      var n=node.children[k], kids=n.order.length;
+      out.push('<tr class="'+(kids?'grp':'')+(n.cn?' cn':'')+'" data-depth="'+depth+'">'
+        +'<td class="l" style="padding-left:'+(10+depth*18)+'px">'
+          +(kids?'<span class="pd-gcar">▾</span>':'<span class="pd-gcar"></span>')
+          +esc(n.label)+(n.code?'<span class="pd-code">'+esc(n.code)+'</span>':'')+'</td>'
+        +'<td>'+fN(Math.round(n.qty))+'</td><td>'+fN(Math.round(n.litres))+'</td>'
+        +'<td>'+fN(Math.round(n.revenue))+'</td>'
+        +'<td>'+(n.litres?f2(n.revenue/n.litres):'<span class="mute">—</span>')+'</td></tr>');
+      if(kids)treeRows(n,depth+1,out);
+    });
+    return out;
+  }
+
   function docsTable(p){
     if(p.status!=='ok')return '<div class="pd-dmsg">'+esc(p.error||'Could not load invoices.')+'</div>';
     if(!p.rows.length)return '<div class="pd-dmsg">No invoices for this item in '+esc(MONTH_LABEL)+'.</div>';
-    var t=p.totals;
+    var dims=DRILL.length?DRILL:['doc'];
+    var root=buildTree(p.rows,dims), t=p.totals;
     return '<table class="pd-dtbl"><thead><tr>'
-      +'<th class="l">Party</th><th class="l">Channel</th><th class="l">Doc No</th><th class="l">Date</th>'
+      +'<th class="l">'+dims.map(function(k){return esc(labelOf(k));}).join(' › ')+'</th>'
       +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
-      +p.rows.map(function(r){
-          return '<tr'+(r.kind==='CN'?' class="cn"':'')+'>'
-            +'<td class="l">'+esc(r.customer)+'<span class="pd-code">'+esc(r.card_code)+'</span></td>'
-            +'<td class="l">'+esc(r.channel||'—')+'</td>'
-            +'<td class="l">'+esc(r.doc_num)+(r.kind==='CN'?' <span class="pd-cn">CN</span>':'')+'</td>'
-            +'<td class="l">'+esc(r.doc_date)+'</td>'
-            +'<td>'+fN(Math.round(r.qty))+'</td><td>'+fN(Math.round(r.litres))+'</td>'
-            +'<td>'+fN(Math.round(r.revenue))+'</td><td>'+f2(r.realise_l)+'</td></tr>';
-        }).join('')
+      +treeRows(root,0,[]).join('')
       +'</tbody><tfoot><tr><td class="l">'+p.rows.length+' document'+(p.rows.length===1?'':'s')+'</td>'
-      +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
       +'<td>'+fN(Math.round(t.revenue))+'</td><td>'+f2(t.realise_l)+'</td></tr></tfoot></table>';
+  }
+  function labelOf(k){
+    for(var i=0;i<PD_DIMS.length;i++)if(PD_DIMS[i].key===k)return PD_DIMS[i].label;
+    return k;
   }
 
   function toggleDocs(cell){
@@ -517,6 +625,7 @@
     var month=document.getElementById('pdMonth').value, key=code+'|'+month+'|'+st+'|'+ch;
     var row=document.createElement('tr');
     row.className='pd-docs';
+    row.setAttribute('data-key',key);
     row.innerHTML='<td colspan="17"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
     tr.parentNode.insertBefore(row,tr.nextSibling);
     cell.classList.add('open');
@@ -597,6 +706,7 @@
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
       .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{}; DONE_SC=p.by_state_channel||{};
+                         ITEM_TYPES=p.item_types||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
       .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; });
   }
@@ -649,6 +759,55 @@
   var now=new Date();
   mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   mEl.addEventListener('change',loadDone);
+  /* ── Drill By ── */
+  function renderDrillList(){
+    document.getElementById('pdDrillList').innerHTML=PD_DIMS.map(function(d){
+      var i=drillPick.indexOf(d.key), on=i>=0;
+      return '<div class="com-dp-item'+(on?' checked':'')+'" data-k="'+d.key+'">'
+        +'<input type="checkbox"'+(on?' checked':'')+'>'
+        +'<span class="com-dp-name">'+esc(d.label)+'<div class="com-dp-sub">'+esc(d.sub)+'</div></span>'
+        +'<span class="com-pos">'+(on?(i+1):'')+'</span></div>';
+    }).join('');
+  }
+  function drillLabel(){
+    document.getElementById('pdDrillLabel').textContent=
+      DRILL.length?DRILL.map(labelOf).join(' › '):'Document';
+  }
+  /* Re-render from the cached payload rather than refetching: the drill is a client-side
+     regrouping of rows the server already sent. */
+  function refreshOpenDocs(){
+    Array.prototype.forEach.call(document.querySelectorAll('tr.pd-docs'),function(row){
+      var box=row.querySelector('.pd-dwrap'), k=row.getAttribute('data-key');
+      if(box&&DOCS[k])box.innerHTML=docsTable(DOCS[k]);
+    });
+  }
+  document.getElementById('pdDrillBtn').addEventListener('click',function(e){
+    e.stopPropagation();
+    document.getElementById('pdDrillPanel').classList.toggle('open');
+  });
+  document.getElementById('pdDrillList').addEventListener('click',function(e){
+    var it=e.target.closest?e.target.closest('.com-dp-item'):null;
+    if(!it)return;
+    var k=it.getAttribute('data-k'), i=drillPick.indexOf(k);
+    if(i>=0)drillPick.splice(i,1); else drillPick.push(k);   // click order = nesting order
+    renderDrillList();
+  });
+  document.getElementById('pdDrillAll').addEventListener('click',function(){
+    drillPick=PD_DIMS.map(function(d){return d.key;}); renderDrillList();
+  });
+  document.getElementById('pdDrillClr').addEventListener('click',function(){
+    drillPick=[]; renderDrillList();
+  });
+  document.getElementById('pdDrillApply').addEventListener('click',function(){
+    DRILL=drillPick.slice();
+    document.getElementById('pdDrillPanel').classList.remove('open');
+    drillLabel(); refreshOpenDocs();
+  });
+  document.addEventListener('click',function(e){
+    if(!e.target.closest||!e.target.closest('.com-drill-box'))
+      document.getElementById('pdDrillPanel').classList.remove('open');
+  });
+
   document.getElementById('pdScope').addEventListener('click',function(e){
     var b=e.target.closest?e.target.closest('[data-scope]'):null;
     if(!b || b.getAttribute('data-scope')===SCOPE)return;
@@ -659,6 +818,7 @@
     DOCS={};                                 // drill-downs are scope-specific too
     render();
   });
+  document.getElementById('pdType').addEventListener('change',function(){TYPEF=this.value;render();});
   document.getElementById('pdState').addEventListener('change',function(){stateF=this.value;render();});
   var sd=debounce(render,120);
   document.getElementById('pdSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});
@@ -716,6 +876,20 @@
   });
 
   document.getElementById('pdList').addEventListener('click',function(e){
+    var g=e.target.closest?e.target.closest('tr.grp'):null;
+    if(g){
+      var d=+g.getAttribute('data-depth'), hide=!g.classList.contains('collapsed');
+      g.classList.toggle('collapsed',hide);
+      var car=g.querySelector('.pd-gcar'); if(car)car.textContent=hide?'▸':'▾';
+      var n=g.nextElementSibling;
+      while(n&&n.hasAttribute('data-depth')&&(+n.getAttribute('data-depth'))>d){
+        n.style.display=hide?'none':'';
+        if(!hide){ n.classList.remove('collapsed');
+                   var c=n.querySelector('.pd-gcar'); if(c&&n.classList.contains('grp'))c.textContent='▾'; }
+        n=n.nextElementSibling;
+      }
+      return;
+    }
     var it=e.target.closest?e.target.closest('.pd-item'):null;
     if(it){ toggleDocs(it); return; }
     var sv=e.target.closest?e.target.closest('.pd-save-b'):null;
@@ -746,6 +920,8 @@
     var h=e.target.closest?e.target.closest('.pd-card-h'):null;
     if(h){ h.parentNode.classList.toggle('open'); }
   });
+
+  renderDrillList(); drillLabel();
 
   loading=true; render();
   Promise.all([loadSaved(), fetchDone()]).then(function(){ loading=false; render(); });
