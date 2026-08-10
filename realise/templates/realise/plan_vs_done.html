@@ -37,11 +37,6 @@
   .com-dp-foot{padding:9px 12px;border-top:1px solid var(--rz-line);position:sticky;bottom:0;background:#fff}
   .com-dp-foot button{width:100%;background:var(--rz-indigo);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 
-  /* grouped rows inside the drill-down */
-  table.pd-dtbl tr.grp>td{font-weight:800;cursor:pointer}
-  table.pd-dtbl tr.grp>td.l{color:var(--rz-ink)}
-  table.pd-dtbl tr.grp:hover>td{background:#f1f5f9}
-  table.pd-dtbl .pd-gcar{display:inline-block;width:12px;color:#94a3b8;font-size:10px;margin-right:4px}
 
   .pd-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
   .pd-card-h{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;border-bottom:1px solid transparent;flex-wrap:wrap}
@@ -610,92 +605,77 @@
     return TERRITORY[group+'|'+state]||GROUP_OWNERS[group]||'—';
   }
 
-  /* Product / Item Name are absent: the drill-down already sits inside one item. Document is
-     absent too — it is the LEAF, not a level. Grouping by it stacked one document under a
-     one-child customer group and printed the same value twice. */
+  /* Drill By picks COLUMNS, not nesting levels. A dimension contributes its own column(s) to
+     one flat row, so Customer and Document sit side by side on the same line instead of the
+     document hanging under a one-child customer group and repeating its value. Rows are the
+     distinct combinations of whatever is selected, aggregated. Product / Item Name are absent:
+     the drill-down already sits inside one item. */
   var PD_DIMS=[
-    {key:'customer', label:'Customer',       sub:'CardName / buyer'},
-    {key:'state',    label:'State',          sub:'Ship-to state'},
-    {key:'channel',  label:'Channel',        sub:'GT / MT / ROI / …'},
-    {key:'person',   label:'Contact Person', sub:'Assigned territory owner'}
+    {key:'customer', label:'Customer', sub:'CardName / buyer', cols:[
+      {h:'Party', v:function(r){ return r.customer||r.card_code||'—'; }}]},
+    {key:'doc', label:'Document', sub:'Invoice / CN number', cols:[
+      {h:'Doc No', v:function(r){ return String(r.doc_num||'—'); }},
+      {h:'Date',   v:function(r){ return r.doc_date||'—'; }}]},
+    {key:'state', label:'State', sub:'Ship-to state', cols:[
+      {h:'State', v:function(r){ return r.state||'—'; }}]},
+    {key:'channel', label:'Channel', sub:'GT / MT / ROI / …', cols:[
+      {h:'Channel', v:function(r){ return r.channel||'—'; }}]},
+    {key:'person', label:'Contact Person', sub:'Assigned territory owner', cols:[
+      {h:'Contact Person', v:function(r){ return assignedPerson(r.channel,r.state); }}]}
   ];
-  var DRILL=[], drillPick=[];              // none = the plain document list
+  var DRILL=['customer','doc'], drillPick=['customer','doc'];
 
-  function dimValue(r,key){
-    if(key==='customer')return (r.customer||r.card_code||'—');
-    if(key==='state')return r.state||'—';
-    if(key==='channel')return r.channel||'—';
-    if(key==='person')return assignedPerson(r.channel,r.state);
-    return '—';
+  function dimOf(k){ for(var i=0;i<PD_DIMS.length;i++)if(PD_DIMS[i].key===k)return PD_DIMS[i]; return null; }
+  function activeCols(){
+    var out=[];
+    DRILL.forEach(function(k){ var d=dimOf(k); if(d)out=out.concat(d.cols); });
+    return out;
   }
 
-  /* Roll the document rows into a nested tree over the chosen dimensions. Totals are summed at
-     every level, so a collapsed group still states its own litres and value. */
-  function buildTree(rows,dims){
-    var root={children:{},order:[],docs:[],qty:0,litres:0,revenue:0};
+  /* One row per distinct combination of the selected columns. Nothing selected collapses to a
+     single total row — honest for "no dimensions", rather than quietly showing a grain nobody
+     asked for. */
+  function groupRows(rows,cols){
+    var byKey={}, order=[];
     rows.forEach(function(r){
-      var node=root;
-      node.qty+=num(r.qty); node.litres+=num(r.litres); node.revenue+=num(r.revenue);
-      dims.forEach(function(k){
-        var v=dimValue(r,k), kid=node.children[v];
-        if(!kid){ kid=node.children[v]={label:v,children:{},order:[],docs:[],qty:0,litres:0,revenue:0};
-                  node.order.push(v); }
-        kid.qty+=num(r.qty); kid.litres+=num(r.litres); kid.revenue+=num(r.revenue);
-        node=kid;
-      });
-      node.docs.push(r);                       // documents hang off the deepest group
+      var vals=cols.map(function(c){ return c.v(r); });
+      var k=vals.join(''), g=byKey[k];
+      if(!g){ g=byKey[k]={vals:vals,qty:0,litres:0,revenue:0,cn:false}; order.push(k); }
+      g.qty+=num(r.qty); g.litres+=num(r.litres); g.revenue+=num(r.revenue);
+      if(r.kind==='CN')g.cn=true;
     });
-    return root;
-  }
-
-  /* A document row shows the document and nothing else. Party, Channel, State and Person are
-     attributes you ask for through Drill By — printing a Party column when Customer is not
-     ticked shows a breakdown nobody selected. With no dimensions at all this is a plain list
-     of invoices; tick Customer and the party arrives as the group above them. */
-  function docRow(r,depth,lead){
-    return '<tr'+(r.kind==='CN'?' class="cn"':'')+' data-depth="'+depth+'">'
-      +(lead?'<td class="l"></td>':'')
-      +'<td class="l" style="padding-left:'+(10+depth*18)+'px">'+esc(r.doc_num)
-        +(r.kind==='CN'?' <span class="pd-cn">CN</span>':'')+'</td>'
-      +'<td class="l">'+esc(r.doc_date)+'</td>'
-      +'<td>'+fN(Math.round(num(r.qty)))+'</td><td>'+fN(Math.round(num(r.litres)))+'</td>'
-      +'<td>'+fN(Math.round(num(r.revenue)))+'</td><td>'+f2(r.realise_l)+'</td></tr>';
-  }
-
-  function treeRows(node,depth,out,lead){
-    node.order.forEach(function(k){
-      var n=node.children[k];
-      out.push('<tr class="grp" data-depth="'+depth+'">'
-        +'<td class="l" colspan="'+(lead+2)+'" style="padding-left:'+(10+depth*18)+'px">'
-          +'<span class="pd-gcar">▾</span>'+esc(n.label)+'</td>'
-        +'<td>'+fN(Math.round(n.qty))+'</td><td>'+fN(Math.round(n.litres))+'</td>'
-        +'<td>'+fN(Math.round(n.revenue))+'</td>'
-        +'<td>'+(n.litres?f2(n.revenue/n.litres):'<span class="mute">—</span>')+'</td></tr>');
-      treeRows(n,depth+1,out,lead);
-    });
-    node.docs.forEach(function(r){ out.push(docRow(r,depth,lead)); });
+    var out=order.map(function(k){ return byKey[k]; });
+    out.sort(function(a,b){ return b.revenue-a.revenue; });
     return out;
   }
 
   function docsTable(p){
     if(p.status!=='ok')return '<div class="pd-dmsg">'+esc(p.error||'Could not load invoices.')+'</div>';
     if(!p.rows.length)return '<div class="pd-dmsg">No invoices for this item in '+esc(MONTH_LABEL)+'.</div>';
-    var rows=p.rows.filter(function(r){return personOk(normState(r.state),r.channel);});
+    var rows=p.rows.filter(function(r){ return personOk(normState(r.state),r.channel); });
     if(!rows.length)return '<div class="pd-dmsg">No invoices for the selected person(s) in '+esc(MONTH_LABEL)+'.</div>';
     // Totals come from the rows on screen, not the payload, so a filter can never leave a
     // footer that disagrees with what is above it.
     var t={qty:0,litres:0,revenue:0};
-    rows.forEach(function(r){t.qty+=num(r.qty);t.litres+=num(r.litres);t.revenue+=num(r.revenue);});
-    t.realise_l=t.litres?t.revenue/t.litres:0;
-    var lead=DRILL.length?1:0;
+    rows.forEach(function(r){ t.qty+=num(r.qty); t.litres+=num(r.litres); t.revenue+=num(r.revenue); });
+    var cols=activeCols(), grouped=groupRows(rows,cols), span=Math.max(cols.length,1);
     return '<table class="pd-dtbl"><thead><tr>'
-      +(lead?'<th class="l">'+esc(DRILL.map(labelOf).join(' › '))+'</th>':'')
-      +'<th class="l">Doc No</th><th class="l">Date</th>'
+      +(cols.length?cols.map(function(c){return '<th class="l">'+esc(c.h)+'</th>';}).join('')
+                   :'<th class="l">All documents</th>')
       +'<th>Qty (Pcs)</th><th>Litres</th><th>Revenue ₹</th><th>₹/L</th></tr></thead><tbody>'
-      +treeRows(buildTree(rows,DRILL),0,[],lead).join('')
-      +'</tbody><tfoot><tr><td class="l" colspan="'+(lead+2)+'">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
+      // No dimensions selected: the footer already IS the single total, so emit no body row
+      // rather than printing the same numbers twice.
+      +(cols.length?grouped.map(function(g){
+          return '<tr'+(g.cn?' class="cn"':'')+'>'
+            +g.vals.map(function(v){return '<td class="l">'+esc(v)+'</td>';}).join('')
+            +'<td>'+fN(Math.round(g.qty))+'</td><td>'+fN(Math.round(g.litres))+'</td>'
+            +'<td>'+fN(Math.round(g.revenue))+'</td>'
+            +'<td>'+(g.litres?f2(g.revenue/g.litres):'<span class="mute">—</span>')+'</td></tr>';
+        }).join(''):'')
+      +'</tbody><tfoot><tr><td class="l" colspan="'+span+'">'+rows.length+' document'+(rows.length===1?'':'s')+'</td>'
       +'<td>'+fN(Math.round(t.qty))+'</td><td>'+fN(Math.round(t.litres))+'</td>'
-      +'<td>'+fN(Math.round(t.revenue))+'</td><td>'+f2(t.realise_l)+'</td></tr></tfoot></table>';
+      +'<td>'+fN(Math.round(t.revenue))+'</td>'
+      +'<td>'+(t.litres?f2(t.revenue/t.litres):'0.00')+'</td></tr></tfoot></table>';
   }
   function labelOf(k){
     for(var i=0;i<PD_DIMS.length;i++)if(PD_DIMS[i].key===k)return PD_DIMS[i].label;
@@ -1005,20 +985,6 @@
   });
 
   document.getElementById('pdList').addEventListener('click',function(e){
-    var g=e.target.closest?e.target.closest('tr.grp'):null;
-    if(g){
-      var d=+g.getAttribute('data-depth'), hide=!g.classList.contains('collapsed');
-      g.classList.toggle('collapsed',hide);
-      var car=g.querySelector('.pd-gcar'); if(car)car.textContent=hide?'▸':'▾';
-      var n=g.nextElementSibling;
-      while(n&&n.hasAttribute('data-depth')&&(+n.getAttribute('data-depth'))>d){
-        n.style.display=hide?'none':'';
-        if(!hide){ n.classList.remove('collapsed');
-                   var c=n.querySelector('.pd-gcar'); if(c&&n.classList.contains('grp'))c.textContent='▾'; }
-        n=n.nextElementSibling;
-      }
-      return;
-    }
     var it=e.target.closest?e.target.closest('.pd-item'):null;
     if(it){ toggleDocs(it); return; }
     var sv=e.target.closest?e.target.closest('.pd-save-b'):null;
