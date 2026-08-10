@@ -4049,6 +4049,34 @@ def _done_finalize(bucket):
     return bucket
 
 
+_fg_types_cache = {}
+_FG_TYPES_TTL = 600               # seconds — the item master barely moves
+
+
+def get_fg_item_types():
+    """{ITEM_CODE: U_TYPE} for every finished-goods item (PREMIUM / COMMODITY / OTHERS).
+    Segment always comes from OITM.U_TYPE, never item-name matching — SAP tags items like
+    COLD PRESS 1 LTR as CANOLA with no hint of it in the name. Covers the whole master, not
+    just what sold, because a planned item with no sale this month still has to be filterable.
+    Cached _FG_TYPES_TTL seconds; {} on any SAP error."""
+    now = time.time()
+    hit = _fg_types_cache.get('v')
+    if hit is not None and _fg_types_cache.get('t', 0) > now:
+        return hit
+    sql = f'''SELECT COALESCE(TRIM(I."ItemCode"), '') AS "CODE",
+                     COALESCE(TRIM(I."U_TYPE"), '')   AS "UTYPE"
+              FROM "{SAP_SCHEMA}"."OITM" I WHERE I."ItemCode" LIKE 'FG%' '''
+    try:
+        rows = sap_connector.execute_query(sql) or []
+    except Exception as exc:
+        logger.error('[FG-TYPES] fetch failed: %s', exc)
+        return {}
+    out = {(r.get('CODE') or '').strip().upper(): (r.get('UTYPE') or '').strip().upper()
+           for r in rows if (r.get('CODE') or '').strip()}
+    _fg_types_cache['v'], _fg_types_cache['t'] = out, now + _FG_TYPES_TTL
+    return out
+
+
 def get_done_by_item(start_date, end_date):
     """Done sales per item for [start_date, end_date], net of returns. Returns {status, rows,
     by_state, states, start, end}: `rows` is the all-India map {ITEM_CODE: {...}} and
@@ -4106,6 +4134,7 @@ def get_done_by_item(start_date, end_date):
     payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
                'by_state': by_state, 'states': sorted(by_state),
                'by_state_channel': by_sc, 'channels': sorted(CHANNEL_MEMBERS),
+               'item_types': get_fg_item_types(),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
         _done_item_cache[key] = (now + _DONE_ITEM_TTL, payload)
