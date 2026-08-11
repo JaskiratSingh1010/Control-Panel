@@ -357,6 +357,12 @@
     return out;
   }
 
+  function mapTotals(D){
+    var ltr=0, rev=0;
+    Object.keys(D).forEach(function(c){ ltr+=num(D[c].litres); rev+=num(D[c].revenue); });
+    return {ltr:ltr, rev:rev};
+  }
+
   function mapForNode(el){
     var card=el.closest?el.closest('.pd-card'):null;
     return doneMapFor(card?card.getAttribute('data-state'):'',
@@ -504,7 +510,7 @@
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
   }
 
-  function planTable(p,pidx,rid,D,scopeLbl,tgt,tgtCh){
+  function planTable(p,pidx,rid,D,scopeLbl,tgt,tgtCh,tgtDone,tgtSt){
     var j=joinPlan(p,D);
     var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
     var body=j.rows.map(function(r){
@@ -632,19 +638,20 @@
           var t=tgt;
           if(!t)return '';
           var tRev=t.ltrs*t.rate;
-          var tpct=t.ltrs?(allLtr/t.ltrs*100):0;
-          var aRl=allLtr?(allRev/allLtr):0, tdiff=(aRl&&t.rate)?(aRl-t.rate):0;
-          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(tgtCh)
+          var tL=tgtDone?tgtDone.ltr:0, tR=tgtDone?tgtDone.rev:0;
+          var tpct=t.ltrs?(tL/t.ltrs*100):0;
+          var aRl=tL?(tR/tL):0, tdiff=(aRl&&t.rate)?(aRl-t.rate):0;
+          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(tgtSt)+' · '+esc(tgtCh)
             +(TYPEF?' · '+esc(TYPEF):'')+'</td>'
             +'<td></td><td></td><td></td>'
             +'<td>'+fN(Math.round(t.ltrs))+'</td>'
             +'<td class="pd-rl">'+f2(t.rate)+'</td>'
-            +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
+            +'<td class="'+(tL<0?'r':'pd-done')+' sep">'+fN(Math.round(tL))+'</td>'
             +'<td class="'+(t.ltrs?achCls(tpct):'mute')+'">'+(t.ltrs?f2(tpct)+'%':'—')+'</td>'
-            +'<td>'+(allLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
+            +'<td>'+(tL?f2(aRl):'<span class="mute">—</span>')+'</td>'
             +'<td class="'+(tdiff?(tdiff>=0?'g':'r'):'mute')+'">'+(tdiff?((tdiff>=0?'+':'')+f2(tdiff)):'—')+'</td>'
             +'<td></td>'
-            +estCells(t.ltrs,tRev,allLtr,allRev,t.rate)+'</tr></tfoot>';
+            +estCells(t.ltrs,tRev,tL,tR,t.rate)+'</tr></tfoot>';
         })()
       +'</table></div>'
       +(x.rows.length
@@ -799,7 +806,9 @@
     var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
     var a=resultAch(o,D);
     var tgt=targetOf(o), tgtCh=(o.channel||channelFromName(o.name)||'');
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgt,tgtCh);}).join('');
+    // same rule for the Target row on a saved card: its own territory, whatever the card scope
+    var tgtDone=tgt?mapTotals(doneMapFor(o.state,tgtCh)):null;
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgt,tgtCh,tgtDone,o.state);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
     // Scoped to a state that billed nothing this month reads identically to a broken join;
@@ -848,8 +857,11 @@
   function targetCardHtml(key,idx){
     var p=key.split('|'), ch=p[0], st=p[1];
     var t=TARGETS[key][TYPEF||'ALL'], tRev=t.ltrs*t.rate;
-    var D=(SCOPE==='all')?doneMapFor('',''):doneMapFor(st,ch);
-    var scopeLbl=(SCOPE==='all')?'all-India':(st+' · '+ch);
+    /* A target is a commitment for ONE territory, so it is always measured against that
+       territory - the All India toggle widens what a rate list is compared to, not what a
+       target means. Widening it showed this card Delhi CORPORATE sales under a Delhi HORECA
+       heading, and an achievement of 1,782%. */
+    var D=doneMapFor(st,ch), scopeLbl=st+' · '+ch;
     var x=extrasFor({},D), xid='t'+(++UID);            // nothing is planned, so everything is "extra"
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
     var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
@@ -895,8 +907,10 @@
        territory the target belongs to. Under All India the rows come from the national map,
        so the input handler and the drill-down have to look items up there too — otherwise
        they miss (pcsbox and boxltr read 0) and a priced row falls back to a realise of 0. */
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(SCOPE==='all'?'':st)
-      +'" data-channel="'+esc(SCOPE==='all'?'':ch)+'">'
+    // these describe the map the rows were built from - the drill-down and the input handler
+    // both resolve items through them
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)
+      +'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(st)+' · '+esc(ch)+'</span>'
         +'<span class="pd-chip state">'+esc(st)+' · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
