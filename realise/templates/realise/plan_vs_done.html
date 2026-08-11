@@ -50,6 +50,7 @@
   .pd-guess{margin-left:5px;font-size:9px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;
     color:#b45309;background:#fef3c7;border-radius:5px;padding:1px 4px}
   .pd-chip.scope{background:#ecfdf5;color:#047857}
+  .pd-chip.tgt{background:#fff7ed;color:#c2410c}
   .pd-chip.ach{background:#f1f5f9;color:#475569}
   .pd-chip.ach.good{background:#dcfce7;color:#15803d}
   .pd-chip.ach.mid{background:#fef3c7;color:#b45309}
@@ -794,6 +795,86 @@
       +'</div><div class="pd-body">'+dry+tables+'</div></div>';
   }
 
+  /* A target set in Update Targets is a commitment whether or not anyone built a rate list for
+     it, so a (channel, state) with a target and no saved result still gets a card. It has no
+     planning grid — there is no plan — just what sold in that scope against the target.
+     Only in "Result's state + channel" scope: a target belongs to one territory, and measuring
+     it against national sales would flatter it. */
+  function targetKeys(){
+    if(SCOPE!=='state')return [];
+    var claimed={};
+    ALL.forEach(function(o){
+      var st=scopeStateOf(o), ch=scopeChanOf(o);
+      if(st&&ch)claimed[ch+'|'+normState(st)]=1;
+    });
+    return Object.keys(TARGETS).sort().filter(function(k){
+      if(claimed[k])return false;                       // a saved result already shows this target
+      var st=k.split('|')[1];
+      if(stateF && normState(stateF)!==st)return false;
+      if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
+      var t=TARGETS[k][TYPEF||'ALL'];
+      return !!(t&&t.ltrs>0);
+    });
+  }
+
+  function targetCardHtml(key,idx){
+    var p=key.split('|'), ch=p[0], st=p[1];
+    var t=TARGETS[key][TYPEF||'ALL'], tRev=t.ltrs*t.rate;
+    var D=doneMapFor(st,ch);
+    var x=extrasFor({},D), xid='t'+(++UID);            // nothing is planned, so everything is "extra"
+    var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
+    var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
+    var diff=(aRl&&t.rate)?(aRl-t.rate):0;
+    var rows=x.rows.map(function(r){
+      var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
+      return '<tr class="x">'+itemCell(r.item,r.code)
+        +'<td class="mute">—</td>'
+        +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+        +'<td class="mute">—</td><td class="mute">—</td><td class="mute">—</td>'
+        +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
+        +'<td class="mute">—</td>'
+        +'<td>'+(a?f2(a):'<span class="mute">—</span>')+'</td>'
+        +'<td class="mute">—</td>'+ratePcCell(d)
+        +'<td class="mute sep">—</td><td class="mute">—</td><td class="mute">—</td></tr>';
+    }).join('');
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
+      +'<div class="pd-card-h">'
+        +'<span class="pd-name">'+esc(st)+' · '+esc(ch)+'</span>'
+        +'<span class="pd-chip state">'+esc(st)+' · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
+        +'<span class="pd-chip tgt">Target only — no rate list</span>'
+        +'<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
+        +'<div class="pd-sp"><span class="material-icons pd-chev">expand_more</span></div>'
+      +'</div><div class="pd-body">'
+      +'<div class="pd-plan-h">Target — Update Targets</div>'
+      +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
+      +'<tr class="grp"><th class="l"></th><th class="pl" colspan="5">Target — as set</th>'
+      +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(st)+' · '+esc(ch)+'</th>'
+      +'<th class="es sep" colspan="3">Estimate — left to hit target</th></tr><tr>'
+      +'<th class="l">Item</th><th>Retailer ₹</th><th>Box Ltrs</th><th>Scheme</th>'
+      +'<th>To be sale</th><th>Relise ₹/L</th>'
+      +'<th class="sep">Done Ltr</th><th>Ach %</th>'
+      +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th>'
+      +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
+      +'</tr></thead>'
+      +(x.rows.length
+        ? '<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="14">'
+            +'<span class="material-icons">expand_more</span>'
+            +x.rows.length+' item'+(x.rows.length===1?'':'s')+' sold in this scope this month'
+            +' — <em>open to see them</em></td></tr></tbody>'
+          +'<tbody class="pd-xrows" id="'+xid+'" hidden>'+rows+'</tbody>'
+        : '<tbody><tr><td class="l" colspan="14"><span class="mute">Nothing sold in this scope this month.</span></td></tr></tbody>')
+      +'<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</td>'
+      +'<td></td><td></td><td></td>'
+      +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
+      +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
+      +'<td class="'+achCls(pct)+'">'+f2(pct)+'%</td>'
+      +'<td>'+(x.doneLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
+      +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
+      +'<td></td>'
+      +estCells(t.ltrs,tRev,x.doneLtr,x.doneRev,t.rate)+'</tr></tfoot></table></div>'
+      +'</div></div>';
+  }
+
   function render(){
     var list=document.getElementById('pdList'), cnt=document.getElementById('pdCount');
     if(loading){ list.innerHTML='<div class="pd-empty">Loading…</div>'; cnt.textContent=''; return; }
@@ -802,9 +883,12 @@
       if(searchF && String(o.name||'').toLowerCase().indexOf(searchF)===-1)return false;
       return true;
     });
-    cnt.textContent=fN(rows.length)+' saved result'+(rows.length===1?'':'s');
-    if(!rows.length){ list.innerHTML='<div class="pd-empty">No saved results'+(stateF?(' for '+esc(stateF)):'')+'. Save one from the Realise Calculator, then come back here.</div>'; return; }
-    list.innerHTML=rows.map(cardHtml).join('');
+    // count the keys, not the markup: "pd-card" also matches the header's "pd-card-h"
+    var tkeys=targetKeys();
+    cnt.textContent=fN(rows.length)+' saved result'+(rows.length===1?'':'s')
+      +(tkeys.length?' · '+tkeys.length+' target-only':'');
+    if(!rows.length && !tkeys.length){ list.innerHTML='<div class="pd-empty">No saved results'+(stateF?(' for '+esc(stateF)):'')+'. Save one from the Realise Calculator, or set a target in Update Targets.</div>'; return; }
+    list.innerHTML=rows.map(cardHtml).join('')+tkeys.map(targetCardHtml).join('');
   }
 
   function fillStates(states){
