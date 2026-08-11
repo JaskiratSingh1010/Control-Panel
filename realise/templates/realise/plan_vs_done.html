@@ -59,6 +59,10 @@
 
   .pd-card-h .pd-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
   .pd-chev{font-size:20px;color:#94a3b8;transition:transform .18s}
+  .pd-edit{border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center}
+  .pd-edit:hover{background:#ffedd5}
+  .pd-edit.on{background:#c2410c;color:#fff;border-color:#c2410c}
+  .pd-edit .material-icons{font-size:16px}
   .pd-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
   .pd-del:hover{background:#fff1f3}
   .pd-card.open .pd-chev{transform:rotate(180deg)}
@@ -361,7 +365,7 @@
 
   /* Unsaved edits on the unplanned rows, keyed result|plan|item so they survive a re-render
      (state filter, search) and so two plans can plan the same SKU independently. */
-  var PENDING={};
+  var PENDING={}, EDIT={};          // EDIT['CHANNEL|STATE'] = target card is in edit mode
   function pkey(rid,pidx,code){ return rid+'|'+pidx+'|'+code; }
 
   /* SS%/DM%/GST%/Disc are not global — they are whatever the person who built THAT plan used
@@ -842,17 +846,42 @@
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
     var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
     var diff=(aRl&&t.rate)?(aRl-t.rate):0;
+    /* Editing turns the card into a plan being drafted: fill Retailer / Scheme / To be sale and
+       Create plan writes a real Rate List for this territory, after which it stops being a
+       target-only card. Terms default to SS 0 / DM 0 / GST 5 / Disc 0 — there is no saved plan
+       here to inherit them from. */
+    // pkey splits on '|', and key is 'CHANNEL|STATE' — swap the separator or the row key
+    // parses wrong and the input handler edits the neighbouring field.
+    var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pend=0;
     var rows=x.rows.map(function(r){
       var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
-      return '<tr class="x">'+itemCell(r.item,r.code)
-        +'<td class="mute">—</td>'
+      if(!ed){
+        return '<tr class="x">'+itemCell(r.item,r.code)
+          +'<td class="mute">—</td>'
+          +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+          +'<td class="mute">—</td><td class="mute">—</td><td class="mute">—</td>'
+          +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
+          +'<td class="mute">—</td>'
+          +'<td>'+(a?f2(a):'<span class="mute">—</span>')+'</td>'
+          +'<td class="mute">—</td>'+ratePcCell(d)
+          +'<td class="mute sep">—</td><td class="mute">—</td><td class="mute">—</td></tr>';
+      }
+      var k=pkey(rid,0,r.code), e=PENDING[k]||{};
+      var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
+      if(sell>0)pend++;
+      var rl=addedRealise(ret,num(d&&d.pcsbox),num(d&&d.boxltr),sch,a,A);
+      var ap=sell?(r.doneLtr/sell*100):0;
+      return '<tr class="x" data-k="'+esc(k)+'">'+itemCell(r.item,r.code)
+        +'<td class="pd-in"><input type="number" step="any" min="0" data-f="retailer" value="'+esc(e.retailer==null?'':e.retailer)+'" placeholder="retailer"></td>'
         +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
-        +'<td class="mute">—</td><td class="mute">—</td><td class="mute">—</td>'
+        +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
+        +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
+        +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
-        +'<td class="mute">—</td>'
+        +'<td data-c="ach" class="'+(sell>0?achCls(ap):'mute')+'">'+(sell>0?f2(ap)+'%':'—')+'</td>'
         +'<td>'+(a?f2(a):'<span class="mute">—</span>')+'</td>'
         +'<td class="mute">—</td>'+ratePcCell(d)
-        +'<td class="mute sep">—</td><td class="mute">—</td><td class="mute">—</td></tr>';
+        +estCells(sell,rl*sell,r.doneLtr,r.doneRev,rl)+'</tr>';
     }).join('');
     return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
@@ -860,7 +889,11 @@
         +'<span class="pd-chip state">'+esc(st)+' · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
         +'<span class="pd-chip tgt">Target only — no rate list</span>'
         +'<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
-        +'<div class="pd-sp"><span class="material-icons pd-chev">expand_more</span></div>'
+        +'<div class="pd-sp">'
+          +'<button class="pd-edit'+(ed?' on':'')+'" data-edit="'+esc(key)+'" title="'
+            +(ed?'Stop editing':'Set Retailer / Scheme / To be sale on these items')+'">'
+            +'<span class="material-icons">'+(ed?'close':'edit')+'</span></button>'
+          +'<span class="material-icons pd-chev">expand_more</span></div>'
       +'</div><div class="pd-body">'
       +'<div class="pd-plan-h">Target — Update Targets</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
@@ -889,6 +922,11 @@
       +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
       +'<td></td>'
       +estCells(t.ltrs,tRev,x.doneLtr,x.doneRev,t.rate)+'</tr></tfoot></table></div>'
+      +(ed
+        ? '<div class="pd-save" data-create="'+esc(key)+'"><span class="pd-save-n">'
+          +(pend?pend+' item'+(pend===1?'':'s')+' ready':'Fill “To be sale” on the items this territory should sell')
+          +'</span><button class="pd-save-b"'+(pend?'':' disabled')+'>Create plan</button></div>'
+        : '')
       +'</div></div>';
   }
 
@@ -970,6 +1008,61 @@
       .catch(function(){ btn.disabled=false; btn.textContent='Add to this plan'; window.alert('Could not add.'); });
   }
 
+  /* Turn a target-only card into a real Rate List, so it stops being target-only and joins the
+     saved results with its own plan. Rows are written in the calculator's shape, with the same
+     price terms the edit note states. */
+  function createPlan(bar){
+    var key=bar.getAttribute('data-create'), p=key.split('|'), ch=p[0], st=p[1];
+    var D=(SCOPE==='all')?doneMapFor('',''):doneMapFor(st,ch);
+    var A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pfx=rid+'|0|', rows=[];
+    Object.keys(PENDING).forEach(function(k){
+      if(k.indexOf(pfx)!==0)return;
+      var code=k.split('|')[2], e=PENDING[k], sell=num(e.sell);
+      if(sell<=0)return;
+      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue);
+      var actRl=lt?(rv/lt):0, ret=num(e.retailer), sch=num(e.scheme);
+      var pb=num(d.pcsbox), bl=num(d.boxltr), tot=bl+sch;
+      var priced=(ret>0&&pb>0&&tot>0);
+      var rl=addedRealise(ret,pb,bl,sch,actRl,A);
+      rows.push({item:d.item_name||code, code:code,
+        retailer:priced?ret:'', ss:priced?A.ss:'', dm:priced?A.dm:'',
+        gst:priced?A.gst:'', disc:priced?A.disc:'',
+        pcsbox:pb||'', boxltr:bl||'', scheme:sch, sell:sell,
+        realise:rl, revenue:rl*sell,
+        ssRate:0, dmRate:0, exgst:0, boxVal:0, netBox:0, totLtr:tot});
+    });
+    if(!rows.length)return;
+    var totSell=rows.reduce(function(a,r){return a+r.sell;},0);
+    var revSum=rows.reduce(function(a,r){return a+r.revenue;},0);
+    var btn=bar.querySelector('.pd-save-b');
+    btn.disabled=true; btn.textContent='Creating…';
+    fetch('/realise/api/rate-list/save/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({name:st+' '+ch+' '+MONTH_LABEL, state:titleState(st), channel:ch,
+        scope:'GRID', payload:{plans:[{name:'Planning Grid', rows:rows,
+          totals:{totSell:totSell, revSum:revSum, blend:totSell?revSum/totSell:0}}], compare:null}})})
+      .then(function(r){return r.json().catch(function(){return {status:'error'};});})
+      .then(function(pl){
+        btn.textContent='Create plan';
+        if(pl.status!=='ok'){ btn.disabled=false; window.alert('Could not create the plan: '+(pl.error||'error')); return; }
+        Object.keys(PENDING).forEach(function(k){ if(k.indexOf(pfx)===0)delete PENDING[k]; });
+        delete EDIT[key];
+        loading=true; render();
+        loadSaved().then(function(){ loading=false; render(); });
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Create plan'; window.alert('Could not create the plan.'); });
+  }
+  /* RateList.state is stored the way the calculator's dropdown spells it, so send Title Case:
+     'DELHI' -> 'Delhi', 'JAMMU AND KASHMIR' -> 'Jammu & Kashmir'.
+     No regex on purpose. A word-boundary escape does not survive the quoting between the
+     generator and this file - it degraded to a literal backspace here, so the replace never
+     matched and the state went out lowercase. Splitting on spaces cannot go wrong. */
+  function titleState(st){
+    return String(st||'').toLowerCase().split(' ').map(function(w){
+      if(!w)return w;
+      return (w==='and') ? '&' : (w.charAt(0).toUpperCase()+w.slice(1));
+    }).join(' ');
+  }
   function loadSaved(){
     return fetch('/realise/api/rate-list/',{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:[],states:[]};})
@@ -1151,6 +1244,15 @@
   });
 
   document.getElementById('pdList').addEventListener('click',function(e){
+    var ed=e.target.closest?e.target.closest('[data-edit]'):null;
+    if(ed){
+      e.stopPropagation();
+      var k=ed.getAttribute('data-edit');
+      if(EDIT[k])delete EDIT[k]; else EDIT[k]=1;
+      render(); return;
+    }
+    var cr=e.target.closest?e.target.closest('.pd-save-b'):null;
+    if(cr && cr.closest('[data-create]')){ createPlan(cr.closest('[data-create]')); return; }
     var it=e.target.closest?e.target.closest('.pd-item'):null;
     if(it){ toggleDocs(it); return; }
     var sv=e.target.closest?e.target.closest('.pd-save-b'):null;
