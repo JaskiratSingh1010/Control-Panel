@@ -1707,6 +1707,31 @@ def plan_vs_done(request):
     })
 
 
+@permission_flag_required('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def plan_vs_done_export(request):
+    """Build an .xlsx from the Plan vs Done tables currently on screen (client scrapes each saved
+    result's rendered table, honouring all filters/scope). Body: {filename, sheets:[{name,
+    rows:[[cell, ...], ...]}]} — cell is a scalar or {value, colspan, bold, fill, color, align}."""
+    from core.simple_xlsx import build_workbook
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        body = {}
+    sheets = [(str(s.get('name') or 'Sheet'), s['rows'])
+              for s in (body.get('sheets') or [])
+              if isinstance(s, dict) and isinstance(s.get('rows'), list) and s['rows']]
+    if not sheets:
+        return JsonResponse({'error': 'no rows to export'}, status=400)
+    fname = re.sub(r'[^A-Za-z0-9._ -]', '_', str(body.get('filename') or 'Plan-vs-Done'))[:120]
+    if not fname.lower().endswith('.xlsx'):
+        fname += '.xlsx'
+    resp = HttpResponse(build_workbook(sheets),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    return resp
+
+
 @any_permission_flag('can_realise_calculator', json_response=True)
 @require_http_methods(['GET'])
 def api_done_by_item(request):

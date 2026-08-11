@@ -174,8 +174,16 @@ class _Styles:
         )
 
 
-def _cell(value, row_idx, col_idx, style=0):
+def _cell(value, row_idx, col_idx, style=0, formula=None):
     ref = f'{_col_name(col_idx)}{row_idx}'
+    # Live formula cell: <f>…</f> plus a cached <v> so Excel shows the value before it recalculates.
+    if formula:
+        f = escape(str(formula).lstrip('='))
+        if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and value == value and value not in (float('inf'), float('-inf'))):
+            num = repr(value) if isinstance(value, float) else str(value)
+            return f'<c r="{ref}" s="{style}"><f>{f}</f><v>{num}</v></c>'
+        return f'<c r="{ref}" s="{style}"><f>{f}</f></c>'
     # Real numeric cells (so Excel can sum/sort) for actual numbers; everything else is text.
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if value != value or value in (float('inf'), float('-inf')):   # NaN / inf → blank
@@ -196,16 +204,18 @@ def _sheet_xml(rows, styles):
         cells = []
         col_idx = 1
         for cell in row:
+            formula = None
             if isinstance(cell, dict):
                 value = cell.get('value', '')
                 colspan = int(cell.get('colspan') or 1)
+                formula = cell.get('formula')
                 if any(k in cell for k in _STYLE_KEYS):
                     style = styles.resolve(cell)
                 else:
                     style = int(cell.get('style') or 0)
             else:
                 value, colspan, style = cell, 1, 0
-            cells.append(_cell(value, r_idx, col_idx, style))
+            cells.append(_cell(value, r_idx, col_idx, style, formula))
             widths[col_idx] = max(widths.get(col_idx, 0), len('' if value is None else str(value)))
             if colspan > 1:
                 start = f'{_col_name(col_idx)}{r_idx}'
