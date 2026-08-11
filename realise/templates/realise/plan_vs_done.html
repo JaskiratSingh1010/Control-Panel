@@ -69,7 +69,7 @@
      table gets a max-height and owns both axes. border-collapse must be `separate` or the
      collapsed borders on sticky cells stop painting once they lift off. */
   .pd-tbl-wrap{max-height:72vh;overflow:auto;border:1px solid #eef2f6;border-radius:12px}
-  table.pd-tbl{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0;font-size:13px}
+  table.pd-tbl{width:100%;min-width:1460px;border-collapse:separate;border-spacing:0;font-size:13px}
   /* EVERY rule below uses child combinators on purpose. The drill-down renders a whole table
      inside a tbody cell, so a descendant selector like `table.pd-tbl thead th` would also match
      the nested table's header — which made it sticky and it covered its own first invoice row. */
@@ -102,7 +102,6 @@
   /* Plan block keeps the Rate List's colours so the two tabs read the same; Done litres get
      their own indigo so the eye lands on the column this tab exists for. */
   table.pd-tbl>tbody>tr>td.pd-rl,table.pd-tbl>tfoot>tr>td.pd-rl{font-weight:800;color:#0e7490}
-  table.pd-tbl>tbody>tr>td.pd-rev,table.pd-tbl>tfoot>tr>td.pd-rev{font-weight:800;color:#065f46}
   table.pd-tbl>tbody>tr>td.pd-done,table.pd-tbl>tfoot>tr>td.pd-done{font-weight:800;color:#4338ca}
   table.pd-tbl>tbody>tr>td.g,table.pd-tbl>tfoot>tr>td.g{color:#15803d;font-weight:800}
   table.pd-tbl>tbody>tr>td.a,table.pd-tbl>tfoot>tr>td.a{color:#b45309;font-weight:800}
@@ -450,10 +449,9 @@
   }
   function estCells(planLtr,planRev,doneLtr,doneRev,planRl){
     var e=estParts(planLtr,planRev,doneLtr,doneRev,planRl);
-    if(!e)return '<td class="mute sep" data-c="ebal">—</td><td class="mute" data-c="erev">—</td>'
+    if(!e)return '<td class="mute sep" data-c="ebal">—</td>'
       +'<td class="mute" data-c="ereq">—</td><td class="mute" data-c="egap">—</td>';
     return '<td class="pd-bal sep" data-c="ebal">'+fN(Math.round(e.balL))+'</td>'
-      +'<td class="pd-bal" data-c="erev">'+fN(Math.round(e.balR))+'</td>'
       +(e.req===null
         ? '<td class="'+e.cls+'" data-c="ereq">'+e.label+'</td><td class="mute" data-c="egap">—</td>'
         : '<td class="pd-req" data-c="ereq">'+f2(e.req)+'</td>'
@@ -473,14 +471,11 @@
         +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td>'
         +'<td>'+fN(Math.round(r.planLtr))+'</td>'
         +'<td class="pd-rl">'+f2(r.planRl)+'</td>'
-        +'<td class="pd-rev">'+fN(Math.round(r.planRev))+'</td>'
         +'<td class="pd-done sep">'+(r.matched?fN(Math.round(r.doneLtr)):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(r.planLtr?achCls(pct):'mute')+'">'+(r.planLtr?f2(pct)+'%':'—')+'</td>'
         +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
         +ratePcCell(r.code?D[r.code]:null)
-        // No sale this month => no revenue to state. A literal 0 reads as a measurement; it isn't.
-        +'<td class="'+(r.matched?'pd-rev':'mute')+'">'+(r.matched?fN(Math.round(r.doneRev)):'—')+'</td>'
         +estCells(r.planLtr,r.planRev,r.doneLtr,r.doneRev,r.planRl)+'</tr>';
     }).join('');
 
@@ -494,14 +489,13 @@
        are editable there — typing a volume plans the item, and Save writes it into this result. */
     var x=extrasFor(j.codes,D), xid='x'+(++UID), extraHtml='', pend=0;
     if(x.rows.length){
-      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="7">'
+      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="6">'
         +'<span class="material-icons">expand_more</span>'
         +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
         +' — <em>open to plan them</em></td>'
         +'<td class="pd-done sep">'+fN(Math.round(x.doneLtr))+'</td><td></td><td></td><td></td>'
         +'<td>'+(x.pcs?f2(x.doneRev/x.pcs):'')+'</td>'
-        +'<td class="pd-rev">'+fN(Math.round(x.doneRev))+'</td>'
-        +'<td class="sep"></td><td></td><td></td><td></td></tr></tbody>'
+        +'<td class="sep"></td><td></td><td></td></tr></tbody>'
         +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
         +x.rows.map(function(r){
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
@@ -517,13 +511,11 @@
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
               +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
-              +'<td class="pd-rev" data-c="rev">'+(sell>0?fN(Math.round(rev)):'<span class="mute">—</span>')+'</td>'
               +'<td class="pd-done sep">'+fN(Math.round(r.doneLtr))+'</td>'
               +'<td data-c="ach" class="'+(sell>0?achCls(ap):'mute')+'">'+(sell>0?f2(ap)+'%':'—')+'</td>'
               +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
               +'<td class="mute">—</td>'
               +ratePcCell(d)
-              +'<td class="pd-rev">'+fN(Math.round(r.doneRev))+'</td>'
               +estCells(sell,rev,r.doneLtr,r.doneRev,rl)+'</tr>';
           }).join('')
         +'</tbody>';
@@ -539,27 +531,25 @@
 
     return '<div class="pd-plan-h">'+esc(p.name||'Plan')+'</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
-      +'<tr class="grp"><th class="l"></th><th class="pl" colspan="6">Plan — as saved</th>'
-      +'<th class="dn sep" colspan="6">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
-      +'<th class="es sep" colspan="4">Estimate — left to hit plan</th></tr><tr>'
+      +'<tr class="grp"><th class="l"></th><th class="pl" colspan="5">Plan — as saved</th>'
+      +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
+      +'<th class="es sep" colspan="3">Estimate — left to hit plan</th></tr><tr>'
       +'<th class="l">Item</th><th>Retailer ₹</th><th>Box Ltrs</th><th>Scheme</th>'
-      +'<th>To be sale</th><th>Relise ₹/L</th><th>Revenue ₹</th>'
+      +'<th>To be sale</th><th>Relise ₹/L</th>'
       +'<th class="sep">Done Ltr</th><th>Ach %</th>'
-      +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th><th>Done Revenue ₹</th>'
-      +'<th class="sep">Bal Ltr</th><th>Bal Revenue ₹</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
+      +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th>'
+      +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
       +'</tr></thead><tbody>'+body+'</tbody>'
       +extraHtml
       +'<tfoot><tr><td class="l">Blended ('+j.rows.length+')</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(j.planLtr))+'</td>'
       +'<td class="pd-rl">'+f2(blendPlan)+'</td>'
-      +'<td class="pd-rev">'+fN(Math.round(j.planRev))+'</td>'
       +'<td class="pd-done sep">'+fN(Math.round(j.doneLtr))+'</td>'
       +'<td class="'+(j.planLtr?achCls(pct):'mute')+'">'+(j.planLtr?f2(pct)+'%':'—')+'</td>'
       +'<td>'+f2(blendAct)+'</td>'
       +'<td class="'+(bdiff?(bdiff>=0?'g':'r'):'mute')+'">'+(bdiff?((bdiff>=0?'+':'')+f2(bdiff)):'—')+'</td>'
       +'<td>'+(j.pcs?f2(j.doneRev/j.pcs):'')+'</td>'
-      +'<td class="pd-rev">'+fN(Math.round(j.doneRev))+'</td>'
       +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr>'
       +'</tfoot></table></div>'
       +(x.rows.length
@@ -688,7 +678,7 @@
     var row=document.createElement('tr');
     row.className='pd-docs';
     row.setAttribute('data-key',key);
-    row.innerHTML='<td colspan="17"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
+    row.innerHTML='<td colspan="14"><div class="pd-dwrap"><div class="pd-dmsg">Loading…</div></div></td>';
     tr.parentNode.insertBefore(row,tr.nextSibling);
     cell.classList.add('open');
     var box=row.querySelector('.pd-dwrap');
@@ -954,16 +944,14 @@
       td.innerHTML=html; if(cls!=null)td.className=cls;
     }
     set('rl', on?f2(rl):'<span class="mute">—</span>', 'pd-rl');
-    set('rev',on?fN(Math.round(rl*sell)):'<span class="mute">—</span>', 'pd-rev');
     set('ach',on?f2(ap)+'%':'—', on?achCls(ap):'mute');
 
     var e=on?estParts(sell,rl*sell,doneLtr,doneRev,rl):null;
     if(!e){
-      set('ebal','—','mute sep'); set('erev','—','mute');
-      set('ereq','—','mute');     set('egap','—','mute');
+      set('ebal','—','mute sep');
+      set('ereq','—','mute'); set('egap','—','mute');
     }else{
       set('ebal',fN(Math.round(e.balL)),'pd-bal sep');
-      set('erev',fN(Math.round(e.balR)),'pd-bal');
       if(e.req===null){ set('ereq',e.label,e.cls); set('egap','—','mute'); }
       else{
         set('ereq',f2(e.req),'pd-req');
