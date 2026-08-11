@@ -471,7 +471,7 @@
         +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td>'
         +'<td>'+fN(Math.round(r.planLtr))+'</td>'
         +'<td class="pd-rl">'+f2(r.planRl)+'</td>'
-        +'<td class="pd-done sep">'+(r.matched?fN(Math.round(r.doneLtr)):'<span class="mute">—</span>')+'</td>'
+        +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+(r.matched?fN(Math.round(r.doneLtr)):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(r.planLtr?achCls(pct):'mute')+'">'+(r.planLtr?f2(pct)+'%':'—')+'</td>'
         +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
         +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
@@ -493,7 +493,7 @@
         +'<span class="material-icons">expand_more</span>'
         +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
         +' — <em>open to plan them</em></td>'
-        +'<td class="pd-done sep">'+fN(Math.round(x.doneLtr))+'</td><td></td><td></td><td></td>'
+        +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td><td></td><td></td><td></td>'
         // Rate ₹/Pc is per-item only. Across a basket a "piece" is not one unit: this
         // set mixes 0.77 / 1 / 3 / 5 L packs, and net pieces can even go negative when
         // returns outweigh sales (-195 pcs on +8.4 lakh revenue gave -4,314.66/pc).
@@ -514,7 +514,7 @@
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
               +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
-              +'<td class="pd-done sep">'+fN(Math.round(r.doneLtr))+'</td>'
+              +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
               +'<td data-c="ach" class="'+(sell>0?achCls(ap):'mute')+'">'+(sell>0?f2(ap)+'%':'—')+'</td>'
               +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
               +'<td class="mute">—</td>'
@@ -548,7 +548,7 @@
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(j.planLtr))+'</td>'
       +'<td class="pd-rl">'+f2(blendPlan)+'</td>'
-      +'<td class="pd-done sep">'+fN(Math.round(j.doneLtr))+'</td>'
+      +'<td class="'+(j.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(j.doneLtr))+'</td>'
       +'<td class="'+(j.planLtr?achCls(pct):'mute')+'">'+(j.planLtr?f2(pct)+'%':'—')+'</td>'
       +'<td>'+f2(blendAct)+'</td>'
       +'<td class="'+(bdiff?(bdiff>=0?'g':'r'):'mute')+'">'+(bdiff?((bdiff>=0?'+':'')+f2(bdiff)):'—')+'</td>'
