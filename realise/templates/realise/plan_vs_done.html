@@ -564,13 +564,23 @@
       +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr></tbody>'
       +extraHtml
       +(x.rows.length
-        ? '<tfoot><tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
-          +'<td></td><td></td><td></td><td></td><td></td>'
-          +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
-          +'<td></td>'
-          +'<td>'+(allLtr?f2(allRev/allLtr):'<span class="mute">—</span>')+'</td>'
-          +'<td></td><td></td>'
-          +'<td class="sep"></td><td></td><td></td></tr></tfoot>'
+        ? (function(){
+            // Everything sold in this scope, measured against the plan: unplanned SKUs count
+            // towards the territory's target too, so this line answers "after all of it, how
+            // much is still left and what rate must the balance fetch". The Blended row above
+            // answers the same question for the planned SKUs alone.
+            var apct = j.planLtr ? (allLtr/j.planLtr*100) : 0;
+            var aRl  = allLtr ? (allRev/allLtr) : 0;
+            var adiff = (aRl && blendPlan) ? (aRl-blendPlan) : 0;
+            return '<tfoot><tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
+              +'<td></td><td></td><td></td><td></td><td></td>'
+              +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
+              +'<td class="'+(j.planLtr?achCls(apct):'mute')+'">'+(j.planLtr?f2(apct)+'%':'—')+'</td>'
+              +'<td>'+(allLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
+              +'<td class="'+(adiff?(adiff>=0?'g':'r'):'mute')+'">'+(adiff?((adiff>=0?'+':'')+f2(adiff)):'—')+'</td>'
+              +'<td></td>'
+              +estCells(j.planLtr,j.planRev,allLtr,allRev,blendPlan)+'</tr></tfoot>';
+          })()
         : '')
       +'</table></div>'
       +(x.rows.length
