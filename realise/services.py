@@ -3986,6 +3986,7 @@ _DONE_ITEM_SQL = '''
            COALESCE(TRIM(H."CardCode"), '')    AS "CCODE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
            ''' + _SHIPTO_STATE + '''           AS "ST",
+           COALESCE(TRIM(C."State1"), '')      AS "BST",
            SUM({litexpr})                      AS "LIT",
            SUM({sign} * L."Quantity")          AS "PCS",
            SUM({sign} * L."LineTotal")         AS "REV"
@@ -3998,7 +3999,7 @@ _DONE_ITEM_SQL = '''
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
       AND I."ItemCode" LIKE 'FG%'
     GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn",
-             H."CardCode", C."U_Main_Group", ''' + _SHIPTO_STATE + '''
+             H."CardCode", C."U_Main_Group", C."State1", ''' + _SHIPTO_STATE + '''
 '''
 
 
@@ -4147,28 +4148,40 @@ def get_done_by_item(start_date, end_date):
                 'start': sd.isoformat(), 'end': ed.isoformat()}
 
     raw2ch = _raw_group_to_channel()
-    agg, by_state, by_sc = {}, {}, {}
+    agg = {}
+    # Two attribution bases. SHIP-TO is the dashboard's rule (where the goods went) and stays
+    # the default. BILL-TO is the customer's own state, which is the honest lens for accounts
+    # that buy in one state and take delivery in another — a Delhi HORECA account shipping to a
+    # hotel in Gurgaon is still Delhi's business.
+    bases = {'shipto': ({}, {}), 'billto': ({}, {})}
     for r in raw or []:
         code = (r.get('ICODE') or '').strip().upper()
         if not code:
             continue
-        st_raw = (r.get('ST') or '').strip()
-        state = norm_state(_delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw)))
         channel = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         _done_accum(agg, code, r)
-        if state:
+        for basis, col in (('shipto', 'ST'), ('billto', 'BST')):
+            raw_st = (r.get(col) or '').strip()
+            state = norm_state(_delhi_gt_state(r.get('CCODE'),
+                                               STATE_CODE_NAMES.get(raw_st, raw_st)))
+            if not state:
+                continue
+            by_state, by_sc = bases[basis]
             _done_accum(by_state.setdefault(state, {}), code, r)
             _done_accum(by_sc.setdefault(state + '|' + channel, {}), code, r)
 
     _done_finalize(agg)
-    for bucket in by_state.values():
-        _done_finalize(bucket)
-    for bucket in by_sc.values():
-        _done_finalize(bucket)
+    for by_state, by_sc in bases.values():
+        for bucket in by_state.values():
+            _done_finalize(bucket)
+        for bucket in by_sc.values():
+            _done_finalize(bucket)
+    by_state, by_sc = bases['shipto']
 
     payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
                'by_state': by_state, 'states': sorted(by_state),
                'by_state_channel': by_sc, 'channels': sorted(CHANNEL_MEMBERS),
+               'by_state_bill': bases['billto'][0], 'by_state_channel_bill': bases['billto'][1],
                'item_types': get_fg_item_types(),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
@@ -4186,6 +4199,7 @@ _DONE_DOCS_SQL = '''
            COALESCE(TRIM(C."CardName"), '')                      AS "CUST",
            COALESCE(TRIM(C."U_Main_Group"), '')                  AS "GRP",
            ''' + _SHIPTO_STATE + '''                             AS "ST",
+           COALESCE(TRIM(C."State1"), '')                        AS "BST",
            '{kind}'                                              AS "KIND",
            SUM({litexpr})                                        AS "LIT",
            SUM({sign} * L."Quantity")                            AS "QTY",
@@ -4198,11 +4212,12 @@ _DONE_DOCS_SQL = '''
     WHERE L."ItemCode" = ? AND H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
     GROUP BY H."DocNum", H."DocDate", H."CardCode", C."CardName", C."U_Main_Group",
-             ''' + _SHIPTO_STATE + '''
+             C."State1", ''' + _SHIPTO_STATE + '''
 '''
 
 
-def get_done_item_documents(item_code, start_date, end_date, state=None, channel=None):
+def get_done_item_documents(item_code, start_date, end_date, state=None, channel=None,
+                            basis='shipto'):
     """Who bought one item in a month: the invoices (and credit notes) behind its Done figure,
     with party, ship-to state, document, litres, pieces and value. Same filters and litre
     formula as get_done_by_item, so the rows sum exactly to that item's Done row — and with
@@ -4211,13 +4226,14 @@ def get_done_item_documents(item_code, start_date, end_date, state=None, channel
     code = str(item_code or '').strip().upper()
     want_state = norm_state(state) if state else ''
     want_chan = _normalize_name(channel) if channel else ''
+    basis = 'billto' if str(basis or '').lower() == 'billto' else 'shipto'
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not code or not sd or not ed:
         return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
                 'error': 'item code and dates required'}
     if ed < sd:
         sd, ed = ed, sd
-    key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan)
+    key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan, basis)
     now = time.time()
     hit = _done_docs_cache.get(key)
     if hit and hit[0] > now:
@@ -4243,7 +4259,7 @@ def get_done_item_documents(item_code, start_date, end_date, state=None, channel
         lit, qty, val = (float(r.get(k) or 0) for k in ('LIT', 'QTY', 'VAL'))
         if not (round(lit, 2) or round(qty, 2) or round(val, 2)):
             continue
-        st_raw = (r.get('ST') or '').strip()
+        st_raw = (r.get('ST' if basis == 'shipto' else 'BST') or '').strip()
         row_state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
         row_chan = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         if want_state and norm_state(row_state) != want_state:

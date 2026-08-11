@@ -196,6 +196,11 @@
         <button type="button" data-scope="state" class="on">Result’s state + channel</button>
         <button type="button" data-scope="all">All India</button>
       </div></div>
+    <div class="pd-fld"><span class="pd-lbl">Attribute by</span>
+      <div class="pd-seg" id="pdBasis">
+        <button type="button" data-basis="shipto" class="on">Ship-to</button>
+        <button type="button" data-basis="billto">Bill-to</button>
+      </div></div>
     <div class="pd-fld"><span class="pd-lbl">Drill By</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="pdDrillBtn"><span id="pdDrillLabel">No grouping</span><span class="com-caret">&#9662;</span></button>
@@ -249,6 +254,15 @@
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
   var SCOPE='state';
+  /* Which state a sale belongs to. Ship-to (where the goods went) is the dashboard's rule and
+     the default. Bill-to (the customer's own state) is the honest lens for accounts that buy in
+     one state and take delivery in another — Delhi HORECA bills SHRAY and M R K in Delhi but
+     ships to Haryana and Rajasthan, so ship-to shows that territory as empty. */
+  var BASIS='shipto', DONE_BY_SHIP={}, DONE_SC_SHIP={}, DONE_BY_BILL={}, DONE_SC_BILL={};
+  function applyBasis(){
+    DONE_BY = (BASIS==='billto')?DONE_BY_BILL:DONE_BY_SHIP;
+    DONE_SC = (BASIS==='billto')?DONE_SC_BILL:DONE_SC_SHIP;
+  }
   /* Segment filter. Type comes from OITM.U_TYPE for the whole FG master, not just what sold,
      so a planned item with no sale this month is still filtered correctly instead of vanishing
      because we could not tell what it was. */
@@ -256,6 +270,9 @@
   /* Update Targets holds a target per (channel, state, segment). Honour the Type filter when
      one is set, else the pooled 'ALL'. No channel on the card means no target to look up:
      a GT target must not be shown against every channel in the state. */
+  /* The result's OWN territory target, independent of the Done scope: switching to All India
+     widens what counts as Done, it does not change what the territory was asked to do. */
+  function targetOf(o){ return targetFor(o.state, o.channel||channelFromName(o.name)); }
   function targetFor(st,ch){
     if(!st||!ch)return null;
     var b=TARGETS[ch+'|'+normState(st)];
@@ -475,9 +492,7 @@
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
   }
 
-  // st / ch are the card's resolved scope — the target lookup needs them, and they live in
-  // cardHtml, so they are passed in rather than reached for from here.
-  function planTable(p,pidx,rid,D,scopeLbl,st,ch){
+  function planTable(p,pidx,rid,D,scopeLbl,tgt,tgtCh){
     var j=joinPlan(p,D);
     var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
     var body=j.rows.map(function(r){
@@ -602,12 +617,12 @@
          built, the target is what the territory was asked to do. Measured against ALL sales in
          the scope, since the target covers the territory rather than a list of SKUs. */
       +(function(){
-          var t=targetFor(st,ch);
+          var t=tgt;
           if(!t)return '';
           var tRev=t.ltrs*t.rate;
           var tpct=t.ltrs?(allLtr/t.ltrs*100):0;
           var aRl=allLtr?(allRev/allLtr):0, tdiff=(aRl&&t.rate)?(aRl-t.rate):0;
-          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(ch||st)
+          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(tgtCh)
             +(TYPEF?' · '+esc(TYPEF):'')+'</td>'
             +'<td></td><td></td><td></td>'
             +'<td>'+fN(Math.round(t.ltrs))+'</td>'
@@ -738,7 +753,8 @@
     }
     var card=cell.closest('.pd-card'), st=card?(card.getAttribute('data-state')||''):'';
     var ch=card?(card.getAttribute('data-channel')||''):'';
-    var month=document.getElementById('pdMonth').value, key=code+'|'+month+'|'+st+'|'+ch;
+    var month=document.getElementById('pdMonth').value;
+    var key=code+'|'+month+'|'+st+'|'+ch+'|'+BASIS;
     var row=document.createElement('tr');
     row.className='pd-docs';
     row.setAttribute('data-key',key);
@@ -749,7 +765,7 @@
     if(DOCS[key]){ box.innerHTML=docsTable(DOCS[key]); return; }
     fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)
           +'&month='+encodeURIComponent(month)+'&state='+encodeURIComponent(st)
-          +'&channel='+encodeURIComponent(ch),
+          +'&channel='+encodeURIComponent(ch)+'&basis='+encodeURIComponent(BASIS),
           {headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
       .then(function(p){ DOCS[key]=p; box.innerHTML=docsTable(p); })
@@ -770,7 +786,8 @@
     var st=scopeStateOf(o), ci=chanInfo(o), ch=ci.ch, D=doneMapFor(st,ch);
     var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
     var a=resultAch(o,D);
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,st,ch);}).join('');
+    var tgt=targetOf(o), tgtCh=(o.channel||channelFromName(o.name)||'');
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgt,tgtCh);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
     // Scoped to a state that billed nothing this month reads identically to a broken join;
@@ -801,11 +818,10 @@
      Only in "Result's state + channel" scope: a target belongs to one territory, and measuring
      it against national sales would flatter it. */
   function targetKeys(){
-    if(SCOPE!=='state')return [];
     var claimed={};
     ALL.forEach(function(o){
-      var st=scopeStateOf(o), ch=scopeChanOf(o);
-      if(st&&ch)claimed[ch+'|'+normState(st)]=1;
+      var ch=o.channel||channelFromName(o.name);          // its own territory, not the view scope
+      if(o.state&&ch)claimed[ch+'|'+normState(o.state)]=1;
     });
     return Object.keys(TARGETS).sort().filter(function(k){
       if(claimed[k])return false;                       // a saved result already shows this target
@@ -820,7 +836,8 @@
   function targetCardHtml(key,idx){
     var p=key.split('|'), ch=p[0], st=p[1];
     var t=TARGETS[key][TYPEF||'ALL'], tRev=t.ltrs*t.rate;
-    var D=doneMapFor(st,ch);
+    var D=(SCOPE==='all')?doneMapFor('',''):doneMapFor(st,ch);
+    var scopeLbl=(SCOPE==='all')?'all-India':(st+' · '+ch);
     var x=extrasFor({},D), xid='t'+(++UID);            // nothing is planned, so everything is "extra"
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
     var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
@@ -848,7 +865,7 @@
       +'<div class="pd-plan-h">Target — Update Targets</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
       +'<tr class="grp"><th class="l"></th><th class="pl" colspan="5">Target — as set</th>'
-      +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(st)+' · '+esc(ch)+'</th>'
+      +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
       +'<th class="es sep" colspan="3">Estimate — left to hit target</th></tr><tr>'
       +'<th class="l">Item</th><th>Retailer ₹</th><th>Box Ltrs</th><th>Scheme</th>'
       +'<th>To be sale</th><th>Relise ₹/L</th>'
@@ -906,10 +923,14 @@
 
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
-      .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{}; DONE_SC=p.by_state_channel||{};
+      .then(function(p){ DONE_ALL=p.rows||{};
+                         DONE_BY_SHIP=p.by_state||{};      DONE_SC_SHIP=p.by_state_channel||{};
+                         DONE_BY_BILL=p.by_state_bill||{}; DONE_SC_BILL=p.by_state_channel_bill||{};
+                         applyBasis();
                          ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
-      .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; });
+      .catch(function(){ DONE_ALL={}; DONE_BY_SHIP={}; DONE_SC_SHIP={};
+                         DONE_BY_BILL={}; DONE_SC_BILL={}; applyBasis(); });
   }
   function loadDone(){
     loading=true; render();
@@ -1052,6 +1073,16 @@
     if(e.target.closest&&e.target.closest('.com-drill-box'))return;
     document.getElementById('pdDrillPanel').classList.remove('open');
     document.getElementById('pdPersPanel').classList.remove('open');
+  });
+
+  document.getElementById('pdBasis').addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('[data-basis]'):null;
+    if(!b || b.getAttribute('data-basis')===BASIS)return;
+    BASIS=b.getAttribute('data-basis');
+    Array.prototype.forEach.call(this.querySelectorAll('[data-basis]'),function(x){
+      x.classList.toggle('on',x.getAttribute('data-basis')===BASIS);
+    });
+    applyBasis(); DOCS={}; render();
   });
 
   document.getElementById('pdScope').addEventListener('click',function(e){
