@@ -90,7 +90,7 @@
   table.pd-tbl>thead>tr>th.l{z-index:4}
   table.pd-tbl>tbody>tr:nth-child(even)>td.l{background:#fafcff}
   table.pd-tbl>tbody.pd-xrows>tr.x>td.l{background:#fcfdff}
-  table.pd-tbl>tfoot>tr>td.l{background:#f8fafc}
+  table.pd-tbl>tfoot>tr>td.l{background:#eef2ff}
   table.pd-tbl>tbody>tr.pd-more>td.l{position:static;background:#f1f5f9;box-shadow:none}
   table.pd-tbl>thead>tr.grp>th.pl{background:#eef2ff;color:#4338ca}
   table.pd-tbl>thead>tr.grp>th.dn{background:#ecfdf5;color:#047857}
@@ -109,8 +109,11 @@
   table.pd-tbl>tbody>tr>td.mute,table.pd-tbl>tfoot>tr>td.mute{color:var(--rz-faint)}
   /* the inline "—" spans inside a cell, not the cell itself */
   table.pd-tbl>tbody>tr>td .mute,table.pd-tbl>tfoot>tr>td .mute{color:var(--rz-faint)}
-  table.pd-tbl>tfoot>tr>td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
-  table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
+  table.pd-tbl>tbody>tr.pd-sub>td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-tbl>tbody>tr.pd-sub>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted);background:#f8fafc}
+  table.pd-tbl>tbody>tr.pd-sub>td.sep{border-left:2px solid var(--rz-line)}
+  table.pd-tbl>tfoot>tr>td{background:#eef2ff;border-top:2px solid #c7d2fe;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:#4338ca}
   table.pd-tbl>tfoot>tr>td.sep{border-left:2px solid var(--rz-line)}
 
   /* "N more items sold, not in this plan" — always visible, rows behind a click. */
@@ -489,16 +492,10 @@
        are editable there — typing a volume plans the item, and Save writes it into this result. */
     var x=extrasFor(j.codes,D), xid='x'+(++UID), extraHtml='', pend=0;
     if(x.rows.length){
-      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="6">'
+      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="14">'
         +'<span class="material-icons">expand_more</span>'
         +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
-        +' — <em>open to plan them</em></td>'
-        +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td><td></td><td></td><td></td>'
-        // Rate ₹/Pc is per-item only. Across a basket a "piece" is not one unit: this
-        // set mixes 0.77 / 1 / 3 / 5 L packs, and net pieces can even go negative when
-        // returns outweigh sales (-195 pcs on +8.4 lakh revenue gave -4,314.66/pc).
-        +'<td></td>'
-        +'<td class="sep"></td><td></td><td></td></tr></tbody>'
+        +' — <em>open to plan them</em></td></tr></tbody>'
         +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
         +x.rows.map(function(r){
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
@@ -521,7 +518,18 @@
               +ratePcCell(d)
               +estCells(sell,rev,r.doneLtr,r.doneRev,rl)+'</tr>';
           }).join('')
-        +'</tbody>';
+        +'</tbody>'
+        // Subtotal sits AFTER the rows it sums, and outside the collapsible tbody so it is
+        // readable without expanding. Rate ₹/Pc is left blank here: across a basket a
+        // "piece" is not one unit (this set mixes 0.77 / 1 / 3 / 5 L packs) and net pieces
+        // can go negative when returns outweigh sales.
+        +'<tbody><tr class="pd-sub"><td class="l">Not in plan ('+x.rows.length+')</td>'
+        +'<td></td><td></td><td></td><td></td><td></td>'
+        +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
+        +'<td></td>'
+        +'<td>'+(x.doneLtr?f2(x.doneRev/x.doneLtr):'<span class="mute">—</span>')+'</td>'
+        +'<td></td><td></td>'
+        +'<td class="sep"></td><td></td><td></td></tr></tbody>';
     }
     var allLtr=j.doneLtr+x.doneLtr, allRev=x.doneRev+j.doneRev;
 
@@ -543,8 +551,7 @@
       +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th>'
       +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
       +'</tr></thead><tbody>'+body+'</tbody>'
-      +extraHtml
-      +'<tfoot><tr><td class="l">Blended ('+j.rows.length+')</td>'
+      +'<tbody><tr class="pd-sub"><td class="l">Blended ('+j.rows.length+')</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(j.planLtr))+'</td>'
       +'<td class="pd-rl">'+f2(blendPlan)+'</td>'
@@ -554,8 +561,18 @@
       +'<td class="'+(bdiff?(bdiff>=0?'g':'r'):'mute')+'">'+(bdiff?((bdiff>=0?'+':'')+f2(bdiff)):'—')+'</td>'
       // blended Rate ₹/Pc would mix pack sizes the same way — see the note above
       +'<td></td>'
-      +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr>'
-      +'</tfoot></table></div>'
+      +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr></tbody>'
+      +extraHtml
+      +(x.rows.length
+        ? '<tfoot><tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
+          +'<td></td><td></td><td></td><td></td><td></td>'
+          +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
+          +'<td></td>'
+          +'<td>'+(allLtr?f2(allRev/allLtr):'<span class="mute">—</span>')+'</td>'
+          +'<td></td><td></td>'
+          +'<td class="sep"></td><td></td><td></td></tr></tfoot>'
+        : '')
+      +'</table></div>'
       +(x.rows.length
         ? '<div class="pd-save" data-save="'+rid+'|'+pidx+'"><span class="pd-save-n">'
           +(pend?pend+' item'+(pend===1?'':'s')+' ready to add':'Fill “To be sale” on any unplanned item to add it to this plan')
@@ -568,10 +585,6 @@
       +'<div class="pd-kpi opp"><div class="k-l">Relise ₹/L · Plan → Actual</div><div class="k-v">'+f2(blendPlan)+' → '+f2(blendAct)+'</div></div>'
       +'<div class="pd-kpi acc"><div class="k-l">Plan · Revenue</div><div class="k-v">₹'+fN(Math.round(j.planRev))+'</div></div>'
       +'<div class="pd-kpi opp"><div class="k-l">Done · Revenue</div><div class="k-v">₹'+fN(Math.round(j.doneRev))+'</div></div>'
-      +(x.rows.length
-        ? '<div class="pd-kpi opp"><div class="k-l">All items sold · '+esc(MONTH_LABEL)+'</div>'
-          +'<div class="k-v">'+fN(Math.round(allLtr))+' L · ₹'+fN(Math.round(allRev))+'</div></div>'
-        : '')
       +(function(){                       // the headline: what the balance must fetch
           var e=estParts(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan);
           if(!e)return '';
