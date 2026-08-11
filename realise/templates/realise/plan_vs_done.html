@@ -474,7 +474,9 @@
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
   }
 
-  function planTable(p,pidx,rid,D,scopeLbl){
+  // st / ch are the card's resolved scope — the target lookup needs them, and they live in
+  // cardHtml, so they are passed in rather than reached for from here.
+  function planTable(p,pidx,rid,D,scopeLbl,st,ch){
     var j=joinPlan(p,D);
     var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
     var body=j.rows.map(function(r){
@@ -767,7 +769,7 @@
     var st=scopeStateOf(o), ci=chanInfo(o), ch=ci.ch, D=doneMapFor(st,ch);
     var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
     var a=resultAch(o,D);
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl);}).join('');
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,st,ch);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
     // Scoped to a state that billed nothing this month reads identically to a broken join;
