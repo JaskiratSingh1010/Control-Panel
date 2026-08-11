@@ -473,6 +473,10 @@
   function estParts(planLtr,planRev,doneLtr,doneRev,planRl){
     if(planLtr<=0)return null;
     var balL=planLtr-doneLtr, balR=planRev-doneRev, o={balL:balL,balR:balR,req:null,gap:0};
+    // With nothing left to require, a word says less than a number. Show the realisation
+    // actually achieved instead, coloured for which case it is: green = the money target is
+    // already made, red = it is short and there is no planned volume left to make it on.
+    o.achieved = doneLtr ? (doneRev/doneLtr) : 0;
     if(balR<=0){ o.label='met';    o.cls='g'; }
     else if(balL<=0){ o.label='no vol'; o.cls='r'; }
     else {
@@ -490,7 +494,11 @@
       +'<td class="mute" data-c="ereq">—</td><td class="mute" data-c="egap">—</td>';
     return '<td class="pd-bal sep" data-c="ebal">'+fN(Math.round(e.balL))+'</td>'
       +(e.req===null
-        ? '<td class="'+e.cls+'" data-c="ereq">'+e.label+'</td><td class="mute" data-c="egap">—</td>'
+        ? '<td class="'+e.cls+'" data-c="ereq" title="'
+            +(e.label==='met'?'Target already made — this is the realisation achieved'
+                             :'Short on value with no planned litres left — this is the realisation achieved')
+            +'">'+(e.achieved?f2(e.achieved):e.label)+'</td>'
+          +'<td class="mute" data-c="egap">—</td>'
         : '<td class="pd-req" data-c="ereq">'+f2(e.req)+'</td>'
           +'<td class="'+(e.gap?(e.gap<=0?'g':'r'):'mute')+'" data-c="egap">'
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
@@ -1228,7 +1236,8 @@
       set('ereq','—','mute'); set('egap','—','mute');
     }else{
       set('ebal',fN(Math.round(e.balL)),'pd-bal sep');
-      if(e.req===null){ set('ereq',e.label,e.cls); set('egap','—','mute'); }
+      // same as estCells: no rate to require, so state the one being achieved
+      if(e.req===null){ set('ereq',e.achieved?f2(e.achieved):e.label,e.cls); set('egap','—','mute'); }
       else{
         set('ereq',f2(e.req),'pd-req');
         set('egap',e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—',e.gap?(e.gap<=0?'g':'r'):'mute');
