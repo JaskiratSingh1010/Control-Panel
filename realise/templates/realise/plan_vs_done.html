@@ -13,6 +13,9 @@
   .pd-bar select,.pd-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .pd-bar select:focus,.pd-bar input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .pd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
+  .pd-export{align-self:center;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--rz-card-brd);color:var(--rz-indigo-deep);font-family:inherit;font-size:12.5px;font-weight:800;padding:9px 15px;border-radius:10px;cursor:pointer;transition:background .15s,border-color .15s}
+  .pd-export:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
+  .pd-export .material-icons{font-size:17px}
   .pd-seg{display:inline-flex;border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;background:#fff}
   .pd-seg button{font-family:inherit;font-size:12.5px;font-weight:700;color:var(--rz-muted);background:#fff;border:0;padding:8px 12px;cursor:pointer}
   .pd-seg button+button{border-left:1px solid #e2e8f0}
@@ -88,7 +91,6 @@
   table.pd-tbl>tbody>tr:nth-child(even)>td.l{background:#fafcff}
   table.pd-tbl>tbody.pd-xrows>tr.x>td.l{background:#fcfdff}
   table.pd-tbl>tfoot>tr>td.l{background:#f8fafc}
-  table.pd-tbl>tfoot>tr.all>td.l{background:#eef2ff}
   table.pd-tbl>tbody>tr.pd-more>td.l{position:static;background:#f1f5f9;box-shadow:none}
   table.pd-tbl>thead>tr.grp>th.pl{background:#eef2ff;color:#4338ca}
   table.pd-tbl>thead>tr.grp>th.dn{background:#ecfdf5;color:#047857}
@@ -111,8 +113,6 @@
   table.pd-tbl>tfoot>tr>td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
   table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted)}
   table.pd-tbl>tfoot>tr>td.sep{border-left:2px solid var(--rz-line)}
-  table.pd-tbl>tfoot>tr.all>td{background:#eef2ff;border-top:1px solid #c7d2fe}
-  table.pd-tbl>tfoot>tr.all>td.l{color:#4338ca}
 
   /* "N more items sold, not in this plan" — always visible, rows behind a click. */
   table.pd-tbl>tbody>tr.pd-more>td{background:#f1f5f9;cursor:pointer;font-weight:800;color:#475569;border-top:2px solid var(--rz-line)}
@@ -222,6 +222,7 @@
     <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
     <span class="pd-count" id="pdCount"></span>
+    <button type="button" class="pd-export" id="pdExport" title="Download every saved result's Plan vs Done table (Excel)"><span class="material-icons">download</span>Export Excel</button>
   </div>
 
   <div id="pdList"><div class="pd-empty">Loading…</div></div>
@@ -560,15 +561,6 @@
       +'<td>'+(j.pcs?f2(j.doneRev/j.pcs):'')+'</td>'
       +'<td class="pd-rev">'+fN(Math.round(j.doneRev))+'</td>'
       +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr>'
-      +(x.rows.length
-        ? '<tr class="all"><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
-          +'<td></td><td></td><td></td><td></td><td></td><td></td>'
-          +'<td class="pd-done sep">'+fN(Math.round(allLtr))+'</td><td></td>'
-          +'<td>'+f2(allLtr?allRev/allLtr:0)+'</td><td></td>'
-          +'<td>'+((j.pcs+x.pcs)?f2(allRev/(j.pcs+x.pcs)):'')+'</td>'
-          +'<td class="pd-rev">'+fN(Math.round(allRev))+'</td>'
-          +'<td class="sep"></td><td></td><td></td><td></td></tr>'
-        : '')
       +'</tfoot></table></div>'
       +(x.rows.length
         ? '<div class="pd-save" data-save="'+rid+'|'+pidx+'"><span class="pd-save-n">'
@@ -582,6 +574,10 @@
       +'<div class="pd-kpi opp"><div class="k-l">Relise ₹/L · Plan → Actual</div><div class="k-v">'+f2(blendPlan)+' → '+f2(blendAct)+'</div></div>'
       +'<div class="pd-kpi acc"><div class="k-l">Plan · Revenue</div><div class="k-v">₹'+fN(Math.round(j.planRev))+'</div></div>'
       +'<div class="pd-kpi opp"><div class="k-l">Done · Revenue</div><div class="k-v">₹'+fN(Math.round(j.doneRev))+'</div></div>'
+      +(x.rows.length
+        ? '<div class="pd-kpi opp"><div class="k-l">All items sold · '+esc(MONTH_LABEL)+'</div>'
+          +'<div class="k-v">'+fN(Math.round(allLtr))+' L · ₹'+fN(Math.round(allRev))+'</div></div>'
+        : '')
       +(function(){                       // the headline: what the balance must fetch
           var e=estParts(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan);
           if(!e)return '';
@@ -1025,6 +1021,106 @@
      would silently drop it. */
   PERSONS=(TERRITORY_DATA.persons||[]).slice().sort().concat(['—']);
   renderDrillList(); drillLabel(); renderPersList(); persLabel();
+
+  /* ── Excel export: scrape every saved result's rendered table (all filters/scope honoured) ── */
+  // Read a cell as plain text, dropping any Material-icons glyph text (chevron_right, expand_more…).
+  function cellText(c){
+    var clone=c.cloneNode(true);
+    Array.prototype.forEach.call(clone.querySelectorAll('.material-icons'), function(ic){ ic.parentNode.removeChild(ic); });
+    var code=clone.querySelector('.pd-code'); if(code) code.textContent=' '+(code.textContent||'');   // keep item name / code apart
+    return (clone.textContent||'').replace(/\s+/g,' ').trim();
+  }
+  // One table cell → a styled workbook cell. `kind`: grp (section band) | head (labels) | foot | body.
+  function styleCell(c, kind){
+    var span=c.colSpan||1, txt=cellText(c), cls=' '+(c.className||'')+' ', cell={value:txt}, bd='';
+    if(kind!=='grp' && kind!=='head'){                 // real numbers on body/foot (strip ₹ , % +)
+      var nn=txt.replace(/[₹,%\s+]/g,'');
+      if(nn!=='' && /^-?\d+(\.\d+)?$/.test(nn)) cell.value=parseFloat(nn);
+    }
+    if(kind==='grp'){                                  // Plan / Done / Estimate colour bands
+      if(/ pl /.test(cls)){ cell.fill='E0E7FF'; cell.color='3730A3'; }
+      else if(/ dn /.test(cls)){ cell.fill='DCFCE7'; cell.color='166534'; }
+      else if(/ es /.test(cls)){ cell.fill='FEF3C7'; cell.color='92400E'; }
+      cell.bold=true; cell.align='center'; bd='tb';
+    } else if(kind==='head'){                          // column-label row
+      cell.fill='EEF2F6'; cell.color='334155'; cell.bold=true; bd='tb';
+      if(/ sep /.test(cls)) bd+='l';
+    } else if(kind==='foot'){                          // Blended / All-items rows
+      cell.fill='F1F5F9'; cell.bold=true; bd='t';
+      if(/ sep /.test(cls)) bd+='l';
+    } else if(/ sep /.test(cls)){ bd='l'; }            // body: section divider
+    if(bd) cell.border=bd;
+    if(span>1) cell.colspan=span;
+    return cell;
+  }
+  /* Live Excel formulas — columns are fixed A–Q on every Plan vs Done table:
+     A Item · B Retailer · C Box Ltrs · D Scheme · E To-be-sale · F Relise/L · G Revenue ·
+     H Done Ltr · I Ach% · J Act Relise · K Diff · L Rate/Pc · M Done Rev · N Bal Ltr ·
+     O Bal Rev · P Req/L · Q Req-vs-Plan. Only inputs (E,F,H,L,M) stay values; the rest recalc. */
+  var ITEM_F={ 6:function(R){return 'E'+R+'*F'+R;}, 8:function(R){return 'H'+R+'/E'+R+'*100';},
+               9:function(R){return 'M'+R+'/H'+R;}, 10:function(R){return 'J'+R+'-F'+R;},
+              13:function(R){return 'E'+R+'-H'+R;}, 14:function(R){return 'G'+R+'-M'+R;},
+              15:function(R){return 'O'+R+'/N'+R;}, 16:function(R){return 'P'+R+'-F'+R;} };
+  // Attach a formula to a cell — only when it currently holds a real number (skips —/met/no-vol text).
+  function setF(row,i,f){ var c=row[i]; if(!c||typeof c!=='object'){c={value:c};row[i]=c;}
+    if(typeof c.value==='number') c.formula='IFERROR('+f+',"")'; }
+  function applyItemF(row,R){ Object.keys(ITEM_F).forEach(function(k){ setF(row,+k,ITEM_F[+k](R)); }); }
+  // Blended row: base totals are SUMs over the item range f0..f1; the rest derive from the same row.
+  function applyBlendF(row,R,f0,f1){
+    var F={ 4:'SUM(E'+f0+':E'+f1+')', 6:'SUM(G'+f0+':G'+f1+')', 7:'SUM(H'+f0+':H'+f1+')', 12:'SUM(M'+f0+':M'+f1+')',
+            5:'G'+R+'/E'+R, 8:'H'+R+'/E'+R+'*100', 9:'M'+R+'/H'+R, 10:'J'+R+'-F'+R,
+           13:'E'+R+'-H'+R, 14:'G'+R+'-M'+R, 15:'O'+R+'/N'+R, 16:'P'+R+'-F'+R };
+    Object.keys(F).forEach(function(k){ setF(row,+k,F[+k]); });
+  }
+  // Scrape one table, tracking each row's Excel row number so live formulas can reference it.
+  function pushTable(tbl,rows){
+    var tbodyIdx=0, firstR=0, lastR=0;
+    Array.prototype.forEach.call(tbl.children, function(sec){
+      var tag=(sec.tagName||'').toLowerCase(); if(tag!=='thead'&&tag!=='tbody'&&tag!=='tfoot')return;
+      var isFirstBody=(tag==='tbody' && tbodyIdx===0); if(tag==='tbody') tbodyIdx++;
+      Array.prototype.forEach.call(sec.rows, function(tr){
+        var isGrp=(tr.className||'').indexOf('grp')!==-1;
+        var kind = tag==='thead' ? (isGrp?'grp':'head') : (tag==='tfoot'?'foot':'body');
+        var row=[]; Array.prototype.forEach.call(tr.cells, function(c){ row.push(styleCell(c,kind)); });
+        var R=rows.length+1;                                       // this row's 1-based Excel row
+        if(isFirstBody){ applyItemF(row,R); if(!firstR)firstR=R; lastR=R; }   // planned items → live
+        else if(tag==='tfoot' && (tr.className||'').indexOf('all')===-1 && firstR){
+          applyBlendF(row,R,firstR,lastR);                         // Blended row → SUM + derived
+        }
+        rows.push(row);
+      });
+    });
+  }
+  function exportExcel(){
+    var cards=document.querySelectorAll('#pdList .pd-card');
+    if(!cards.length){ window.alert('Nothing to export.'); return; }
+    var rows=[[{value:'Plan vs Done — '+MONTH_LABEL, bold:true, color:'0F172A'}], []];
+    Array.prototype.forEach.call(cards, function(card){
+      var name=((card.querySelector('.pd-name')||{}).textContent||'').trim();
+      var chips=Array.prototype.map.call(card.querySelectorAll('.pd-card-h .pd-chip'),
+        function(c){return (c.textContent||'').replace(/\s+/g,' ').trim();}).join('   ·   ');
+      rows.push([{value:name||'Result', bold:true, fill:'E0E7FF', color:'1E293B', border:'tb'}]);
+      if(chips) rows.push([{value:chips, color:'64748B'}]);
+      var title='';
+      Array.prototype.forEach.call(card.querySelectorAll('.pd-plan-h, table.pd-tbl'), function(el){
+        if(el.classList.contains('pd-plan-h')){ title=(el.textContent||'').trim(); return; }
+        if(title){ rows.push([{value:title, bold:true, color:'4338CA'}]); title=''; }
+        pushTable(el, rows);
+        rows.push([]);
+      });
+      rows.push([]);
+    });
+    var mv=document.getElementById('pdMonth').value||'', fname='Plan-vs-Done'+(mv?'-'+mv:'');
+    fetch('/realise/plan-vs-done/export/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({filename:fname, sheets:[{name:'Plan vs Done', rows:rows}]})})
+      .then(function(r){ if(!r.ok) throw 0; return r.blob(); })
+      .then(function(b){ var u=URL.createObjectURL(b), a=document.createElement('a');
+        a.href=u; a.download=fname+'.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){URL.revokeObjectURL(u);},2000); })
+      .catch(function(){ window.alert('Export failed.'); });
+  }
+  document.getElementById('pdExport').addEventListener('click', exportExcel);
 
   loading=true; render();
   Promise.all([loadSaved(), fetchDone()]).then(function(){ loading=false; render(); });
