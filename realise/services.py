@@ -4077,6 +4077,41 @@ def get_fg_item_types():
     return out
 
 
+def get_territory_targets(month, year):
+    """Targets set on the Update Targets screen, as {'CHANNEL|STATE': {segment: {ltrs, rate}}}
+    for one month. Segment keys are 'PREMIUM', 'COMMODITY' and 'ALL' (every segment pooled).
+
+    Source is TargetNode, whose grain is (main_group, state, sales_person, segment). Rows are
+    summed across sales_person: a state's target is the state's target however many people it
+    was entered under. A pooled RATE has to be volume-weighted — averaging 220 and 180 would
+    invent a number neither target asked for — so rates are re-derived from pooled value over
+    pooled litres. Nodes with no state are skipped: Plan vs Done scopes by state, and a
+    channel-wide target cannot be attributed to one."""
+    out = {}
+    rows = TargetNode.objects.filter(month=int(month), year=int(year)).exclude(state='')
+    for n in rows:
+        ch = _normalize_name(n.main_group)
+        st = norm_state(n.state)
+        if not ch or not st:
+            continue
+        seg = _normalize_name(n.segment) or 'ALL'
+        ltrs = float(n.target_ltrs or 0)
+        rate = float(n.target_realise or 0)
+        if ltrs <= 0 and rate <= 0:
+            continue
+        bucket = out.setdefault(ch + '|' + st, {})
+        for key in (seg, 'ALL'):
+            cell = bucket.setdefault(key, {'ltrs': 0.0, 'value': 0.0})
+            cell['ltrs'] += ltrs
+            cell['value'] += ltrs * rate
+    for bucket in out.values():
+        for cell in bucket.values():
+            cell['rate'] = round(cell['value'] / cell['ltrs'], 2) if cell['ltrs'] else 0.0
+            cell['ltrs'] = round(cell['ltrs'], 2)
+            cell['value'] = round(cell['value'], 2)
+    return out
+
+
 def get_done_by_item(start_date, end_date):
     """Done sales per item for [start_date, end_date], net of returns. Returns {status, rows,
     by_state, states, start, end}: `rows` is the all-India map {ITEM_CODE: {...}} and

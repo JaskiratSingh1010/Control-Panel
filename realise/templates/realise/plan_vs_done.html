@@ -112,6 +112,8 @@
   table.pd-tbl>tbody>tr.pd-sub>td{background:#f8fafc;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
   table.pd-tbl>tbody>tr.pd-sub>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:var(--rz-muted);background:#f8fafc}
   table.pd-tbl>tbody>tr.pd-sub>td.sep{border-left:2px solid var(--rz-line)}
+  table.pd-tbl>tfoot>tr.pd-tgt>td{background:#fff7ed;border-top:2px solid #fed7aa;color:#9a3412}
+  table.pd-tbl>tfoot>tr.pd-tgt>td.l{background:#fff7ed;color:#c2410c}
   table.pd-tbl>tfoot>tr>td{background:#eef2ff;border-top:2px solid #c7d2fe;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
   table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:#4338ca}
   table.pd-tbl>tfoot>tr>td.sep{border-left:2px solid var(--rz-line)}
@@ -249,7 +251,17 @@
   /* Segment filter. Type comes from OITM.U_TYPE for the whole FG master, not just what sold,
      so a planned item with no sale this month is still filtered correctly instead of vanishing
      because we could not tell what it was. */
-  var ITEM_TYPES={}, TYPEF='';
+  var ITEM_TYPES={}, TYPEF='', TARGETS={};
+  /* Update Targets holds a target per (channel, state, segment). Honour the Type filter when
+     one is set, else the pooled 'ALL'. No channel on the card means no target to look up:
+     a GT target must not be shown against every channel in the state. */
+  function targetFor(st,ch){
+    if(!st||!ch)return null;
+    var b=TARGETS[ch+'|'+normState(st)];
+    if(!b)return null;
+    var t=b[TYPEF||'ALL'];
+    return (t&&t.ltrs>0)?t:null;
+  }
   function typeOk(code){ return !TYPEF || (ITEM_TYPES[String(code||'').toUpperCase()]||'')===TYPEF; }
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
   function scopeStateOf(o){ return (SCOPE==='all'||!o.state)?'':o.state; }
@@ -582,6 +594,28 @@
               +estCells(j.planLtr,j.planRev,allLtr,allRev,blendPlan)+'</tr></tfoot>';
           })()
         : '')
+      /* The territory's own target from Update Targets, if one is set for this (channel, state).
+         It is a different benchmark from the saved plan above: the plan is the rate list someone
+         built, the target is what the territory was asked to do. Measured against ALL sales in
+         the scope, since the target covers the territory rather than a list of SKUs. */
+      +(function(){
+          var t=targetFor(st,ch);
+          if(!t)return '';
+          var tRev=t.ltrs*t.rate;
+          var tpct=t.ltrs?(allLtr/t.ltrs*100):0;
+          var aRl=allLtr?(allRev/allLtr):0, tdiff=(aRl&&t.rate)?(aRl-t.rate):0;
+          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(ch||st)
+            +(TYPEF?' · '+esc(TYPEF):'')+'</td>'
+            +'<td></td><td></td><td></td>'
+            +'<td>'+fN(Math.round(t.ltrs))+'</td>'
+            +'<td class="pd-rl">'+f2(t.rate)+'</td>'
+            +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
+            +'<td class="'+(t.ltrs?achCls(tpct):'mute')+'">'+(t.ltrs?f2(tpct)+'%':'—')+'</td>'
+            +'<td>'+(allLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
+            +'<td class="'+(tdiff?(tdiff>=0?'g':'r'):'mute')+'">'+(tdiff?((tdiff>=0?'+':'')+f2(tdiff)):'—')+'</td>'
+            +'<td></td>'
+            +estCells(t.ltrs,tRev,allLtr,allRev,t.rate)+'</tr></tfoot>';
+        })()
       +'</table></div>'
       +(x.rows.length
         ? '<div class="pd-save" data-save="'+rid+'|'+pidx+'"><span class="pd-save-n">'
@@ -787,7 +821,7 @@
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
       .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{}; DONE_SC=p.by_state_channel||{};
-                         ITEM_TYPES=p.item_types||{};
+                         ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
       .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; });
   }

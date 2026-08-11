@@ -1739,6 +1739,8 @@ def api_done_by_item(request):
     start, end, month = _month_bounds(request.GET.get('month'))
     payload = services.get_done_by_item(start, end)
     payload['month'] = month
+    y, m = month.split('-')
+    payload['targets'] = services.get_territory_targets(int(m), int(y))
     return JsonResponse(payload)
 
 
