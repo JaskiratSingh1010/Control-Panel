@@ -883,7 +883,12 @@
         +'<td class="mute">—</td>'+ratePcCell(d)
         +estCells(sell,rl*sell,r.doneLtr,r.doneRev,rl)+'</tr>';
     }).join('');
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
+    /* data-state / data-channel must describe the map the rows were BUILT from, not the
+       territory the target belongs to. Under All India the rows come from the national map,
+       so the input handler and the drill-down have to look items up there too — otherwise
+       they miss (pcsbox and boxltr read 0) and a priced row falls back to a realise of 0. */
+    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(SCOPE==='all'?'':st)
+      +'" data-channel="'+esc(SCOPE==='all'?'':ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(st)+' · '+esc(ch)+'</span>'
         +'<span class="pd-chip state">'+esc(st)+' · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
