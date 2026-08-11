@@ -263,6 +263,7 @@
      one state and take delivery in another — Delhi HORECA bills SHRAY and M R K in Delhi but
      ships to Haryana and Rajasthan, so ship-to shows that territory as empty. */
   var BASIS='shipto', DONE_BY_SHIP={}, DONE_SC_SHIP={}, DONE_BY_BILL={}, DONE_SC_BILL={};
+  var DONE_CH={};                       // channel across every state
   function applyBasis(){
     DONE_BY = (BASIS==='billto')?DONE_BY_BILL:DONE_BY_SHIP;
     DONE_SC = (BASIS==='billto')?DONE_SC_BILL:DONE_SC_SHIP;
@@ -303,8 +304,9 @@
     var k=Object.keys(hits);
     return k.length===1?k[0]:'';
   }
+  /* All India widens the STATE only - the channel stays fixed, so a GT plan is compared with
+     GT everywhere rather than with every channel in the country. */
   function chanInfo(o){
-    if(SCOPE==='all'||!o.state)return {ch:'',guess:false};
     if(o.channel)return {ch:o.channel,guess:false};
     var g=channelFromName(o.name);
     return {ch:g,guess:!!g};
@@ -314,9 +316,10 @@
      one bucket, which is what a "Delhi GT" plan should actually be measured against. */
   function doneMapFor(st,ch){
     if(!PSEL.length){                                   // fast path: no person filter
-      if(!st)return DONE_ALL;
-      if(ch)return DONE_SC[normState(st)+'|'+ch]||{};
-      return DONE_BY[normState(st)]||{};
+      if(st&&ch)return DONE_SC[normState(st)+'|'+ch]||{};
+      if(st)return DONE_BY[normState(st)]||{};
+      if(ch)return DONE_CH[ch]||{};     // All India, one channel
+      return DONE_ALL;
     }
     var want=st?normState(st):'', keep=[];
     Object.keys(DONE_SC).forEach(function(k){
@@ -803,7 +806,8 @@
   function cardHtml(o,idx){
     var pl=(o.payload&&o.payload.plans)||[];
     var st=scopeStateOf(o), ci=chanInfo(o), ch=ci.ch, D=doneMapFor(st,ch);
-    var lbl=st?(st+(ch?' · '+ch:' · all channels')):'all-India';
+    var lbl = st ? (st+(ch?' · '+ch:' · all channels'))
+                 : (ch ? ('all states · '+ch) : 'all-India');
     var a=resultAch(o,D);
     var tgt=targetOf(o), tgtCh=(o.channel||channelFromName(o.name)||'');
     // same rule for the Target row on a saved card: its own territory, whatever the card scope
@@ -814,13 +818,13 @@
     // Scoped to a state that billed nothing this month reads identically to a broken join;
     // say which it is rather than leaving a card of dashes.
     var dry=(st && !Object.keys(D).length)
-      ? '<div class="pd-note">Nothing shipped to '+esc(lbl)+' this month. Switch the scope to All India, or clear the channel, to see where these items did sell.</div>'
+      ? '<div class="pd-note">Nothing sold in '+esc(lbl)+' this month. Switch the scope to All India, or clear the channel on the Rate List tab, to widen it.</div>'
       : '';
     return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
-        +(o.state?'<span class="pd-chip state">'+esc(o.state)
-            +(st?(ch?' · '+esc(ch):' · all channels'):' · not scoped')
+        +(o.state?'<span class="pd-chip state">'+esc(st||'all states')
+            +(ch?' · '+esc(ch):(st?' · all channels':''))
             +(ci.guess?'<span class="pd-guess" title="Taken from the result name — set it on the Rate List tab to make it explicit">from name</span>':'')
             +'</span>':'')
         +'<span class="pd-chip scope">'+esc(scope)+'</span>'
@@ -991,11 +995,12 @@
       .then(function(p){ DONE_ALL=p.rows||{};
                          DONE_BY_SHIP=p.by_state||{};      DONE_SC_SHIP=p.by_state_channel||{};
                          DONE_BY_BILL=p.by_state_bill||{}; DONE_SC_BILL=p.by_state_channel_bill||{};
+                         DONE_CH=p.by_channel||{};
                          applyBasis();
                          ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
       .catch(function(){ DONE_ALL={}; DONE_BY_SHIP={}; DONE_SC_SHIP={};
-                         DONE_BY_BILL={}; DONE_SC_BILL={}; applyBasis(); });
+                         DONE_BY_BILL={}; DONE_SC_BILL={}; DONE_CH={}; applyBasis(); });
   }
   function loadDone(){
     loading=true; render();

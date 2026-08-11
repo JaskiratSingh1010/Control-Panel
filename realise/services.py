@@ -4154,12 +4154,16 @@ def get_done_by_item(start_date, end_date):
     # that buy in one state and take delivery in another — a Delhi HORECA account shipping to a
     # hotel in Gurgaon is still Delhi's business.
     bases = {'shipto': ({}, {}), 'billto': ({}, {})}
+    # Channel across every state. Not derivable from by_state_channel: rows with no state at all
+    # are excluded from those buckets and would silently drop out of a channel roll-up.
+    by_channel = {}
     for r in raw or []:
         code = (r.get('ICODE') or '').strip().upper()
         if not code:
             continue
         channel = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         _done_accum(agg, code, r)
+        _done_accum(by_channel.setdefault(channel, {}), code, r)
         for basis, col in (('shipto', 'ST'), ('billto', 'BST')):
             raw_st = (r.get(col) or '').strip()
             state = norm_state(_delhi_gt_state(r.get('CCODE'),
@@ -4171,6 +4175,8 @@ def get_done_by_item(start_date, end_date):
             _done_accum(by_sc.setdefault(state + '|' + channel, {}), code, r)
 
     _done_finalize(agg)
+    for bucket in by_channel.values():
+        _done_finalize(bucket)
     for by_state, by_sc in bases.values():
         for bucket in by_state.values():
             _done_finalize(bucket)
@@ -4182,6 +4188,7 @@ def get_done_by_item(start_date, end_date):
                'by_state': by_state, 'states': sorted(by_state),
                'by_state_channel': by_sc, 'channels': sorted(CHANNEL_MEMBERS),
                'by_state_bill': bases['billto'][0], 'by_state_channel_bill': bases['billto'][1],
+               'by_channel': by_channel,
                'item_types': get_fg_item_types(),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
