@@ -1741,6 +1741,9 @@ def api_done_by_item(request):
     payload['month'] = month
     y, m = month.split('-')
     payload['targets'] = services.get_territory_targets(int(m), int(y))
+    # Item-level targets set in Update Targets, so the page can show a per-SKU commitment
+    # inside its segment instead of only the segment total.
+    payload['item_targets'] = services.get_territory_item_targets(int(m), int(y))
     return JsonResponse(payload)
 
 
@@ -2309,7 +2312,10 @@ def api_territory_product_targets(request):
         month, year = datetime.now().month, datetime.now().year
     return JsonResponse({'status': 'ok', 'month': month, 'year': year,
                          'products': services.get_product_master(),
-                         'data': services.get_territory_product_targets(month, year)})
+                         'data': services.get_territory_product_targets(month, year),
+                         # Item-level rows in the exact shape the editor posts back, so
+                         # load and save are symmetric.
+                         'items': services.get_territory_item_targets_editor(month, year)})
 
 
 @group_required('realise_admin', json_response=True)
@@ -2326,7 +2332,13 @@ def api_save_territory_product_targets(request):
         month, year = int(month), int(year)
     except (ValueError, TypeError):
         return JsonResponse({'status': 'error', 'error': 'month and year must be integers'}, status=400)
-    saved = services.save_territory_product_targets(month, year, targets, request.user)
+    # Absent 'items' must stay None: an older cached bundle posts without it and must
+    # not wipe the period's item targets. {} is a deliberate clear.
+    items = body.get('items')
+    if items is not None and not isinstance(items, dict):
+        return JsonResponse({'status': 'error', 'error': 'items must be an object'}, status=400)
+    saved = services.save_territory_product_targets(month, year, targets, request.user,
+                                                    items_obj=items)
     return JsonResponse({'status': 'ok', 'saved': saved})
 
 
@@ -2377,6 +2389,50 @@ def api_product_actuals(request):
     if not channel:
         return JsonResponse({'status': 'error', 'error': 'channel required'}, status=400)
     return JsonResponse({'status': 'ok', **services.get_product_actuals_payload(channel, state, month, year)})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_variety_items(request):
+    """The FG item master grouped under the target editor's variety cards — feeds the
+    item-target screen one level below 'Set product targets'.
+
+    Not served by api_realise_calculator_items, which returns the same master: that view is
+    gated on the can_realise_calculator flag, so a target admin without it would get a 403
+    on this page."""
+    return JsonResponse({'status': 'ok', 'items': services.get_variety_items()})
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['GET'])
+def api_item_actuals(request):
+    """Previous-month actual sale per ITEM for one (channel, state) — the item-row twin of
+    api_product_actuals.
+
+    Attribution differs from that view on purpose and cannot be reconciled here: this reads
+    get_done_by_item, which buckets a sale to the CUSTOMER's state (OCRD.State1), while the
+    product cards read the sales proc's ship-to State. For an account that bills in one
+    state and delivers to another the two chips will disagree, correctly."""
+    channel = request.GET.get('channel', '')
+    state = request.GET.get('state', '')
+    try:
+        month = int(request.GET.get('month', datetime.now().month))
+        year = int(request.GET.get('year', datetime.now().year))
+    except (ValueError, TypeError):
+        month, year = datetime.now().month, datetime.now().year
+    if not channel:
+        return JsonResponse({'status': 'error', 'error': 'channel required'}, status=400)
+    pm, py = services._prev_month(month, year)
+    start, end = services.month_date_range(pm, py)
+    payload = services.get_done_by_item(start, end)
+    st = services.norm_state(state)
+    src = (payload.get('by_state_channel', {}).get(st + '|' + channel, {}) if st
+           else payload.get('by_channel', {}).get(channel, {}))
+    items = {code: {'litres': round(float(v.get('litres') or 0), 2),
+                    'realise': round(float(v.get('realise_l') or 0), 2)}
+             for code, v in (src or {}).items()}
+    return JsonResponse({'status': 'ok', 'items': items,
+                         'last_month': pm, 'last_year': py})
 
 
 @never_cache
@@ -2432,6 +2488,8 @@ def person_targets_embed(request):
             'channelTargets':     reverse('realise:api_channel_quick_targets'),
             'channelTargetsSave': reverse('realise:api_save_channel_quick_targets'),
             'productActuals':     reverse('realise:api_product_actuals'),
+            'varietyItems':       reverse('realise:api_variety_items'),
+            'itemActuals':        reverse('realise:api_item_actuals'),
         },
     }
     return render(request, 'realise/person_targets_embed.html', {'boot': boot, 'asset_ver': asset_ver})

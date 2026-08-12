@@ -150,6 +150,11 @@
   /* A plan item repeated inside its segment, so the group adds up to its Target row. Read-only
      and tinted so it never reads as a second, separate sale. */
   table.pd-tbl>tbody.pd-xrows>tr.x.ref>td{background:#f6f7ff}
+  /* An item carrying its own target from Update Targets — its plan cells are a commitment,
+     not blanks, so it reads warm like the Target rows it sits under. */
+  table.pd-tbl>tbody.pd-xrows>tr.x.tgt>td{background:#fffbf4}
+  table.pd-tbl>tbody.pd-xrows>tr.x.tgt>td.l{color:var(--rz-body);font-weight:700}
+  table.pd-tbl>tbody.pd-xrows>tr.x.tgt>td.pd-rl{color:#c2410c}
   .pd-inplan{margin-left:7px;padding:1px 6px;border-radius:999px;font-size:9.5px;font-weight:800;
     letter-spacing:.06em;color:#4338ca;background:#e0e7ff;border:1px solid #c7d2fe;vertical-align:1px}
   table.pd-tbl>tbody>tr>td.pd-bal,table.pd-tbl>tfoot>tr>td.pd-bal{font-weight:700;color:#9a3412}
@@ -368,6 +373,9 @@
      so a planned item with no sale this month is still filtered correctly instead of vanishing
      because we could not tell what it was. */
   var ITEM_TYPES={}, TYPEF='', TARGETS={};
+  /* Item-level targets set in Update Targets: {'CHANNEL|STATE': {ITEMCODE: {...}}}.
+     One level below TARGETS, which is per segment. */
+  var ITEM_TGT={};
   /* Update Targets holds a target per (channel, state, segment). Honour the Type filter when
      one is set, else the pooled 'ALL'. No channel on the card means no target to look up:
      a GT target must not be shown against every channel in the state. */
@@ -408,6 +416,40 @@
     Object.keys(acc).forEach(function(s){ acc[s].rate=acc[s].ltrs?(acc[s].value/acc[s].ltrs):0; });
     return acc;
   }
+  /* One item's target for a scope — the item twin of targetBucket. With a state it is that
+     territory's own row; without one (All India) it is the CHANNEL's, every state's target
+     for that item added up with the rate re-derived from pooled value over pooled litres.
+     Averaging two states' rates would print a number neither target asked for.
+     Retailer and Scheme are per-state DECISIONS, not item constants, so where states
+     disagree they collapse to -1 and render as a dash rather than a price nobody set;
+     Box Ltrs and Pcs/Box are properties of the pack and pool trivially. */
+  function itemTargetBucket(st,ch){
+    if(!ch)return null;
+    if(st)return ITEM_TGT[ch+'|'+normState(st)]||null;
+    var acc={}, any=false;
+    Object.keys(ITEM_TGT).forEach(function(k){
+      if(k.split('|')[0]!==ch)return;
+      var b=ITEM_TGT[k];
+      Object.keys(b).forEach(function(code){
+        var t=b[code];
+        if(!t||!(num(t.ltrs)>0))return;
+        var a=acc[code];
+        if(!a){
+          a=acc[code]={ltrs:0,value:0,rate:0,name:t.name,seg:t.seg,
+                       boxltr:num(t.boxltr),pcsbox:num(t.pcsbox),
+                       retailer:num(t.retailer),scheme:num(t.scheme)};
+        }else{
+          if(num(t.retailer)!==a.retailer)a.retailer=-1;
+          if(num(t.scheme)!==a.scheme)a.scheme=-1;
+        }
+        a.ltrs+=num(t.ltrs); a.value+=num(t.ltrs)*num(t.rate); any=true;
+      });
+    });
+    if(!any)return null;
+    Object.keys(acc).forEach(function(c){ acc[c].rate=acc[c].ltrs?(acc[c].value/acc[c].ltrs):0; });
+    return acc;
+  }
+
   function terrLbl(st,ch){ return (st||'All India')+' · '+ch; }
 
   function targetTotalRow(st,ch,map){
@@ -484,6 +526,41 @@
     var rank={PREMIUM:0,COMMODITY:1,OTHERS:2};
     groups.sort(function(a,b){ return (rank[a.seg]==null?3:rank[a.seg])-(rank[b.seg]==null?3:rank[b.seg]); });
     return groups;
+  }
+
+  /* An item that was TARGETED but did not sell has no row in the Done map, so it would be
+     absent from the card entirely and a total miss would look like nothing at all. Push a
+     zero-Done row for it. groupBySegment types these off ITEM_TYPES — the whole FG master,
+     not just what sold — so they land in the right segment with no other change. */
+  function injectTargeted(IT,rows,D){
+    Object.keys(IT||{}).forEach(function(code){
+      if(D[code]||!typeOk(code))return;
+      rows.push({item:IT[code].name||code, code:code, doneLtr:0, doneRev:0, fromTarget:true});
+    });
+  }
+
+  /* One item that carries its own target from Update Targets. The five PLAN cells the
+     target-only card leaves as dashes are exactly the five this fills, so nothing about the
+     14-column shape changes — the columns were always there, waiting for a commitment. */
+  function itemTargetRow(r,it,d,actRl){
+    var tRev=num(it.ltrs)*num(it.rate);
+    var pct=it.ltrs?(r.doneLtr/it.ltrs*100):0;
+    var diff=(actRl&&it.rate)?(actRl-it.rate):0;
+    // -1 means the states disagreed on this price when pooled for All India.
+    var money=function(v){ return v>=0?f2(v):'<span class="mute">—</span>'; };
+    return '<tr class="x tgt">'
+      +itemCell(r.item,r.code,'TARGET')
+      +'<td>'+money(num(it.retailer))+'</td>'
+      +'<td>'+(it.boxltr?f2(it.boxltr):'<span class="mute">—</span>')+'</td>'
+      +'<td>'+money(num(it.scheme))+'</td>'
+      +'<td>'+fN(Math.round(it.ltrs))+'</td>'
+      +'<td class="pd-rl">'+f2(it.rate)+'</td>'
+      +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
+      +'<td class="'+(it.ltrs?achCls(pct):'mute')+'">'+(it.ltrs?f2(pct)+'%':'—')+'</td>'
+      +'<td>'+(actRl?f2(actRl):'<span class="mute">—</span>')+'</td>'
+      +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
+      +ratePcCell(d)
+      +estCells(num(it.ltrs),tRev,r.doneLtr,r.doneRev,num(it.rate))+'</tr>';
   }
 
   /* Pack size for pricing a row, off the month's Done map. Every caller goes through this so
@@ -785,6 +862,8 @@
               planLtr:r.planLtr,planRev:r.planRev,planRl:r.planRl,
               doneLtr:r.doneLtr,doneRev:r.doneRev,inPlan:true};
     });
+    var IT=itemTargetBucket(tgtSt,tgtCh)||{};
+    injectTargeted(IT,x.rows,D);
     var tsegs=targetSegs(tgtSt,tgtCh), groups=buildGroups(x.rows,tsegs,planRef);
     var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
 
@@ -817,6 +896,10 @@
             }
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
+            /* Carries its own target from Update Targets and nobody has started editing it
+               here — show the commitment rather than an empty row to fill in. Once a pending
+               edit exists it wins: the person is mid-plan and must not have it overwritten. */
+            if(IT[r.code] && !PENDING[k])return itemTargetRow(r,IT[r.code],d,actRl);
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
             if(sell>0)pend++;
             var pk=packOf(r.code,rid,D);
@@ -1141,6 +1224,8 @@
     // pkey splits on '|', and key is 'CHANNEL|STATE' — swap the separator or the row key
     // parses wrong and the input handler edits the neighbouring field.
     var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, pend=0;
+    var IT=itemTargetBucket(st,ch)||{};
+    injectTargeted(IT,x.rows,D);
     /* Same shape as a saved card: each segment's items sit under that segment's Target row. */
     var tsegs=targetSegs(st,ch), groups=buildGroups(x.rows,tsegs);
     var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
@@ -1153,6 +1238,7 @@
       return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
         +g.rows.map(function(r){
                 var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0, pk=packOf(r.code,rid,D);
+      if(!ed && IT[r.code])return itemTargetRow(r,IT[r.code],d,a);
       if(!ed){
         return '<tr class="x">'+itemCell(r.item,r.code)
           +'<td class="mute">—</td>'
@@ -1164,7 +1250,13 @@
           +'<td class="mute">—</td>'+ratePcCell(d)
           +'<td class="mute sep">—</td><td class="mute">—</td><td class="mute">—</td></tr>';
       }
-      var k=pkey(rid,0,r.code), e=PENDING[k]||{};
+      var k=pkey(rid,0,r.code), it=IT[r.code];
+      /* Editing a targeted item starts from the target, not from blank — Create plan then
+         writes the Rate List with the pricing the target was actually set at. -1 means the
+         states disagreed when pooled for All India, so there is no single price to seed. */
+      var e=PENDING[k]||(it?{retailer:num(it.retailer)>=0?it.retailer:'',
+                             scheme:num(it.scheme)>=0?it.scheme:'',
+                             sell:it.ltrs}:{});
       var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
       if(sell>0)pend++;
       var rl=addedRealise(ret,pk.pcsbox,pk.boxltr,sch,a,A);
@@ -1255,7 +1347,7 @@
       .then(function(r){return r.ok?r.json():{rows:{}};})
       .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{};
                          DONE_SC=p.by_state_channel||{}; DONE_CH=p.by_channel||{};
-                         ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{};
+                         ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{}; ITEM_TGT=p.item_targets||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
       .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; DONE_CH={}; });
   }

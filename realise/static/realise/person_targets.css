@@ -130,6 +130,40 @@
   .prod-clear:hover{background:#fff;color:#b91c1c;border-color:#fff}
   .prod-ilbl{font-size:11px;font-weight:800;letter-spacing:.4px;margin-bottom:4px;opacity:.95}
   .prod-last{margin-top:8px;font-size:12.5px;font-weight:700;background:rgba(0,0,0,.18);border-radius:8px;padding:5px 10px;display:inline-block}
+  /* Drill into a variety's items. The card is white-on-colour, so the chrome here is
+     rgba over the card's own background, same as .prod-clear above. */
+  .prod-drill{margin-top:9px;width:100%;border:1px solid rgba(255,255,255,.65);background:rgba(255,255,255,.18);color:#fff;padding:7px 10px;border-radius:10px;font-family:var(--font);font-size:12px;font-weight:800;letter-spacing:.3px;cursor:pointer;transition:.12s}
+  .prod-drill:hover{background:#fff;color:var(--tx)}
+  /* A variety whose litres/realise come from its items: the two inputs are locked, and
+     this says why rather than leaving them looking broken. */
+  .prod-derived{margin-top:7px;font-size:11px;font-weight:800;letter-spacing:.3px;opacity:.95}
+  .prod-input.ro{background:rgba(255,255,255,.55);cursor:not-allowed}
+
+  /* Item-target screen (level 3, above the variety grid) */
+  .item-modal{max-width:min(1180px,96vw);width:100%;max-height:92vh}
+  .iterms{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 22px;background:#fff;border-bottom:1px solid var(--border)}
+  .iterms-l{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--tx3)}
+  .iterms label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.3px;color:var(--tx2)}
+  .iterms input{width:74px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-weight:800;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:var(--tx);outline:none}
+  .iterms input:focus{border-color:var(--ac)}
+  .iterms input:disabled{background:var(--bg);color:var(--tx3)}
+  /* Six columns, in Plan vs Done's order: Item / Retailer / Box Ltrs / Scheme / To be sale / Relise */
+  .irow{display:grid;grid-template-columns:minmax(220px,2.4fr) 1fr .8fr 1fr 1fr .9fr;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px solid var(--border)}
+  .irow:hover{background:#f8fafc}
+  .irow.on{background:var(--ac-light)}
+  .irow-hd{position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid var(--border);font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--tx3);padding:8px 2px}
+  .irow-hd:hover{background:#fff}
+  .irow-hd>div+div,.irow-ro,.irow-rl{text-align:right}
+  .irow-nm{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .irow-nm b{font-size:12.5px;font-weight:700;color:var(--tx);line-height:1.3}
+  .irow-code{font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--tx3)}
+  .irow-last{font-size:10.5px;font-weight:700;color:var(--ac);font-variant-numeric:tabular-nums}
+  .irow-in input{padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .irow-in input:focus{border-color:var(--ac)}
+  .irow-ro{font-size:12.5px;font-weight:700;color:var(--tx2);font-variant-numeric:tabular-nums}
+  .irow-rl{font-size:14px;font-weight:800;color:var(--ac);font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .irow-search{width:180px}
+  @media(max-width:860px){.irow{grid-template-columns:1fr 1fr 1fr;row-gap:4px}.irow-hd{display:none}}
   /* Modal: summary bar (current + last saved) and footer with Clear-all */
   .modal-summary{display:flex;gap:10px;flex-wrap:wrap;padding:12px 22px;background:#f8fafc;border-bottom:1px solid var(--border)}
   .ms-cell{flex:1;min-width:90px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}

@@ -4,11 +4,13 @@ import time
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 
+from django.db import transaction
 from django.utils import timezone
 
 from core import sap_connector
 from .models import (MainGroupMaster, MonthlyTarget, SegmentTarget, StateMaster,
                      TargetMaster, TargetNode, TerritoryMapping, TerritoryProductTarget,
+                     TerritoryItemTarget,
                      CityOwner, ClosingRemark, CreditLock, CreditLockSnapshot, FlexTarget,
                      AgingRemark, AgingRemarkLine, AgingDueConfig, Claim)
 
@@ -1390,6 +1392,17 @@ def _to_decimal(raw):
         return Decimal('0')
 
 
+def _to_float(raw):
+    """_to_decimal's twin for arithmetic. Blank, None and junk all read as 0.0 — every
+    caller here is doing money maths where a missing input means 'not entered', not an
+    error to raise."""
+    try:
+        s = str(raw).strip()
+        return float(s) if s else 0.0
+    except Exception:
+        return 0.0
+
+
 SEGMENT_CHOICES = ('PREMIUM', 'COMMODITY')
 
 
@@ -1960,7 +1973,11 @@ def save_territory_targets(month, year, items):
 
 # Sub-groups that are folded into a parent product in the target editor (shown under
 # the parent, not as their own card). 'EXTRA VIRGIN OLIVE' is part of the OLIVE family.
-PRODUCT_MERGED = {'EXTRA VIRGIN OLIVE'}
+# Kept as a map rather than a bare set so the child -> parent name lives in ONE place:
+# get_product_actuals and get_variety_items both have to apply the same fold, and a
+# hard-coded string in each would drift.
+PRODUCT_MERGE_PARENT = {'EXTRA VIRGIN OLIVE': 'OLIVE'}
+PRODUCT_MERGED = set(PRODUCT_MERGE_PARENT)
 
 
 def get_product_master():
@@ -1991,6 +2008,189 @@ def get_territory_product_targets(month, year):
             'r': float(r.target_realise or 0),
         }
     return out
+
+
+def item_target_realise(retailer, pcs_per_box, box_litres, scheme, ss=0, dm=0, gst=0, disc=0):
+    """The Realise Calculator's rate, for one item target. Same formula as addedRealise()
+    in plan_vs_done.html, so an item target and the same item drafted as a plan on the
+    Plan vs Done card price identically:
+
+        ((retailer / (1+ss%) / (1+dm%) / (1+gst%)) * pcs_per_box - disc) / (box_litres + scheme)
+
+    Returns 0.0 when the row cannot be priced (no retailer, no pack config, or a zero
+    denominator) rather than raising - a half-filled row is a normal editing state."""
+    ret = _to_float(retailer)
+    pb = _to_float(pcs_per_box)
+    total_ltr = _to_float(box_litres) + _to_float(scheme)
+    if ret <= 0 or pb <= 0 or total_ltr <= 0:
+        return 0.0
+    ex = ret
+    for pct in (ss, dm, gst):
+        ex = ex / (1.0 + _to_float(pct) / 100.0)
+    return round((ex * pb - _to_float(disc)) / total_ltr, 2)
+
+
+def get_variety_items():
+    """The FG item master regrouped under the target editor's VARIETY CARDS:
+    {'P#CANOLA': [{code, name, sku, box_litres, pcs_per_box}, ...]}.
+
+    Built on get_realise_calc_items(), which already carries pcs_per_box and box_litres -
+    the two numbers the pricing row needs - but returns RAW SAP values. So the same three
+    folds the cards themselves use are applied here, or items land under a card that does
+    not exist and their targets roll into nothing, invisibly:
+      • _reclassify        - YELLOW MUSTARD is Premium, not the commodity MUSTARD card
+      • PRODUCT_MERGE_PARENT - EXTRA VIRGIN OLIVE items belong on the OLIVE card
+      • ALLOWED_SUB_GROUPS - anything else has no card to sit on
+    Plus FG-only: get_done_by_item is FG-only, so a target on a non-FG item could never
+    show a Done figure and would read as a permanent 0% miss."""
+    payload = get_realise_calc_items()
+    out = {}
+    for it in payload.get('items') or []:
+        code = (it.get('code') or '').strip().upper()
+        if not code.startswith('FG'):
+            continue
+        seg = 'PREMIUM' if it.get('type') == 'P' else 'COMMODITY'
+        seg, sub = _reclassify(seg, (it.get('variety') or '').upper(), it.get('name') or '')
+        sub = PRODUCT_MERGE_PARENT.get(sub, sub)
+        if sub not in ALLOWED_SUB_GROUPS:
+            continue
+        pid = ('P' if seg == 'PREMIUM' else 'C') + '#' + sub
+        out.setdefault(pid, []).append({
+            'code': code,
+            'name': it.get('name') or code,
+            'sku': it.get('sku') or '',
+            'box_litres': it.get('box_litres') or 0,
+            'pcs_per_box': it.get('pcs_per_box') or 0,
+        })
+    for rows in out.values():
+        rows.sort(key=lambda r: r['name'])
+    return out
+
+
+def _fold_item_targets(month, year):
+    """{'CHANNEL||STATE': {'P#SUBGROUP': {'l': litres, 'r': volume-weighted rate}}} — the
+    period's item rows summed to the variety card they sit under.
+
+    This is what REPLACES a hand-typed variety target: clicking into the item screen is an
+    explicit statement of finer intent, so the children win. Read from the DB rather than
+    from the request so an old client and a new one fold identically."""
+    acc = {}
+    for r in TerritoryItemTarget.objects.filter(month=month, year=year):
+        ltrs = float(r.target_ltrs or 0)
+        if ltrs <= 0:
+            continue
+        key = f'{_normalize_name(r.channel)}||{_normalize_name(r.state_name)}'
+        code = 'P' if r.product_type == 'PREMIUM' else 'C'
+        pid = f'{code}#{_normalize_name(r.sub_group)}'
+        cell = acc.setdefault(key, {}).setdefault(pid, [0.0, 0.0])
+        cell[0] += ltrs
+        cell[1] += ltrs * float(r.target_realise or 0)
+    return {k: {p: {'l': round(v[0], 2), 'r': round(v[1] / v[0], 2) if v[0] else 0.0}
+                for p, v in pm.items()}
+            for k, pm in acc.items()}
+
+
+def get_territory_item_targets_editor(month, year):
+    """The item rows in the exact shape the Update Targets screen POSTs them back in, so
+    load and save are symmetric and there is no transform to get wrong in one direction:
+    {'CHANNEL||STATE': {ITEMCODE: {l, r, ret, sch, bl, pb, ss, dm, gst, dsc, sub, t, nm}}}."""
+    out = {}
+    for r in TerritoryItemTarget.objects.filter(month=month, year=year):
+        key = f'{_normalize_name(r.channel)}||{_normalize_name(r.state_name)}'
+        out.setdefault(key, {})[r.item_code] = {
+            'l': float(r.target_ltrs or 0), 'r': float(r.target_realise or 0),
+            'ret': float(r.retailer or 0), 'sch': float(r.scheme or 0),
+            'bl': float(r.box_litres or 0), 'pb': float(r.pcs_per_box or 0),
+            'ss': float(r.ss_pct or 0), 'dm': float(r.dm_pct or 0),
+            'gst': float(r.gst_pct or 0), 'dsc': float(r.disc or 0),
+            'sub': _normalize_name(r.sub_group),
+            't': 'P' if r.product_type == 'PREMIUM' else 'C',
+            'nm': r.item_name or r.item_code,
+        }
+    return out
+
+
+def get_territory_item_targets(month, year):
+    """Item targets for Plan vs Done: {'CHANNEL|STATE': {ITEMCODE: {...}}}.
+
+    The item twin of get_territory_targets, keyed the same way (single '|', normalised
+    channel and state) so the page's existing key split works unchanged. 'value'
+    (= ltrs x rate) is precomputed so All India can pool rates BY VOLUME instead of
+    averaging them, the same mistake get_territory_targets guards against."""
+    out = {}
+    for r in TerritoryItemTarget.objects.filter(month=month, year=year):
+        ch = _normalize_name(r.channel)
+        st = norm_state(r.state_name)
+        if not ch or not st:
+            continue
+        ltrs = float(r.target_ltrs or 0)
+        rate = float(r.target_realise or 0)
+        if ltrs <= 0 and rate <= 0:
+            continue
+        out.setdefault(ch + '|' + st, {})[r.item_code] = {
+            'ltrs': round(ltrs, 2), 'rate': round(rate, 2),
+            'value': round(ltrs * rate, 2),
+            'retailer': float(r.retailer or 0), 'scheme': float(r.scheme or 0),
+            'boxltr': float(r.box_litres or 0), 'pcsbox': float(r.pcs_per_box or 0),
+            'name': r.item_name or r.item_code,
+            'seg': r.product_type, 'variety': _normalize_name(r.sub_group),
+        }
+    return out
+
+
+def _save_item_targets(month, year, items_obj, user=None):
+    """Replace the period's item rows from the editor payload. Returns the row count.
+
+    The posted rate is recomputed from the posted inputs rather than trusted - the same
+    rule api_rate_list_add_items follows - so a stale bundle cannot file a rate that does
+    not follow from its own numbers. Variety and segment are re-derived from the item
+    master where possible, falling back to what the client sent."""
+    TerritoryItemTarget.objects.filter(month=month, year=year).delete()
+    # code -> (segment, sub_group) straight off the same fold the cards use
+    lookup = {}
+    for pid, rows in (get_variety_items() or {}).items():
+        code, sub = pid.split('#', 1)
+        seg = 'PREMIUM' if code == 'P' else 'COMMODITY'
+        for it in rows:
+            lookup[it['code']] = (seg, sub)
+
+    saved = 0
+    for key, cell in (items_obj or {}).items():
+        if '||' not in str(key):
+            continue
+        channel, state = str(key).split('||', 1)
+        channel, state = _normalize_name(channel), _normalize_name(state)
+        if not channel:
+            continue
+        _, _, person = complete_target_triple(channel, state, '')
+        for raw_code, val in (cell or {}).items():
+            code = str(raw_code or '').strip().upper()
+            if not code or not isinstance(val, dict):
+                continue
+            ltrs = _to_float(val.get('l'))
+            if ltrs <= 0:
+                continue                       # a row with no volume is not a target
+            seg, sub = lookup.get(code, (
+                'PREMIUM' if str(val.get('t') or 'P').upper() == 'P' else 'COMMODITY',
+                _normalize_name(val.get('sub') or ''),
+            ))
+            if not sub:
+                continue
+            rate = item_target_realise(val.get('ret'), val.get('pb'), val.get('bl'),
+                                       val.get('sch'), val.get('ss'), val.get('dm'),
+                                       val.get('gst'), val.get('dsc'))
+            TerritoryItemTarget.objects.create(
+                channel=channel, state_name=state, sales_person=person,
+                item_code=code, item_name=str(val.get('nm') or code)[:200],
+                product_type=seg, sub_group=sub, month=month, year=year,
+                retailer=_to_decimal(val.get('ret')), scheme=_to_decimal(val.get('sch')),
+                box_litres=_to_decimal(val.get('bl')), pcs_per_box=_to_decimal(val.get('pb')),
+                ss_pct=_to_decimal(val.get('ss')), dm_pct=_to_decimal(val.get('dm')),
+                gst_pct=_to_decimal(val.get('gst')), disc=_to_decimal(val.get('dsc')),
+                target_ltrs=_to_decimal(ltrs), target_realise=_to_decimal(rate),
+                updated_by=user)
+            saved += 1
+    return saved
 
 
 def _rebuild_target_rollups(month, year):
@@ -2040,10 +2240,46 @@ def _rebuild_target_rollups(month, year):
             defaults={'tgt_ltrs': round(suml, 2), 'tgt_rate': round(rate, 2)})
 
 
-def save_territory_product_targets(month, year, targets_obj, user=None):
+def save_territory_product_targets(month, year, targets_obj, user=None, items_obj=None):
     """Replace a period's per-product territory targets with the submitted set (the UI
     always holds the full set), then rebuild the dashboard roll-ups. targets_obj shape:
-    {'CHANNEL||STATE': {'P#SUBGROUP': {'l': ltrs, 'r': realise}, ...}}."""
+    {'CHANNEL||STATE': {'P#SUBGROUP': {'l': ltrs, 'r': realise}, ...}}.
+
+    items_obj carries the ITEM-level targets in the same request, because both grains have
+    to be in front of _rebuild_target_rollups at once: it deletes and rebuilds the period's
+    TargetNode rows, so two separate saves would leave the dashboard reading a half-updated
+    picture until the second one landed - permanently, if it never did.
+      items_obj is None -> leave existing item rows alone (an older cached bundle posts no
+                           'items' key and must not wipe them)
+      items_obj == {}   -> clear the period's item rows
+      items_obj set     -> full replace, like targets_obj
+
+    Where a variety has item rows, their sum REPLACES whatever litres/realise the variety
+    card carries. Returns the product-row count.
+
+    Atomic: two blind deletes run here, and a failure between them would leave item rows
+    gone, product rows half-written and the roll-ups never rebuilt."""
+    with transaction.atomic():
+        return _save_territory_product_targets(month, year, targets_obj, user, items_obj)
+
+
+def _save_territory_product_targets(month, year, targets_obj, user, items_obj):
+    if items_obj is not None:
+        _save_item_targets(month, year, items_obj, user)
+
+    # Read the fold back from the DB, not from the request, so the numbers a client sees
+    # and the numbers stored can never diverge on a stale bundle.
+    derived = _fold_item_targets(month, year)
+    merged = {k: dict(v or {}) for k, v in (targets_obj or {}).items()}
+    for key, prodmap in derived.items():
+        cell = merged.setdefault(key, {})
+        for pid_key, val in prodmap.items():
+            cell[pid_key] = val
+            # The state card's whole-segment aggregate and a derived variety would both
+            # roll into the same (channel, state, segment) TargetNode. Drop the aggregate.
+            cell.pop(pid_key.split('#', 1)[0] + '#' + AGG_SUBGROUP, None)
+    targets_obj = merged
+
     TerritoryProductTarget.objects.filter(month=month, year=year).delete()
     saved = 0
     for key, prodmap in (targets_obj or {}).items():
@@ -4119,11 +4355,16 @@ def get_territory_targets(month, year):
 def get_done_by_item(start_date, end_date):
     """Done sales per item for [start_date, end_date], net of returns. Returns {status, rows,
     by_state, states, start, end}: `rows` is the all-India map {ITEM_CODE: {...}} and
-    `by_state` the same shape per SHIP-TO state, so the Plan vs Done page can scope a saved
-    Rate List to the state it was planned for without a second round trip. State is the
-    ship-to address state (CRD1), not the customer's billing state, and carries the Delhi-GT
-    remap — the same attribution the sales dashboard uses, so the two agree. Hidden
-    (U_ARNO 'T'/'H') and cancelled documents excluded. Cached _DONE_ITEM_TTL seconds."""
+    `by_state` the same shape per state, so the Plan vs Done page can scope a saved Rate List
+    to the state it was planned for without a second round trip.
+
+    State is the CUSTOMER'S BILLING state (OCRD.State1), not the ship-to address, and carries
+    the Delhi-GT remap. This DIFFERS from the sales dashboard, which attributes by ship-to
+    (CRD1): a Delhi account delivering to a hotel in Gurgaon counts as Delhi here and as
+    Haryana there. Both totals agree nationally; only the per-state split differs.
+
+    Hidden (U_ARNO 'T'/'H') and cancelled documents excluded. FG items only.
+    Cached _DONE_ITEM_TTL seconds."""
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not sd or not ed:
         return {'status': 'error', 'rows': {}, 'error': 'start_date and end_date required',

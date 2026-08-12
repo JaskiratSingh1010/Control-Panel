@@ -80,6 +80,24 @@ const keyOf = (channel, state) => `${channel}||${state}`;
 const fmt = n => '₹' + new Intl.NumberFormat('en-IN').format(Math.round(n || 0));
 const pid = (type, name) => type + '#' + name; // product id, e.g. P#CANOLA
 const AGG_SUB = '__ALL__'; // reserved sub for a state-card aggregate (whole Premium/Commodity, not per-product)
+/* Item-level targets: one level below a variety card, keyed CHANNEL||STATE -> ItemCode.
+   Each row carries its own SS/DM/GST/Disc because those are a decision of whoever set the
+   target, not a global setting — the rule the Rate Lists already follow. These defaults
+   match what Plan vs Done assumes for a target-only card, so a target and a plan drafted
+   from it price identically. */
+const ITEM_TERMS = { ss: 0, dm: 0, gst: 5, dsc: 0 };
+/* The Realise Calculator's rate. Mirrors addedRealise() in plan_vs_done.html and
+   item_target_realise() in services.py — the server recomputes and stores its own value,
+   this is for live feedback while typing. A half-filled row reads 0, never NaN. */
+const itemRealise = x => {
+  const ret = +x.ret || 0, pb = +x.pb || 0, tot = (+x.bl || 0) + (+x.sch || 0);
+  if (!(ret > 0 && pb > 0 && tot > 0)) return 0;
+  const ex = ret / (1 + (+x.ss || 0) / 100) / (1 + (+x.dm || 0) / 100) / (1 + (+x.gst || 0) / 100);
+  return Math.round((ex * pb - (+x.dsc || 0)) / tot * 100) / 100;
+};
+// The item codes of ONE variety inside one territory's cell.
+const itemsOfVariety = (cell, type, name) =>
+  Object.keys(cell || {}).filter(c => cell[c] && cell[c].t === type && cell[c].sub === name);
 const _pl = x => x && typeof x === 'object' ? +x.l || 0 : +x || 0; // tgt litres of a product entry (legacy number = litres)
 const _pr = x => x && typeof x === 'object' ? +x.r || 0 : 0; // tgt realise of a product entry
 const tProdL = (v, id) => v && typeof v === 'object' ? _pl(v[id]) : 0; // target litres for one product
@@ -788,7 +806,10 @@ function DrillCards({
   products,
   month,
   year,
-  BOOT
+  BOOT,
+  itemTargets,
+  setItemTarget,
+  clearVarietyItems
 }) {
   const [editProd, setEditProd] = useState(null); // {channel,state} whose product-target modal is open (nested on top)
   const [editCh, setEditCh] = useState(null); // channel whose channel-target modal is open
@@ -797,6 +818,43 @@ function DrillCards({
   const [prodFilter, setProdFilter] = useState('all'); // product-modal filter: all | P | C
   const [prodActuals, setProdActuals] = useState({}); // {P#SUB:{litres,realise}} last-month actual sale for the open state
   const [prodActualsMo, setProdActualsMo] = useState(null);
+  const [editItem, setEditItem] = useState(null); // {channel,state,type,name} — variety whose ITEM screen is open
+  const [itemMaster, setItemMaster] = useState(null); // {'P#CANOLA':[{code,name,sku,box_litres,pcs_per_box}]}
+  const [itemActuals, setItemActuals] = useState({}); // {FG0000047:{litres,realise}} last month
+  const [itemQ, setItemQ] = useState(''); // search inside the item screen
+  const [itemOnly, setItemOnly] = useState(false); // show only rows that already carry a target
+  /* One level below the variety card: that variety's items, for this same territory. The
+     master is fetched once per page — it is the whole FG list and 600s-cached server-side.
+     Actuals are per territory, like openProd's. */
+  const openItem = (channel, state, p) => {
+    setItemQ('');
+    setItemOnly(false);
+    setEditItem({
+      channel,
+      state,
+      type: p.type,
+      name: p.name
+    });
+    if (!itemMaster && BOOT && BOOT.urls && BOOT.urls.varietyItems) {
+      fetch(BOOT.urls.varietyItems, {
+        headers: {
+          'X-CSRFToken': BOOT.csrf
+        }
+      }).then(r => r.json()).then(d => {
+        setItemMaster(d.status === 'ok' ? d.items || {} : {});
+      }).catch(() => setItemMaster({}));
+    }
+    if (BOOT && BOOT.urls && BOOT.urls.itemActuals) {
+      setItemActuals({});
+      fetch(BOOT.urls.itemActuals + '?channel=' + encodeURIComponent(channel) + '&state=' + encodeURIComponent(state) + '&month=' + month + '&year=' + year, {
+        headers: {
+          'X-CSRFToken': BOOT.csrf
+        }
+      }).then(r => r.json()).then(d => {
+        if (d.status === 'ok') setItemActuals(d.items || {});
+      }).catch(() => {});
+    }
+  };
   const openProd = (channel, state) => {
     setSavedSnap(targets[keyOf(channel, state)] || {});
     setProdActuals({});
@@ -826,21 +884,31 @@ function DrillCards({
     setEditCh(ch);
   };
   useEffect(() => {
-    if (!editProd) return;
+    if (!editItem) return;
     const h = e => {
-      if (e.key === 'Escape') setEditProd(null);
+      if (e.key === 'Escape') setEditItem(null);
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [editProd]);
+  }, [editItem]);
+  useEffect(() => {
+    if (!editProd) return;
+    const h = e => {
+      // The item modal stacks above this one — without the guard a single Escape would drop
+      // the user two levels. Same rule the channel modal already applies below.
+      if (e.key === 'Escape' && !editItem) setEditProd(null);
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [editProd, editItem]);
   useEffect(() => {
     if (!editCh) return;
     const h = e => {
-      if (e.key === 'Escape' && !editProd) setEditCh(null);
+      if (e.key === 'Escape' && !editProd && !editItem) setEditCh(null);
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [editCh, editProd]);
+  }, [editCh, editProd, editItem]);
   const lastLbl = chLast ? monthLabel(chLast.month) + ' ' + chLast.year : 'last month';
   // Per-state product-target roll-up (litres) for a channel — the granular total that
   // flows UP to the channel card when no "whole" channel target is set.
@@ -982,13 +1050,20 @@ function DrillCards({
       soldRev += (a.litres || 0) * (a.realise || 0);
     });
     const soldRlz = soldTot > 0 ? Math.round(soldRev / soldTot) : 0;
-    const clearProduct = id => {
+    const iCell = itemTargets[keyOf(editProd.channel, editProd.state)] || {};
+    const clearProduct = (id, p) => {
+      // Clearing only `targets` would leave this variety's item rows in place, and the
+      // server's fold would put the number straight back on the next save.
+      if (p) clearVarietyItems(editProd.channel, editProd.state, p.type, p.name);
       setTarget(editProd.channel, editProd.state, id, 'l', '');
       setTarget(editProd.channel, editProd.state, id, 'r', '');
     };
     const ProdCard = p => {
       const id = pid(p.type, p.name),
         color = hashColor(p.name + p.type);
+      // Item rows win: where they exist this card's two numbers are DERIVED from them, so
+      // the inputs lock rather than offer an edit the next save would overwrite.
+      const nItems = itemsOfVariety(iCell, p.type, p.name).length;
       const lastL = tProdL(snap, id),
         lastR = tProdR(snap, id),
         hadLast = lastL > 0 || lastR > 0;
@@ -1009,7 +1084,7 @@ function DrillCards({
       }, p.type === 'P' ? 'PREMIUM' : 'COMMODITY'), hasNow && /*#__PURE__*/React.createElement("button", {
         className: "prod-clear",
         title: "Clear this product",
-        onClick: () => clearProduct(id)
+        onClick: () => clearProduct(id, p)
       }, "Clear")), /*#__PURE__*/React.createElement("div", {
         className: "prod-name"
       }, p.name), /*#__PURE__*/React.createElement("div", {
@@ -1028,10 +1103,12 @@ function DrillCards({
       }, "TGT LITRES"), /*#__PURE__*/React.createElement("div", {
         className: "prod-input-wrap"
       }, /*#__PURE__*/React.createElement("input", {
-        className: "prod-input",
+        className: nItems ? 'prod-input ro' : 'prod-input',
         type: "number",
         min: "0",
         placeholder: "0",
+        disabled: !!nItems,
+        title: nItems ? 'Set on the item screen' : undefined,
         value: curL || '',
         onChange: e => setTarget(editProd.channel, editProd.state, id, 'l', e.target.value)
       }))), /*#__PURE__*/React.createElement("div", {
@@ -1044,10 +1121,12 @@ function DrillCards({
       }, "TGT REALISE (\u20B9)"), /*#__PURE__*/React.createElement("div", {
         className: "prod-input-wrap"
       }, /*#__PURE__*/React.createElement("input", {
-        className: "prod-input",
+        className: nItems ? 'prod-input ro' : 'prod-input',
         type: "number",
         min: "0",
         placeholder: "0",
+        disabled: !!nItems,
+        title: nItems ? 'Set on the item screen' : undefined,
         value: curR || '',
         onChange: e => setTarget(editProd.channel, editProd.state, id, 'r', e.target.value)
       })))), (() => {
@@ -1068,7 +1147,16 @@ function DrillCards({
         return /*#__PURE__*/React.createElement("div", {
           className: "prod-last"
         }, prodActualsMo ? 'No sale last month' : '…');
-      })());
+      })(), nItems ? /*#__PURE__*/React.createElement("div", {
+        className: "prod-derived"
+      }, 'Derived from ' + nItems + ' item' + (nItems === 1 ? '' : 's')) : null, /*#__PURE__*/React.createElement("button", {
+        className: "prod-drill",
+        title: 'Set a target per item for ' + p.name,
+        onClick: e => {
+          e.stopPropagation();
+          openItem(editProd.channel, editProd.state, p);
+        }
+      }, "Items", nItems ? ' · ' + nItems : '', " →"));
     };
     const group = (type, label, color) => {
       const list = products.filter(p => p.type === type);
@@ -1214,6 +1302,191 @@ function DrillCards({
     }, "Total: ", fmtL(tSum(v))), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-green",
       onClick: () => setEditProd(null)
+    }, "Done"))));
+  })(), editItem && (() => {
+    /* Level 3: one variety's items for one territory. Columns are deliberately the same
+       six as Plan vs Done's plan block — Item / Retailer / Box Ltrs / Scheme / To be sale /
+       Relise — so a target set here and the same row read there line up cell for cell. */
+    const k = keyOf(editItem.channel, editItem.state);
+    const cell = itemTargets[k] || {};
+    const vid = pid(editItem.type, editItem.name);
+    const list = itemMaster && itemMaster[vid] || [];
+    const mineCodes = itemsOfVariety(cell, editItem.type, editItem.name);
+    // Terms are per-row on the wire, but a territory is filled in one sitting, so the first
+    // filled row's set is the one to show and edit.
+    const A = mineCodes.length ? cell[mineCodes[0]] : ITEM_TERMS;
+    const meta = c => ({
+      sub: editItem.name,
+      t: editItem.type,
+      nm: c.name,
+      bl: c.box_litres,
+      pb: c.pcs_per_box,
+      ss: +A.ss || 0,
+      dm: +A.dm || 0,
+      gst: +A.gst || 0,
+      dsc: +A.dsc || 0
+    });
+    let sumL = 0,
+      sumLR = 0;
+    mineCodes.forEach(c => {
+      sumL += +cell[c].l || 0;
+      sumLR += (+cell[c].l || 0) * (+cell[c].r || 0);
+    });
+    const blended = sumL > 0 ? Math.round(sumLR / sumL * 100) / 100 : 0;
+    let soldL = 0;
+    list.forEach(c => {
+      soldL += (itemActuals[c.code] || {}).litres || 0;
+    });
+    const q = itemQ.trim().toUpperCase();
+    const shownItems = list.filter(c => {
+      if (itemOnly && !cell[c.code]) return false;
+      if (!q) return true;
+      return c.name.indexOf(q) >= 0 || c.code.indexOf(q) >= 0;
+    });
+    const termIn = (label, field) => /*#__PURE__*/React.createElement("label", null, label, /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      step: "any",
+      disabled: !admin || !mineCodes.length,
+      // Re-rates every row of this variety: the terms are a property of the whole sitting.
+      title: mineCodes.length ? undefined : 'Fill an item first',
+      value: +A[field] || 0,
+      onChange: e => setItemTarget(editItem.channel, editItem.state, '*', field, e.target.value, {
+        t: editItem.type,
+        sub: editItem.name
+      })
+    }));
+    const cellIn = (c, field, ph) => /*#__PURE__*/React.createElement("div", {
+      className: "irow-in"
+    }, /*#__PURE__*/React.createElement("input", {
+      className: "prod-input",
+      type: "number",
+      min: "0",
+      step: "any",
+      disabled: !admin,
+      placeholder: ph,
+      value: (cell[c.code] || {})[field] || '',
+      onChange: e => setItemTarget(editItem.channel, editItem.state, c.code, field, e.target.value, meta(c))
+    }));
+    const ItemRow = c => {
+      const cur = cell[c.code] || {};
+      const act = itemActuals[c.code];
+      return /*#__PURE__*/React.createElement("div", {
+        className: cur.l ? 'irow on' : 'irow',
+        key: c.code
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "irow-nm"
+      }, /*#__PURE__*/React.createElement("b", null, c.name), /*#__PURE__*/React.createElement("span", {
+        className: "irow-code"
+      }, c.code), act && act.litres ? /*#__PURE__*/React.createElement("span", {
+        className: "irow-last"
+      }, "Last mo ", fmtL(act.litres), act.realise > 0 ? ' · ₹' + act.realise + '/L' : '') : null), cellIn(c, 'ret', 'retailer'), /*#__PURE__*/React.createElement("div", {
+        className: "irow-ro"
+      }, c.box_litres || '—'), cellIn(c, 'sch', '0'), cellIn(c, 'l', 'to be sale'), /*#__PURE__*/React.createElement("div", {
+        className: "irow-rl"
+      }, cur.r > 0 ? '₹' + cur.r : /*#__PURE__*/React.createElement("span", {
+        className: "muted"
+      }, "—")));
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      className: "modal-overlay",
+      style: {
+        zIndex: 1200
+      },
+      onClick: () => setEditItem(null)
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "modal item-modal",
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "modal-hd"
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8
+      }
+    }, editItem.name, /*#__PURE__*/React.createElement("span", {
+      className: "prod-badge",
+      style: {
+        background: editItem.type === 'P' ? '#0d9488' : '#d97706',
+        color: '#fff'
+      }
+    }, editItem.type === 'P' ? 'PREMIUM' : 'COMMODITY'), /*#__PURE__*/React.createElement("span", {
+      className: "muted",
+      style: {
+        fontWeight: 700,
+        fontSize: 13
+      }
+    }, editItem.state, " · ", editItem.channel)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      className: "modal-search irow-search",
+      placeholder: "Search item…",
+      value: itemQ,
+      onChange: e => setItemQ(e.target.value)
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "seg"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: 'seg-b' + (itemOnly ? '' : ' on'),
+      onClick: () => setItemOnly(false)
+    }, "All (", list.length, ")"), /*#__PURE__*/React.createElement("button", {
+      className: 'seg-b' + (itemOnly ? ' on' : ''),
+      onClick: () => setItemOnly(true)
+    }, "Targeted (", mineCodes.length, ")")), /*#__PURE__*/React.createElement("button", {
+      className: "modal-x",
+      onClick: () => setEditItem(null)
+    }, "\xD7"))), /*#__PURE__*/React.createElement("div", {
+      className: "iterms"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "iterms-l"
+    }, "Relise ₹/L is calculated on these terms"), termIn('SS %', 'ss'), termIn('DM %', 'dm'), termIn('GST %', 'gst'), termIn('Disc ₹', 'dsc')), /*#__PURE__*/React.createElement("div", {
+      className: "modal-summary"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "ms-cell"
+    }, "ITEMS TARGETED", /*#__PURE__*/React.createElement("b", null, mineCodes.length, " / ", list.length)), /*#__PURE__*/React.createElement("div", {
+      className: "ms-cell"
+    }, "TARGET LITRES", /*#__PURE__*/React.createElement("b", null, fmtL(sumL))), /*#__PURE__*/React.createElement("div", {
+      className: "ms-cell"
+    }, "BLENDED ₹/L", /*#__PURE__*/React.createElement("b", null, blended > 0 ? '₹' + blended : '—')), /*#__PURE__*/React.createElement("div", {
+      className: "ms-cell"
+    }, "LAST MO SOLD", /*#__PURE__*/React.createElement("b", null, fmtL(soldL)))), /*#__PURE__*/React.createElement("div", {
+      className: "modal-body"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "irow irow-hd"
+    }, /*#__PURE__*/React.createElement("div", null, "ITEM"), /*#__PURE__*/React.createElement("div", null, "RETAILER ₹"), /*#__PURE__*/React.createElement("div", null, "BOX LTRS"), /*#__PURE__*/React.createElement("div", null, "SCHEME"), /*#__PURE__*/React.createElement("div", null, "TO BE SALE"), /*#__PURE__*/React.createElement("div", null, "RELISE ₹/L")), itemMaster === null ? /*#__PURE__*/React.createElement("div", {
+      className: "muted",
+      style: {
+        padding: '14px 2px'
+      }
+    }, "Loading the item list…") : shownItems.length ? shownItems.map(ItemRow) : /*#__PURE__*/React.createElement("div", {
+      className: "muted",
+      style: {
+        padding: '14px 2px'
+      }
+    }, list.length ? 'No item matches that filter.' : 'No items under this variety.')), /*#__PURE__*/React.createElement("div", {
+      className: "modal-foot"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "btn btn-clear",
+      disabled: !mineCodes.length,
+      onClick: () => {
+        if (confirm('Clear all item targets for ' + editItem.name + ' in ' + editItem.state + '?')) clearVarietyItems(editItem.channel, editItem.state, editItem.type, editItem.name);
+      }
+    }, "🗑 Clear items"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "muted",
+      style: {
+        marginRight: 12,
+        fontWeight: 700
+      }
+    }, editItem.name, " target: ", fmtL(sumL), blended > 0 ? ' @ ₹' + blended + '/L' : ''), /*#__PURE__*/React.createElement("button", {
+      className: "btn btn-green",
+      onClick: () => setEditItem(null)
     }, "Done"))));
   })(), editCh && (() => {
     const ctr = (chRows || []).find(r => r.channel === editCh) || {};
@@ -3010,6 +3283,9 @@ function App() {
   const [tab, setTab] = useState('cards');
   const [rows, setRows] = useState([]); // [{person,channel,state}] — grid
   const [targets, setTargets] = useState({}); // {channel||state: {P#sub:{l,r}}}
+  // {channel||state: {FG0000047:{l,r,ret,sch,bl,pb,ss,dm,gst,dsc,sub,t,nm}}} — one level
+  // below `targets`. A variety that has rows here gets its litres/realise DERIVED from them.
+  const [itemTargets, setItemTargets] = useState({});
   const [sos, setSos] = useState([]); // sales officers (client-side only)
   const [products, setProducts] = useState(PRODUCT_SEED);
   const [month, setMonth] = useState(BOOT.month);
@@ -3048,6 +3324,10 @@ function App() {
     });
     const d = await r.json();
     setTargets(d.data || {});
+    // Loaded HERE, not in a loader of its own: the month/year effect calls only
+    // loadTargets, so a separate one would carry last month's item rows into the new month
+    // and save them there.
+    setItemTargets(d.items || {});
     if (Array.isArray(d.products) && d.products.length) setProducts(d.products);
     setDirtyT(false);
   }, []);
@@ -3131,12 +3411,14 @@ function App() {
   const stateRef = useRef({
     rows,
     sos,
-    targets
+    targets,
+    itemTargets
   });
   stateRef.current = {
     rows,
     sos,
-    targets
+    targets,
+    itemTargets
   };
   const histRef = useRef([]);
   const [histLen, setHistLen] = useState(0);
@@ -3150,6 +3432,10 @@ function App() {
     if (prev) {
       setRows(prev.rows);
       setTargets(prev.targets);
+      // Undo must rewind BOTH grains together: rewinding `targets` alone would restore an
+      // old variety total while the item rows deriving it stayed, and the next save would
+      // silently re-derive straight over the undo.
+      setItemTargets(prev.itemTargets || {});
       setSos(prev.sos);
       setDirtyM(true);
       setDirtyT(true);
@@ -3210,6 +3496,89 @@ function App() {
     });
     setDirtyT(true);
   }, []);
+  /* Push one variety's item rows up into `targets` as a derived {l, r}, so every existing
+     consumer — tSum, tByType, the KPI strip, the state cards, the save payload — keeps
+     working without knowing item targets exist. Litres add; the rate is pooled BY VOLUME,
+     never averaged, or two SKUs at 300 and 260 would report a rate neither was set at. */
+  const _deriveVariety = (cell, tcell, type, name) => {
+    const out = { ...(tcell || {}) };
+    const vid = pid(type, name);
+    let sl = 0, slr = 0;
+    itemsOfVariety(cell, type, name).forEach(c => {
+      sl += +cell[c].l || 0;
+      slr += (+cell[c].l || 0) * (+cell[c].r || 0);
+    });
+    if (sl > 0) {
+      out[vid] = { l: Math.round(sl * 100) / 100, r: Math.round(slr / sl * 100) / 100 };
+      // A whole-segment aggregate and a derived variety would both roll into the same
+      // (channel, state, segment) TargetNode. Same rule setTarget applies above.
+      delete out[type + '#' + AGG_SUB];
+    } else {
+      delete out[vid];
+    }
+    return out;
+  };
+
+  /* Set one field of one ITEM's target row. `code === '*'` rewrites an SS/DM/GST/Disc term
+     across every row of that variety and re-rates them. */
+  const setItemTarget = useCallback((channel, state, code, field, val, meta) => {
+    const k = keyOf(channel, state);
+    // Read through stateRef, which every render keeps current, so both setters below get
+    // plain values. Deriving one atom inside the other's updater would make that updater
+    // impure — React may call it twice, and the variety total would be applied twice.
+    const cur = stateRef.current.itemTargets || {};
+    const cell = { ...(cur[k] || {}) };
+    const n = val === '' ? 0 : Number(val);
+    if (code === '*') {
+      itemsOfVariety(cell, meta.t, meta.sub).forEach(c => {
+        const np = { ...cell[c], [field]: n };
+        cell[c] = { ...np, r: itemRealise(np) };
+      });
+    } else {
+      const base = cell[code] || { l: 0, ret: 0, sch: 0, ...ITEM_TERMS };
+      const np = { ...base, ...meta, [field]: n };
+      np.r = itemRealise(np);
+      // Neither volume nor a price is not a target — drop the row rather than posting an
+      // empty one the server would skip anyway.
+      if (!+np.l && !+np.ret) delete cell[code];else cell[code] = np;
+    }
+    const nx = { ...cur };
+    if (Object.keys(cell).length === 0) delete nx[k];else nx[k] = cell;
+    setItemTargets(nx);
+    setTargets(tt => {
+      const next = { ...tt };
+      const derived = _deriveVariety(cell, next[k], meta.t, meta.sub);
+      if (Object.keys(derived).length === 0) delete next[k];else next[k] = derived;
+      return next;
+    });
+    setDirtyT(true);
+  }, []);
+
+  /* Drop every item row of one variety in one territory, and the variety total they were
+     deriving. The variety card's Clear MUST route through here: clearing only `targets`
+     would leave the item rows, and the server's fold would put the number straight back on
+     the next save — a button that looks like it worked and didn't. */
+  const clearVarietyItems = useCallback((channel, state, type, name) => {
+    const k = keyOf(channel, state);
+    setItemTargets(t => {
+      if (!t[k]) return t;
+      const cell = { ...t[k] };
+      itemsOfVariety(cell, type, name).forEach(c => delete cell[c]);
+      const nx = { ...t };
+      if (Object.keys(cell).length === 0) delete nx[k];else nx[k] = cell;
+      return nx;
+    });
+    setTargets(tt => {
+      if (!tt[k]) return tt;
+      const cell = { ...tt[k] };
+      delete cell[pid(type, name)];
+      const nx = { ...tt };
+      if (Object.keys(cell).length === 0) delete nx[k];else nx[k] = cell;
+      return nx;
+    });
+    setDirtyT(true);
+  }, []);
+
   // Clear ALL product targets for one (channel,state) territory.
   const clearCell = useCallback((channel, state) => {
     setTargets(t => {
@@ -3416,7 +3785,11 @@ function App() {
           body: JSON.stringify({
             month,
             year,
-            targets
+            targets,
+            // Both grains in ONE request: the server deletes and rebuilds the period's
+            // TargetNode rows, so two saves would leave the dashboard half-updated until
+            // the second landed — permanently, if it never did.
+            items: itemTargets
           })
         });
         const d = await res.json();
@@ -3476,7 +3849,10 @@ function App() {
     rows: assignedRows,
     channels,
     targets,
+    itemTargets,
     setTarget,
+    setItemTarget,
+    clearVarietyItems,
     setAggTarget,
     clearCell,
     totalsByChannel,

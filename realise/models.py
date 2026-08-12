@@ -206,6 +206,71 @@ class TerritoryProductTarget(models.Model):
         return f'{self.channel}/{self.state_name} {self.product_type}:{self.sub_group} {self.month}/{self.year}'
 
 
+class TerritoryItemTarget(models.Model):
+    """Per-ITEM target for one (channel, state) territory and period — one level below
+    TerritoryProductTarget, at the grain a target is actually handed out in ("Delhi GT ko
+    COLD PRESS 1L+1L COMBO ka 9,200 L").
+
+    Carries the whole Realise-Calculator pricing row, not just the two output numbers, so
+    the screen reopens exactly as it was filled and the rate can be re-derived and audited.
+
+    These rows are the CHILD of the variety target: on save they are summed per
+    (channel, state, product_type, sub_group) and that sum REPLACES the hand-typed
+    TerritoryProductTarget for that variety, which then rolls up through
+    _rebuild_target_rollups like any other row. Nothing here is ever written to TargetNode —
+    that table is deleted and rebuilt on every product-target save, so a direct write would
+    disappear at the next admin click with no error."""
+
+    PRODUCT_TYPES = [('PREMIUM', 'Premium'), ('COMMODITY', 'Commodity')]
+
+    channel        = models.CharField(max_length=20)               # GT, MT, ROI, ECOM, HORECA, CSD, REST
+    state_name     = models.CharField(max_length=100, blank=True, default='')
+    sales_person   = models.CharField(max_length=100, blank=True, default='')  # stamped, not keyed
+    item_code      = models.CharField(max_length=50)               # SAP ItemCode, e.g. FG0000033
+    item_name      = models.CharField(max_length=200, blank=True, default='')
+    # Segment and variety card this row rolls into. Stored (denormalised) so the fold is a
+    # plain GROUP BY with no SAP call inside a write path — but deliberately NOT part of the
+    # key, so a reclassification in SAP cannot leave the same item filed under two varieties
+    # and double-count into the segment rollup.
+    product_type   = models.CharField(max_length=20, choices=PRODUCT_TYPES)
+    sub_group      = models.CharField(max_length=100)
+    month          = models.IntegerField()
+    year           = models.IntegerField()
+
+    # Pricing INPUTS — what was typed, plus the pack config as the master read at entry time.
+    # Snapshotted rather than re-read: a target is a commitment made on a date, and must not
+    # silently re-rate itself when a pack changes in SAP months later.
+    retailer       = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    scheme         = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    box_litres     = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    pcs_per_box    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    ss_pct         = models.DecimalField(max_digits=6,  decimal_places=2, default=0)
+    dm_pct         = models.DecimalField(max_digits=6,  decimal_places=2, default=0)
+    gst_pct        = models.DecimalField(max_digits=6,  decimal_places=2, default=5)
+    disc           = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # OUTPUTS — what rolls up. target_realise is derived from the inputs above, server-side.
+    target_ltrs    = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    target_realise = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='territory_item_targets')
+
+    class Meta:
+        unique_together = ('channel', 'state_name', 'item_code', 'month', 'year')
+        ordering = ['channel', 'state_name', 'product_type', 'sub_group', 'item_code']
+        indexes = [
+            models.Index(fields=['year', 'month']),
+            models.Index(fields=['channel', 'state_name']),
+            models.Index(fields=['item_code']),
+        ]
+
+    def __str__(self):
+        return f'{self.channel}/{self.state_name} {self.item_code} {self.month}/{self.year}'
+
+
 class TargetNode(models.Model):
     """Free-form hierarchical target. Any of the three dimensions may be blank,
     so a target can be held at any level (e.g. GT only, or GT+Punjab, or GT+Punjab+Prince).
