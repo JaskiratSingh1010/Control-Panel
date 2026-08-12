@@ -12,6 +12,9 @@
   .pd-lbl{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   .pd-bar select,.pd-bar input{font-family:inherit;font-size:13px;font-weight:600;color:var(--rz-ink);border:1px solid #e2e8f0;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .pd-bar select:focus,.pd-bar input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  /* Channel view combines the states, so the State filter is switched off there — it has to
+     LOOK off, or it reads as a control that stopped working. */
+  .pd-bar select:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}
   .pd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
   .pd-export{align-self:center;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--rz-card-brd);color:var(--rz-indigo-deep);font-family:inherit;font-size:12.5px;font-weight:800;padding:9px 15px;border-radius:10px;cursor:pointer;transition:background .15s,border-color .15s}
   .pd-export:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
@@ -287,10 +290,12 @@
   <h1 class="pd-h1">Plan vs Done</h1>
 
   <div class="pd-bar">
-    <div class="pd-fld"><span class="pd-lbl">Done scope</span>
+    <div class="pd-fld"><span class="pd-lbl">View by</span>
       <div class="pd-seg" id="pdScope">
-        <button type="button" data-scope="state" class="on">Result’s state + channel</button>
-        <button type="button" data-scope="all">All India</button>
+        <button type="button" data-scope="state" class="on"
+          title="One card per state and channel — Delhi · GT, Punjab · GT, and so on.">State</button>
+        <button type="button" data-scope="all"
+          title="One card per channel, every state combined — the whole of GT on one card.">Channel</button>
       </div></div>
     <div class="pd-fld"><span class="pd-lbl">Drill By</span>
       <div class="com-drill-box">
@@ -474,7 +479,9 @@
     return acc;
   }
 
-  function terrLbl(st,ch){ return (st||'All India')+' · '+ch; }
+  /* Channel view leads with the channel — the card IS "the whole of GT", and burying that
+     behind "All India" made it read as a scope note rather than the subject of the card. */
+  function terrLbl(st,ch){ return st ? (st+' · '+ch) : (ch+' · all states'); }
 
   /* Split on anything that is not a letter or a digit. No regex on purpose — a word-boundary
      escape has not survived the quoting into this file before, and a pattern that silently
@@ -1189,7 +1196,7 @@
     var pl=(o.payload&&o.payload.plans)||[];
     var st=scopeStateOf(o), ci=chanInfo(o), ch=ci.ch, D=doneMapFor(st,ch);
     var lbl = st ? (st+(ch?' · '+ch:' · all channels'))
-                 : (ch ? ('all states · '+ch) : 'all-India');
+                 : (ch ? (ch+' · all states') : 'all-India');
     var a=resultAch(o,D);
     var tgtCh=(o.channel||channelFromName(o.name)||'');
     /* The Target row follows the card's scope, same as Done: All India keeps the channel and
@@ -1212,7 +1219,7 @@
         +'<span class="pd-name">'+esc(o.name)+'</span>'
         +(function(){
             if(!o.state)return '';
-            var txt=(st||'all states')+(ch?' · '+ch:(st?' · all channels':''));
+            var txt=st ? (st+(ch?' · '+ch:' · all channels')) : (ch?(ch+' · all states'):'all states');
             // A guessed channel keeps its chip whatever the name says — the badge is the
             // warning that the tagging was inferred, and that has to stay visible.
             if(!ci.guess && !chipSaysMore(o.name,txt))return '';
@@ -1451,6 +1458,13 @@
        stayed on screen while every other number on the card had moved to July.
        A plan with no month at all is a standing one and shows in every month; the card says
        so, and it can be tied to a month on the Rate List tab. */
+    /* Channel view is states COMBINED, so a state filter has nothing to narrow — it would
+       only decide which channels appear, while each card still reported its national figure.
+       Disable it and drop any pick, rather than leave a control that quietly lies. */
+    var stSel=document.getElementById('pdState');
+    stSel.disabled=(SCOPE==='all');
+    stSel.title=stSel.disabled?'Channel view combines every state — switch to State view to filter by one.':'';
+    if(stSel.disabled && stateF){ stateF=''; stSel.value=''; }
     var mv=document.getElementById('pdMonth').value||'';
     var inScope=ALL.filter(function(o){
       if(stateF && normState(o.state)!==normState(stateF))return false;
