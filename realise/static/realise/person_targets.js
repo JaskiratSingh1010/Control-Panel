@@ -98,6 +98,23 @@ const itemRealise = x => {
 // The item codes of ONE variety inside one territory's cell.
 const itemsOfVariety = (cell, type, name) =>
   Object.keys(cell || {}).filter(c => cell[c] && cell[c].t === type && cell[c].sub === name);
+/* Sort key for a pack size label ('100 MLS', '1 LTR', '5 LTR', '700 GMS', '13 KGS').
+   Volume and weight are separate scales — 500 MLS and 500 GMS are not the same size — so
+   they group first and compare on a common unit within the group. Plain alphabetical would
+   file '100 MLS' before '1 LTR' and read as nonsense in a size filter. */
+const skuKey = s => {
+  const m = String(s || '').trim().match(/^([\d.]+)\s*(\S+)/);
+  const n = m ? parseFloat(m[1]) || 0 : 0, u = m ? m[2].toUpperCase() : '';
+  if (/^ML/.test(u)) return [0, n / 1000];
+  if (/^L/.test(u)) return [0, n];
+  if (/^G/.test(u)) return [1, n / 1000];
+  if (/^K/.test(u)) return [1, n];
+  return [2, n];
+};
+const skuCmpAsc = (a, b) => {
+  const ka = skuKey(a), kb = skuKey(b);
+  return ka[0] !== kb[0] ? ka[0] - kb[0] : ka[1] - kb[1] || String(a).localeCompare(String(b));
+};
 const _pl = x => x && typeof x === 'object' ? +x.l || 0 : +x || 0; // tgt litres of a product entry (legacy number = litres)
 const _pr = x => x && typeof x === 'object' ? +x.r || 0 : 0; // tgt realise of a product entry
 const tProdL = (v, id) => v && typeof v === 'object' ? _pl(v[id]) : 0; // target litres for one product
@@ -823,12 +840,14 @@ function DrillCards({
   const [itemActuals, setItemActuals] = useState({}); // {FG0000047:{litres,realise}} last month
   const [itemQ, setItemQ] = useState(''); // search inside the item screen
   const [itemOnly, setItemOnly] = useState(false); // show only rows that already carry a target
+  const [skuF, setSkuF] = useState([]); // pack sizes ticked in the item screen; [] = every size
   /* One level below the variety card: that variety's items, for this same territory. The
      master is fetched once per page — it is the whole FG list and 600s-cached server-side.
      Actuals are per territory, like openProd's. */
   const openItem = (channel, state, p) => {
     setItemQ('');
     setItemOnly(false);
+    setSkuF([]);
     setEditItem({
       channel,
       state,
@@ -1337,9 +1356,22 @@ function DrillCards({
     list.forEach(c => {
       soldL += (itemActuals[c.code] || {}).litres || 0;
     });
+    /* Pack sizes present in THIS variety, with a count each. Built from the variety's own
+       items rather than the whole master, so the strip never offers a size that would
+       filter to nothing. A ticked size that no longer exists (variety switched underneath)
+       simply matches nothing — harmless. */
+    const skuCount = {};
+    list.forEach(c => {
+      const k = c.sku || '—';
+      skuCount[k] = (skuCount[k] || 0) + 1;
+    });
+    const skuList = Object.keys(skuCount).sort(skuCmpAsc);
+    const skuOn = s => skuF.indexOf(s) >= 0;
+    const toggleSku = s => setSkuF(f => f.indexOf(s) >= 0 ? f.filter(x => x !== s) : f.concat([s]));
     const q = itemQ.trim().toUpperCase();
     const shownItems = list.filter(c => {
       if (itemOnly && !cell[c.code]) return false;
+      if (skuF.length && !skuOn(c.sku || '—')) return false;
       if (!q) return true;
       return c.name.indexOf(q) >= 0 || c.code.indexOf(q) >= 0;
     });
@@ -1452,7 +1484,20 @@ function DrillCards({
       className: "ms-cell"
     }, "BLENDED ₹/L", /*#__PURE__*/React.createElement("b", null, blended > 0 ? '₹' + blended : '—')), /*#__PURE__*/React.createElement("div", {
       className: "ms-cell"
-    }, "LAST MO SOLD", /*#__PURE__*/React.createElement("b", null, fmtL(soldL)))), /*#__PURE__*/React.createElement("div", {
+    }, "LAST MO SOLD", /*#__PURE__*/React.createElement("b", null, fmtL(soldL)))), skuList.length > 1 ? /*#__PURE__*/React.createElement("div", {
+      className: "isku"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "iterms-l"
+    }, "Pack size"), skuList.map(s => /*#__PURE__*/React.createElement("button", {
+      key: s,
+      className: 'isku-b' + (skuOn(s) ? ' on' : ''),
+      onClick: () => toggleSku(s)
+    }, s, /*#__PURE__*/React.createElement("i", null, skuCount[s]))), skuF.length ? /*#__PURE__*/React.createElement("button", {
+      className: "isku-x",
+      onClick: () => setSkuF([])
+    }, "Clear ", skuF.length) : null, /*#__PURE__*/React.createElement("span", {
+      className: "isku-n"
+    }, "Showing ", shownItems.length, " of ", list.length)) : null, /*#__PURE__*/React.createElement("div", {
       className: "modal-body"
     }, /*#__PURE__*/React.createElement("div", {
       className: "irow irow-hd"
