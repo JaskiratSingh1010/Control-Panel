@@ -119,6 +119,10 @@
   table.pd-tbl>tbody>tr.pd-sub>td.sep{border-left:2px solid var(--rz-line)}
   table.pd-tbl>tfoot>tr.pd-tgt>td{background:#fff7ed;border-top:2px solid #fed7aa;color:#9a3412}
   table.pd-tbl>tfoot>tr.pd-tgt>td.l{background:#fff7ed;color:#c2410c}
+  table.pd-tbl>tfoot>tr.pd-tgt.tot>td{background:#ffedd5;border-top:1px solid #fb923c;font-weight:900}
+  table.pd-tbl>tbody>tr.pd-seg>td{background:#eef2f6;font-weight:800;font-size:11px;letter-spacing:.4px;
+    text-transform:uppercase;color:#475569;border-top:1px solid var(--rz-line)}
+  table.pd-tbl>tbody>tr.pd-seg>td.l{background:#eef2f6;color:#334155}
   table.pd-tbl>tfoot>tr>td{background:#eef2ff;border-top:2px solid #c7d2fe;font-weight:900;padding:10px 12px;border-top:2px solid var(--rz-line);text-align:right;font-variant-numeric:tabular-nums}
   table.pd-tbl>tfoot>tr>td.l{text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px;color:#4338ca}
   table.pd-tbl>tfoot>tr>td.sep{border-left:2px solid var(--rz-line)}
@@ -272,6 +276,28 @@
      Premium, one for Commodity. Pooling them hid that they carry different rates - 1,00,000 at
      220 and 2,00,000 at 160 pool to 180, a rate neither target asked for. Only when a territory
      was given a single undifferentiated target does one combined row appear. */
+  /* Render every segment row, then a total across them when a territory carries more than one.
+     The total's rate is the pooled one from Update Targets, and its Done is the territory's
+     whole figure - which is not necessarily the two segments added up, because items typed
+     OTHERS sell into the territory but have no target. */
+  function targetBlock(st,ch,map){
+    var segs=targetSegs(st,ch);
+    if(!segs.length)return '';
+    var lbl='Target · '+st+' · '+ch;
+    var html=segs.map(function(pair){
+      var seg=pair[0], t=pair[1], d=segTotals(map||{},seg);
+      return targetRowHtml(lbl+(seg?' · '+seg:''), t, d.ltr, d.rev);
+    }).join('');
+    if(segs.length>1){
+      var b=TARGETS[ch+'|'+normState(st)], all=b&&b.ALL;
+      if(all&&all.ltrs>0){
+        var d=segTotals(map||{},'');
+        html+=targetRowHtml(lbl+' · TOTAL', all, d.ltr, d.rev);
+      }
+    }
+    return html;
+  }
+
   function targetSegs(st,ch){
     if(!st||!ch)return [];
     var b=TARGETS[ch+'|'+normState(st)];
@@ -281,6 +307,27 @@
     if(segs.length)return segs.map(function(k){return [k,b[k]];});
     return (b.ALL&&b.ALL.ltrs>0)?[['',b.ALL]]:[];
   }
+  /* Sort the unplanned items into Premium / Commodity / Others and hand back the groups in
+     that order, each already sorted by litres. Ungrouped, a Premium and a Commodity item sat
+     next to each other with nothing to say which target row they belonged to. */
+  var SEG_ORDER=['PREMIUM','COMMODITY','OTHERS',''];
+  function groupBySegment(rows){
+    var by={};
+    rows.forEach(function(r){ (by[ITEM_TYPES[r.code]||'']=by[ITEM_TYPES[r.code]||'']||[]).push(r); });
+    return SEG_ORDER.filter(function(k){return by[k]&&by[k].length;}).map(function(k){
+      var g=by[k], ltr=0, rev=0;
+      g.forEach(function(r){ ltr+=num(r.doneLtr); rev+=num(r.doneRev); });
+      return {seg:k, rows:g, ltr:ltr, rev:rev};
+    });
+  }
+  function segHeadRow(g){
+    return '<tr class="pd-seg"><td class="l" colspan="6">'+esc(g.seg||'UNCLASSIFIED')
+      +' · '+g.rows.length+' item'+(g.rows.length===1?'':'s')+'</td>'
+      +'<td class="'+(g.ltr<0?'r':'pd-done')+' sep">'+fN(Math.round(g.ltr))+'</td><td></td>'
+      +'<td>'+(g.ltr?f2(g.rev/g.ltr):'<span class="mute">—</span>')+'</td>'
+      +'<td></td><td></td><td class="sep"></td><td></td><td></td></tr>';
+  }
+
   /* Done for one segment of a map. Types come from the whole FG master, so an item that had no
      sale is still classified and cannot drift into the wrong segment. */
   function segTotals(D,seg){
@@ -296,7 +343,7 @@
     var tRev=t.ltrs*t.rate;
     var pct=t.ltrs?(doneLtr/t.ltrs*100):0;
     var aRl=doneLtr?(doneRev/doneLtr):0, diff=(aRl&&t.rate)?(aRl-t.rate):0;
-    return '<tr class="pd-tgt"><td class="l">'+esc(label)+'</td>'
+    return '<tr class="pd-tgt'+(/TOTAL$/.test(label)?' tot':'')+'"><td class="l">'+esc(label)+'</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
       +'<td class="'+(doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(doneLtr))+'</td>'
@@ -563,7 +610,8 @@
         +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
         +' — <em>open to plan them</em></td></tr></tbody>'
         +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
-        +x.rows.map(function(r){
+        +groupBySegment(x.rows).map(function(g){
+          return (TYPEF?'':segHeadRow(g))+g.rows.map(function(r){
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
@@ -583,7 +631,8 @@
               +'<td class="mute">—</td>'
               +ratePcCell(d)
               +estCells(sell,rev,r.doneLtr,r.doneRev,rl)+'</tr>';
-          }).join('')
+          }).join('');
+        }).join('')
         +'</tbody>'
         // Subtotal sits AFTER the rows it sums, and outside the collapsible tbody so it is
         // readable without expanding. Rate ₹/Pc is left blank here: across a basket a
@@ -653,13 +702,8 @@
          the target is what the territory was asked to do, so it is measured against every sale
          in that territory rather than only the planned SKUs. */
       +(function(){
-          var segs=targetSegs(tgtSt,tgtCh);
-          if(!segs.length)return '';
-          return '<tfoot>'+segs.map(function(pair){
-            var seg=pair[0], t=pair[1], d=segTotals(tgtMap||{},seg);
-            return targetRowHtml('Target · '+tgtSt+' · '+tgtCh+(seg?' · '+seg:''),
-                                 t, d.ltr, d.rev);
-          }).join('')+'</tfoot>';
+          var b=targetBlock(tgtSt,tgtCh,tgtMap);
+          return b?('<tfoot>'+b+'</tfoot>'):'';
         })()
       +'</table></div>'
       +(x.rows.length
@@ -880,7 +924,8 @@
     // pkey splits on '|', and key is 'CHANNEL|STATE' — swap the separator or the row key
     // parses wrong and the input handler edits the neighbouring field.
     var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pend=0;
-    var rows=x.rows.map(function(r){
+    var rows=groupBySegment(x.rows).map(function(g){
+      return (TYPEF?'':segHeadRow(g))+g.rows.map(function(r){
       var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
       if(!ed){
         return '<tr class="x">'+itemCell(r.item,r.code)
@@ -909,6 +954,7 @@
         +'<td>'+(a?f2(a):'<span class="mute">—</span>')+'</td>'
         +'<td class="mute">—</td>'+ratePcCell(d)
         +estCells(sell,rl*sell,r.doneLtr,r.doneRev,rl)+'</tr>';
+      }).join('');
     }).join('');
     /* data-state / data-channel must describe the map the rows were BUILT from, not the
        territory the target belongs to. Under All India the rows come from the national map,
@@ -947,10 +993,7 @@
             +' — <em>open to see them</em></td></tr></tbody>'
           +'<tbody class="pd-xrows" id="'+xid+'" hidden>'+rows+'</tbody>'
         : '<tbody><tr><td class="l" colspan="14"><span class="mute">Nothing sold in this scope this month.</span></td></tr></tbody>')
-      +'<tfoot>'+targetSegs(st,ch).map(function(pair){
-          var seg=pair[0], t=pair[1], d=segTotals(D,seg);
-          return targetRowHtml('Target · '+st+' · '+ch+(seg?' · '+seg:''), t, d.ltr, d.rev);
-        }).join('')+'</tfoot></table></div>'
+      +'<tfoot>'+targetBlock(st,ch,D)+'</tfoot></table></div>'
       +(ed
         ? '<div class="pd-save" data-create="'+esc(key)+'"><span class="pd-save-n">'
           +(pend?pend+' item'+(pend===1?'':'s')+' ready':'Fill “To be sale” on the items this territory should sell')
