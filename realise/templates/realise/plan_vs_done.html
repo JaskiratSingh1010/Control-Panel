@@ -321,6 +321,7 @@
       </select></div>
     <div class="pd-fld"><span class="pd-lbl">Month</span><input type="month" id="pdMonth"></div>
     <div class="pd-fld"><span class="pd-lbl">State</span><select id="pdState"><option value="">All states</option></select></div>
+    <div class="pd-fld"><span class="pd-lbl">Channel</span><select id="pdChannel"><option value="">All channels</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
     <span class="pd-count" id="pdCount"></span>
     <button type="button" class="pd-export" id="pdExport" title="Download every saved result's Plan vs Done table (Excel)"><span class="material-icons">download</span>Export Excel</button>
@@ -373,7 +374,16 @@
   function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
   function num(v){var n=parseFloat(v);return isFinite(n)?n:0;}
 
-  var ALL=[], DONE_ALL={}, DONE_BY={}, DONE_SC={}, MONTH_LABEL='', stateF='', searchF='', loading=false, UID=0;
+  var ALL=[], DONE_ALL={}, DONE_BY={}, DONE_SC={}, MONTH_LABEL='', stateF='', chanF='', searchF='', loading=false, UID=0;
+  /* What the reader has opened, by a key that survives a re-render. Every filter rebuilds the
+     whole list, so without this, flipping Done Scope reopened the first three cards and shut
+     everything the reader had opened — the page rearranging itself under them. Everything
+     starts closed: on a screen of 20-odd territories, the reader picks what to look at.
+     Keys: 'c:<id>' saved card · 'c:CHANNEL|STATE' target card · 'p:<rid>|<plan>' planning
+     grid · 'g:<rid>|<plan>|<segment>' one segment's items. */
+  var OPEN={};
+  function isOpen(k){ return !!OPEN[k]; }
+  function openCls(k){ return isOpen(k)?' open':''; }
   /* SCOPE decides which Done map a card reads: the state it was planned for, or all-India.
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
@@ -507,8 +517,9 @@
       return {seg:k, rows:g, ltr:ltr, rev:rev};
     });
   }
-  function segHeadRow(g,moreId){
-    return '<tr class="pd-seg'+(moreId?' hdr" data-more="'+moreId:'')+'"><td class="l" colspan="6">'
+  function segHeadRow(g,moreId,okey){
+    return '<tr class="pd-seg'+(moreId?(isOpen(okey)?' hdr open':' hdr')+'" data-more="'+moreId
+              +'" data-okey="'+esc(okey||''):'')+'"><td class="l" colspan="6">'
       +(moreId?'<span class="material-icons">expand_more</span>':'')
       +esc(g.seg||'UNCLASSIFIED')
       +' · '+g.rows.length+' item'+(g.rows.length===1?'':'s')+'</td>'
@@ -595,12 +606,13 @@
     return {ltr:ltr, rev:rev};
   }
   /* One Target row. Shared by the saved cards and the target-only cards so they cannot drift. */
-  function targetRowHtml(label,t,doneLtr,doneRev,moreId){
+  function targetRowHtml(label,t,doneLtr,doneRev,moreId,okey){
     var tRev=t.ltrs*t.rate;
     var pct=t.ltrs?(doneLtr/t.ltrs*100):0;
     var aRl=doneLtr?(doneRev/doneLtr):0, diff=(aRl&&t.rate)?(aRl-t.rate):0;
     return '<tr class="pd-tgt'+(/TOTAL$/.test(label)?' tot':'')
-        +(moreId?' hdr" data-more="'+moreId:'')+'"><td class="l">'
+        +(moreId?(isOpen(okey)?' hdr open':' hdr')+'" data-more="'+moreId
+                 +'" data-okey="'+esc(okey||''):'')+'"><td class="l">'
       +(moreId?'<span class="material-icons">expand_more</span>':'')+esc(label)+'</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
@@ -883,12 +895,12 @@
 
     if(groups.length){
       extraHtml=groups.map(function(g){
-        var gid='x'+(++UID), t=tByseg[g.seg];
+        var gid='x'+(++UID), gk='g:'+rid+'|'+pidx+'|'+g.seg, t=tByseg[g.seg];
         var head = t
           ? targetRowHtml('Target · '+terrLbl(tgtSt,tgtCh)+(g.seg?' · '+g.seg:''),
-                          t, segTotals(tgtMap||{},g.seg).ltr, segTotals(tgtMap||{},g.seg).rev, gid)
-          : segHeadRow(g, gid);
-        return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
+                          t, segTotals(tgtMap||{},g.seg).ltr, segTotals(tgtMap||{},g.seg).rev, gid, gk)
+          : segHeadRow(g, gid, gk);
+        return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'"'+(isOpen(gk)?'':' hidden')+'>'
           +g.rows.map(function(r){
             /* Already planned: show it as it reads at the top of the card, no inputs — editing
                it here would fight the plan row that owns it. */
@@ -949,10 +961,10 @@
       +'Leave it blank and the month’s actual realisation is used instead, with the price inputs left empty.');
 
     /* The planned rows collapse behind their own heading, the same way each segment's items
-       collapse behind its Target row. A plan with 30 SKUs otherwise pushes the totals and the
-       target rows off screen. Open by default — the plan is what this card is about. */
-    var pgid='pg'+(++UID);
-    return '<div class="pd-plan-h hdr open" data-more="'+pgid+'">'
+       collapse behind its Target row. Closed to start with: a plan of 30 SKUs pushes the
+       totals and the target rows off screen, and those are what most readings need. */
+    var pgid='pg'+(++UID), pgk='p:'+rid+'|'+pidx;
+    return '<div class="pd-plan-h hdr'+openCls(pgk)+'" data-more="'+pgid+'" data-okey="'+esc(pgk)+'">'
       +'<span class="material-icons">expand_more</span>'
       +'<span class="pd-plan-t">'+esc(p.name||'Plan')+'</span>'
       +'<span class="pd-plan-n">'+j.rows.length+' item'+(j.rows.length===1?'':'s')+'</span></div>'
@@ -967,7 +979,7 @@
       +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
       // Blended stays OUT of the collapsing tbody: it is the summary of what just folded
       // away, so hiding it with the rows would leave the plan showing nothing at all.
-      +'</tr></thead><tbody id="'+pgid+'">'+body+'</tbody>'
+      +'</tr></thead><tbody id="'+pgid+'"'+(isOpen(pgk)?'':' hidden')+'>'+body+'</tbody>'
       +'<tbody><tr class="pd-sub"><td class="l">Blended ('+j.rows.length+')</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(j.planLtr))+'</td>'
@@ -1172,7 +1184,8 @@
     var dry=(st && !Object.keys(D).length)
       ? '<div class="pd-note">Nothing sold in '+esc(lbl)+' this month. Switch the scope to All India, or clear the channel on the Rate List tab, to widen it.</div>'
       : '';
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-id="'+o.id+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
+    var ck='c:'+o.id;
+    return '<div class="pd-card'+openCls(ck)+'" data-okey="'+esc(ck)+'" data-id="'+o.id+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
         +(o.state?'<span class="pd-chip state">'+esc(st||'all states')
@@ -1247,6 +1260,7 @@
       });
       return Object.keys(keys).sort().filter(function(k){
         if(claimed[k])return false;
+        if(chanF && k.split('|')[0]!==chanF)return false;
         if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
         var b=targetBucket('',k.split('|')[0]), t=b&&b[TYPEF||'ALL'];
         return !!(t&&t.ltrs>0) || !!sold[k];              // a target to hit, or a sale to show
@@ -1258,6 +1272,7 @@
       if(claimed[k])return false;                       // a saved result already shows this territory
       var st=k.split('|')[1];
       if(stateF && normState(stateF)!==st)return false;
+      if(chanF && k.split('|')[0]!==chanF)return false;
       if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
       var t=TARGETS[k]&&TARGETS[k][TYPEF||'ALL'];
       return !!(t&&t.ltrs>0) || !!sold[k];
@@ -1292,12 +1307,12 @@
     var tsegs=targetSegs(st,ch), groups=buildGroups(x.rows,tsegs);
     var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
     var body=groups.map(function(g){
-      var gid='t'+(++UID), t=tByseg[g.seg];
+      var gid='t'+(++UID), gk='g:'+key+'|'+g.seg, t=tByseg[g.seg];
       var head = t
         ? targetRowHtml('Target · '+terrLbl(st,ch)+(g.seg?' · '+g.seg:''),
-                        t, segTotals(D,g.seg).ltr, segTotals(D,g.seg).rev, gid)
-        : segHeadRow(g, gid);
-      return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
+                        t, segTotals(D,g.seg).ltr, segTotals(D,g.seg).rev, gid, gk)
+        : segHeadRow(g, gid, gk);
+      return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'"'+(isOpen(gk)?'':' hidden')+'>'
         +g.rows.map(function(r){
                 var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0, pk=packOf(r.code,rid,D);
       if(!ed && IT[r.code])return itemTargetRow(r,IT[r.code],d,a);
@@ -1339,7 +1354,8 @@
         +'</tbody>';
     }).join('');
 
-    return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)
+    var ck='c:'+key;
+    return '<div class="pd-card'+openCls(ck)+'" data-okey="'+esc(ck)+'" data-state="'+esc(st)
       +'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(terrLbl(st,ch))+'</span>'
@@ -1408,6 +1424,9 @@
     var mv=document.getElementById('pdMonth').value||'';
     var inScope=ALL.filter(function(o){
       if(stateF && o.state!==stateF)return false;
+      // A result's own channel, not the view scope — an untagged one is not tied to a channel
+      // and so cannot be excluded by picking one.
+      if(chanF && (o.channel||channelFromName(o.name))!==chanF)return false;
       if(searchF && String(o.name||'').toLowerCase().indexOf(searchF)===-1)return false;
       return true;
     });
@@ -1420,7 +1439,8 @@
       // Say what the month hid, or an empty screen reads as missing data.
       +(hidden?' · '+hidden+' from another month':'');
     if(!rows.length && !tkeys.length){
-      list.innerHTML='<div class="pd-empty">No saved results'+(stateF?(' for '+esc(stateF)):'')
+      list.innerHTML='<div class="pd-empty">Nothing'
+        +(stateF?(' for '+esc(stateF)):'')+(chanF?(' in '+esc(chanF)):'')
         +' in '+esc(MONTH_LABEL)+'.'
         +(hidden?' '+hidden+' plan'+(hidden===1?' is':'s are')+' saved for another month — switch the month, or retag them on the Rate List tab.'
                 :' Save one from the Realise Calculator, or set a target in Update Targets.')
@@ -1434,6 +1454,17 @@
     var sel=document.getElementById('pdState'), cur=sel.value;
     sel.innerHTML='<option value="">All states</option>'+states.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
     if(states.indexOf(cur)>=0)sel.value=cur;
+  }
+  /* Channels that actually billed this month, plus any a saved result is tagged with — a list
+     of every channel that exists would offer picks that filter to an empty page. */
+  function fillChannels(){
+    var sel=document.getElementById('pdChannel'), cur=sel.value, seen={};
+    Object.keys(DONE_CH||{}).forEach(function(c){ if(c)seen[c]=1; });
+    ALL.forEach(function(o){ var c=o.channel||channelFromName(o.name); if(c)seen[c]=1; });
+    var chans=Object.keys(seen).sort();
+    sel.innerHTML='<option value="">All channels</option>'
+      +chans.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('');
+    if(chans.indexOf(cur)>=0)sel.value=cur; else { sel.value=''; chanF=''; }
   }
 
   /* Done map for the picked month — refetched on every month change. The server echoes the
@@ -1548,7 +1579,7 @@
   function loadSaved(){
     return fetch('/realise/api/rate-list/',{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:[],states:[]};})
-      .then(function(p){ ALL=p.rows||[]; fillStates(p.states||[]); })
+      .then(function(p){ ALL=p.rows||[]; fillStates(p.states||[]); fillChannels(); })
       .catch(function(){ ALL=[]; });
   }
 
@@ -1834,6 +1865,7 @@
   });
   document.getElementById('pdType').addEventListener('change',function(){TYPEF=this.value;render();});
   document.getElementById('pdState').addEventListener('change',function(){stateF=this.value;render();});
+  document.getElementById('pdChannel').addEventListener('change',function(){chanF=this.value;render();});
   var sd=debounce(render,120);
   document.getElementById('pdSearch').addEventListener('input',function(){searchF=this.value.trim().toLowerCase();sd();});
   /* Typing recomputes only the edited row + its Save bar. Card/plan totals deliberately do NOT
@@ -1930,11 +1962,22 @@
     var more=e.target.closest?e.target.closest('[data-more]'):null;
     if(more){
       var tb=document.getElementById(more.getAttribute('data-more'));
-      if(tb){ tb.hidden=!tb.hidden; more.classList.toggle('open',!tb.hidden); }
+      if(tb){
+        tb.hidden=!tb.hidden;
+        more.classList.toggle('open',!tb.hidden);
+        // Remember it, or the next filter change rebuilds the list and shuts it again.
+        var ok=more.getAttribute('data-okey');
+        if(ok){ if(tb.hidden)delete OPEN[ok]; else OPEN[ok]=1; }
+      }
       return;
     }
     var h=e.target.closest?e.target.closest('.pd-card-h'):null;
-    if(h){ h.parentNode.classList.toggle('open'); }
+    if(h){
+      var card=h.parentNode;
+      card.classList.toggle('open');
+      var ck=card.getAttribute('data-okey');
+      if(ck){ if(card.classList.contains('open'))OPEN[ck]=1; else delete OPEN[ck]; }
+    }
   });
 
   /* '—' is what assignedPerson returns for a (channel, state) with no owner — e.g. ROI in
