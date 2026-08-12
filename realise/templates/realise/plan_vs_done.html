@@ -267,13 +267,44 @@
      a GT target must not be shown against every channel in the state. */
   /* The result's OWN territory target, independent of the Done scope: switching to All India
      widens what counts as Done, it does not change what the territory was asked to do. */
-  function targetOf(o){ return targetFor(o.state, o.channel||channelFromName(o.name)); }
-  function targetFor(st,ch){
-    if(!st||!ch)return null;
+
+  /* Update Targets is filled per segment, so Plan vs Done shows it per segment: one row for
+     Premium, one for Commodity. Pooling them hid that they carry different rates - 1,00,000 at
+     220 and 2,00,000 at 160 pool to 180, a rate neither target asked for. Only when a territory
+     was given a single undifferentiated target does one combined row appear. */
+  function targetSegs(st,ch){
+    if(!st||!ch)return [];
     var b=TARGETS[ch+'|'+normState(st)];
-    if(!b)return null;
-    var t=b[TYPEF||'ALL'];
-    return (t&&t.ltrs>0)?t:null;
+    if(!b)return [];
+    if(TYPEF)return (b[TYPEF]&&b[TYPEF].ltrs>0)?[[TYPEF,b[TYPEF]]]:[];
+    var segs=Object.keys(b).filter(function(k){return k!=='ALL'&&b[k].ltrs>0;}).sort();
+    if(segs.length)return segs.map(function(k){return [k,b[k]];});
+    return (b.ALL&&b.ALL.ltrs>0)?[['',b.ALL]]:[];
+  }
+  /* Done for one segment of a map. Types come from the whole FG master, so an item that had no
+     sale is still classified and cannot drift into the wrong segment. */
+  function segTotals(D,seg){
+    var ltr=0, rev=0;
+    Object.keys(D).forEach(function(c){
+      if(seg && (ITEM_TYPES[c]||'')!==seg)return;
+      ltr+=num(D[c].litres); rev+=num(D[c].revenue);
+    });
+    return {ltr:ltr, rev:rev};
+  }
+  /* One Target row. Shared by the saved cards and the target-only cards so they cannot drift. */
+  function targetRowHtml(label,t,doneLtr,doneRev){
+    var tRev=t.ltrs*t.rate;
+    var pct=t.ltrs?(doneLtr/t.ltrs*100):0;
+    var aRl=doneLtr?(doneRev/doneLtr):0, diff=(aRl&&t.rate)?(aRl-t.rate):0;
+    return '<tr class="pd-tgt"><td class="l">'+esc(label)+'</td>'
+      +'<td></td><td></td><td></td>'
+      +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
+      +'<td class="'+(doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(doneLtr))+'</td>'
+      +'<td class="'+(t.ltrs?achCls(pct):'mute')+'">'+(t.ltrs?f2(pct)+'%':'—')+'</td>'
+      +'<td>'+(doneLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
+      +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
+      +'<td></td>'
+      +estCells(t.ltrs,tRev,doneLtr,doneRev,t.rate)+'</tr>';
   }
   function typeOk(code){ return !TYPEF || (ITEM_TYPES[String(code||'').toUpperCase()]||'')===TYPEF; }
   function normState(x){ return String(x||'').toUpperCase().replace(/&/g,' AND ').replace(/\s+/g,' ').trim(); }
@@ -348,12 +379,6 @@
       c.rate_box =c.boxes ?c.revenue/c.boxes :0;
     });
     return out;
-  }
-
-  function mapTotals(D){
-    var ltr=0, rev=0;
-    Object.keys(D).forEach(function(c){ ltr+=num(D[c].litres); rev+=num(D[c].revenue); });
-    return {ltr:ltr, rev:rev};
   }
 
   function mapForNode(el){
@@ -503,7 +528,7 @@
             +(e.gap?((e.gap>=0?'+':'')+f2(e.gap)):'—')+'</td>');
   }
 
-  function planTable(p,pidx,rid,D,scopeLbl,tgt,tgtCh,tgtDone,tgtSt){
+  function planTable(p,pidx,rid,D,scopeLbl,tgtCh,tgtMap,tgtSt){
     var j=joinPlan(p,D);
     var A=planAssumptions(p); ASSUME[rid+'|'+pidx]=A;   // the input handler needs these too
     var body=j.rows.map(function(r){
@@ -623,28 +648,18 @@
               +estCells(j.planLtr,j.planRev,allLtr,allRev,blendPlan)+'</tr></tfoot>';
           })()
         : '')
-      /* The territory's own target from Update Targets, if one is set for this (channel, state).
-         It is a different benchmark from the saved plan above: the plan is the rate list someone
-         built, the target is what the territory was asked to do. Measured against ALL sales in
-         the scope, since the target covers the territory rather than a list of SKUs. */
+      /* The territory's own target from Update Targets, split the way it was entered. It is a
+         different benchmark from the saved plan above: the plan is a rate list someone built,
+         the target is what the territory was asked to do, so it is measured against every sale
+         in that territory rather than only the planned SKUs. */
       +(function(){
-          var t=tgt;
-          if(!t)return '';
-          var tRev=t.ltrs*t.rate;
-          var tL=tgtDone?tgtDone.ltr:0, tR=tgtDone?tgtDone.rev:0;
-          var tpct=t.ltrs?(tL/t.ltrs*100):0;
-          var aRl=tL?(tR/tL):0, tdiff=(aRl&&t.rate)?(aRl-t.rate):0;
-          return '<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(tgtSt)+' · '+esc(tgtCh)
-            +(TYPEF?' · '+esc(TYPEF):'')+'</td>'
-            +'<td></td><td></td><td></td>'
-            +'<td>'+fN(Math.round(t.ltrs))+'</td>'
-            +'<td class="pd-rl">'+f2(t.rate)+'</td>'
-            +'<td class="'+(tL<0?'r':'pd-done')+' sep">'+fN(Math.round(tL))+'</td>'
-            +'<td class="'+(t.ltrs?achCls(tpct):'mute')+'">'+(t.ltrs?f2(tpct)+'%':'—')+'</td>'
-            +'<td>'+(tL?f2(aRl):'<span class="mute">—</span>')+'</td>'
-            +'<td class="'+(tdiff?(tdiff>=0?'g':'r'):'mute')+'">'+(tdiff?((tdiff>=0?'+':'')+f2(tdiff)):'—')+'</td>'
-            +'<td></td>'
-            +estCells(t.ltrs,tRev,tL,tR,t.rate)+'</tr></tfoot>';
+          var segs=targetSegs(tgtSt,tgtCh);
+          if(!segs.length)return '';
+          return '<tfoot>'+segs.map(function(pair){
+            var seg=pair[0], t=pair[1], d=segTotals(tgtMap||{},seg);
+            return targetRowHtml('Target · '+tgtSt+' · '+tgtCh+(seg?' · '+seg:''),
+                                 t, d.ltr, d.rev);
+          }).join('')+'</tfoot>';
         })()
       +'</table></div>'
       +(x.rows.length
@@ -799,10 +814,10 @@
     var lbl = st ? (st+(ch?' · '+ch:' · all channels'))
                  : (ch ? ('all states · '+ch) : 'all-India');
     var a=resultAch(o,D);
-    var tgt=targetOf(o), tgtCh=(o.channel||channelFromName(o.name)||'');
+    var tgtCh=(o.channel||channelFromName(o.name)||'');
     // same rule for the Target row on a saved card: its own territory, whatever the card scope
-    var tgtDone=tgt?mapTotals(doneMapFor(o.state,tgtCh)):null;
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgt,tgtCh,tgtDone,o.state);}).join('');
+    var tgtMap=doneMapFor(o.state,tgtCh);        // the territory's own sales, split per segment below
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgtCh,tgtMap,o.state);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
     // Scoped to a state that billed nothing this month reads identically to a broken join;
@@ -850,7 +865,7 @@
 
   function targetCardHtml(key,idx){
     var p=key.split('|'), ch=p[0], st=p[1];
-    var t=TARGETS[key][TYPEF||'ALL'], tRev=t.ltrs*t.rate;
+    var t=TARGETS[key][TYPEF||'ALL'];         // header chip: the territory's total
     /* A target is a commitment for ONE territory, so it is always measured against that
        territory - the All India toggle widens what a rate list is compared to, not what a
        target means. Widening it showed this card Delhi CORPORATE sales under a Delhi HORECA
@@ -858,8 +873,6 @@
     var D=doneMapFor(st,ch), scopeLbl=st+' · '+ch;
     var x=extrasFor({},D), xid='t'+(++UID);            // nothing is planned, so everything is "extra"
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
-    var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
-    var diff=(aRl&&t.rate)?(aRl-t.rate):0;
     /* Editing turns the card into a plan being drafted: fill Retailer / Scheme / To be sale and
        Create plan writes a real Rate List for this territory, after which it stops being a
        target-only card. Terms default to SS 0 / DM 0 / GST 5 / Disc 0 — there is no saved plan
@@ -934,15 +947,10 @@
             +' — <em>open to see them</em></td></tr></tbody>'
           +'<tbody class="pd-xrows" id="'+xid+'" hidden>'+rows+'</tbody>'
         : '<tbody><tr><td class="l" colspan="14"><span class="mute">Nothing sold in this scope this month.</span></td></tr></tbody>')
-      +'<tfoot><tr class="pd-tgt"><td class="l">Target · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</td>'
-      +'<td></td><td></td><td></td>'
-      +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
-      +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
-      +'<td class="'+achCls(pct)+'">'+f2(pct)+'%</td>'
-      +'<td>'+(x.doneLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
-      +'<td class="'+(diff?(diff>=0?'g':'r'):'mute')+'">'+(diff?((diff>=0?'+':'')+f2(diff)):'—')+'</td>'
-      +'<td></td>'
-      +estCells(t.ltrs,tRev,x.doneLtr,x.doneRev,t.rate)+'</tr></tfoot></table></div>'
+      +'<tfoot>'+targetSegs(st,ch).map(function(pair){
+          var seg=pair[0], t=pair[1], d=segTotals(D,seg);
+          return targetRowHtml('Target · '+st+' · '+ch+(seg?' · '+seg:''), t, d.ltr, d.rev);
+        }).join('')+'</tfoot></table></div>'
       +(ed
         ? '<div class="pd-save" data-create="'+esc(key)+'"><span class="pd-save-n">'
           +(pend?pend+' item'+(pend===1?'':'s')+' ready':'Fill “To be sale” on the items this territory should sell')
