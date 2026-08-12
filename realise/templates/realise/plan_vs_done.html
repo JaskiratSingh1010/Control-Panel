@@ -147,6 +147,11 @@
   table.pd-tbl>tbody>tr.pd-tgt:hover>td{background:#ffedd5}
   table.pd-tbl>tbody.pd-xrows>tr.x>td{background:#fcfdff;color:var(--rz-muted)}
   table.pd-tbl>tbody.pd-xrows>tr.x>td.l{color:var(--rz-body);font-weight:600}
+  /* A plan item repeated inside its segment, so the group adds up to its Target row. Read-only
+     and tinted so it never reads as a second, separate sale. */
+  table.pd-tbl>tbody.pd-xrows>tr.x.ref>td{background:#f6f7ff}
+  .pd-inplan{margin-left:7px;padding:1px 6px;border-radius:999px;font-size:9.5px;font-weight:800;
+    letter-spacing:.06em;color:#4338ca;background:#e0e7ff;border:1px solid #c7d2fe;vertical-align:1px}
   table.pd-tbl>tbody>tr>td.pd-bal,table.pd-tbl>tfoot>tr>td.pd-bal{font-weight:700;color:#9a3412}
   table.pd-tbl>tbody>tr>td.pd-req,table.pd-tbl>tfoot>tr>td.pd-req{font-weight:800;color:#c2410c}
 
@@ -398,15 +403,16 @@
     if(segs.length)return segs.map(function(k){return [k,b[k]];});
     return (b.ALL&&b.ALL.ltrs>0)?[['',b.ALL]]:[];
   }
-  /* Sort the unplanned items into Premium / Commodity / Others and hand back the groups in
-     that order, each already sorted by litres. Ungrouped, a Premium and a Commodity item sat
-     next to each other with nothing to say which target row they belonged to. */
+  /* Sort the items into Premium / Commodity / Others and hand back the groups in that order,
+     each sorted by litres. Ungrouped, a Premium and a Commodity item sat next to each other
+     with nothing to say which target row they belonged to. */
   var SEG_ORDER=['PREMIUM','COMMODITY','OTHERS',''];
   function groupBySegment(rows){
     var by={};
     rows.forEach(function(r){ (by[ITEM_TYPES[r.code]||'']=by[ITEM_TYPES[r.code]||'']||[]).push(r); });
     return SEG_ORDER.filter(function(k){return by[k]&&by[k].length;}).map(function(k){
       var g=by[k], ltr=0, rev=0;
+      g.sort(function(a,b){ return num(b.doneLtr)-num(a.doneLtr); });
       g.forEach(function(r){ ltr+=num(r.doneLtr); rev+=num(r.doneRev); });
       return {seg:k, rows:g, ltr:ltr, rev:rev};
     });
@@ -425,14 +431,20 @@
      single group holding everything - splitting it by segment there would leave the target row
      heading an empty group while the items sat under plain headers it does not own.
      Otherwise: one group per segment, plus an empty one for any targeted segment that sold
-     nothing, so a missed segment is still visible. */
-  function buildGroups(rows,tsegs){
+     nothing, so a missed segment is still visible.
+     planRows are the plan's own items repeated inside their segment. They are already listed
+     at the top of the card, but a Target row counts the WHOLE territory - leaving them out
+     made the group's Done read higher than the items under it added up, which read as a
+     missing sale. They carry inPlan so the renderer marks them and skips the inputs. */
+  function buildGroups(rows,tsegs,planRows){
+    var all=rows.concat(planRows||[]);
     if(tsegs.length===1 && tsegs[0][0]===''){
       var ltr=0, rev=0;
-      rows.forEach(function(r){ ltr+=num(r.doneLtr); rev+=num(r.doneRev); });
-      return [{seg:'', rows:rows, ltr:ltr, rev:rev}];
+      all.forEach(function(r){ ltr+=num(r.doneLtr); rev+=num(r.doneRev); });
+      all.sort(function(a,b){ return num(b.doneLtr)-num(a.doneLtr); });
+      return [{seg:'', rows:all, ltr:ltr, rev:rev}];
     }
-    var groups=groupBySegment(rows), seen={};
+    var groups=groupBySegment(all), seen={};
     groups.forEach(function(g){ seen[g.seg]=1; });
     tsegs.forEach(function(pr){ if(pr[0] && !seen[pr[0]])groups.push({seg:pr[0],rows:[],ltr:0,rev:0}); });
     var rank={PREMIUM:0,COMMODITY:1,OTHERS:2};
@@ -644,11 +656,12 @@
      a realisation figure, not a quantity. */
   /* Item cell doubles as the drill-down handle — click it for the parties and invoices behind
      that item's Done figure. Rows without a code cannot be looked up, so they stay plain. */
-  function itemCell(item,code){
+  function itemCell(item,code,badge){
     if(!code)return '<td class="l">'+esc(item)+'</td>';
     return '<td class="l pd-item" data-code="'+esc(code)+'">'
       +'<span class="material-icons pd-ichev">chevron_right</span>'
-      +esc(item)+'<span class="pd-code">'+esc(code)+'</span></td>';
+      +esc(item)+'<span class="pd-code">'+esc(code)+'</span>'
+      +(badge?'<span class="pd-inplan">'+esc(badge)+'</span>':'')+'</td>';
   }
 
   function ratePcCell(d){
@@ -727,11 +740,18 @@
     /* Each segment's unplanned items sit under that segment's own Target row, which doubles as
        the group header. A segment with no target keeps a plain header, and a target with no
        sales still shows so a missed segment is not invisible.
-       The listed items are the UNPLANNED ones only, so they sum to slightly less than the
-       Target row's Done, which counts the whole territory - the difference is whatever the
-       plan above already covers. */
+       A Target row's Done covers the whole territory, so the plan's own items are repeated
+       inside their segment (tagged IN PLAN, read-only - they are editable at the top of the
+       card) and the listed items add up to the Target row exactly. */
     var x=extrasFor(j.codes,D), pend=0, extraHtml='';
-    var tsegs=targetSegs(tgtSt,tgtCh), groups=buildGroups(x.rows,tsegs);
+    var planRef=j.rows.filter(function(r){
+      return r.code && (Math.round(num(r.doneLtr)) || Math.round(num(r.doneRev)));
+    }).map(function(r){
+      return {item:r.item,code:r.code,retailer:r.retailer,boxltr:r.boxltr,scheme:r.scheme,
+              planLtr:r.planLtr,planRev:r.planRev,planRl:r.planRl,
+              doneLtr:r.doneLtr,doneRev:r.doneRev,inPlan:true};
+    });
+    var tsegs=targetSegs(tgtSt,tgtCh), groups=buildGroups(x.rows,tsegs,planRef);
     var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
 
     if(groups.length){
@@ -743,6 +763,24 @@
           : segHeadRow(g, gid);
         return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
           +g.rows.map(function(r){
+            /* Already planned: show it as it reads at the top of the card, no inputs — editing
+               it here would fight the plan row that owns it. */
+            if(r.inPlan){
+              var rp=r.planLtr?(r.doneLtr/r.planLtr*100):0;
+              var rAct=r.doneLtr?(r.doneRev/r.doneLtr):0;
+              var rDif=(rAct&&r.planRl)?(rAct-r.planRl):0;
+              return '<tr class="x ref">'
+                +itemCell(r.item,r.code,'IN PLAN')
+                +'<td>'+f2(r.retailer)+'</td><td>'+f2(r.boxltr)+'</td><td>'+f2(r.scheme)+'</td>'
+                +'<td>'+fN(Math.round(r.planLtr))+'</td>'
+                +'<td class="pd-rl">'+f2(r.planRl)+'</td>'
+                +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
+                +'<td class="'+(r.planLtr?achCls(rp):'mute')+'">'+(r.planLtr?f2(rp)+'%':'—')+'</td>'
+                +'<td>'+(rAct?f2(rAct):'<span class="mute">—</span>')+'</td>'
+                +'<td class="'+(rDif?(rDif>=0?'g':'r'):'mute')+'">'+(rDif?((rDif>=0?'+':'')+f2(rDif)):'—')+'</td>'
+                +ratePcCell(D[r.code])
+                +estCells(r.planLtr,r.planRev,r.doneLtr,r.doneRev,r.planRl)+'</tr>';
+            }
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
