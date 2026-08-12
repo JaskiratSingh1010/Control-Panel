@@ -670,13 +670,7 @@
           +(g.rows.length?'':'<tr class="x"><td class="l" colspan="14"><span class="mute">Nothing sold in this segment this month.</span></td></tr>')
           +'</tbody>';
       }).join('')
-      +'<tbody><tr class="pd-sub"><td class="l">Not in plan ('+x.rows.length+')</td>'
-      +'<td></td><td></td><td></td><td></td><td></td>'
-      +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
-      +'<td></td>'
-      +'<td>'+(x.doneLtr?f2(x.doneRev/x.doneLtr):'<span class="mute">—</span>')+'</td>'
-      +'<td></td><td></td>'
-      +'<td class="sep"></td><td></td><td></td></tr></tbody>';
+      ;      // each segment's own Target row already carries its total
     }
 
     var allLtr=j.doneLtr+x.doneLtr, allRev=x.doneRev+j.doneRev;
