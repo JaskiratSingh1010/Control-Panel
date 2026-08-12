@@ -412,10 +412,20 @@
 
   function targetTotalRow(st,ch,map){
     var segs=targetSegs(st,ch);
-    if(segs.length<2)return '';
+    if(!segs.length)return '';
     var b=targetBucket(st,ch), all=b&&b.ALL;
     if(!all||all.ltrs<=0)return '';
     var d=segTotals(map||{},'');
+    /* One segment used to mean "no total needed". It is not the same question: a segment row
+       counts only its own items, this row counts the whole territory. A HORECA card carrying a
+       Premium-only target showed 11,511 and never the channel's 12,759, because Commodity sold
+       into it with no target of its own. Drop the row only when it would repeat the single
+       segment row exactly. */
+    if(segs.length<2){
+      var s=segTotals(map||{},segs[0][0]);
+      if(Math.round(s.ltr)===Math.round(d.ltr)
+         && Math.round(num(all.ltrs))===Math.round(num(segs[0][1].ltrs)))return '';
+    }
     return targetRowHtml('Target · '+terrLbl(st,ch)+' · TOTAL', all, d.ltr, d.rev);
   }
 
