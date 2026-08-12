@@ -385,18 +385,42 @@
   /* The per-segment Target rows now head their own item groups in the body, so the footer
      carries only the total across them. Its Done is the territory's whole figure, which is not
      always the segments added up: items typed OTHERS sell into the territory but have no target. */
+  /* The target for a scope. With a state it is that territory's own bucket. With no state —
+     All India — it is the CHANNEL's target: every state's target for that channel added up,
+     rates volume-weighted the way the server pools them. All India widens the target exactly
+     as it widens Done, so a card's two sides stay comparable and the channel card reads the
+     same total as the Targets dashboard. */
+  function targetBucket(st,ch){
+    if(!ch)return null;
+    if(st)return TARGETS[ch+'|'+normState(st)]||null;
+    var acc={}, any=false;
+    Object.keys(TARGETS).forEach(function(k){
+      if(k.split('|')[0]!==ch)return;
+      var b=TARGETS[k];
+      Object.keys(b).forEach(function(seg){
+        var t=b[seg];
+        if(!t||!(num(t.ltrs)>0))return;
+        var a=acc[seg]||(acc[seg]={ltrs:0,value:0,rate:0});
+        a.ltrs+=num(t.ltrs); a.value+=num(t.ltrs)*num(t.rate); any=true;
+      });
+    });
+    if(!any)return null;
+    Object.keys(acc).forEach(function(s){ acc[s].rate=acc[s].ltrs?(acc[s].value/acc[s].ltrs):0; });
+    return acc;
+  }
+  function terrLbl(st,ch){ return (st||'All India')+' · '+ch; }
+
   function targetTotalRow(st,ch,map){
     var segs=targetSegs(st,ch);
     if(segs.length<2)return '';
-    var b=TARGETS[ch+'|'+normState(st)], all=b&&b.ALL;
+    var b=targetBucket(st,ch), all=b&&b.ALL;
     if(!all||all.ltrs<=0)return '';
     var d=segTotals(map||{},'');
-    return targetRowHtml('Target · '+st+' · '+ch+' · TOTAL', all, d.ltr, d.rev);
+    return targetRowHtml('Target · '+terrLbl(st,ch)+' · TOTAL', all, d.ltr, d.rev);
   }
 
   function targetSegs(st,ch){
-    if(!st||!ch)return [];
-    var b=TARGETS[ch+'|'+normState(st)];
+    var b=targetBucket(st,ch);
     if(!b)return [];
     if(TYPEF)return (b[TYPEF]&&b[TYPEF].ltrs>0)?[[TYPEF,b[TYPEF]]]:[];
     var segs=Object.keys(b).filter(function(k){return k!=='ALL'&&b[k].ltrs>0;}).sort();
@@ -758,7 +782,7 @@
       extraHtml=groups.map(function(g){
         var gid='x'+(++UID), t=tByseg[g.seg];
         var head = t
-          ? targetRowHtml('Target · '+tgtSt+' · '+tgtCh+(g.seg?' · '+g.seg:''),
+          ? targetRowHtml('Target · '+terrLbl(tgtSt,tgtCh)+(g.seg?' · '+g.seg:''),
                           t, segTotals(tgtMap||{},g.seg).ltr, segTotals(tgtMap||{},g.seg).rev, gid)
           : segHeadRow(g, gid);
         return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
@@ -1018,9 +1042,13 @@
                  : (ch ? ('all states · '+ch) : 'all-India');
     var a=resultAch(o,D);
     var tgtCh=(o.channel||channelFromName(o.name)||'');
-    // same rule for the Target row on a saved card: its own territory, whatever the card scope
-    var tgtMap=doneMapFor(o.state,tgtCh);        // the territory's own sales, split per segment below
-    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgtCh,tgtMap,o.state);}).join('');
+    /* The Target row follows the card's scope, same as Done: All India keeps the channel and
+       widens the state, so the row compares the channel's whole target to the channel's whole
+       sale. Pinning it to the card's own state left an all-India Done measured against one
+       state's target. */
+    var tgtSt=scopeStateOf(o);
+    var tgtMap=doneMapFor(tgtSt,tgtCh);
+    var tables=pl.map(function(p,i){return planTable(p,i,o.id,D,lbl,tgtCh,tgtMap,tgtSt);}).join('');
     var scope=(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':
                (o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))));
     // Scoped to a state that billed nothing this month reads identically to a broken join;
@@ -1050,14 +1078,31 @@
   /* A target set in Update Targets is a commitment whether or not anyone built a rate list for
      it, so a (channel, state) with a target and no saved result still gets a card. It has no
      planning grid — there is no plan — just what sold in that scope against the target.
-     Only in "Result's state + channel" scope: a target belongs to one territory, and measuring
-     it against national sales would flatter it. */
+     All India collapses these to ONE card per channel, keyed 'CHANNEL|': the state is what the
+     scope widens, so eight state cards each showing the same national Done would read as eight
+     separate sales. Target and Done both become the channel's whole figure. */
   function targetKeys(){
-    var claimed={};
+    var claimed={}, wide=(SCOPE==='all');
     ALL.forEach(function(o){
       var ch=o.channel||channelFromName(o.name);          // its own territory, not the view scope
-      if(o.state&&ch)claimed[ch+'|'+normState(o.state)]=1;
+      if(!ch)return;
+      if(wide)claimed[ch+'|']=1;                          // that result already covers the channel
+      else if(o.state)claimed[ch+'|'+normState(o.state)]=1;
     });
+    if(wide){
+      var chans={};
+      Object.keys(TARGETS).forEach(function(k){
+        var p=k.split('|');
+        if(stateF && normState(stateF)!==p[1])return;     // State filter still picks which targets count
+        chans[p[0]]=1;
+      });
+      return Object.keys(chans).sort().map(function(c){return c+'|';}).filter(function(k){
+        if(claimed[k])return false;
+        if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
+        var b=targetBucket('',k.split('|')[0]), t=b&&b[TYPEF||'ALL'];
+        return !!(t&&t.ltrs>0);
+      });
+    }
     return Object.keys(TARGETS).sort().filter(function(k){
       if(claimed[k])return false;                       // a saved result already shows this target
       var st=k.split('|')[1];
@@ -1069,13 +1114,13 @@
   }
 
   function targetCardHtml(key,idx){
-    var p=key.split('|'), ch=p[0], st=p[1];
-    var t=TARGETS[key][TYPEF||'ALL'];         // header chip: the territory's total
-    /* A target is a commitment for ONE territory, so it is always measured against that
-       territory - the All India toggle widens what a rate list is compared to, not what a
-       target means. Widening it showed this card Delhi CORPORATE sales under a Delhi HORECA
-       heading, and an achievement of 1,782%. */
-    var D=doneMapFor(st,ch), scopeLbl=st+' · '+ch;
+    var p=key.split('|'), ch=p[0], st=p[1]||'';
+    /* Blank state = All India: the channel's target across every state, against the channel's
+       sale across every state. Both sides widen together, so the card reads what the Targets
+       dashboard reads for that channel. */
+    var b=targetBucket(st,ch), t=b&&b[TYPEF||'ALL'];      // header chip: the scope's total
+    if(!t)return '';
+    var D=doneMapFor(st,ch), scopeLbl=terrLbl(st,ch);
     var x=extrasFor({},D);                             // nothing is planned, so everything is "extra"
     var rid='T:'+key.replace('|','~');
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
@@ -1092,7 +1137,7 @@
     var body=groups.map(function(g){
       var gid='t'+(++UID), t=tByseg[g.seg];
       var head = t
-        ? targetRowHtml('Target · '+st+' · '+ch+(g.seg?' · '+g.seg:''),
+        ? targetRowHtml('Target · '+terrLbl(st,ch)+(g.seg?' · '+g.seg:''),
                         t, segTotals(D,g.seg).ltr, segTotals(D,g.seg).rev, gid)
         : segHeadRow(g, gid);
       return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
@@ -1133,8 +1178,8 @@
     return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)
       +'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
-        +'<span class="pd-name">'+esc(st)+' · '+esc(ch)+'</span>'
-        +'<span class="pd-chip state">'+esc(st)+' · '+esc(ch)+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
+        +'<span class="pd-name">'+esc(terrLbl(st,ch))+'</span>'
+        +'<span class="pd-chip state">'+esc(terrLbl(st,ch))+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
         +'<span class="pd-chip tgt">Target only — no rate list</span>'
         +'<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
         +'<div class="pd-sp">'
@@ -1246,8 +1291,8 @@
      saved results with its own plan. Rows are written in the calculator's shape, with the same
      price terms the edit note states. */
   function createPlan(bar){
-    var key=bar.getAttribute('data-create'), p=key.split('|'), ch=p[0], st=p[1];
-    var D=(SCOPE==='all')?doneMapFor('',''):doneMapFor(st,ch);
+    var key=bar.getAttribute('data-create'), p=key.split('|'), ch=p[0], st=p[1]||'';
+    var D=doneMapFor(st,ch);              // st is blank on All India: the whole channel
     var A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pfx=rid+'|0|', rows=[];
     Object.keys(PENDING).forEach(function(k){
       if(k.indexOf(pfx)!==0)return;
@@ -1272,7 +1317,8 @@
     btn.disabled=true; btn.textContent='Creating…';
     fetch('/realise/api/rate-list/save/',{method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-      body:JSON.stringify({name:st+' '+ch+' '+MONTH_LABEL, state:titleState(st), channel:ch,
+      // On All India the card has no state, so the plan is saved for the channel alone.
+      body:JSON.stringify({name:terrLbl(st,ch)+' '+MONTH_LABEL, state:titleState(st), channel:ch,
         scope:'GRID', payload:{plans:[{name:'Planning Grid', rows:rows,
           totals:{totSell:totSell, revSum:revSum, blend:totSell?revSum/totSell:0}}], compare:null}})})
       .then(function(r){return r.json().catch(function(){return {status:'error'};});})
