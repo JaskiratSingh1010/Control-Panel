@@ -63,6 +63,9 @@
   .pd-edit:hover{background:#ffedd5}
   .pd-edit.on{background:#c2410c;color:#fff;border-color:#c2410c}
   .pd-edit .material-icons{font-size:16px}
+  .pd-add{border:1px solid #bbf7d0;background:#f0fdf4;color:#15803d;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center}
+  .pd-add:hover{background:#dcfce7}
+  .pd-add .material-icons{font-size:18px}
   .pd-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
   .pd-del:hover{background:#fff1f3}
   .pd-card.open .pd-chev{transform:rotate(180deg)}
@@ -198,6 +201,59 @@
   .pd-kpi.req .k-l{color:#c2410c}.pd-kpi.req .k-v{color:#9a3412}
   .pd-note{margin-top:10px;font-size:11.5px;color:var(--rz-muted);font-weight:600}
 
+  /* Item picker — same modal as the Realise Calculator, so picking an item feels identical
+     in both places. Markup, CSS and cascade behaviour are lifted from there unchanged. */
+  .rc-modal{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}
+  .rc-modal[hidden]{display:none}
+  .rc-modal-card{background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.35);width:min(940px,96vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+  .rc-modal-h{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eef2f6}
+  .rc-modal-h .t{font-size:15px;font-weight:800;color:var(--rz-ink)}
+  .rc-modal-h input{margin-left:auto;font-family:inherit;font-size:13px;font-weight:600;border:1px solid #e2e8f0;border-radius:9px;padding:8px 11px;min-width:240px;outline:none}
+  .rc-modal-h input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .rc-modal-x{border:0;background:#f1f5f9;color:#64748b;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit}
+  .rc-modal-x:hover{background:#e2e8f0;color:#334155}
+  .rc-modal-clear{border:1px solid #e2e8f0;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .rc-modal-clear:hover{background:#f8fafc;color:var(--rz-ink);border-color:var(--rz-indigo)}
+  .rc-modal-body{display:grid;grid-template-columns:1fr 1fr 1.5fr;height:64vh;max-height:560px;overflow:hidden}
+  .rc-col{overflow-y:auto;min-height:0;border-right:1px solid #eef2f6;padding:6px}   /* min-height:0 lets the column actually scroll inside the grid */
+  .rc-col:last-child{border-right:0}
+  .rc-col-h{position:sticky;top:0;background:#fff;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted);padding:6px 10px 6px;z-index:1}
+  .rc-opt{padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--rz-body);display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .rc-opt:hover{background:#f1f5ff}
+  .rc-opt.on{background:#eef2ff;color:var(--rz-indigo);font-weight:800}
+  .rc-opt .n{font-size:11px;color:var(--rz-faint);font-weight:700}
+  .rc-opt .tp{font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px}
+  .rc-opt .tp.P{background:#eef2ff;color:#4338ca}.rc-opt .tp.C{background:#fef9c3;color:#854d0e}
+  .rc-col-empty{padding:16px;color:var(--rz-faint);font-size:12px;text-align:center}
+  /* SKU column as grouped chips */
+  .rc-skugrp{margin:2px 8px 16px}
+  .rc-skugrp-l{display:inline-block;font-size:12.5px;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:#4338ca;background:#eef2ff;padding:4px 11px;border-radius:7px;margin:10px 2px 9px}
+  .rc-skuchips{display:flex;flex-wrap:wrap;gap:7px}
+  .rc-skuchip{display:inline-flex;align-items:baseline;gap:5px;min-width:46px;justify-content:center;padding:9px 13px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:16px;font-weight:800;color:var(--rz-ink)}
+  .rc-skuchip:hover{border-color:var(--rz-indigo);background:#f1f5ff}
+  .rc-skuchip.on{background:#eef2ff;border-color:var(--rz-indigo);color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+  .rc-skuchip .n{font-size:10.5px;color:var(--rz-faint);font-weight:700}
+
+  .pk-form{padding:16px;border-top:1px solid #eef2f6}
+  .pk-item{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--rz-ink);margin-bottom:14px}
+  .pk-item .material-icons{font-size:18px;color:var(--rz-indigo)}
+  .pk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .pk-grid label{display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:800;
+    letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
+  .pk-grid input,.pk-grid output{font-family:inherit;font-size:14px;font-weight:700;text-align:right;
+    color:var(--rz-ink);background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:9px 11px;
+    outline:none;font-variant-numeric:tabular-nums}
+  .pk-grid input:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  .pk-grid output{background:#f8fafc;border-style:dashed;color:var(--rz-muted)}
+  .pk-grid output.calc{color:#0e7490;border-color:#a5f3fc;background:#ecfeff}
+  .pk-foot{display:flex;align-items:center;gap:10px;margin-top:16px}
+  .pk-note{font-size:11.5px;font-weight:600;color:var(--rz-muted);margin-right:auto}
+  .pk-back{border:1px solid #e2e8f0;background:#fff;color:var(--rz-muted);font-family:inherit;
+    font-size:12.5px;font-weight:700;padding:9px 13px;border-radius:9px;cursor:pointer}
+  .pk-back:hover{background:#f8fafc;color:var(--rz-ink)}
+  .pk-save{border:0;background:var(--rz-indigo);color:#fff;font-family:inherit;font-size:12.5px;
+    font-weight:800;padding:9px 16px;border-radius:9px;cursor:pointer}
+  .pk-save:disabled{opacity:.45;cursor:default}
   .pd-empty{padding:44px;text-align:center;color:var(--rz-muted);background:var(--rz-card);border:1px dashed var(--rz-card-brd);border-radius:16px}
 </style>
 {% endblock %}
@@ -248,6 +304,39 @@
 
   <div id="pdList"><div class="pd-empty">Loading…</div></div>
 </div>
+
+  <div class="rc-modal" id="pickModal" hidden>
+    <div class="rc-modal-card">
+      <div class="rc-modal-h">
+        <span class="t">Select item</span>
+        <input type="search" id="pkSearch" placeholder="Search item code / name…" autocomplete="off">
+        <button class="rc-modal-clear" id="pkClear" title="Reset size / variety / search">Clear</button>
+        <button class="rc-modal-x" id="pkClose" title="Close">✕</button>
+      </div>
+      <div class="rc-modal-body">
+        <div class="rc-col" id="pkVar"></div>
+        <div class="rc-col" id="pkSku"></div>
+        <div class="rc-col" id="pkItem"></div>
+      </div>
+      <!-- step 2: the picked item's plan line. Box Ltrs and Relise are derived, never typed. -->
+      <div class="pk-form" id="pkForm" hidden>
+        <div class="pk-item"><span class="material-icons">inventory_2</span>
+          <span id="pkFormName"></span><span class="pd-code" id="pkFormCode"></span></div>
+        <div class="pk-grid">
+          <label>Retailer ₹<input type="number" step="any" min="0" id="pkRetailer" placeholder="0"></label>
+          <label>Box Ltrs<output id="pkBoxltr">—</output></label>
+          <label>Scheme<input type="number" step="any" min="0" id="pkScheme" placeholder="0"></label>
+          <label>To be sale<input type="number" step="any" min="0" id="pkSell" placeholder="litres"></label>
+          <label>Relise ₹/L<output id="pkRelise" class="calc">—</output></label>
+        </div>
+        <div class="pk-foot">
+          <span class="pk-note" id="pkNote"></span>
+          <button type="button" class="pk-back" id="pkBack">‹ Back to items</button>
+          <button type="button" class="pk-save" id="pkSave" disabled>Add to plan</button>
+        </div>
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -651,12 +740,13 @@
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
             if(sell>0)pend++;
-            var rl=addedRealise(ret,num(d&&d.pcsbox),num(d&&d.boxltr),sch,actRl,A);
+            var pk=packOf(r.code,rid,D);
+            var rl=addedRealise(ret,pk.pcsbox,pk.boxltr,sch,actRl,A);
             var rev=rl*sell, bal=sell-r.doneLtr, ap=sell?(r.doneLtr/sell*100):0;
             return '<tr class="x" data-k="'+esc(k)+'">'
               +itemCell(r.item,r.code)
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="retailer" value="'+esc(e.retailer==null?'':e.retailer)+'" placeholder="retailer"></td>'
-              +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+              +'<td>'+(pk.boxltr?f2(pk.boxltr):'<span class="mute">—</span>')+'</td>'
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
               +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
               +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
@@ -905,6 +995,8 @@
           +fN(Math.round(a.done))+' / '+fN(Math.round(a.plan))+' L'
           +(a.plan?' · '+f2(a.pct)+'%':'')+'</span>'
         +'<div class="pd-sp"><span class="pd-meta">saved '+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
+        +'<button class="pd-add" data-add="'+o.id+'|'+esc(o.state)+'|'+esc(tgtCh)+'|plan" title="Add an item to this plan">'
+          +'<span class="material-icons">add</span></button>'
         +'<button class="pd-del" title="Delete this saved result" data-del="'+o.id+'">✕</button>'
         +'<span class="material-icons pd-chev">expand_more</span></div>'
       +'</div><div class="pd-body">'+dry+tables+'</div></div>';
@@ -940,6 +1032,7 @@
        heading, and an achievement of 1,782%. */
     var D=doneMapFor(st,ch), scopeLbl=st+' · '+ch;
     var x=extrasFor({},D);                             // nothing is planned, so everything is "extra"
+    var rid='T:'+key.replace('|','~');
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
     /* Editing turns the card into a plan being drafted: fill Retailer / Scheme / To be sale and
        Create plan writes a real Rate List for this territory, after which it stops being a
@@ -947,7 +1040,7 @@
        here to inherit them from. */
     // pkey splits on '|', and key is 'CHANNEL|STATE' — swap the separator or the row key
     // parses wrong and the input handler edits the neighbouring field.
-    var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pend=0;
+    var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, pend=0;
     /* Same shape as a saved card: each segment's items sit under that segment's Target row. */
     var tsegs=targetSegs(st,ch), groups=buildGroups(x.rows,tsegs);
     var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
@@ -959,11 +1052,11 @@
         : segHeadRow(g, gid);
       return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
         +g.rows.map(function(r){
-                var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
+                var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0, pk=packOf(r.code,rid,D);
       if(!ed){
         return '<tr class="x">'+itemCell(r.item,r.code)
           +'<td class="mute">—</td>'
-          +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+          +'<td>'+(pk.boxltr?f2(pk.boxltr):'<span class="mute">—</span>')+'</td>'
           +'<td class="mute">—</td><td class="mute">—</td><td class="mute">—</td>'
           +'<td class="'+(r.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(r.doneLtr))+'</td>'
           +'<td class="mute">—</td>'
@@ -974,11 +1067,11 @@
       var k=pkey(rid,0,r.code), e=PENDING[k]||{};
       var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
       if(sell>0)pend++;
-      var rl=addedRealise(ret,num(d&&d.pcsbox),num(d&&d.boxltr),sch,a,A);
+      var rl=addedRealise(ret,pk.pcsbox,pk.boxltr,sch,a,A);
       var ap=sell?(r.doneLtr/sell*100):0;
       return '<tr class="x" data-k="'+esc(k)+'">'+itemCell(r.item,r.code)
         +'<td class="pd-in"><input type="number" step="any" min="0" data-f="retailer" value="'+esc(e.retailer==null?'':e.retailer)+'" placeholder="retailer"></td>'
-        +'<td>'+(num(d&&d.boxltr)?f2(d.boxltr):'<span class="mute">—</span>')+'</td>'
+        +'<td>'+(pk.boxltr?f2(pk.boxltr):'<span class="mute">—</span>')+'</td>'
         +'<td class="pd-in"><input type="number" step="any" min="0" data-f="scheme" value="'+esc(e.scheme==null?'':e.scheme)+'" placeholder="0"></td>'
         +'<td class="pd-in"><input type="number" step="any" min="0" data-f="sell" value="'+esc(e.sell==null?'':e.sell)+'" placeholder="to be sale"></td>'
         +'<td class="pd-rl" data-c="rl">'+(sell>0?f2(rl):'<span class="mute">—</span>')+'</td>'
@@ -1000,6 +1093,8 @@
         +'<span class="pd-chip tgt">Target only — no rate list</span>'
         +'<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
         +'<div class="pd-sp">'
+          +'<button class="pd-add" data-add="T:'+esc(key.replace('|','~'))+'|'+esc(st)+'|'+esc(ch)+'|target|'+esc(key)+'" title="Add an item to this target">'
+            +'<span class="material-icons">add</span></button>'
           +'<button class="pd-edit'+(ed?' on':'')+'" data-edit="'+esc(key)+'" title="'
             +(ed?'Stop editing':'Set Retailer / Scheme / To be sale on these items')+'">'
             +'<span class="material-icons">'+(ed?'close':'edit')+'</span></button>'
@@ -1078,12 +1173,12 @@
       if(k.indexOf(pfx)!==0)return;
       var code=k.split('|')[2], e=PENDING[k], sell=num(e.sell);
       if(sell<=0)return;
-      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue);
+      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue), pk=packOf(code,rid,D);
       // `realise` is only the price-less fallback; when a retailer price is sent the server
       // recomputes from the plan's own SS/DM/GST/disc rather than trusting this number.
       rows.push({code:code, item:d.item_name||code, retailer:num(e.retailer),
                  scheme:num(e.scheme), sell:sell, realise:lt?(rv/lt):0,
-                 pcsbox:num(d.pcsbox), boxltr:num(d.boxltr)});
+                 pcsbox:pk.pcsbox, boxltr:pk.boxltr});
     });
     if(!rows.length)return;
     var btn=bar.querySelector('.pd-save-b');
@@ -1113,9 +1208,9 @@
       if(k.indexOf(pfx)!==0)return;
       var code=k.split('|')[2], e=PENDING[k], sell=num(e.sell);
       if(sell<=0)return;
-      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue);
+      var d=D[code]||{}, lt=num(d.litres), rv=num(d.revenue), pk=packOf(code,rid,D);
       var actRl=lt?(rv/lt):0, ret=num(e.retailer), sch=num(e.scheme);
-      var pb=num(d.pcsbox), bl=num(d.boxltr), tot=bl+sch;
+      var pb=pk.pcsbox, bl=pk.boxltr, tot=bl+sch;
       var priced=(ret>0&&pb>0&&tot>0);
       var rl=addedRealise(ret,pb,bl,sch,actRl,A);
       rows.push({item:d.item_name||code, code:code,
@@ -1168,6 +1263,156 @@
   var now=new Date();
   mEl.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   mEl.addEventListener('change',loadDone);
+  var ITEMS=null, itemsLoading=false, pkVar='', pkSku='', pkQuery='';
+  var pickCard=null;                 // {rid, st, ch, kind} the picker is adding to
+  function loadItems(cb){
+    if(ITEMS){cb&&cb();return;}
+    if(itemsLoading)return;
+    itemsLoading=true;
+    fetch('/realise/api/realise-calculator/items/',{headers:{'X-CSRFToken':csrf()}})
+      .then(function(r){return r.ok?r.json():{items:[]};})
+      .then(function(p){ITEMS=p.items||[];itemsLoading=false;cb&&cb();})
+      .catch(function(){ITEMS=[];itemsLoading=false;cb&&cb();});
+  }
+  function itemOpt(x){
+    return '<div class="rc-opt" data-code="'+esc(x.code)+'"><span>'+esc(x.name)+'</span>'
+      +'<span>'+(x.type?'<span class="tp '+x.type+'">'+x.type+'</span>':'')+'</span></div>';
+  }
+  // SKU sort: unit group order MLS → LTR → GMS → KG (others last), number descending within a unit.
+  function skuRank(s){
+    var m=String(s).trim().match(/^([\d.]+)\s*(\S+)/);
+    var num=m?parseFloat(m[1]):0, u=m?m[2].toUpperCase():'', order;
+    if(/^ML/.test(u))order=0; else if(/^L/.test(u))order=1;
+    else if(/^G/.test(u))order=2; else if(/^K/.test(u))order=3; else order=9;
+    return {order:order,num:num};
+  }
+  function skuCmp(a,b){ var ra=skuRank(a),rb=skuRank(b); return ra.order!==rb.order?ra.order-rb.order:rb.num-ra.num; }
+  function renderPicker(){
+    var vC=document.getElementById('pkVar'),sC=document.getElementById('pkSku'),iC=document.getElementById('pkItem');
+    if(!ITEMS){vC.innerHTML='<div class="rc-col-h">Variety</div>';sC.innerHTML='<div class="rc-col-h">SKU / Size</div>';iC.innerHTML='<div class="rc-col-h">Item</div><div class="rc-col-empty">Loading items…</div>';return;}
+    if(pkQuery){                                   // search overrides the cascade
+      var q=pkQuery.toLowerCase();
+      var m=ITEMS.filter(function(x){return (x.name+' '+x.code).toLowerCase().indexOf(q)!==-1;}).slice(0,400);
+      vC.innerHTML='<div class="rc-col-h">SKU / Size</div><div class="rc-col-empty">— searching —</div>';
+      sC.innerHTML='<div class="rc-col-h">Variety</div>';
+      iC.innerHTML='<div class="rc-col-h">Item ('+m.length+')</div>'+(m.length?m.map(itemOpt).join(''):'<div class="rc-col-empty">No match</div>');
+      return;
+    }
+    // Column 1 = SKU / Size (chosen first), Column 2 = Variety (filtered by SKU), Column 3 = Item.
+    var skuMap={}; ITEMS.forEach(function(x){skuMap[x.sku]=(skuMap[x.sku]||0)+1;});
+    var GK=['MLS','LTR','GMS','KGS','OTHER'], grp={MLS:[],LTR:[],GMS:[],KGS:[],OTHER:[]};
+    Object.keys(skuMap).forEach(function(s){
+      var o=skuRank(s).order; grp[o===0?'MLS':o===1?'LTR':o===2?'GMS':o===3?'KGS':'OTHER'].push(s);
+    });
+    var html='<div class="rc-col-h">SKU / Size</div>';
+    GK.forEach(function(g){
+      var arr=grp[g]; if(!arr.length)return; arr.sort(skuCmp);
+      html+='<div class="rc-skugrp"><div class="rc-skugrp-l">'+g+'</div><div class="rc-skuchips">'
+        +arr.map(function(s){var num=s.split(/\s+/)[0];
+          return '<div class="rc-skuchip'+(s===pkSku?' on':'')+'" data-sku="'+esc(s)+'" title="'+esc(s)+'">'+esc(num)+'<span class="n">'+skuMap[s]+'</span></div>';
+        }).join('')+'</div></div>';
+    });
+    vC.innerHTML=html;
+    if(pkSku){
+      var varMap={}; ITEMS.forEach(function(x){if(x.sku===pkSku)varMap[x.variety]=(varMap[x.variety]||0)+1;});
+      sC.innerHTML='<div class="rc-col-h">Variety</div>'+Object.keys(varMap).sort().map(function(v){
+        return '<div class="rc-opt'+(v===pkVar?' on':'')+'" data-var="'+esc(v)+'">'+esc(v)+'<span class="n">'+varMap[v]+'</span></div>';}).join('');
+    } else sC.innerHTML='<div class="rc-col-h">Variety</div><div class="rc-col-empty">Pick a size</div>';
+    if(pkSku&&pkVar){
+      var its=ITEMS.filter(function(x){return x.sku===pkSku&&x.variety===pkVar;});
+      iC.innerHTML='<div class="rc-col-h">Item ('+its.length+')</div>'+its.map(itemOpt).join('');
+    } else iC.innerHTML='<div class="rc-col-h">Item</div><div class="rc-col-empty">Pick size &amp; variety</div>';
+  }
+
+  /* ══════════════════ Item picker ══════════════════
+     Lifted from the Realise Calculator so picking an item is the same gesture in both places.
+     Here it adds the chosen item to a card as an editable row: an item that has never sold does
+     not appear in the Done map, so without this there was no way to plan it at all. */
+  /* Two steps in one modal: pick the item, then fill its plan line. Box Ltrs and Relise are
+     derived from the item master and the plan's own terms, so only the three commercial numbers
+     are ever typed. Saving writes it straight into the Rate List - a target-only card gets one
+     created for it, after which it stops being target-only. */
+  var pickCard=null, pkPicked=null;
+  function openPicker(ctx){
+    pickCard=ctx; pkPicked=null; pkVar=''; pkSku=''; pkQuery='';
+    document.getElementById('pkSearch').value='';
+    showPickStep(1);
+    document.getElementById('pickModal').hidden=false;
+    renderPicker(); loadItems(renderPicker);
+    setTimeout(function(){document.getElementById('pkSearch').focus();},30);
+  }
+  function closePicker(){ document.getElementById('pickModal').hidden=true; pickCard=null; pkPicked=null; }
+  function showPickStep(n){
+    document.querySelector('.rc-modal-body').hidden = (n!==1);
+    document.getElementById('pkForm').hidden = (n!==2);
+    document.getElementById('pkSearch').style.display = (n===1?'':'none');
+    document.getElementById('pkClear').style.display = (n===1?'':'none');
+  }
+  function pickAssumptions(){
+    return (pickCard && ASSUME[pickCard.rid+'|0']) || {ss:0,dm:0,gst:5,disc:0};
+  }
+  function selectItem(code){
+    var it=(ITEMS||[]).filter(function(x){return x.code===code;})[0];
+    if(!it||!pickCard)return;
+    pkPicked=it;
+    document.getElementById('pkFormName').textContent=it.name;
+    document.getElementById('pkFormCode').textContent=it.code;
+    document.getElementById('pkBoxltr').textContent=num(it.box_litres)?f2(it.box_litres):'—';
+    document.getElementById('pkRetailer').value='';
+    document.getElementById('pkScheme').value='';
+    document.getElementById('pkSell').value='';
+    var A=pickAssumptions();
+    document.getElementById('pkNote').textContent=
+      'Relise on this plan’s terms — SS '+f2(A.ss)+'% · DM '+f2(A.dm)+'% · GST '+f2(A.gst)+'% · Disc '+f2(A.disc);
+    pkRecalc();
+    showPickStep(2);
+    setTimeout(function(){document.getElementById('pkRetailer').focus();},30);
+  }
+  function pkRecalc(){
+    if(!pkPicked)return;
+    var A=pickAssumptions();
+    var ret=num(document.getElementById('pkRetailer').value);
+    var sch=num(document.getElementById('pkScheme').value);
+    var sell=num(document.getElementById('pkSell').value);
+    var pb=num(pkPicked.pcs_per_box), bl=num(pkPicked.box_litres);
+    var rl=addedRealise(ret,pb,bl,sch,0,A);
+    document.getElementById('pkRelise').textContent=rl?f2(rl):'—';
+    document.getElementById('pkSave').disabled=!(sell>0);
+    return {ret:ret, sch:sch, sell:sell, pb:pb, bl:bl, rl:rl, A:A};
+  }
+  function pkSaveItem(){
+    var v=pkRecalc();
+    if(!v||v.sell<=0||!pickCard)return;
+    var priced=(v.ret>0 && v.pb>0 && (v.bl+v.sch)>0);
+    var row={item:pkPicked.name, code:pkPicked.code,
+      retailer:priced?v.ret:'', ss:priced?v.A.ss:'', dm:priced?v.A.dm:'',
+      gst:priced?v.A.gst:'', disc:priced?v.A.disc:'',
+      pcsbox:v.pb||'', boxltr:v.bl||'', scheme:v.sch, sell:v.sell,
+      realise:v.rl, revenue:v.rl*v.sell,
+      ssRate:0, dmRate:0, exgst:0, boxVal:0, netBox:0, totLtr:v.bl+v.sch};
+    var btn=document.getElementById('pkSave');
+    btn.disabled=true; btn.textContent='Saving…';
+    var req = pickCard.kind==='plan'
+      ? fetch('/realise/api/rate-list/add-items/',{method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+          body:JSON.stringify({id:pickCard.rid, plan:0, rows:[row]})})
+      : fetch('/realise/api/rate-list/save/',{method:'POST',
+          headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+          body:JSON.stringify({name:pickCard.st+' '+pickCard.ch+' '+MONTH_LABEL,
+            state:titleState(pickCard.st), channel:pickCard.ch, scope:'GRID',
+            payload:{plans:[{name:'Planning Grid', rows:[row],
+              totals:{totSell:v.sell, revSum:v.rl*v.sell, blend:v.rl}}], compare:null}})});
+    req.then(function(r){return r.json().catch(function(){return {status:'error'};});})
+      .then(function(pl){
+        btn.disabled=false; btn.textContent='Add to plan';
+        if(pl.status!=='ok'){ window.alert('Could not add the item: '+(pl.error||'error')); return; }
+        closePicker();
+        loading=true; render();
+        loadSaved().then(function(){ loading=false; render(); });
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Add to plan'; window.alert('Could not add the item.'); });
+  }
+
   /* ── Drill By ── */
   function renderDrillList(){
     document.getElementById('pdDrillList').innerHTML=PD_DIMS.map(function(d){
@@ -1262,6 +1507,28 @@
     document.getElementById('pdPersPanel').classList.remove('open');
   });
 
+  ['pkRetailer','pkScheme','pkSell'].forEach(function(id){
+    document.getElementById(id).addEventListener('input',pkRecalc);
+  });
+  document.getElementById('pkSave').addEventListener('click',pkSaveItem);
+  document.getElementById('pkBack').addEventListener('click',function(){ pkPicked=null; showPickStep(1); });
+  document.getElementById('pkSearch').addEventListener('input',function(){pkQuery=this.value.trim();renderPicker();});
+  document.getElementById('pkClose').addEventListener('click',closePicker);
+  document.getElementById('pkClear').addEventListener('click',function(){
+    pkSku=''; pkVar=''; pkQuery=''; document.getElementById('pkSearch').value='';
+    renderPicker(); document.getElementById('pkSearch').focus();
+  });
+  document.getElementById('pickModal').addEventListener('click',function(e){if(e.target===this)closePicker();});
+  document.querySelector('.rc-modal-body').addEventListener('click',function(e){
+    var el=e.target.closest?e.target.closest('.rc-opt,.rc-skuchip'):null; if(!el)return;
+    if(el.hasAttribute('data-sku')){pkSku=el.getAttribute('data-sku');pkVar='';pkQuery='';document.getElementById('pkSearch').value='';renderPicker();}
+    else if(el.hasAttribute('data-var')){pkVar=el.getAttribute('data-var');renderPicker();}
+    else if(el.hasAttribute('data-code')){selectItem(el.getAttribute('data-code'));}
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&!document.getElementById('pickModal').hidden)closePicker();
+  });
+
   document.getElementById('pdScope').addEventListener('click',function(e){
     var b=e.target.closest?e.target.closest('[data-scope]'):null;
     if(!b || b.getAttribute('data-scope')===SCOPE)return;
@@ -1289,10 +1556,11 @@
     if(!String(e0.sell||'').trim() && !String(e0.scheme||'').trim() && !String(e0.retailer||'').trim())
       delete PENDING[k];
 
-    var d=mapForNode(tr)[code]||{}, doneLtr=num(d.litres), doneRev=num(d.revenue);
+    var M=mapForNode(tr), d=M[code]||{}, doneLtr=num(d.litres), doneRev=num(d.revenue);
+    var pk=packOf(code,parts[0],M);
     var actRl=doneLtr?(doneRev/doneLtr):0, sell=num(e0.sell);
     var A=ASSUME[parts[0]+'|'+parts[1]]||{ss:0,dm:0,gst:5,disc:0};
-    var rl=addedRealise(num(e0.retailer),num(d.pcsbox),num(d.boxltr),num(e0.scheme),actRl,A);
+    var rl=addedRealise(num(e0.retailer),pk.pcsbox,pk.boxltr,num(e0.scheme),actRl,A);
     var on=sell>0, ap=on?(doneLtr/sell*100):0;
     function set(c,html,cls){
       var td=tr.querySelector('[data-c="'+c+'"]'); if(!td)return;
@@ -1329,6 +1597,13 @@
   });
 
   document.getElementById('pdList').addEventListener('click',function(e){
+    var add=e.target.closest?e.target.closest('[data-add]'):null;
+    if(add){
+      e.stopPropagation();
+      var p=add.getAttribute('data-add').split('|');
+      openPicker({rid:p[0], st:p[1], ch:p[2], kind:p[3], key:p.slice(4).join('|')});
+      return;
+    }
     var ed=e.target.closest?e.target.closest('[data-edit]'):null;
     if(ed){
       e.stopPropagation();
