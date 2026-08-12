@@ -73,6 +73,15 @@
   .pd-card.open .pd-body{display:block}
 
   .pd-plan-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--rz-indigo);margin:14px 0 8px}
+  /* The plan heading doubles as the collapse handle for its rows — same chevron and rotation
+     as the Target rows use for their groups, so one gesture works everywhere on the card. */
+  .pd-plan-h.hdr{cursor:pointer;display:inline-flex;align-items:center;gap:2px;user-select:none;
+    border-radius:8px;padding:3px 9px 3px 4px;margin-left:-4px;transition:background .15s}
+  .pd-plan-h.hdr:hover{background:#eef2ff}
+  .pd-plan-h.hdr .material-icons{font-size:18px;display:inline-block;transition:transform .18s;transform:rotate(-90deg)}
+  .pd-plan-h.hdr.open .material-icons{transform:none}
+  .pd-plan-n{margin-left:8px;padding:2px 8px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;
+    color:#4338ca;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:none}
   /* Scroll box, not the page: the header can only stick to its own scroll container, so the
      table gets a max-height and owns both axes. border-collapse must be `separate` or the
      collapsed borders on sticky cells stop painting once they lift off. */
@@ -934,7 +943,14 @@
       +'(SS '+f2(A.ss)+'% · DM '+f2(A.dm)+'% · GST '+f2(A.gst)+'% · Disc '+f2(A.disc)+'). '
       +'Leave it blank and the month’s actual realisation is used instead, with the price inputs left empty.');
 
-    return '<div class="pd-plan-h">'+esc(p.name||'Plan')+'</div>'
+    /* The planned rows collapse behind their own heading, the same way each segment's items
+       collapse behind its Target row. A plan with 30 SKUs otherwise pushes the totals and the
+       target rows off screen. Open by default — the plan is what this card is about. */
+    var pgid='pg'+(++UID);
+    return '<div class="pd-plan-h hdr open" data-more="'+pgid+'">'
+      +'<span class="material-icons">expand_more</span>'
+      +'<span class="pd-plan-t">'+esc(p.name||'Plan')+'</span>'
+      +'<span class="pd-plan-n">'+j.rows.length+' item'+(j.rows.length===1?'':'s')+'</span></div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
       +'<tr class="grp"><th class="l"></th><th class="pl" colspan="5">Plan — as saved</th>'
       +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
@@ -944,7 +960,9 @@
       +'<th class="sep">Done Ltr</th><th>Ach %</th>'
       +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th>'
       +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
-      +'</tr></thead><tbody>'+body+'</tbody>'
+      // Blended stays OUT of the collapsing tbody: it is the summary of what just folded
+      // away, so hiding it with the rows would leave the plan showing nothing at all.
+      +'</tr></thead><tbody id="'+pgid+'">'+body+'</tbody>'
       +'<tbody><tr class="pd-sub"><td class="l">Blended ('+j.rows.length+')</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(j.planLtr))+'</td>'
@@ -1924,7 +1942,12 @@
       if(chips) rows.push([{value:chips, color:'64748B'}]);
       var title='';
       Array.prototype.forEach.call(card.querySelectorAll('.pd-plan-h, table.pd-tbl'), function(el){
-        if(el.classList.contains('pd-plan-h')){ title=(el.textContent||'').trim(); return; }
+        if(el.classList.contains('pd-plan-h')){
+          // Read the name span when there is one: the collapsible heading also holds a
+          // chevron ligature and an item-count pill, neither of which belongs in the file.
+          var t=el.querySelector('.pd-plan-t');
+          title=((t||el).textContent||'').trim(); return;
+        }
         if(title){ rows.push([{value:title, bold:true, color:'4338CA'}]); title=''; }
         pushTable(el, rows);
         rows.push([]);
