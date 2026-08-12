@@ -53,6 +53,9 @@
   /* Not tied to a month, so it shows against every one — amber, because it usually wants fixing */
   .pd-chip.anymonth{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
   .pd-chip.tgt{background:#fff7ed;color:#c2410c}
+  /* Billed, but nobody set a target or built a rate list for it — grey, because it is a fact
+     about the territory, not a verdict on it */
+  .pd-chip.sale{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
   .pd-chip.ach{background:#f1f5f9;color:#475569}
   .pd-chip.ach.good{background:#dcfce7;color:#15803d}
   .pd-chip.ach.mid{background:#fef3c7;color:#b45309}
@@ -1197,6 +1200,29 @@
      All India collapses these to ONE card per channel, keyed 'CHANNEL|': the state is what the
      scope widens, so eight state cards each showing the same national Done would read as eight
      separate sales. Target and Done both become the channel's whole figure. */
+  /* Every territory that SOLD, keyed like TARGETS ('CHANNEL|STATE', or 'CHANNEL|' when the
+     scope is All India). A sale with neither a target nor a rate list had nowhere to appear,
+     so the tab read as if that state or channel had done nothing — the numbers were only ever
+     as complete as somebody's planning. Zero-net territories are left out. */
+  function soldKeys(wide){
+    var out={};
+    if(wide){
+      Object.keys(DONE_CH).forEach(function(ch){
+        var m=DONE_CH[ch], lt=0;
+        Object.keys(m).forEach(function(c){ if(typeOk(c))lt+=num(m[c].litres); });
+        if(Math.round(lt))out[ch+'|']=1;
+      });
+      return out;
+    }
+    Object.keys(DONE_SC).forEach(function(k){
+      var p=k.split('|'), st=p[0], ch=p[1], m=DONE_SC[k], lt=0;
+      if(!st||!ch)return;
+      Object.keys(m).forEach(function(c){ if(typeOk(c))lt+=num(m[c].litres); });
+      if(Math.round(lt))out[ch+'|'+st]=1;
+    });
+    return out;
+  }
+
   function targetKeys(){
     var claimed={}, wide=(SCOPE==='all');
     ALL.forEach(function(o){
@@ -1205,27 +1231,36 @@
       if(wide)claimed[ch+'|']=1;                          // that result already covers the channel
       else if(o.state)claimed[ch+'|'+normState(o.state)]=1;
     });
+    var sold=soldKeys(wide), keys={};
     if(wide){
-      var chans={};
       Object.keys(TARGETS).forEach(function(k){
         var p=k.split('|');
         if(stateF && normState(stateF)!==p[1])return;     // State filter still picks which targets count
-        chans[p[0]]=1;
+        keys[p[0]+'|']=1;
       });
-      return Object.keys(chans).sort().map(function(c){return c+'|';}).filter(function(k){
+      // A channel is only a card in its own right when it billed; with a State filter on,
+      // that has to be the sale inside that state, not the channel's national figure.
+      Object.keys(soldKeys(false)).forEach(function(k){
+        var p=k.split('|');
+        if(stateF && normState(stateF)!==p[1])return;
+        keys[p[0]+'|']=1;
+      });
+      return Object.keys(keys).sort().filter(function(k){
         if(claimed[k])return false;
         if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
         var b=targetBucket('',k.split('|')[0]), t=b&&b[TYPEF||'ALL'];
-        return !!(t&&t.ltrs>0);
+        return !!(t&&t.ltrs>0) || !!sold[k];              // a target to hit, or a sale to show
       });
     }
-    return Object.keys(TARGETS).sort().filter(function(k){
-      if(claimed[k])return false;                       // a saved result already shows this target
+    Object.keys(TARGETS).forEach(function(k){ keys[k]=1; });
+    Object.keys(sold).forEach(function(k){ keys[k]=1; });
+    return Object.keys(keys).sort().filter(function(k){
+      if(claimed[k])return false;                       // a saved result already shows this territory
       var st=k.split('|')[1];
       if(stateF && normState(stateF)!==st)return false;
       if(searchF && k.toLowerCase().indexOf(searchF)===-1)return false;
-      var t=TARGETS[k][TYPEF||'ALL'];
-      return !!(t&&t.ltrs>0);
+      var t=TARGETS[k]&&TARGETS[k][TYPEF||'ALL'];
+      return !!(t&&t.ltrs>0) || !!sold[k];
     });
   }
 
@@ -1235,11 +1270,15 @@
        sale across every state. Both sides widen together, so the card reads what the Targets
        dashboard reads for that channel. */
     var b=targetBucket(st,ch), t=b&&b[TYPEF||'ALL'];      // header chip: the scope's total
-    if(!t)return '';
     var D=doneMapFor(st,ch), scopeLbl=terrLbl(st,ch);
     var x=extrasFor({},D);                             // nothing is planned, so everything is "extra"
+    /* No target and no rate list, but the territory BILLED — it still gets a card. Sales that
+       nobody planned or targeted were invisible here, which reads as "we sold nothing" rather
+       than "nobody set a number for this". A card with neither a target nor a sale is the one
+       case with nothing to say. */
+    if(!t && !Math.round(x.doneLtr) && !Math.round(x.doneRev))return '';
     var rid='T:'+key.replace('|','~');
-    var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
+    var pct=(t&&t.ltrs)?(x.doneLtr/t.ltrs*100):0;
     /* Editing turns the card into a plan being drafted: fill Retailer / Scheme / To be sale and
        Create plan writes a real Rate List for this territory, after which it stops being a
        target-only card. Terms default to SS 0 / DM 0 / GST 5 / Disc 0 — there is no saved plan
@@ -1305,8 +1344,13 @@
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(terrLbl(st,ch))+'</span>'
         +'<span class="pd-chip state">'+esc(terrLbl(st,ch))+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
-        +'<span class="pd-chip tgt">Target only — no rate list</span>'
-        +'<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
+        +(t?'<span class="pd-chip tgt">Target only — no rate list</span>'
+           :'<span class="pd-chip sale" title="This territory billed this month but has no target in Update Targets and no saved rate list.">Sale only — no target, no plan</span>')
+        +(t
+          ? '<span class="pd-chip ach '+chipCls(pct)+'">'+fN(Math.round(x.doneLtr))+' / '+fN(Math.round(t.ltrs))+' L · '+f2(pct)+'%</span>'
+          // Nothing to measure against, so state the sale rather than a 0% that reads as failure.
+          : '<span class="pd-chip ach">'+fN(Math.round(x.doneLtr))+' L sold'
+            +(x.doneLtr?' · ₹'+f2(x.doneRev/x.doneLtr)+'/L':'')+'</span>')
         +'<div class="pd-sp">'
           +'<button class="pd-add" data-add="T:'+esc(key.replace('|','~'))+'|'+esc(st)+'|'+esc(ch)+'|target|'+esc(key)+'" title="Add an item to this target">'
             +'<span class="material-icons">add</span></button>'
@@ -1315,7 +1359,7 @@
             +'<span class="material-icons">'+(ed?'close':'edit')+'</span></button>'
           +'<span class="material-icons pd-chev">expand_more</span></div>'
       +'</div><div class="pd-body">'
-      +'<div class="pd-plan-h">Target — Update Targets</div>'
+      +'<div class="pd-plan-h">'+(t?'Target — Update Targets':'Sold this month — nothing planned or targeted')+'</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
       +'<tr class="grp"><th class="l"></th><th class="pl" colspan="5">Target — as set</th>'
       +'<th class="dn sep" colspan="5">Done — '+esc(MONTH_LABEL)+' · '+esc(scopeLbl)+'</th>'
@@ -1327,7 +1371,23 @@
       +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
       +'</tr></thead>'
       +body
-      +(function(){ var t=targetTotalRow(st,ch,D); return t?('<tfoot>'+t+'</tfoot>'):''; })()
+      +(function(){
+          var tr=targetTotalRow(st,ch,D);
+          /* With no target there is no Target · TOTAL row, but the card still needs its own
+             bottom line — otherwise the only totals on a sale-only card are the per-segment
+             headers and the whole figure is left for the reader to add up. */
+          if(!tr && !t){
+            var aRl=x.doneLtr?(x.doneRev/x.doneLtr):0;
+            tr='<tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
+              +'<td></td><td></td><td></td><td></td><td></td>'
+              +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
+              +'<td class="mute">—</td>'
+              +'<td>'+(aRl?f2(aRl):'<span class="mute">—</span>')+'</td>'
+              +'<td class="mute">—</td><td></td>'
+              +'<td class="mute sep">—</td><td class="mute">—</td><td class="mute">—</td></tr>';
+          }
+          return tr?('<tfoot>'+tr+'</tfoot>'):'';
+        })()
       +'</table></div>'
       +(ed
         ? '<div class="pd-save" data-create="'+esc(key)+'"><span class="pd-save-n">'
