@@ -440,6 +440,13 @@
     return groups;
   }
 
+  /* Pack size for pricing a row, off the month's Done map. Every caller goes through this so
+     an item missing from the map yields zeros rather than throwing on an undefined lookup. */
+  function packOf(code, rid, D){
+    var d=D&&D[code];
+    return {pcsbox:d?num(d.pcsbox):0, boxltr:d?num(d.boxltr):0};
+  }
+
   /* Done for one segment of a map. Types come from the whole FG master, so an item that had no
      sale is still classified and cannot drift into the wrong segment. */
   function segTotals(D,seg){
