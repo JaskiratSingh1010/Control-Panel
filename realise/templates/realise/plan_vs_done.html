@@ -476,6 +476,28 @@
 
   function terrLbl(st,ch){ return (st||'All India')+' · '+ch; }
 
+  /* Split on anything that is not a letter or a digit. No regex on purpose — a word-boundary
+     escape has not survived the quoting into this file before, and a pattern that silently
+     matches nothing here would quietly hide chips that carry real information. */
+  function wordsOf(s){
+    var out=[], cur='', u=String(s||'').toUpperCase();
+    for(var i=0;i<u.length;i++){
+      var c=u.charAt(i);
+      if((c>='A'&&c<='Z')||(c>='0'&&c<='9'))cur+=c;
+      else if(cur){ out.push(cur); cur=''; }
+    }
+    if(cur)out.push(cur);
+    return out;
+  }
+  /* The heading already names the territory — "UTTAR PRADESH · CSD" beside a chip reading
+     "UTTAR PRADESH · CSD" is the same thing twice. Keep the chip only when it says something
+     the heading does not: a widened scope ("all states · GT"), or a territory the result's
+     name never mentions. */
+  function chipSaysMore(name,chip){
+    var n=String(name||'').toUpperCase();
+    return wordsOf(chip).some(function(w){ return n.indexOf(w)<0; });
+  }
+
   function targetTotalRow(st,ch,map){
     var segs=targetSegs(st,ch);
     if(!segs.length)return '';
@@ -1188,10 +1210,16 @@
     return '<div class="pd-card'+openCls(ck)+'" data-okey="'+esc(ck)+'" data-id="'+o.id+'" data-state="'+esc(st)+'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(o.name)+'</span>'
-        +(o.state?'<span class="pd-chip state">'+esc(st||'all states')
-            +(ch?' · '+esc(ch):(st?' · all channels':''))
-            +(ci.guess?'<span class="pd-guess" title="Taken from the result name — set it on the Rate List tab to make it explicit">from name</span>':'')
-            +'</span>':'')
+        +(function(){
+            if(!o.state)return '';
+            var txt=(st||'all states')+(ch?' · '+ch:(st?' · all channels':''));
+            // A guessed channel keeps its chip whatever the name says — the badge is the
+            // warning that the tagging was inferred, and that has to stay visible.
+            if(!ci.guess && !chipSaysMore(o.name,txt))return '';
+            return '<span class="pd-chip state">'+esc(txt)
+              +(ci.guess?'<span class="pd-guess" title="Taken from the result name — set it on the Rate List tab to make it explicit">from name</span>':'')
+              +'</span>';
+          })()
         +'<span class="pd-chip scope">'+esc(scope)+'</span>'
         /* A plan with no month rides along with whatever month is on screen. That is a real
            choice for a standing plan, but silently it looks like a bug — say it on the card. */
@@ -1359,7 +1387,9 @@
       +'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
         +'<span class="pd-name">'+esc(terrLbl(st,ch))+'</span>'
-        +'<span class="pd-chip state">'+esc(terrLbl(st,ch))+(TYPEF?' · '+esc(TYPEF):'')+'</span>'
+        // The heading IS the territory here, so no chip repeating it — only the Type filter,
+        // which the heading cannot show.
+        +(TYPEF?'<span class="pd-chip state">'+esc(TYPEF)+'</span>':'')
         +(t?'<span class="pd-chip tgt">Target only — no rate list</span>'
            :'<span class="pd-chip sale" title="This territory billed this month but has no target in Update Targets and no saved rate list.">Sale only — no target, no plan</span>')
         +(t
