@@ -1423,7 +1423,7 @@
        so, and it can be tied to a month on the Rate List tab. */
     var mv=document.getElementById('pdMonth').value||'';
     var inScope=ALL.filter(function(o){
-      if(stateF && o.state!==stateF)return false;
+      if(stateF && normState(o.state)!==normState(stateF))return false;
       // A result's own channel, not the view scope — an untagged one is not tied to a channel
       // and so cannot be excluded by picking one.
       if(chanF && (o.channel||channelFromName(o.name))!==chanF)return false;
@@ -1450,21 +1450,41 @@
     list.innerHTML=rows.map(cardHtml).join('')+tkeys.map(targetCardHtml).join('');
   }
 
-  function fillStates(states){
-    var sel=document.getElementById('pdState'), cur=sel.value;
-    sel.innerHTML='<option value="">All states</option>'+states.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
-    if(states.indexOf(cur)>=0)sel.value=cur;
+  /* Both dropdowns are built from EVERYTHING the page can show — what billed this month, what
+     carries a target, and what a saved result is tagged with. Filling States from the saved
+     results alone listed one state while the page rendered twenty; filling Channels before
+     the Done map had arrived listed only the one channel a saved result was tagged with.
+
+     Values are the normalised state name, so a saved result's "Delhi" and a Done row's
+     "DELHI" are the same option; the label is title-cased for reading. Must be called AFTER
+     the Done fetch resolves, and again on every month change — a month's territories are not
+     the previous month's. */
+  function fillFilters(){
+    var st={}, ch={};
+    Object.keys(DONE_BY||{}).forEach(function(s){ if(s)st[s]=1; });
+    Object.keys(DONE_CH||{}).forEach(function(c){ if(c)ch[c]=1; });
+    Object.keys(DONE_SC||{}).forEach(function(k){
+      var p=k.split('|'); if(p[0])st[p[0]]=1; if(p[1])ch[p[1]]=1;
+    });
+    Object.keys(TARGETS||{}).forEach(function(k){          // targeted but maybe unsold
+      var p=k.split('|'); if(p[0])ch[p[0]]=1; if(p[1])st[p[1]]=1;
+    });
+    ALL.forEach(function(o){
+      if(o.state)st[normState(o.state)]=1;
+      var c=o.channel||channelFromName(o.name); if(c)ch[c]=1;
+    });
+    fillSel('pdState','All states',Object.keys(st).sort(),titleState,function(v){stateF=v;});
+    fillSel('pdChannel','All channels',Object.keys(ch).sort(),null,function(v){chanF=v;});
   }
-  /* Channels that actually billed this month, plus any a saved result is tagged with — a list
-     of every channel that exists would offer picks that filter to an empty page. */
-  function fillChannels(){
-    var sel=document.getElementById('pdChannel'), cur=sel.value, seen={};
-    Object.keys(DONE_CH||{}).forEach(function(c){ if(c)seen[c]=1; });
-    ALL.forEach(function(o){ var c=o.channel||channelFromName(o.name); if(c)seen[c]=1; });
-    var chans=Object.keys(seen).sort();
-    sel.innerHTML='<option value="">All channels</option>'
-      +chans.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('');
-    if(chans.indexOf(cur)>=0)sel.value=cur; else { sel.value=''; chanF=''; }
+  /* Rebuild one dropdown, keeping the current pick if it still exists. If it does not — the
+     month changed and that territory sold nothing — the filter is cleared rather than left
+     pointing at an option that is gone, which would show an empty page with no way back. */
+  function fillSel(id,allLbl,vals,label,onLost){
+    var sel=document.getElementById(id), cur=sel.value;
+    sel.innerHTML='<option value="">'+allLbl+'</option>'
+      +vals.map(function(v){return '<option value="'+esc(v)+'">'+esc(label?label(v):v)+'</option>';}).join('');
+    if(cur && vals.indexOf(cur)>=0)sel.value=cur;
+    else if(cur){ sel.value=''; onLost(''); }
   }
 
   /* Done map for the picked month — refetched on every month change. The server echoes the
@@ -1479,8 +1499,9 @@
       .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{};
                          DONE_SC=p.by_state_channel||{}; DONE_CH=p.by_channel||{};
                          ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{}; ITEM_TGT=p.item_targets||{};
-                         if(p.month)MONTH_LABEL=monthLabel(p.month); })
-      .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; DONE_CH={}; });
+                         if(p.month)MONTH_LABEL=monthLabel(p.month);
+                         fillFilters(); })
+      .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; DONE_CH={}; fillFilters(); });
   }
   function loadDone(){
     loading=true; render();
@@ -1579,7 +1600,9 @@
   function loadSaved(){
     return fetch('/realise/api/rate-list/',{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:[],states:[]};})
-      .then(function(p){ ALL=p.rows||[]; fillStates(p.states||[]); fillChannels(); })
+      // Saved results contribute their own state and channel to the filters. At boot this may
+      // run before the Done map lands; the Promise.all below refills once both are in.
+      .then(function(p){ ALL=p.rows||[]; fillFilters(); })
       .catch(function(){ ALL=[]; });
   }
 
@@ -2092,7 +2115,7 @@
   document.getElementById('pdExport').addEventListener('click', exportExcel);
 
   loading=true; render();
-  Promise.all([loadSaved(), fetchDone()]).then(function(){ loading=false; render(); });
+  Promise.all([loadSaved(), fetchDone()]).then(function(){ fillFilters(); loading=false; render(); });
 })();
 </script>
 {% endblock %}
