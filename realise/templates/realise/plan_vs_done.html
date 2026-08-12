@@ -134,6 +134,14 @@
   /* Inline-block, not flex: a flex `td` with colspan collapses the column widths in Safari. */
   table.pd-tbl>tbody>tr.pd-more>td .material-icons{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
   table.pd-tbl>tbody>tr.pd-more.open>td .material-icons{transform:rotate(180deg)}
+  /* Target / segment rows that head a collapsible group */
+  table.pd-tbl>tbody>tr.hdr>td{cursor:pointer}
+  table.pd-tbl>tbody>tr.hdr>td .material-icons{font-size:18px;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
+  table.pd-tbl>tbody>tr.hdr.open>td .material-icons{transform:rotate(180deg)}
+  table.pd-tbl>tbody>tr.pd-tgt>td{background:#fff7ed;border-top:2px solid #fed7aa;color:#9a3412;font-weight:800;padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums}
+  table.pd-tbl>tbody>tr.pd-tgt>td.l{background:#fff7ed;color:#c2410c;text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px}
+  table.pd-tbl>tbody>tr.pd-tgt>td.sep{border-left:2px solid var(--rz-line)}
+  table.pd-tbl>tbody>tr.pd-tgt:hover>td{background:#ffedd5}
   table.pd-tbl>tbody.pd-xrows>tr.x>td{background:#fcfdff;color:var(--rz-muted)}
   table.pd-tbl>tbody.pd-xrows>tr.x>td.l{color:var(--rz-body);font-weight:600}
   table.pd-tbl>tbody>tr>td.pd-bal,table.pd-tbl>tfoot>tr>td.pd-bal{font-weight:700;color:#9a3412}
@@ -280,22 +288,16 @@
      The total's rate is the pooled one from Update Targets, and its Done is the territory's
      whole figure - which is not necessarily the two segments added up, because items typed
      OTHERS sell into the territory but have no target. */
-  function targetBlock(st,ch,map){
+  /* The per-segment Target rows now head their own item groups in the body, so the footer
+     carries only the total across them. Its Done is the territory's whole figure, which is not
+     always the segments added up: items typed OTHERS sell into the territory but have no target. */
+  function targetTotalRow(st,ch,map){
     var segs=targetSegs(st,ch);
-    if(!segs.length)return '';
-    var lbl='Target · '+st+' · '+ch;
-    var html=segs.map(function(pair){
-      var seg=pair[0], t=pair[1], d=segTotals(map||{},seg);
-      return targetRowHtml(lbl+(seg?' · '+seg:''), t, d.ltr, d.rev);
-    }).join('');
-    if(segs.length>1){
-      var b=TARGETS[ch+'|'+normState(st)], all=b&&b.ALL;
-      if(all&&all.ltrs>0){
-        var d=segTotals(map||{},'');
-        html+=targetRowHtml(lbl+' · TOTAL', all, d.ltr, d.rev);
-      }
-    }
-    return html;
+    if(segs.length<2)return '';
+    var b=TARGETS[ch+'|'+normState(st)], all=b&&b.ALL;
+    if(!all||all.ltrs<=0)return '';
+    var d=segTotals(map||{},'');
+    return targetRowHtml('Target · '+st+' · '+ch+' · TOTAL', all, d.ltr, d.rev);
   }
 
   function targetSegs(st,ch){
@@ -320,12 +322,33 @@
       return {seg:k, rows:g, ltr:ltr, rev:rev};
     });
   }
-  function segHeadRow(g){
-    return '<tr class="pd-seg"><td class="l" colspan="6">'+esc(g.seg||'UNCLASSIFIED')
+  function segHeadRow(g,moreId){
+    return '<tr class="pd-seg'+(moreId?' hdr" data-more="'+moreId:'')+'"><td class="l" colspan="6">'
+      +(moreId?'<span class="material-icons">expand_more</span>':'')
+      +esc(g.seg||'UNCLASSIFIED')
       +' · '+g.rows.length+' item'+(g.rows.length===1?'':'s')+'</td>'
       +'<td class="'+(g.ltr<0?'r':'pd-done')+' sep">'+fN(Math.round(g.ltr))+'</td><td></td>'
       +'<td>'+(g.ltr?f2(g.rev/g.ltr):'<span class="mute">—</span>')+'</td>'
       +'<td></td><td></td><td class="sep"></td><td></td><td></td></tr>';
+  }
+
+  /* Groups to hang under the Target rows. A territory given ONE undifferentiated target gets a
+     single group holding everything - splitting it by segment there would leave the target row
+     heading an empty group while the items sat under plain headers it does not own.
+     Otherwise: one group per segment, plus an empty one for any targeted segment that sold
+     nothing, so a missed segment is still visible. */
+  function buildGroups(rows,tsegs){
+    if(tsegs.length===1 && tsegs[0][0]===''){
+      var ltr=0, rev=0;
+      rows.forEach(function(r){ ltr+=num(r.doneLtr); rev+=num(r.doneRev); });
+      return [{seg:'', rows:rows, ltr:ltr, rev:rev}];
+    }
+    var groups=groupBySegment(rows), seen={};
+    groups.forEach(function(g){ seen[g.seg]=1; });
+    tsegs.forEach(function(pr){ if(pr[0] && !seen[pr[0]])groups.push({seg:pr[0],rows:[],ltr:0,rev:0}); });
+    var rank={PREMIUM:0,COMMODITY:1,OTHERS:2};
+    groups.sort(function(a,b){ return (rank[a.seg]==null?3:rank[a.seg])-(rank[b.seg]==null?3:rank[b.seg]); });
+    return groups;
   }
 
   /* Done for one segment of a map. Types come from the whole FG master, so an item that had no
@@ -339,11 +362,13 @@
     return {ltr:ltr, rev:rev};
   }
   /* One Target row. Shared by the saved cards and the target-only cards so they cannot drift. */
-  function targetRowHtml(label,t,doneLtr,doneRev){
+  function targetRowHtml(label,t,doneLtr,doneRev,moreId){
     var tRev=t.ltrs*t.rate;
     var pct=t.ltrs?(doneLtr/t.ltrs*100):0;
     var aRl=doneLtr?(doneRev/doneLtr):0, diff=(aRl&&t.rate)?(aRl-t.rate):0;
-    return '<tr class="pd-tgt'+(/TOTAL$/.test(label)?' tot':'')+'"><td class="l">'+esc(label)+'</td>'
+    return '<tr class="pd-tgt'+(/TOTAL$/.test(label)?' tot':'')
+        +(moreId?' hdr" data-more="'+moreId:'')+'"><td class="l">'
+      +(moreId?'<span class="material-icons">expand_more</span>':'')+esc(label)+'</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
       +'<td class="'+(doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(doneLtr))+'</td>'
@@ -603,15 +628,25 @@
     /* Items sold outside this plan: a summary row that is always visible (so the size of what
        the plan misses is never hidden) and the detail rows behind a toggle. Scheme and To-be-sale
        are editable there — typing a volume plans the item, and Save writes it into this result. */
-    var x=extrasFor(j.codes,D), xid='x'+(++UID), extraHtml='', pend=0;
-    if(x.rows.length){
-      extraHtml='<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="14">'
-        +'<span class="material-icons">expand_more</span>'
-        +x.rows.length+' more item'+(x.rows.length===1?'':'s')+' sold this month, not in this plan'
-        +' — <em>open to plan them</em></td></tr></tbody>'
-        +'<tbody class="pd-xrows" id="'+xid+'" hidden>'
-        +groupBySegment(x.rows).map(function(g){
-          return (TYPEF?'':segHeadRow(g))+g.rows.map(function(r){
+    /* Each segment's unplanned items sit under that segment's own Target row, which doubles as
+       the group header. A segment with no target keeps a plain header, and a target with no
+       sales still shows so a missed segment is not invisible.
+       The listed items are the UNPLANNED ones only, so they sum to slightly less than the
+       Target row's Done, which counts the whole territory - the difference is whatever the
+       plan above already covers. */
+    var x=extrasFor(j.codes,D), pend=0, extraHtml='';
+    var tsegs=targetSegs(tgtSt,tgtCh), groups=buildGroups(x.rows,tsegs);
+    var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
+
+    if(groups.length){
+      extraHtml=groups.map(function(g){
+        var gid='x'+(++UID), t=tByseg[g.seg];
+        var head = t
+          ? targetRowHtml('Target · '+tgtSt+' · '+tgtCh+(g.seg?' · '+g.seg:''),
+                          t, segTotals(tgtMap||{},g.seg).ltr, segTotals(tgtMap||{},g.seg).rev, gid)
+          : segHeadRow(g, gid);
+        return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
+          +g.rows.map(function(r){
             var d=D[r.code], k=pkey(rid,pidx,r.code), e=PENDING[k]||{};
             var actRl=r.doneLtr?(r.doneRev/r.doneLtr):0;
             var sell=num(e.sell), sch=num(e.scheme), ret=num(e.retailer);
@@ -631,21 +666,19 @@
               +'<td class="mute">—</td>'
               +ratePcCell(d)
               +estCells(sell,rev,r.doneLtr,r.doneRev,rl)+'</tr>';
-          }).join('');
-        }).join('')
-        +'</tbody>'
-        // Subtotal sits AFTER the rows it sums, and outside the collapsible tbody so it is
-        // readable without expanding. Rate ₹/Pc is left blank here: across a basket a
-        // "piece" is not one unit (this set mixes 0.77 / 1 / 3 / 5 L packs) and net pieces
-        // can go negative when returns outweigh sales.
-        +'<tbody><tr class="pd-sub"><td class="l">Not in plan ('+x.rows.length+')</td>'
-        +'<td></td><td></td><td></td><td></td><td></td>'
-        +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
-        +'<td></td>'
-        +'<td>'+(x.doneLtr?f2(x.doneRev/x.doneLtr):'<span class="mute">—</span>')+'</td>'
-        +'<td></td><td></td>'
-        +'<td class="sep"></td><td></td><td></td></tr></tbody>';
+          }).join('')
+          +(g.rows.length?'':'<tr class="x"><td class="l" colspan="14"><span class="mute">Nothing sold in this segment this month.</span></td></tr>')
+          +'</tbody>';
+      }).join('')
+      +'<tbody><tr class="pd-sub"><td class="l">Not in plan ('+x.rows.length+')</td>'
+      +'<td></td><td></td><td></td><td></td><td></td>'
+      +'<td class="'+(x.doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(x.doneLtr))+'</td>'
+      +'<td></td>'
+      +'<td>'+(x.doneLtr?f2(x.doneRev/x.doneLtr):'<span class="mute">—</span>')+'</td>'
+      +'<td></td><td></td>'
+      +'<td class="sep"></td><td></td><td></td></tr></tbody>';
     }
+
     var allLtr=j.doneLtr+x.doneLtr, allRev=x.doneRev+j.doneRev;
 
     var notes=[];
@@ -678,8 +711,11 @@
       +'<td></td>'
       +estCells(j.planLtr,j.planRev,j.doneLtr,j.doneRev,blendPlan)+'</tr></tbody>'
       +extraHtml
-      +(x.rows.length
-        ? (function(){
+      /* ONE tfoot. Two separate ones is invalid HTML and browsers relocate or drop the second,
+         so the grand total and the target total are built together. */
+      +(function(){
+          var rows='';
+          if(x.rows.length){
             // Everything sold in this scope, measured against the plan: unplanned SKUs count
             // towards the territory's target too, so this line answers "after all of it, how
             // much is still left and what rate must the balance fetch". The Blended row above
@@ -687,23 +723,17 @@
             var apct = j.planLtr ? (allLtr/j.planLtr*100) : 0;
             var aRl  = allLtr ? (allRev/allLtr) : 0;
             var adiff = (aRl && blendPlan) ? (aRl-blendPlan) : 0;
-            return '<tfoot><tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
+            rows += '<tr><td class="l">All items sold · '+esc(MONTH_LABEL)+'</td>'
               +'<td></td><td></td><td></td><td></td><td></td>'
               +'<td class="'+(allLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(allLtr))+'</td>'
               +'<td class="'+(j.planLtr?achCls(apct):'mute')+'">'+(j.planLtr?f2(apct)+'%':'—')+'</td>'
               +'<td>'+(allLtr?f2(aRl):'<span class="mute">—</span>')+'</td>'
               +'<td class="'+(adiff?(adiff>=0?'g':'r'):'mute')+'">'+(adiff?((adiff>=0?'+':'')+f2(adiff)):'—')+'</td>'
               +'<td></td>'
-              +estCells(j.planLtr,j.planRev,allLtr,allRev,blendPlan)+'</tr></tfoot>';
-          })()
-        : '')
-      /* The territory's own target from Update Targets, split the way it was entered. It is a
-         different benchmark from the saved plan above: the plan is a rate list someone built,
-         the target is what the territory was asked to do, so it is measured against every sale
-         in that territory rather than only the planned SKUs. */
-      +(function(){
-          var b=targetBlock(tgtSt,tgtCh,tgtMap);
-          return b?('<tfoot>'+b+'</tfoot>'):'';
+              +estCells(j.planLtr,j.planRev,allLtr,allRev,blendPlan)+'</tr>';
+          }
+          rows += targetTotalRow(tgtSt,tgtCh,tgtMap);
+          return rows?('<tfoot>'+rows+'</tfoot>'):'';
         })()
       +'</table></div>'
       +(x.rows.length
@@ -915,7 +945,7 @@
        target means. Widening it showed this card Delhi CORPORATE sales under a Delhi HORECA
        heading, and an achievement of 1,782%. */
     var D=doneMapFor(st,ch), scopeLbl=st+' · '+ch;
-    var x=extrasFor({},D), xid='t'+(++UID);            // nothing is planned, so everything is "extra"
+    var x=extrasFor({},D);                             // nothing is planned, so everything is "extra"
     var pct=t.ltrs?(x.doneLtr/t.ltrs*100):0;
     /* Editing turns the card into a plan being drafted: fill Retailer / Scheme / To be sale and
        Create plan writes a real Rate List for this territory, after which it stops being a
@@ -924,9 +954,18 @@
     // pkey splits on '|', and key is 'CHANNEL|STATE' — swap the separator or the row key
     // parses wrong and the input handler edits the neighbouring field.
     var ed=!!EDIT[key], A={ss:0,dm:0,gst:5,disc:0}, rid='T:'+key.replace('|','~'), pend=0;
-    var rows=groupBySegment(x.rows).map(function(g){
-      return (TYPEF?'':segHeadRow(g))+g.rows.map(function(r){
-      var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
+    /* Same shape as a saved card: each segment's items sit under that segment's Target row. */
+    var tsegs=targetSegs(st,ch), groups=buildGroups(x.rows,tsegs);
+    var tByseg={}; tsegs.forEach(function(pr){ tByseg[pr[0]]=pr[1]; });
+    var body=groups.map(function(g){
+      var gid='t'+(++UID), t=tByseg[g.seg];
+      var head = t
+        ? targetRowHtml('Target · '+st+' · '+ch+(g.seg?' · '+g.seg:''),
+                        t, segTotals(D,g.seg).ltr, segTotals(D,g.seg).rev, gid)
+        : segHeadRow(g, gid);
+      return '<tbody>'+head+'</tbody><tbody class="pd-xrows" id="'+gid+'" hidden>'
+        +g.rows.map(function(r){
+                var d=D[r.code], a=r.doneLtr?(r.doneRev/r.doneLtr):0;
       if(!ed){
         return '<tr class="x">'+itemCell(r.item,r.code)
           +'<td class="mute">—</td>'
@@ -954,14 +993,11 @@
         +'<td>'+(a?f2(a):'<span class="mute">—</span>')+'</td>'
         +'<td class="mute">—</td>'+ratePcCell(d)
         +estCells(sell,rl*sell,r.doneLtr,r.doneRev,rl)+'</tr>';
-      }).join('');
+        }).join('')
+        +(g.rows.length?'':'<tr class="x"><td class="l" colspan="14"><span class="mute">Nothing sold in this segment this month.</span></td></tr>')
+        +'</tbody>';
     }).join('');
-    /* data-state / data-channel must describe the map the rows were BUILT from, not the
-       territory the target belongs to. Under All India the rows come from the national map,
-       so the input handler and the drill-down have to look items up there too — otherwise
-       they miss (pcsbox and boxltr read 0) and a priced row falls back to a realise of 0. */
-    // these describe the map the rows were built from - the drill-down and the input handler
-    // both resolve items through them
+
     return '<div class="pd-card'+(idx<3?' open':'')+'" data-state="'+esc(st)
       +'" data-channel="'+esc(ch)+'">'
       +'<div class="pd-card-h">'
@@ -986,14 +1022,9 @@
       +'<th>Actual Relise ₹/L</th><th>Diff ₹/L</th><th>Rate ₹/Pc</th>'
       +'<th class="sep">Bal Ltr</th><th>Req ₹/L</th><th>Req vs Plan ₹/L</th>'
       +'</tr></thead>'
-      +(x.rows.length
-        ? '<tbody><tr class="pd-more" data-more="'+xid+'"><td class="l" colspan="14">'
-            +'<span class="material-icons">expand_more</span>'
-            +x.rows.length+' item'+(x.rows.length===1?'':'s')+' sold in this scope this month'
-            +' — <em>open to see them</em></td></tr></tbody>'
-          +'<tbody class="pd-xrows" id="'+xid+'" hidden>'+rows+'</tbody>'
-        : '<tbody><tr><td class="l" colspan="14"><span class="mute">Nothing sold in this scope this month.</span></td></tr></tbody>')
-      +'<tfoot>'+targetBlock(st,ch,D)+'</tfoot></table></div>'
+      +body
+      +(function(){ var t=targetTotalRow(st,ch,D); return t?('<tfoot>'+t+'</tfoot>'):''; })()
+      +'</table></div>'
       +(ed
         ? '<div class="pd-save" data-create="'+esc(key)+'"><span class="pd-save-n">'
           +(pend?pend+' item'+(pend===1?'':'s')+' ready':'Fill “To be sale” on the items this territory should sell')
