@@ -482,6 +482,11 @@ class RateList(models.Model):
     # Dashboard channel (GT/MT/ROI/ECOM/HORECA/CSD/REST). Blank = the result is not tied to one,
     # so Plan vs Done measures it across every channel in its state.
     channel = models.CharField(max_length=20, blank=True)
+    # The month this plan is FOR, 'YYYY-MM'. Targets and Done are both scoped by month, so a
+    # plan without one showed August's numbers while the rest of the card read July. Defaults
+    # to the month it was saved in; blank means the plan is not tied to a month and shows in
+    # every one, the same convention `channel` uses for territory.
+    month = models.CharField(max_length=7, blank=True)
     scope = models.CharField(max_length=10, default='BOTH')
     payload = models.JSONField(default=dict)
     created_by = models.CharField(max_length=150, blank=True)

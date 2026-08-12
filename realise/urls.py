@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/rate-list/delete/',    views.api_rate_list_delete,    name='api_rate_list_delete'),
     path('api/rate-list/add-items/', views.api_rate_list_add_items, name='api_rate_list_add_items'),
     path('api/rate-list/set-channel/', views.api_rate_list_set_channel, name='api_rate_list_set_channel'),
+    path('api/rate-list/set-month/', views.api_rate_list_set_month, name='api_rate_list_set_month'),
     path('plan-vs-done/',            views.plan_vs_done,            name='plan_vs_done'),
     path('plan-vs-done/export/',     views.plan_vs_done_export,     name='plan_vs_done_export'),
     path('api/done-by-item/',        views.api_done_by_item,        name='api_done_by_item'),

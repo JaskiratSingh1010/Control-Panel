@@ -438,6 +438,8 @@
         <option value="ECOM">ECOM</option><option value="HORECA">HORECA</option>
         <option value="CSD">CSD</option><option value="REST">REST</option>
       </select></div>
+      <div class="rc-save-f"><span class="rc-save-l">Month</span><input type="month" id="svMonth"
+        title="The month this plan is FOR. Plan vs Done measures it against this month's sales and targets."></div>
       <div class="rc-save-f"><span class="rc-save-l">Result name</span><input type="text" id="svName" placeholder="e.g. Delhi GT — July plan"></div>
       <button type="button" class="rc-choice-b both" id="svSave" style="margin-top:16px;width:100%">Save to Rate List</button>
       <button type="button" class="rc-choice-cancel" id="svCancel">Cancel</button>
@@ -906,9 +908,14 @@
   document.getElementById('ordSave').addEventListener('click',function(){openSave('order');});
   document.getElementById('svCancel').addEventListener('click',function(){saveModal.hidden=true;});
   saveModal.addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
+  /* Default the month to today's. A plan saved with none shows against EVERY month in Plan
+     vs Done, which is almost never what someone building this month's rate list meant. */
+  (function(){var i=document.getElementById('svMonth');
+    if(i&&!i.value){var d=new Date();i.value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);}})();
   document.getElementById('svSave').addEventListener('click',function(){
     var state=document.getElementById('svState').value;
     var channel=document.getElementById('svChannel').value;
+    var month=document.getElementById('svMonth').value;
     var name=document.getElementById('svName').value.trim();
     if(!name){window.alert('Please enter a result name.');return;}
     var scope, plans, compare=null;
@@ -935,7 +942,7 @@
     }
     var btn=document.getElementById('svSave');btn.disabled=true;btn.textContent='Saving…';
     fetch('/realise/api/rate-list/save/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-      body:JSON.stringify({name:name,state:state,channel:channel,scope:scope,payload:{plans:plans,compare:compare}})})
+      body:JSON.stringify({name:name,state:state,channel:channel,month:month,scope:scope,payload:{plans:plans,compare:compare}})})
       .then(function(r){return r.json().catch(function(){return {status:'error',error:'HTTP '+r.status};});})
       .then(function(p){ btn.disabled=false;btn.textContent='Save to Rate List';
         if(p.status==='ok'){ saveModal.hidden=true; window.alert('Saved to Rate List. Open the Rate List tab to view it.'); }
@@ -977,6 +984,7 @@
     var plans=(o.payload&&o.payload.plans)||[], scope=o.scope||'BOTH';
     if(o.state){document.getElementById('svState').value=o.state;}   // prefill Save dialog
     if(o.channel){document.getElementById('svChannel').value=o.channel;}
+    if(o.month){document.getElementById('svMonth').value=o.month;}   // keep the loaded plan's month
     document.getElementById('svName').value=o.name||'';
     if(scope==='GRID'){                                              // saved from the Planning Grid
       grid=savedRows(plans[0]&&plans[0].rows, blankRow);

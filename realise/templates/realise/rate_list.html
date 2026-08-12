@@ -26,6 +26,12 @@
   .rl-ch{font-family:inherit;font-size:11px;font-weight:800;color:#4338ca;background:transparent;
     border:1px dashed #c7d2fe;border-radius:7px;padding:2px 5px;outline:none;cursor:pointer}
   .rl-ch:hover{background:#eef2ff}
+  /* Month this plan is FOR. Same weight as the channel select beside it — both decide
+     what Plan vs Done measures the plan against. */
+  .rl-mo{font-family:inherit;font-size:11px;font-weight:800;color:#b45309;background:transparent;
+    border:1px dashed #fcd34d;border-radius:7px;padding:2px 7px;cursor:pointer;outline:none}
+  .rl-mo:hover{background:#fffbeb}
+  .rl-mo:focus{border-style:solid;box-shadow:0 0 0 3px rgba(245,158,11,.18)}
   .rl-ch:focus{border-style:solid;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .rl-meta{font-size:11.5px;color:var(--rz-muted);font-weight:600}
   .rl-card-h .rl-sp{margin-left:auto;display:flex;align-items:center;gap:10px}
@@ -133,6 +139,8 @@
           +'<option value="">all channels</option>'
           +RL_CHANNELS.map(function(c){return '<option value="'+esc(c)+'"'+((o.channel||'')===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')
         +'</select>'
+        +'<input class="rl-mo" type="month" data-mo="'+o.id+'" value="'+esc(o.month||'')+'"'
+          +' title="Month this plan is FOR — Plan vs Done only shows it against this month’s sales. Clear it to show the plan in every month.">'
         +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))))+'</span>'
         +'<div class="rl-sp"><span class="rl-meta">'+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
         +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><span class="material-icons" style="font-size:14px">edit</span>Load &amp; Edit</button>'
@@ -167,7 +175,8 @@
   }
 
   document.getElementById('rlList').addEventListener('click',function(e){
-    if(e.target.closest&&e.target.closest('.rl-ch'))e.stopPropagation();   // don't collapse the card
+    // neither control should collapse the card it sits on
+    if(e.target.closest&&(e.target.closest('.rl-ch')||e.target.closest('.rl-mo')))e.stopPropagation();
   },true);
   document.getElementById('rlList').addEventListener('change',function(e){
     var sel=e.target.closest?e.target.closest('.rl-ch'):null;
@@ -183,6 +192,21 @@
         ALL.forEach(function(o){ if(String(o.id)===String(id))o.channel=p.channel; });
       })
       .catch(function(){ window.alert('Could not set the channel.'); });
+  });
+  document.getElementById('rlList').addEventListener('change',function(e){
+    var inp=e.target.closest?e.target.closest('.rl-mo'):null;
+    if(!inp)return;
+    e.stopPropagation();
+    var id=inp.getAttribute('data-mo');
+    fetch('/realise/api/rate-list/set-month/',{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({id:id, month:inp.value})})
+      .then(function(r){return r.json().catch(function(){return {status:'error'};});})
+      .then(function(p){
+        if(p.status!=='ok'){ window.alert('Could not set the month: '+(p.error||'error')); return; }
+        ALL.forEach(function(o){ if(String(o.id)===String(id))o.month=p.month; });
+      })
+      .catch(function(){ window.alert('Could not set the month.'); });
   });
   document.getElementById('rlState').addEventListener('change',function(){stateF=this.value;render();});
   var sd=debounce(render,120);

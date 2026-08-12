@@ -11,6 +11,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.cache import never_cache
+from django.utils import timezone
 
 from core.decorators import group_required, permission_flag_required, any_permission_flag
 from core import sap_connector
@@ -1492,10 +1493,18 @@ def api_rate_list_save(request):
     payload = body.get('payload') or {}
     if not (isinstance(payload, dict) and payload.get('plans')):
         return JsonResponse({'status': 'error', 'error': 'Nothing to save.'}, status=400)
+    # The month this plan is FOR. Defaults to the month it is being saved in, which is right
+    # in practice - a month's rate list gets built during that month - and is far better than
+    # blank, which would show the plan against every month's Done.
+    month = _clean_plan_month(body.get('month'))
+    if not month:
+        now = timezone.localtime()
+        month = f'{now.year:04d}-{now.month:02d}'
     obj = RateList.objects.create(
         name=name[:200],
         state=(body.get('state') or '').strip()[:100],
         channel=(body.get('channel') or '').strip().upper()[:20],
+        month=month,
         scope=(str(body.get('scope') or 'BOTH').upper())[:10],
         payload=payload,
         created_by=(request.user.username if request.user.is_authenticated else ''),
@@ -1519,7 +1528,8 @@ def api_rate_list(request):
     if state:
         qs = qs.filter(state=state)
     rows = [{
-        'id': o.id, 'name': o.name, 'state': o.state, 'channel': o.channel, 'scope': o.scope,
+        'id': o.id, 'name': o.name, 'state': o.state, 'channel': o.channel,
+        'month': o.month, 'scope': o.scope,
         'payload': o.payload, 'created_by': o.created_by,
         'created_at': o.created_at.strftime('%Y-%m-%d %H:%M'),
     } for o in qs[:500]]
@@ -1788,6 +1798,47 @@ def api_rate_list_set_channel(request):
     obj.channel = channel
     obj.save(update_fields=['channel'])
     return JsonResponse({'status': 'ok', 'channel': obj.channel})
+
+
+def _clean_plan_month(raw):
+    """'YYYY-MM' or '' - never a guess. A malformed month silently scoping a plan to the
+    wrong period is worse than refusing it."""
+    m = str(raw or '').strip()[:7]
+    if not m:
+        return ''
+    parts = m.split('-')
+    if len(parts) != 2 or len(parts[0]) != 4:
+        return ''
+    try:
+        y, mo = int(parts[0]), int(parts[1])
+    except (TypeError, ValueError):
+        return ''
+    return f'{y:04d}-{mo:02d}' if 1 <= mo <= 12 and 2000 <= y <= 2100 else ''
+
+
+@any_permission_flag('can_realise_calculator', json_response=True)
+@require_http_methods(['POST'])
+def api_rate_list_set_month(request):
+    """Set the month a saved result is planned FOR. Body: {id, month:'YYYY-MM'}; '' clears it.
+
+    Plan vs Done scopes Done and targets by month, so a plan needs its own or it reads against
+    whatever month is on screen. Cleared means the plan is not tied to a month and shows in
+    every one - deliberate, for a standing plan, and visible on the card."""
+    from .models import RateList
+    body = _parse_body(request)
+    try:
+        obj = RateList.objects.filter(id=int(body.get('id'))).first()
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'error': 'bad id'}, status=400)
+    if obj is None:
+        return JsonResponse({'status': 'error', 'error': 'Saved result not found.'}, status=404)
+    raw = str(body.get('month') or '').strip()
+    month = _clean_plan_month(raw)
+    if raw and not month:
+        return JsonResponse({'status': 'error', 'error': 'Month must be YYYY-MM.'}, status=400)
+    obj.month = month
+    obj.save(update_fields=['month'])
+    return JsonResponse({'status': 'ok', 'month': obj.month})
 
 
 @permission_flag_required('can_customer_master')
