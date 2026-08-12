@@ -1754,9 +1754,7 @@ def api_done_item_documents(request):
     start, end, month = _month_bounds(request.GET.get('month'))
     state = (request.GET.get('state') or '').strip()      # blank = all-India
     channel = (request.GET.get('channel') or '').strip()  # blank = every channel
-    basis = (request.GET.get('basis') or 'shipto').strip()
-    payload = services.get_done_item_documents(code, start, end, state=state, channel=channel,
-                                               basis=basis)
+    payload = services.get_done_item_documents(code, start, end, state=state, channel=channel)
     payload['month'] = month
     payload['state'] = state
     payload['channel'] = channel

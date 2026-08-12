@@ -3967,8 +3967,13 @@ def get_realise_calculator(start_date, end_date):
 
 
 # ══════════════════════ Plan vs Done (Rate List achievement) ══════════════════════
-# Per-item Done litres/revenue for one month, ALL-INDIA (no state / channel scoping) —
-# the actual side of the Plan vs Done tab, joined to a saved Rate List by ItemCode.
+# Per-item Done litres/revenue for one month — the actual side of the Plan vs Done tab, joined
+# to a saved Rate List by ItemCode.
+# STATE IS THE CUSTOMER'S OWN (OCRD.State1), not the ship-to address: a Delhi HORECA account
+# delivering to a hotel in Gurgaon is still Delhi's business, and ship-to left such territories
+# reading empty. This DIFFERS from the Sales dashboard, which attributes by ship-to, so per-state
+# figures between the two tabs will not agree for accounts that buy in one state and take
+# delivery in another (CSD, HORECA chains, corporate).
 # FINISHED GOODS ONLY (ItemCode LIKE 'FG%'), same as _COMPARE_LINE_SQL: invoices also carry
 # packaging (PM — glass jars, caps, cartons) and raw material (RM) lines, which are not
 # sellable SKUs and have no place in a sales plan.
@@ -3985,8 +3990,7 @@ _DONE_ITEM_SQL = '''
            COALESCE(I."SalPackUn", 0)          AS "LTRPP",
            COALESCE(TRIM(H."CardCode"), '')    AS "CCODE",
            COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
-           ''' + _SHIPTO_STATE + '''           AS "ST",
-           COALESCE(TRIM(C."State1"), '')      AS "BST",
+           COALESCE(TRIM(C."State1"), '')      AS "ST",
            SUM({litexpr})                      AS "LIT",
            SUM({sign} * L."Quantity")          AS "PCS",
            SUM({sign} * L."LineTotal")         AS "REV"
@@ -3994,12 +3998,11 @@ _DONE_ITEM_SQL = '''
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
     LEFT JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
-    ''' + _SHIPTO_JOIN + '''
     WHERE H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
       AND I."ItemCode" LIKE 'FG%'
     GROUP BY I."ItemCode", I."ItemName", I."SalFactor2", I."SalPackUn",
-             H."CardCode", C."U_Main_Group", C."State1", ''' + _SHIPTO_STATE + '''
+             H."CardCode", C."U_Main_Group", C."State1"
 '''
 
 
@@ -4153,7 +4156,7 @@ def get_done_by_item(start_date, end_date):
     # the default. BILL-TO is the customer's own state, which is the honest lens for accounts
     # that buy in one state and take delivery in another — a Delhi HORECA account shipping to a
     # hotel in Gurgaon is still Delhi's business.
-    bases = {'shipto': ({}, {}), 'billto': ({}, {})}
+    by_state, by_sc = {}, {}
     # Channel across every state. Not derivable from by_state_channel: rows with no state at all
     # are excluded from those buckets and would silently drop out of a channel roll-up.
     by_channel = {}
@@ -4164,30 +4167,23 @@ def get_done_by_item(start_date, end_date):
         channel = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         _done_accum(agg, code, r)
         _done_accum(by_channel.setdefault(channel, {}), code, r)
-        for basis, col in (('shipto', 'ST'), ('billto', 'BST')):
-            raw_st = (r.get(col) or '').strip()
-            state = norm_state(_delhi_gt_state(r.get('CCODE'),
-                                               STATE_CODE_NAMES.get(raw_st, raw_st)))
-            if not state:
-                continue
-            by_state, by_sc = bases[basis]
+        raw_st = (r.get('ST') or '').strip()
+        state = norm_state(_delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(raw_st, raw_st)))
+        if state:
             _done_accum(by_state.setdefault(state, {}), code, r)
             _done_accum(by_sc.setdefault(state + '|' + channel, {}), code, r)
 
     _done_finalize(agg)
     for bucket in by_channel.values():
         _done_finalize(bucket)
-    for by_state, by_sc in bases.values():
-        for bucket in by_state.values():
-            _done_finalize(bucket)
-        for bucket in by_sc.values():
-            _done_finalize(bucket)
-    by_state, by_sc = bases['shipto']
+    for bucket in by_state.values():
+        _done_finalize(bucket)
+    for bucket in by_sc.values():
+        _done_finalize(bucket)
 
     payload = {'status': 'ok', 'rows': agg, 'count': len(agg),
                'by_state': by_state, 'states': sorted(by_state),
                'by_state_channel': by_sc, 'channels': sorted(CHANNEL_MEMBERS),
-               'by_state_bill': bases['billto'][0], 'by_state_channel_bill': bases['billto'][1],
                'by_channel': by_channel,
                'item_types': get_fg_item_types(),
                'start': sd.isoformat(), 'end': ed.isoformat()}
@@ -4205,8 +4201,7 @@ _DONE_DOCS_SQL = '''
            COALESCE(TRIM(H."CardCode"), '')                      AS "CCODE",
            COALESCE(TRIM(C."CardName"), '')                      AS "CUST",
            COALESCE(TRIM(C."U_Main_Group"), '')                  AS "GRP",
-           ''' + _SHIPTO_STATE + '''                             AS "ST",
-           COALESCE(TRIM(C."State1"), '')                        AS "BST",
+           COALESCE(TRIM(C."State1"), '')                        AS "ST",
            '{kind}'                                              AS "KIND",
            SUM({litexpr})                                        AS "LIT",
            SUM({sign} * L."Quantity")                            AS "QTY",
@@ -4215,32 +4210,31 @@ _DONE_DOCS_SQL = '''
     JOIN "{S}"."{ln}" L ON L."DocEntry" = H."DocEntry"
     JOIN "{S}"."OITM" I ON I."ItemCode" = L."ItemCode"
     LEFT JOIN "{S}"."OCRD" C ON C."CardCode" = H."CardCode"
-    ''' + _SHIPTO_JOIN + '''
     WHERE L."ItemCode" = ? AND H."DocDate" >= ? AND H."DocDate" < ? AND H."CANCELED" = 'N'
       AND (H."U_ARNO" NOT IN ('T', 'H') OR H."U_ARNO" IS NULL)
     GROUP BY H."DocNum", H."DocDate", H."CardCode", C."CardName", C."U_Main_Group",
-             C."State1", ''' + _SHIPTO_STATE + '''
+             C."State1"
 '''
 
 
-def get_done_item_documents(item_code, start_date, end_date, state=None, channel=None,
-                            basis='shipto'):
+def get_done_item_documents(item_code, start_date, end_date, state=None, channel=None):
     """Who bought one item in a month: the invoices (and credit notes) behind its Done figure,
-    with party, ship-to state, document, litres, pieces and value. Same filters and litre
+    with party, state, document, litres, pieces and value. State is the customer's own, the same
+    basis get_done_by_item uses, so the drill-down keeps reconciling to the row it hangs under.
+    Same filters and litre
     formula as get_done_by_item, so the rows sum exactly to that item's Done row — and with
     `state` set, to that state's row. Returns {status, code, rows, totals}; rows carry kind
     'INV' or 'CN' (returns, negative). Cached _DONE_DOCS_TTL seconds per (item, range, state)."""
     code = str(item_code or '').strip().upper()
     want_state = norm_state(state) if state else ''
     want_chan = _normalize_name(channel) if channel else ''
-    basis = 'billto' if str(basis or '').lower() == 'billto' else 'shipto'
     sd, ed = _parse_ymd(start_date), _parse_ymd(end_date)
     if not code or not sd or not ed:
         return {'status': 'error', 'code': code, 'rows': [], 'totals': {},
                 'error': 'item code and dates required'}
     if ed < sd:
         sd, ed = ed, sd
-    key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan, basis)
+    key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan)
     now = time.time()
     hit = _done_docs_cache.get(key)
     if hit and hit[0] > now:
@@ -4266,7 +4260,7 @@ def get_done_item_documents(item_code, start_date, end_date, state=None, channel
         lit, qty, val = (float(r.get(k) or 0) for k in ('LIT', 'QTY', 'VAL'))
         if not (round(lit, 2) or round(qty, 2) or round(val, 2)):
             continue
-        st_raw = (r.get('ST' if basis == 'shipto' else 'BST') or '').strip()
+        st_raw = (r.get('ST') or '').strip()
         row_state = _delhi_gt_state(r.get('CCODE'), STATE_CODE_NAMES.get(st_raw, st_raw))
         row_chan = raw2ch.get(_normalize_name(r.get('GRP')), 'REST')
         if want_state and norm_state(row_state) != want_state:

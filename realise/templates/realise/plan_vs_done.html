@@ -200,11 +200,6 @@
         <button type="button" data-scope="state" class="on">Result’s state + channel</button>
         <button type="button" data-scope="all">All India</button>
       </div></div>
-    <div class="pd-fld"><span class="pd-lbl">Attribute by</span>
-      <div class="pd-seg" id="pdBasis">
-        <button type="button" data-basis="shipto" class="on">Ship-to</button>
-        <button type="button" data-basis="billto">Bill-to</button>
-      </div></div>
     <div class="pd-fld"><span class="pd-lbl">Drill By</span>
       <div class="com-drill-box">
         <button type="button" class="com-drill-btn" id="pdDrillBtn"><span id="pdDrillLabel">No grouping</span><span class="com-caret">&#9662;</span></button>
@@ -258,16 +253,11 @@
      A saved result with no state tag can only ever be all-India. Ship-to state, matching the
      sales dashboard's attribution (and its Delhi-GT remap), so the two never disagree. */
   var SCOPE='state';
-  /* Which state a sale belongs to. Ship-to (where the goods went) is the dashboard's rule and
-     the default. Bill-to (the customer's own state) is the honest lens for accounts that buy in
-     one state and take delivery in another — Delhi HORECA bills SHRAY and M R K in Delhi but
-     ships to Haryana and Rajasthan, so ship-to shows that territory as empty. */
-  var BASIS='shipto', DONE_BY_SHIP={}, DONE_SC_SHIP={}, DONE_BY_BILL={}, DONE_SC_BILL={};
+  /* A sale belongs to the CUSTOMER's state, not the ship-to address: a Delhi HORECA account
+     delivering to a hotel in Gurgaon is still Delhi's business. The server settles this, so
+     there is nothing to choose here. Note the Sales dashboard attributes by ship-to, so its
+     per-state figures will differ for accounts that buy in one state and deliver in another. */
   var DONE_CH={};                       // channel across every state
-  function applyBasis(){
-    DONE_BY = (BASIS==='billto')?DONE_BY_BILL:DONE_BY_SHIP;
-    DONE_SC = (BASIS==='billto')?DONE_SC_BILL:DONE_SC_SHIP;
-  }
   /* Segment filter. Type comes from OITM.U_TYPE for the whole FG master, not just what sold,
      so a planned item with no sale this month is still filtered correctly instead of vanishing
      because we could not tell what it was. */
@@ -776,7 +766,7 @@
     var card=cell.closest('.pd-card'), st=card?(card.getAttribute('data-state')||''):'';
     var ch=card?(card.getAttribute('data-channel')||''):'';
     var month=document.getElementById('pdMonth').value;
-    var key=code+'|'+month+'|'+st+'|'+ch+'|'+BASIS;
+    var key=code+'|'+month+'|'+st+'|'+ch;
     var row=document.createElement('tr');
     row.className='pd-docs';
     row.setAttribute('data-key',key);
@@ -787,7 +777,7 @@
     if(DOCS[key]){ box.innerHTML=docsTable(DOCS[key]); return; }
     fetch('/realise/api/done-by-item/docs/?code='+encodeURIComponent(code)
           +'&month='+encodeURIComponent(month)+'&state='+encodeURIComponent(st)
-          +'&channel='+encodeURIComponent(ch)+'&basis='+encodeURIComponent(BASIS),
+          +'&channel='+encodeURIComponent(ch),
           {headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{status:'error',error:'HTTP '+r.status};})
       .then(function(p){ DOCS[key]=p; box.innerHTML=docsTable(p); })
@@ -992,15 +982,11 @@
 
     return fetch('/realise/api/done-by-item/?month='+encodeURIComponent(m),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{rows:{}};})
-      .then(function(p){ DONE_ALL=p.rows||{};
-                         DONE_BY_SHIP=p.by_state||{};      DONE_SC_SHIP=p.by_state_channel||{};
-                         DONE_BY_BILL=p.by_state_bill||{}; DONE_SC_BILL=p.by_state_channel_bill||{};
-                         DONE_CH=p.by_channel||{};
-                         applyBasis();
+      .then(function(p){ DONE_ALL=p.rows||{}; DONE_BY=p.by_state||{};
+                         DONE_SC=p.by_state_channel||{}; DONE_CH=p.by_channel||{};
                          ITEM_TYPES=p.item_types||{}; TARGETS=p.targets||{};
                          if(p.month)MONTH_LABEL=monthLabel(p.month); })
-      .catch(function(){ DONE_ALL={}; DONE_BY_SHIP={}; DONE_SC_SHIP={};
-                         DONE_BY_BILL={}; DONE_SC_BILL={}; DONE_CH={}; applyBasis(); });
+      .catch(function(){ DONE_ALL={}; DONE_BY={}; DONE_SC={}; DONE_CH={}; });
   }
   function loadDone(){
     loading=true; render();
@@ -1198,16 +1184,6 @@
     if(e.target.closest&&e.target.closest('.com-drill-box'))return;
     document.getElementById('pdDrillPanel').classList.remove('open');
     document.getElementById('pdPersPanel').classList.remove('open');
-  });
-
-  document.getElementById('pdBasis').addEventListener('click',function(e){
-    var b=e.target.closest?e.target.closest('[data-basis]'):null;
-    if(!b || b.getAttribute('data-basis')===BASIS)return;
-    BASIS=b.getAttribute('data-basis');
-    Array.prototype.forEach.call(this.querySelectorAll('[data-basis]'),function(x){
-      x.classList.toggle('on',x.getAttribute('data-basis')===BASIS);
-    });
-    applyBasis(); DOCS={}; render();
   });
 
   document.getElementById('pdScope').addEventListener('click',function(e){
