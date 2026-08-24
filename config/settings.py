@@ -26,7 +26,11 @@ def env_list(key, default=None, sep=','):
 
 SECRET_KEY = env('DJANGO_SECRET_KEY', 'django-insecure-fallback-key-CHANGE-ME')
 DEBUG = env_bool('DJANGO_DEBUG', True)
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['127.0.0.1', 'localhost','103.89.45.75'])
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['127.0.0.1', 'localhost', '138.252.101.118'])
+
+# POST/AJAX from the live dashboard (non-standard port, plain http) must be a trusted CSRF origin
+# on Django 4+, or form submits fail with a 403. Include scheme + host + port.
+CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', ['http://138.252.101.118:9080'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
