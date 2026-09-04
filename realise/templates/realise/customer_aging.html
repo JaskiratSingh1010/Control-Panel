@@ -348,7 +348,11 @@
     <div class="ag-cond" id="agCond">
       <button type="button" class="ag-btn" id="agCondBtn"><span class="material-icons">tune</span><span id="agCondLabel">Conditions</span></button>
       <div class="ag-cond-pop" id="agCondPop">
-        <div class="ag-cond-row">Balance Due</div>
+        <div class="ag-cond-row">Filter rows by</div>
+        <select id="agCondField">
+          <option value="bd">Balance Due</option>
+          <option value="os">Outstanding</option>
+        </select>
         <select id="agCondOp">
           <option value="">Show all</option>
           <option value="gte">More than</option>
@@ -475,7 +479,20 @@
   var selectedFormats = [];   // [] = all formats; else only these show
   var signSel = 'both';       // 'both' | 'pos' | 'neg' — Balance Due sign filter
   var segSel  = 'both';       // 'both' | 'b2b' | 'b2c' — Mart B2B/B2C (GSTIN) segment filter
-  var cond = {op:'', a:0, b:0};   // numeric Balance Due condition (gte / lte / between)
+  // Numeric money condition. `field` says which column it tests: 'bd' = Balance
+  // Due, 'os' = Outstanding. It is applied to the main table AND to both RAW DATA
+  // views - RAW DATA used to ignore it, so setting a condition while that view was
+  // open looked like nothing happened.
+  var cond = {op:'', a:0, b:0, field:'bd'};
+
+  function condPass(bdVal, osVal){
+    if(!cond.op) return true;
+    var v = (cond.field === 'os') ? (Number(osVal)||0) : (Number(bdVal)||0);
+    if(cond.op === 'gte') return v >= cond.a;
+    if(cond.op === 'lte') return v <= cond.a;
+    if(cond.op === 'between') return v >= cond.a && v <= cond.b;
+    return true;
+  }
   var bucketSel = '';         // '' = every age; else one AGING_BUCKETS key, set by the age rail
   var DETAIL_URL = "{% url 'realise:customer_aging_detail' %}";
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
@@ -695,9 +712,7 @@
     var bd = Number(c.balance_due)||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
-    if(cond.op==='gte' && !(bd>=cond.a)) return false;
-    if(cond.op==='lte' && !(bd<=cond.a)) return false;
-    if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return false;
+    if(!condPass(bd, c.outstanding)) return false;
     return true;
   }
   // Customers passing the active Format multi-select + search + sign + condition filters.
@@ -878,7 +893,7 @@
     var bdCell = isAR()
       ? '<td class="num"><div class="cellpad bal"><a class="ag-bd-link ag-rawlink" title="Open raw invoices" data-scope="cust" data-code="'+esc(c.code)+'" data-name="'+esc(c.name)+'">'+money(c.balance_due)+'</a></div></td>'
       : '<td class="num"><div class="cellpad bal"><a class="ag-bd-link" title="Open document detail" href="'+DETAIL_URL+'?code='+encodeURIComponent(c.code)+'&name='+encodeURIComponent(c.name)+'&as_of='+encodeURIComponent(ASOF)+(company==='mart'?'&company=mart':(company==='bev'?'&company=bev':''))+'">'+money(c.balance_due)+'</a></div></td>';
-    return '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'" data-bk="'+bucketsWithMoney(c)+'"'+(seg?' data-seg="'+seg+'"':'')+'>'+
+    return '<tr class="ag-cust" data-gi="'+gi+'" data-code="'+esc(c.code)+'" data-name="'+esc((c.name+' '+g.format).toLowerCase())+'" data-bd="'+(Number(c.balance_due)||0)+'" data-os="'+(Number(c.outstanding)||0)+'" data-bk="'+bucketsWithMoney(c)+'"'+(seg?' data-seg="'+seg+'"':'')+'>'+
       '<td><div class="cellpad cname" title="'+esc(c.name)+'">'+esc(c.name)+'<span class="ag-code">'+esc(c.code)+'</span></div></td>'+
       '<td class="num"><div class="cellpad">'+money(c.original)+'</div></td>'+
       bdCell+
@@ -981,9 +996,7 @@
     var bd = Number(r.getAttribute('data-bd'))||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
-    if(cond.op==='gte' && !(bd>=cond.a)) return false;
-    if(cond.op==='lte' && !(bd<=cond.a)) return false;
-    if(cond.op==='between' && !(bd>=cond.a && bd<=cond.b)) return false;
+    if(!condPass(bd, r.getAttribute('data-os'))) return false;
     return true;
   }
   // Re-sum each group's header + the grand-total row from the customers passing the CURRENT
@@ -1355,7 +1368,8 @@
   var rawScope=null;                 // {type:'sp',sp} | {type:'cust',code,name}
   var rawSort={key:'days',dir:-1};   // dir: 1 asc, -1 desc
   var rawColF={};                    // column key → lower-cased filter text
-  function rawColByKey(k){ for(var i=0;i<RAW_COLS.length;i++){ if(RAW_COLS[i].key===k) return RAW_COLS[i]; } return null; }
+  var RAW_COL_BY_KEY={}; RAW_COLS.forEach(function(c){ RAW_COL_BY_KEY[c.key]=c; });
+  function rawColByKey(k){ return RAW_COL_BY_KEY[k]||null; }
   // Effective Actual Sales Person: the user's entry if set, otherwise defaults to the SAP Sales
   // Person — so an untouched row shows (and sorts/filters/pivots as) the original sales person.
   function effActualSp(r){ var a=r.actual_sp; return (a!=null && String(a).trim()!=='') ? a : (r.sp==null?'':r.sp); }
@@ -1387,30 +1401,54 @@
   function isNumCol(col){ return col.type==='num'||col.type==='money'; }
   function rawFilteredRows(){
     var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
+    // Resolve the active column filters ONCE. Doing it inside the per-row test (and looking
+    // each column up by scanning RAW_COLS) meant every keystroke and every export walked
+    // 22 columns per row per filter — the reason a filtered export crawled.
+    var active=[];
+    for(var k in rawColF){ var f=rawColF[k]; if(!f) continue;
+      var fc=rawColByKey(k); if(fc) active.push({col:fc, f:f}); }
+    var na=active.length, cols=RAW_COLS, nc=cols.length;
     var rows=(RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
+      if(!condPass(r.bal, r.outstanding)) return false;   // the Conditions popup, same rule as the main table
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
       if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
         if(rawScope.type==='sp' && r.sp!==rawScope.sp) return false;
         if(rawScope.type==='cust' && r.code!==rawScope.code) return false;
       }
-      if(q){ var hit=false;
-        for(var i=0;i<RAW_COLS.length;i++){ if(String(rawVal(r,RAW_COLS[i])).toLowerCase().indexOf(q)!==-1){hit=true;break;} }
-        if(!hit) return false;
+      // Column filters before the all-columns search: they are one column each and usually
+      // the narrower test, so fewer rows reach the 22-column scan below.
+      for(var i=0;i<na;i++){
+        if(String(rawVal(r,active[i].col)).toLowerCase().indexOf(active[i].f)===-1) return false;
       }
-      for(var k in rawColF){ var f=rawColF[k]; if(!f) continue; var col=rawColByKey(k);
-        if(col && String(rawVal(r,col)).toLowerCase().indexOf(f)===-1) return false;
+      if(q){ var hit=false;
+        for(var j=0;j<nc;j++){ if(String(rawVal(r,cols[j])).toLowerCase().indexOf(q)!==-1){hit=true;break;} }
+        if(!hit) return false;
       }
       return true;
     });
     var col=rawColByKey(rawSort.key), dir=rawSort.dir;
-    if(col) rows.sort(function(a,b){
-      var av=rawVal(a,col), bv=rawVal(b,col);
-      if(isNumCol(col)) return ((Number(av)||0)-(Number(bv)||0))*dir;
-      return String(av).localeCompare(String(bv))*dir;
-    });
+    if(col){
+      // Decorate → sort → undecorate: read the sort value once per row instead of twice per
+      // comparison (localeCompare on freshly built strings was the bulk of a big sort).
+      var isNum=isNumCol(col);
+      var dec=rows.map(function(r){ var v=rawVal(r,col);
+        return {r:r, k:isNum?(Number(v)||0):String(v)}; });
+      dec.sort(isNum ? function(a,b){ return (a.k-b.k)*dir; }
+                     : function(a,b){ return a.k.localeCompare(b.k)*dir; });
+      rows=dec.map(function(d){ return d.r; });
+    }
     return rows;
+  }
+  // Typing in the search box / a column filter fires per character; re-rendering the whole
+  // table on each one is wasted work, so coalesce the bursts.
+  var rawRenderTimer=null;
+  function renderRawSoon(){
+    clearTimeout(rawRenderTimer);
+    rawRenderTimer=setTimeout(function(){
+      if(rawTab==='pivot') renderPivot(); else renderRawBody();
+    }, 180);
   }
   function renderRawHead(){
     var h1=RAW_COLS.map(function(c){
@@ -1531,6 +1569,7 @@
     var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
     return (RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
+      if(!condPass(r.bal, r.outstanding)) return false;   // the Conditions popup, same rule as the main table
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
       if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
@@ -1649,25 +1688,31 @@
     var btn = document.getElementById('agRawExport'), label = btn.textContent;
     btn.disabled = true; btn.textContent = 'Building\u2026';
     var cols = RAW_COLS.slice();
+    var nc = cols.length, numFlag = cols.map(isNumCol);   // hoisted out of the per-row loop
     var fname = arCfg().name + ' Aging';
     var payload = {
       filename: fname,
       columns: cols.map(function(c){ return c.label; }),
       // Sheet 1 - the raw table exactly as displayed.
       rows: rows.map(function(r){
-        return cols.map(function(c){
-          var v = rawVal(r, c);
-          return isNumCol(c) ? (Math.round(Number(v)||0)) : String(v==null?'':v);
-        });
+        var out = new Array(nc);
+        for(var i=0;i<nc;i++){
+          var v = rawVal(r, cols[i]);
+          out[i] = numFlag[i] ? (Math.round(Number(v)||0)) : (v==null ? '' : String(v));
+        }
+        return out;
       }),
-      // Sheets 2 and 3 - what each invoice contributes, and who it belongs to.
+      // Sheets 2 and 3 - what each invoice contributes, who it belongs to, and its remark.
+      // Sent as plain arrays, not objects: repeating six key names on every invoice was a
+      // large slice of the upload. The order must match AGG_FIELDS on the server.
       agg: rows.map(function(r){
-        return {actual: String(effActualSp(r)||''),
-                code:   String(r.code==null?'':r.code),
-                cust:   String(r.name==null?'':r.name),
-                bal:    Number(r.bal)||0,
-                outstanding: Number(r.outstanding)||0,
-                bucket: bucketKeyForDays(r.days)};
+        return [String(effActualSp(r)||''),
+                String(r.code==null?'':r.code),
+                String(r.name==null?'':r.name),
+                Number(r.bal)||0,
+                Number(r.outstanding)||0,
+                bucketKeyForDays(r.days),
+                String(r.remark==null?'':r.remark)];
       })
     };
     fetch(PIVOT_XLSX_URL, {method:'POST',
@@ -1918,7 +1963,7 @@
 
     // RAW DATA workspace (Beverages) — tabs, table (search/filter/sort/CSV) + pivot (drill-by).
     document.getElementById('agRawClose').addEventListener('click', closeRaw);
-    document.getElementById('agRawSearch').addEventListener('input', function(){ if(rawTab==='pivot') renderPivot(); else renderRawBody(); });
+    document.getElementById('agRawSearch').addEventListener('input', renderRawSoon);
     document.getElementById('agPivExpand').addEventListener('click', expandAllPiv);
     document.getElementById('agPivCollapse').addEventListener('click', collapseAllPiv);
     document.getElementById('agPivSign').addEventListener('click',function(e){
@@ -1980,7 +2025,7 @@
       }
       var inp=e.target.closest('input[data-fk]'); if(!inp) return;
       rawColF[inp.getAttribute('data-fk')]=(inp.value||'').trim().toLowerCase();
-      renderRawBody();   // thead untouched → the filter input keeps focus/caret
+      renderRawSoon();   // thead untouched → the filter input keeps focus/caret
     });
     document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeRaw(); });
 
@@ -2046,19 +2091,29 @@
     document.getElementById('agCondOp').addEventListener('change',function(){
       showCondParts(this.value);
     });
+    // If RAW DATA is on screen it has to be redrawn too, otherwise the condition
+    // silently changes only the table hidden behind it.
+    function refreshRawIfOpen(){
+      var m = document.getElementById('agRawModal');
+      if(m && m.classList.contains('show')) renderRawSoon();
+    }
+
     document.getElementById('agCondApply').addEventListener('click',function(){
       var op = document.getElementById('agCondOp').value;
+      var fld = document.getElementById('agCondField').value || 'bd';
       var a = parseFloat(document.getElementById('agCondA').value);
       var b = parseFloat(document.getElementById('agCondB').value);
-      if(!op || isNaN(a) || (op==='between' && isNaN(b))) cond = {op:'',a:0,b:0};
-      else if(op==='between') cond = {op:op, a:Math.min(a,b), b:Math.max(a,b)};   // order-independent
-      else cond = {op:op, a:a, b:0};
+      if(!op || isNaN(a) || (op==='between' && isNaN(b))) cond = {op:'',a:0,b:0,field:fld};
+      else if(op==='between') cond = {op:op, a:Math.min(a,b), b:Math.max(a,b), field:fld};   // order-independent
+      else cond = {op:op, a:a, b:0, field:fld};
       document.getElementById('agCondLabel').textContent = cond.op ? 'Conditions •' : 'Conditions';
       condBox.classList.remove('open');
       applyFilters();
+      refreshRawIfOpen();
     });
     document.getElementById('agCondClear').addEventListener('click',function(){
-      cond = {op:'',a:0,b:0};
+      cond = {op:'',a:0,b:0,field:'bd'};
+      document.getElementById('agCondField').value = 'bd';
       document.getElementById('agCondOp').value = '';
       document.getElementById('agCondA').value = '';
       document.getElementById('agCondB').value = '';
@@ -2068,6 +2123,7 @@
       document.getElementById('agCondLabel').textContent = 'Conditions';
       condBox.classList.remove('open');
       applyFilters();
+      refreshRawIfOpen();
     });
   }
 

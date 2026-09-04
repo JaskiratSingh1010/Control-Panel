@@ -6,6 +6,7 @@ import re
 import time
 from datetime import datetime
 
+from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -2714,7 +2715,8 @@ def api_export_aging_pivot(request):
         2. Actual Name  one line per Actual Sales Person - Balance Due, Outstanding,
                         Difference (Balance Due - Outstanding) and each aging bucket -
                         with a Grand Total
-        3. Parties      the same line for every customer sitting under those names
+        3. Parties      the same line for every customer sitting under those names,
+                        plus that customer's Remarks (its invoices' distinct remarks)
 
     Sheets 2 and 3 are ordinary cells, not a live PivotTable: no fills, no styling,
     no currency symbols. Numbers are written as real numbers so Excel can total them.
@@ -2727,6 +2729,15 @@ def api_export_aging_pivot(request):
     of its distinct customers. Balance Due has no such problem - it is per invoice.
     """
     body = _parse_body(request)
+    # An oversized POST makes request.body raise, which _parse_body swallows into {}. Say so
+    # plainly instead of the misleading "no rows to export" - see DATA_UPLOAD_MAX_MEMORY_SIZE.
+    length = request.META.get('CONTENT_LENGTH') or ''
+    if not body and str(length).isdigit() and int(length) > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
+        return JsonResponse({'error': 'this export is %d MB, over the %d MB request limit - '
+                                      'narrow the filters and try again'
+                                      % (int(length) // (1024 * 1024),
+                                         settings.DATA_UPLOAD_MAX_MEMORY_SIZE // (1024 * 1024))},
+                            status=413)
     rows = body.get('rows')
     columns = body.get('columns') or []
     agg = body.get('agg') or []
@@ -2754,7 +2765,7 @@ def api_export_aging_pivot(request):
 
     # -- group the invoices once, then render sheets 2 and 3 from the same buckets ----
     def blank():
-        return {'bal': 0.0, 'out': {}, 'b': {b['key']: 0.0 for b in buckets}}
+        return {'bal': 0.0, 'out': {}, 'rmk': {}, 'b': {b['key']: 0.0 for b in buckets}}
 
     def add(node, item):
         node['bal'] += num(item.get('bal'))
@@ -2765,10 +2776,22 @@ def api_export_aging_pivot(request):
         code = str(item.get('code') or item.get('cust') or '')
         if code not in node['out']:
             node['out'][code] = num(item.get('outstanding'))
+        # remarks of the invoices under this node, distinct, in the order they were seen
+        remark = str(item.get('remark') or '').strip()
+        if remark:
+            node['rmk'][remark] = True
+
+    # The page posts each invoice as a compact array (no repeated key names — it keeps the
+    # upload small on a big book). A stale cached page may still post dicts, so take both.
+    agg_fields = ('actual', 'code', 'cust', 'bal', 'outstanding', 'bucket', 'remark')
 
     by_actual, by_party, order_a, order_p = {}, {}, [], []
-    for item in agg:
-        if not isinstance(item, dict):
+    for raw_item in agg:
+        if isinstance(raw_item, dict):
+            item = raw_item
+        elif isinstance(raw_item, (list, tuple)):
+            item = dict(zip(agg_fields, raw_item))
+        else:
             continue
         actual = str(item.get('actual') or '').strip() or '(blank)'
         cust = str(item.get('cust') or '').strip() or str(item.get('code') or '(blank)')
@@ -2811,18 +2834,22 @@ def api_export_aging_pivot(request):
                         + [{'value': v, **bold} for v in measures(grand)])
 
     # -- sheet 3: the parties under those names --------------------------------------
+    # Remarks sit next to the customer name (this sheet only — the Actual Name sheet rolls up
+    # too many customers for a remark list to mean anything). A customer's invoices often share
+    # one remark, so the distinct ones are joined rather than repeated.
     order_p.sort(key=lambda k: (k[0], -abs(by_party[k]['bal'])))
-    party_sheet = [[{'value': 'Actual Sales Person', **bold}, {'value': 'Row Labels', **bold}]
+    party_sheet = [[{'value': 'Actual Sales Person', **bold}, {'value': 'Row Labels', **bold},
+                    {'value': 'Remarks', **bold}]
                    + [{'value': h, **bold} for h in sum_heads]]
     pgrand = blank()
     for actual, cust in order_p:
         node = by_party[(actual, cust)]
-        party_sheet.append([actual, cust] + measures(node))
+        party_sheet.append([actual, cust, ', '.join(node['rmk'])] + measures(node))
         pgrand['bal'] += node['bal']
         for b in buckets:
             pgrand['b'][b['key']] += node['b'][b['key']]
         pgrand['out'][(actual, cust)] = out_total(node)
-    party_sheet.append([{'value': 'Grand Total', **bold}, '']
+    party_sheet.append([{'value': 'Grand Total', **bold}, '', '']
                        + [{'value': v, **bold} for v in measures(pgrand)])
 
     content = build_workbook([

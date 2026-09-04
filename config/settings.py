@@ -32,6 +32,17 @@ ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['127.0.0.1', 'localhost', '138
 # on Django 4+, or form submits fail with a 403. Include scheme + host + port.
 CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', ['http://138.252.101.118:9080'])
 
+# ---------------------------------------------------------------------------
+# POST body size
+# ---------------------------------------------------------------------------
+# Django's default cap is 2.5 MB, and reading request.body past it raises
+# RequestDataTooBig. The Customer Aging "Export Excel" posts the whole on-screen
+# invoice book as JSON, which passes 2.5 MB at roughly 6,000 invoices - so a big
+# export was rejected after the browser had already spent seconds packing it, and
+# the page silently fell back to a CSV. This is an internal, login-only panel, so
+# a larger cap is fine.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(env('DJANGO_MAX_POST_MB', '64')) * 1024 * 1024
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',

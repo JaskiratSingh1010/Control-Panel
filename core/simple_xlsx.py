@@ -12,6 +12,17 @@ def _col_name(index):
     return name
 
 
+# A big sheet asks for the same few column letters hundreds of thousands of times, so grow
+# the list once and index it instead of re-deriving A/B/.../AC per cell.
+_COL_CACHE = ['']
+
+
+def _col(index):
+    while len(_COL_CACHE) <= index:
+        _COL_CACHE.append(_col_name(len(_COL_CACHE)))
+    return _COL_CACHE[index]
+
+
 def _safe_sheet_name(name):
     cleaned = re.sub(r'[\[\]:*?/\\]', ' ', str(name or 'Sheet')).strip() or 'Sheet'
     return cleaned[:31]
@@ -200,12 +211,18 @@ def _sheet_xml(rows, styles):
     max_col = 1
     widths = {}        # 1-based column index → max display length (for auto-fit)
 
+    # Hot loop: a 20k x 22 sheet is ~440k cells, so the two common cases (a plain number and
+    # a plain string) are written inline — one str() per cell, shared by the width tally, and
+    # escape() only when the text actually holds a markup character. _cell() still handles the
+    # rare ones (formulas) so both paths stay in one place.
+    isinst = isinstance
     for r_idx, row in enumerate(rows, 1):
         cells = []
+        append = cells.append
         col_idx = 1
         for cell in row:
             formula = None
-            if isinstance(cell, dict):
+            if isinst(cell, dict):
                 value = cell.get('value', '')
                 colspan = int(cell.get('colspan') or 1)
                 formula = cell.get('formula')
@@ -215,15 +232,34 @@ def _sheet_xml(rows, styles):
                     style = int(cell.get('style') or 0)
             else:
                 value, colspan, style = cell, 1, 0
-            cells.append(_cell(value, r_idx, col_idx, style, formula))
-            widths[col_idx] = max(widths.get(col_idx, 0), len('' if value is None else str(value)))
+            if formula is not None:
+                append(_cell(value, r_idx, col_idx, style, formula))
+                width = len('' if value is None else str(value))
+            elif isinst(value, (int, float)) and not isinst(value, bool):
+                if value != value or value in (float('inf'), float('-inf')):   # NaN / inf → blank
+                    append('<c r="%s%d" s="%d"/>' % (_col(col_idx), r_idx, style))
+                    width = 0
+                else:
+                    num = repr(value) if isinst(value, float) else str(value)
+                    append('<c r="%s%d" t="n" s="%d"><v>%s</v></c>'
+                           % (_col(col_idx), r_idx, style, num))
+                    width = len(num)
+            else:
+                text = '' if value is None else str(value)
+                width = len(text)
+                if '&' in text or '<' in text or '>' in text:
+                    text = escape(text)
+                append('<c r="%s%d" t="inlineStr" s="%d"><is><t>%s</t></is></c>'
+                       % (_col(col_idx), r_idx, style, text))
+            if width > widths.get(col_idx, 0):
+                widths[col_idx] = width
             if colspan > 1:
-                start = f'{_col_name(col_idx)}{r_idx}'
-                end = f'{_col_name(col_idx + colspan - 1)}{r_idx}'
-                merges.append(f'<mergeCell ref="{start}:{end}"/>')
+                merges.append('<mergeCell ref="%s%d:%s%d"/>'
+                              % (_col(col_idx), r_idx, _col(col_idx + colspan - 1), r_idx))
             col_idx += colspan
-        max_col = max(max_col, col_idx - 1)
-        xml_rows.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
+        if col_idx - 1 > max_col:
+            max_col = col_idx - 1
+        xml_rows.append('<row r="%d">%s</row>' % (r_idx, ''.join(cells)))
 
     merge_xml = ''
     if merges:
@@ -296,7 +332,9 @@ def build_workbook(sheets):
     )
 
     out = BytesIO()
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zf:
+    # compresslevel=1: on a 20MB sheet this writes in ~0.5s instead of ~1.3s at the zlib
+    # default, for ~1MB more file. The wait matters more than the size for a download.
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
         zf.writestr('[Content_Types].xml', content_types)
         zf.writestr('_rels/.rels', root_rels)
         zf.writestr('xl/workbook.xml', workbook)
