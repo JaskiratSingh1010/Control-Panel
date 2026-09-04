@@ -104,4 +104,5 @@ urlpatterns = [
     path('api/verify-pin/',          views.api_verify_pin,         name='api_verify_pin'),
     path('api/export-raw-csv/',      views.api_export_raw_csv,     name='api_export_raw_csv'),
     path('api/export-excel/',        views.api_export_excel,       name='api_export_excel'),
+    path('api/export-aging-pivot/',  views.api_export_aging_pivot, name='api_export_aging_pivot'),
 ]

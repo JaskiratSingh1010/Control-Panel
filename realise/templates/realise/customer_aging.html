@@ -436,7 +436,7 @@
           <div class="agrx-clr" data-what="both">Clear Both</div>
         </div>
       </span>
-      <button type="button" class="agrx-btn" id="agRawExport">Export CSV</button>
+      <button type="button" class="agrx-btn" id="agRawExport" title="Excel workbook: Raw Data, Actual Name and Parties">Export Excel</button>
       <button type="button" class="agrx-x" id="agRawClose" title="Close">&times;</button>
     </div>
     <div class="agrx-pane on" id="agRawPaneTable"><div class="agrx-tw"><table class="agrx-tb" id="agRawTable"></table></div></div>
@@ -466,6 +466,7 @@
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
   var DETAIL_EXPORT_URL = "{% url 'realise:api_export_aging_detail' %}";
   var AGING_REMARK_URL = "{% url 'realise:api_aging_remark' %}";
+  var PIVOT_XLSX_URL = "{% url 'realise:api_export_aging_pivot' %}";
   // Remark filter: card_code → [tokens] (split categories + free-text) and the master option list.
   var REMARK_INDEX = JSON.parse(document.getElementById('aging-remark-index').textContent || '{}');
   var REMARK_OPTIONS = JSON.parse(document.getElementById('aging-remark-options').textContent || '[]');
@@ -1476,7 +1477,7 @@
     document.getElementById('agRawPanePivot').classList.toggle('on', !isTable);
     document.getElementById('agRawDrill').style.display  = isTable ? 'none' : '';
     document.getElementById('agPivTools').style.display  = isTable ? 'none' : '';
-    document.getElementById('agRawExport').textContent   = isTable ? 'Export CSV' : 'Export Pivot';
+    document.getElementById('agRawExport').textContent   = 'Export Excel';
     if(isTable){ renderRawBody(); } else { renderDrill(); renderPivot(); }
   }
 
@@ -1622,6 +1623,57 @@
       return '<label class="agrx-opt"><input type="checkbox" data-k="'+esc(d.key)+'"'+(on?' checked':'')+'>'+
         (on?'<span class="agrx-ord">'+(idx+1)+'</span>':'')+'<span>'+esc(d.label)+'</span></label>';
     }).join('');
+  }
+  // Export to Excel: one workbook, three plain sheets - Raw Data, Actual Name, Parties.
+  // We send only the rows on screen (rawFilteredRows already applied every filter, the
+  // search box and the drill-in scope), and the server does the grouping and totals.
+  // Money is sent as plain numbers - no rupee sign, no formatting - so Excel can sum it.
+  function exportRawExcel(){
+    var rows = rawFilteredRows();
+    if(!rows.length){ showToast('Nothing to export','err'); return; }
+    var btn = document.getElementById('agRawExport'), label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Building\u2026';
+    var cols = RAW_COLS.slice();
+    var fname = arCfg().name + ' Aging';
+    var payload = {
+      filename: fname,
+      columns: cols.map(function(c){ return c.label; }),
+      // Sheet 1 - the raw table exactly as displayed.
+      rows: rows.map(function(r){
+        return cols.map(function(c){
+          var v = rawVal(r, c);
+          return isNumCol(c) ? (Math.round(Number(v)||0)) : String(v==null?'':v);
+        });
+      }),
+      // Sheets 2 and 3 - what each invoice contributes, and who it belongs to.
+      agg: rows.map(function(r){
+        return {actual: String(effActualSp(r)||''),
+                code:   String(r.code==null?'':r.code),
+                cust:   String(r.name==null?'':r.name),
+                bal:    Number(r.bal)||0,
+                outstanding: Number(r.outstanding)||0,
+                bucket: bucketKeyForDays(r.days)};
+      })
+    };
+    fetch(PIVOT_XLSX_URL, {method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body: JSON.stringify(payload)})
+      .then(function(res){
+        if(res.ok) return res.blob();
+        return res.json().catch(function(){ return {}; })
+                  .then(function(e){ throw new Error(e.error || ('server error '+res.status)); });
+      })
+      .then(function(blob){
+        var url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = fname + '.xlsx'; a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+        showToast('Exported \u00b7 ' + rows.length + ' invoices', 'ok');
+      })
+      .catch(function(err){
+        showToast('Excel export failed (' + err.message + ') \u2014 sending CSV instead', 'err');
+        exportPivotCSV();
+      })
+      .then(function(){ btn.disabled = false; btn.textContent = label; });
   }
   function exportPivotCSV(){
     var root=buildPivotTree();
@@ -1860,7 +1912,7 @@
       [].forEach.call(this.querySelectorAll('button'),function(x){ x.classList.toggle('on', x===b); });
       renderPivot();
     });
-    document.getElementById('agRawExport').addEventListener('click',function(){ if(rawTab==='pivot') exportPivotCSV(); else exportRawCSV(); });
+    document.getElementById('agRawExport').addEventListener('click',function(){ exportRawExcel(); });
     document.getElementById('agRawTabs').addEventListener('click',function(e){
       var b=e.target.closest('button[data-tab]'); if(b) setTab(b.getAttribute('data-tab'));
     });

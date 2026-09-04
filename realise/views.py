@@ -2703,3 +2703,132 @@ def api_export_excel(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@group_required(*REALISE_GROUPS, json_response=True)
+@require_http_methods(['POST'])
+def api_export_aging_pivot(request):
+    """RAW DATA -> one .xlsx with three plain sheets.
+
+        1. Raw Data     every open invoice on screen, every column, as-is
+        2. Actual Name  one line per Actual Sales Person - Balance Due, each aging
+                        bucket, and Outstanding - with a Grand Total
+        3. Parties      the same line for every customer sitting under those names
+
+    Sheets 2 and 3 are ordinary cells, not a live PivotTable: no fills, no styling,
+    no currency symbols. Numbers are written as real numbers so Excel can total them.
+
+    The Outstanding trap
+    --------------------
+    Outstanding is a CUSTOMER-level ledger figure that SAP repeats on every one of that
+    customer's invoices. Adding it up per invoice would multiply it by the invoice count.
+    So it is counted once per customer inside each group, and a group's total is the sum
+    of its distinct customers. Balance Due has no such problem - it is per invoice.
+    """
+    body = _parse_body(request)
+    rows = body.get('rows')
+    columns = body.get('columns') or []
+    agg = body.get('agg') or []
+    if not isinstance(rows, list) or not rows:
+        return JsonResponse({'error': 'no rows to export'}, status=400)
+    if not isinstance(columns, list) or not columns:
+        return JsonResponse({'error': 'no columns supplied'}, status=400)
+    if len(rows) > 200000:
+        return JsonResponse({'error': 'too many rows for one export'}, status=400)
+
+    bold = {'bold': True}
+    buckets = services.AGING_BUCKETS
+
+    def num(v):
+        try:
+            return round(float(v or 0), 2)
+        except (TypeError, ValueError):
+            return 0.0
+
+    # -- sheet 1: the raw table, exactly as shown -------------------------------------
+    raw_sheet = [[{'value': str(c), **bold} for c in columns]]
+    for r in rows:
+        if isinstance(r, list):
+            raw_sheet.append(list(r))
+
+    # -- group the invoices once, then render sheets 2 and 3 from the same buckets ----
+    def blank():
+        return {'bal': 0.0, 'out': {}, 'b': {b['key']: 0.0 for b in buckets}}
+
+    def add(node, item):
+        node['bal'] += num(item.get('bal'))
+        key = str(item.get('bucket') or '')
+        if key in node['b']:
+            node['b'][key] += num(item.get('bal'))
+        # one Outstanding per customer, not per invoice
+        code = str(item.get('code') or item.get('cust') or '')
+        if code not in node['out']:
+            node['out'][code] = num(item.get('outstanding'))
+
+    by_actual, by_party, order_a, order_p = {}, {}, [], []
+    for item in agg:
+        if not isinstance(item, dict):
+            continue
+        actual = str(item.get('actual') or '').strip() or '(blank)'
+        cust = str(item.get('cust') or '').strip() or str(item.get('code') or '(blank)')
+        if actual not in by_actual:
+            by_actual[actual] = blank()
+            order_a.append(actual)
+        add(by_actual[actual], item)
+        pkey = (actual, cust)
+        if pkey not in by_party:
+            by_party[pkey] = blank()
+            order_p.append(pkey)
+        add(by_party[pkey], item)
+
+    def out_total(node):
+        return round(sum(node['out'].values()), 2)
+
+    # Outstanding sits next to Balance Due, before the aging columns. These two lists are
+    # written in the same order on purpose - change one and you must change the other.
+    def measures(node):
+        return ([round(node['bal'], 2), out_total(node)]
+                + [round(node['b'][b['key']], 2) for b in buckets])
+
+    sum_heads = (['Sum of Balance Due', 'Outstanding']
+                 + ['Sum of %s' % b['label'] for b in buckets])
+
+    # -- sheet 2: one line per Actual Sales Person -----------------------------------
+    order_a.sort(key=lambda a: -abs(by_actual[a]['bal']))
+    actual_sheet = [[{'value': 'Row Labels', **bold}] + [{'value': h, **bold} for h in sum_heads]]
+    grand = blank()
+    for a in order_a:
+        actual_sheet.append([a] + measures(by_actual[a]))
+        grand['bal'] += by_actual[a]['bal']
+        for b in buckets:
+            grand['b'][b['key']] += by_actual[a]['b'][b['key']]
+        grand['out'][a] = out_total(by_actual[a])      # already de-duplicated per group
+    actual_sheet.append([{'value': 'Grand Total', **bold}]
+                        + [{'value': v, **bold} for v in measures(grand)])
+
+    # -- sheet 3: the parties under those names --------------------------------------
+    order_p.sort(key=lambda k: (k[0], -abs(by_party[k]['bal'])))
+    party_sheet = [[{'value': 'Actual Sales Person', **bold}, {'value': 'Row Labels', **bold}]
+                   + [{'value': h, **bold} for h in sum_heads]]
+    pgrand = blank()
+    for actual, cust in order_p:
+        node = by_party[(actual, cust)]
+        party_sheet.append([actual, cust] + measures(node))
+        pgrand['bal'] += node['bal']
+        for b in buckets:
+            pgrand['b'][b['key']] += node['b'][b['key']]
+        pgrand['out'][(actual, cust)] = out_total(node)
+    party_sheet.append([{'value': 'Grand Total', **bold}, '']
+                       + [{'value': v, **bold} for v in measures(pgrand)])
+
+    content = build_workbook([
+        ('Raw Data', raw_sheet),
+        ('Actual Name', actual_sheet),
+        ('Parties', party_sheet),
+    ])
+    name = str(body.get('filename') or 'Customer Aging').strip() or 'Customer Aging'
+    name = re.sub(r'[\\/:*?"<>|]+', '_', name)[:80]
+    response = HttpResponse(
+        content, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="%s.xlsx"' % name
+    return response
