@@ -48,6 +48,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Stopwatch on every request. Outermost so it measures everything below it.
+    'core.middleware.RequestTimingMiddleware',
     # Compress JSON/HTML responses (~70-80% smaller) — must run first.
     'django.middleware.gzip.GZipMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -102,7 +104,78 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# ---------------------------------------------------------------------------
+# Static files
+# ---------------------------------------------------------------------------
+# WhiteNoise was already installed but left on Django's plain storage, so every
+# CSS/JS/font file was re-downloaded on every visit and sent uncompressed.
+#
+# CompressedManifestStaticFilesStorage does two things at collectstatic time:
+#   * writes a .gz and .br copy of each text file, so the browser downloads a
+#     much smaller file;
+#   * renames each file with a hash of its contents (app.a1b2c3.css), which
+#     lets WhiteNoise mark it cacheable for a year. The name changes whenever
+#     the file changes, so a stale copy can never be served.
+#
+# Remember: after changing any static file you must run
+#     python manage.py collectstatic
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+# Without this block Django uses per-process memory, which has three problems:
+#   * every worker process keeps its own copy, so the same SAP pull happens
+#     once per worker instead of once in total;
+#   * a restart throws everything away, so the next visitor waits again;
+#   * it only holds 300 entries before it starts evicting.
+#
+# Default below is a file-backed cache: no extra software to install, shared by
+# every worker, and it survives a restart. On the Linux server set
+# DJANGO_CACHE_URL=redis://127.0.0.1:6379/1 to switch to Redis, which is
+# faster still. Nothing else in the code needs to change.
+CACHE_URL = env('DJANGO_CACHE_URL', '')
+
+if CACHE_URL.startswith('redis'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': CACHE_URL,
+            'KEY_PREFIX': 'cp',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': str(BASE_DIR / '.django-cache'),
+            'KEY_PREFIX': 'cp',
+            'TIMEOUT': 300,
+            'OPTIONS': {
+                # Plenty for our handful of KPI keys; stops silent eviction.
+                'MAX_ENTRIES': 5000,
+                'CULL_FREQUENCY': 4,
+            },
+        }
+    }
+
+# How long the shared KPI cache holds a SAP answer (see core/kpi_cache.py).
+# The current month keeps moving so it gets a short window; a finished month
+# barely changes, so it can be held much longer.
+KPI_CACHE_TTL_CURRENT_MONTH = int(env('KPI_TTL_CURRENT', '300'))
+KPI_CACHE_TTL_PAST_MONTH = int(env('KPI_TTL_PAST', '1800'))
+# After the fresh window a stale answer is still served instantly while a new
+# one is fetched in the background, for up to this long.
+KPI_CACHE_STALE_FOR = int(env('KPI_STALE_FOR', '3600'))
 
 # Django Admin Settings
 LOGIN_URL = '/accounts/login/'
@@ -117,3 +190,65 @@ SAP_HANA = {
 }
 
 GROQ_API_KEY = env('GROQ_API_KEY', '')
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# Django's built-in logging only prints error tracebacks to the console when
+# DEBUG is True. With DJANGO_DEBUG=False (how we run this) a crash showed up as
+# a bare
+#     "GET /accounts/login/ HTTP/1.1" 500 145
+# and nothing else, so there was no way to tell what actually broke.
+#
+# This block sends every request error to the console with its full traceback,
+# whether DEBUG is on or off. It changes nothing a visitor sees - the browser
+# still gets the plain "Server Error (500)" page.
+# Requests slower than this get written to the slow-request log. Lower it to
+# 0 while hunting a problem (logs every request), raise it to keep noise down.
+SLOW_REQUEST_SECONDS = float(env('SLOW_REQUEST_SECONDS', '1.0'))
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'plain': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'plain',
+        },
+        # Slow requests go to their own file so they are easy to read and do
+        # not drown in everything else. Caps at 5 x 2 MB, then overwrites the
+        # oldest - it can never fill the disk.
+        'slowfile': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'slow-requests.log'),
+            'maxBytes': 2 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'plain',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        # The traceback of any unhandled exception in a view/template.
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        # The stopwatch (core/middleware.py).
+        'core.timing': {
+            'handlers': ['console', 'slowfile'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}

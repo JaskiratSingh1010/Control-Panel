@@ -5,7 +5,7 @@ from django.conf import settings
 from django.views.generic import RedirectView
 from django.views.static import serve as serve_static
 
-from core.views import PermissionLoginView
+from core.views import PermissionLoginView, nav_ticker
 
 # Configure Django admin to use the control panel login instead of default admin login
 admin.site.login_url = '/accounts/login/'
@@ -19,6 +19,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/login/', PermissionLoginView.as_view(), name='login'),
     path('accounts/logout/', auth_views.LogoutView.as_view(next_page='/accounts/login/'), name='logout'),
+
+    path('api/nav-ticker/', nav_ticker, name='nav_ticker'),
 
     path('', include('home.urls')),
     path('realise/', include('realise.urls')),

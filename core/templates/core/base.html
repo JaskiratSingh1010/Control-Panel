@@ -6,13 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Jivo Control Panel{% endblock %}</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300,0,0" rel="stylesheet">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="{% static 'vendor/css/material-icons.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/css/material-symbols.css' %}" rel="stylesheet">
+  
+  <link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
+  {% include 'core/_numerals.html' %}
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Raleway', sans-serif; background: #f3f4f6; color: #1f2937; }
+    body { margin: 0; font-family: 'CPNum', 'Raleway', sans-serif; background: #f3f4f6; color: #1f2937; }
 
     /* ── Light & subtle report theme tokens ───────────────────────────────────
        Shared palette for the Realise/report pages so they all read like the Home
@@ -41,10 +42,16 @@
       --rz-neg:       #e11d48;   /* negative / red                        */
       --rz-amber:     #d97706;   /* amber accent                          */
       --rz-teal:      #0d9488;   /* teal accent                           */
-      /* Numeric font: plain upright figures for money / metric values. Raleway's numerals
-         read as slanted / "cursive"; a neutral system sans keeps numbers legible & subtle.
-         Applied to numeric cells & KPI values app-wide via the rule below.               */
-      --rz-num: system-ui, "Segoe UI", Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      /* Numeric font: the same face the Jivo E-Commerce app uses for every figure, so
+         numbers look identical across both products. Spline Sans Mono is a monospace, so
+         every digit is the same width and columns line up. Change this one line to
+         re-tone every number in the whole control panel at once.                        */
+      --rz-num: 'CPNum', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      /* Big headline figures (the KPI stat cards) do NOT use the mono face. The
+         Spline Sans Mono subset only ships one weight, so a 900-weight KPI value
+         came out looking thin. This plain sans stack is what the live server uses,
+         and it honours font-weight properly.                                       */
+      --rz-num-plain: system-ui, "Segoe UI", Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif;
       /* KPI accent bars (thin top strip on white stat cards) */
       --rz-acc-indigo: linear-gradient(90deg,#6366f1,#7c3aed);
       --rz-acc-green:  linear-gradient(90deg,#059669,#16a34a);
@@ -59,11 +66,20 @@
        used app-wide: KPI stat values (*-kpi-v), the shared .num table cell, and the
        common per-report money/qty cell classes. Selectors only hit number-only elements,
        so prose (party names, headings) keeps Raleway. Edit --rz-num to re-tone at once. */
-    [class$="kpi-v"], [class*="kpi-v "], .kpi-value,
+    /* the "KPI difference" popup: every column except the category name */
+    .glimpse-table td:not(:first-child), .glimpse-diff,
     .num, td.num, .op-hi, .dd-mono,
     .sv, .sp-amt, .sa-qty, .doc, .doc-bal, .cmp-big, .cmp-chg, .cm-gst,
     .rc-so-one, .pf-prow-qty, .sc2-state-val, .sc2-drillval {
       font-family: var(--rz-num);
+      font-variant-numeric: tabular-nums;
+      font-style: normal;
+      letter-spacing: 0;
+    }
+
+    /* KPI stat values keep the plain sans, so a bold number really looks bold. */
+    [class$="kpi-v"], [class*="kpi-v "], .kpi-value {
+      font-family: var(--rz-num-plain);
       font-variant-numeric: tabular-nums;
       font-style: normal;
       letter-spacing: 0;

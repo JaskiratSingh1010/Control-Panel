@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Person Mapping &amp; Targets</title>
-<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'realise/person_targets.css' %}?v={{ asset_ver }}">
+  {% include 'core/_numerals.html' %}
+  <style>body{font-family:'CPNum','Raleway',system-ui,sans-serif;}</style>
 </head>
 <body>
 <div id="root"></div>

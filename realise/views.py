@@ -634,10 +634,14 @@ def api_export_aging_detail(request):
             return '0'
 
     hdr = {'bold': True, 'fill': '0F172A', 'color': 'FFFFFF'}
-    headers = ['Format', 'Customer', 'Doc No', 'Type', 'Posting Date', 'Due Date', 'Branch',
-               'Original', 'Balance Due', '0-30', '31-60', '61-90', '91-120', '121+', 'Remark', 'Splits']
+    # Aging columns come from the one bucket list, so splitting or merging a bucket there
+    # changes this sheet too instead of silently exporting the wrong (or missing) columns.
+    bucket_keys = [b['key'] for b in services.AGING_BUCKETS]
+    bucket_labels = [b['label'].replace(' ', '') for b in services.AGING_BUCKETS]
+    headers = (['Format', 'Customer', 'Doc No', 'Type', 'Posting Date', 'Due Date', 'Branch',
+                'Original', 'Balance Due'] + bucket_labels + ['Remark', 'Splits'])
     rows = [[{'value': h, **hdr} for h in headers]]
-    tot = {k: 0.0 for k in ('original', 'balance_due', 'b0_30', 'b31_60', 'b61_90', 'b91_120', 'b121')}
+    tot = {k: 0.0 for k in ['original', 'balance_due'] + bucket_keys}
     for code in codes:
         name, fmt = meta[code]
         for d in detail.get(code, []):
@@ -645,11 +649,11 @@ def api_export_aging_detail(request):
                 (('%s: %s' % (s.get('category') or '?', famt(s.get('amount'))))
                  + ((' (%s)' % s['remark']) if s.get('remark') else ''))
                 for s in (d.get('splits') or []))
-            rows.append([
-                fmt, name, d['doc_no'], d['type'], d['posting_date'], d['due_date'], d['branch'],
-                d['original'], d['balance_due'], d['b0_30'], d['b31_60'], d['b61_90'],
-                d['b91_120'], d['b121'], d['remark'], splits,
-            ])
+            rows.append(
+                [fmt, name, d['doc_no'], d['type'], d['posting_date'], d['due_date'], d['branch'],
+                 d['original'], d['balance_due']]
+                + [d.get(k, 0) for k in bucket_keys]
+                + [d['remark'], splits])
             for k in tot:
                 tot[k] += d.get(k, 0) or 0
     if len(rows) == 1:
@@ -657,9 +661,9 @@ def api_export_aging_detail(request):
 
     def tcell(v):
         return {'value': round(v, 2), 'bold': True, 'fill': 'E2E8F0'}
-    rows.append([{'value': 'TOTAL', 'bold': True, 'fill': 'E2E8F0'}] + ['' ] * 6
-                + [tcell(tot['original']), tcell(tot['balance_due']), tcell(tot['b0_30']),
-                   tcell(tot['b31_60']), tcell(tot['b61_90']), tcell(tot['b91_120']), tcell(tot['b121'])]
+    rows.append([{'value': 'TOTAL', 'bold': True, 'fill': 'E2E8F0'}] + [''] * 6
+                + [tcell(tot['original']), tcell(tot['balance_due'])]
+                + [tcell(tot[k]) for k in bucket_keys]
                 + ['', ''])
 
     content = build_workbook([('Aging Detail', rows)])

@@ -943,7 +943,7 @@ def _seg_stats(pair):
             'realise': round(pair[1] / pair[0], 2) if pair[0] > 0 else 0}
 
 
-def get_channel_actuals(start_date, end_date):
+def _get_channel_actuals_uncached(start_date, end_date):
     """Per display-channel actual oil litres + realise (₹/L) for a date range, split by
     Premium / Commodity — the same rows the dashboard counts, bucketed by display channel."""
     _, raw = get_sales_data_cached(start_date, end_date)
@@ -5285,7 +5285,11 @@ AGING_XLSX_PATH = os.path.join(settings.BASE_DIR, 'Customer-Aging.xlsx')
 # Bucket columns in the DATA sheet, in display order, with the palette used by the
 # Customer Aging tab (current=green → escalating to 121+=red).
 AGING_BUCKETS = [
-    {'key': 'b0_30',   'label': '0 - 30',   'color': '#16a34a'},
+    # The first three are all "current" (0-30) - a green ramp, light to dark - so the row still
+    # reads as one healthy block at a glance while staying selectable one week at a time.
+    {'key': 'b0_7',    'label': '0 - 7',    'color': '#22c55e'},
+    {'key': 'b8_15',   'label': '8 - 15',   'color': '#16a34a'},
+    {'key': 'b16_30',  'label': '16 - 30',  'color': '#15803d'},
     {'key': 'b31_60',  'label': '31 - 60',  'color': '#0d9488'},
     {'key': 'b61_90',  'label': '61 - 90',  'color': '#d97706'},
     {'key': 'b91_120', 'label': '91 - 120', 'color': '#ea580c'},
@@ -5389,7 +5393,12 @@ def _read_xlsx_sheet(path, sheet_name):
 
 
 def _load_aging_rows():
-    """Parse the DATA sheet into one dict per customer. Header is row 2, totals row 1,
+    """UNUSED - the spreadsheet fallback. Nothing calls this; every company now reads live
+    SAP through _load_aging_rows_sap(). Left in place only as a record of the old sheet
+    layout. NOTE: it still emits the pre-split b0_30 key, so if you ever revive it you must
+    first split that column into b0_7 / b8_15 / b16_30 to match AGING_BUCKETS.
+
+    Parse the DATA sheet into one dict per customer. Header is row 2, totals row 1,
     data from row 3 down (cols: code, name, FORMAT, original, balance, 5 buckets)."""
     sheet = _read_xlsx_sheet(AGING_XLSX_PATH, 'DATA')
     out = []
@@ -5495,7 +5504,9 @@ def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_g
     )
     SELECT C."CardCode" AS "code", C."CardName" AS "name", {fmt_sel} AS "format",
            SUM(a.orig) AS "original", SUM(a.bal) AS "balance_due",
-           SUM(CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END) AS "b0_30",
+           SUM(CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=7 THEN a.bal ELSE 0 END) AS "b0_7",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 8 AND 15 THEN a.bal ELSE 0 END) AS "b8_15",
+           SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 16 AND 30 THEN a.bal ELSE 0 END) AS "b16_30",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 31 AND 60 THEN a.bal ELSE 0 END) AS "b31_60",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 61 AND 90 THEN a.bal ELSE 0 END) AS "b61_90",
            SUM(CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END) AS "b91_120",
@@ -5542,7 +5553,9 @@ def _load_aging_rows_sap(aging_date, schema=None, apply_oil_filters=True, with_g
             'format': fmt,
             'original':    _aging_num(r.get('original')),
             'balance_due': balance_due,
-            'b0_30':   _aging_num(r.get('b0_30')),
+            'b0_7':    _aging_num(r.get('b0_7')),
+            'b8_15':   _aging_num(r.get('b8_15')),
+            'b16_30':  _aging_num(r.get('b16_30')),
             'b31_60':  _aging_num(r.get('b31_60')),
             'b61_90':  _aging_num(r.get('b61_90')),
             'b91_120': _aging_num(r.get('b91_120')),
@@ -5576,12 +5589,14 @@ def _build_aging_payload(rows):
     # Top single customer exposure across the book (largest outstanding balance).
     top_customer = max(rows, key=lambda r: r['balance_due']) if rows else None
     overdue_90 = round(total['b91_120'] + total['b121'], 2)
+    # "Current" is still 0-30 days; it is just assembled from the three sub-buckets now.
+    current = round(total['b0_7'] + total['b8_15'] + total['b16_30'], 2)
     bal = total['balance_due'] or 1.0
 
     kpis = {
         'total_outstanding': total['balance_due'],
-        'current': total['b0_30'],
-        'current_pct': round(total['b0_30'] / bal * 100, 1),
+        'current': current,
+        'current_pct': round(current / bal * 100, 1),
         'overdue_90': overdue_90,
         'overdue_90_pct': round(overdue_90 / bal * 100, 1),
         'customer_count': len(rows),
@@ -5987,7 +6002,9 @@ def _aging_detail_sql(where_card, ag, S, with_branch):
     SELECT a.card AS "card", a.trans AS "trans", a.line AS "line", a.docno AS "docno", a.ttype AS "ttype",
            a.bdate AS "bdate", a.duedate AS "duedate", a.orig AS "original", a.bal AS "balance_due",
            {bcol}
-           CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=30 THEN a.bal ELSE 0 END AS "b0_30",
+           CASE WHEN a.bdate IS NULL OR DAYS_BETWEEN(a.bdate,{ag})<=7 THEN a.bal ELSE 0 END AS "b0_7",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 8 AND 15 THEN a.bal ELSE 0 END AS "b8_15",
+           CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 16 AND 30 THEN a.bal ELSE 0 END AS "b16_30",
            CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 31 AND 60 THEN a.bal ELSE 0 END AS "b31_60",
            CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 61 AND 90 THEN a.bal ELSE 0 END AS "b61_90",
            CASE WHEN DAYS_BETWEEN(a.bdate,{ag}) BETWEEN 91 AND 120 THEN a.bal ELSE 0 END AS "b91_120",
@@ -6099,7 +6116,9 @@ def get_customer_aging_detail(card_code, aging_date=None, schema=None, row_key_p
             'splits': splits.get(row_key, []),
             'credit_override': credit.get(row_key, ''),   # per-invoice credit-period override
             'item_type': '',                              # 'P' | 'C' | 'P+C' — filled below for invoices
-            'b0_30': _aging_num(r.get('b0_30')),
+            'b0_7': _aging_num(r.get('b0_7')),
+            'b8_15': _aging_num(r.get('b8_15')),
+            'b16_30': _aging_num(r.get('b16_30')),
             'b31_60': _aging_num(r.get('b31_60')),
             'b61_90': _aging_num(r.get('b61_90')),
             'b91_120': _aging_num(r.get('b91_120')),
@@ -6205,7 +6224,9 @@ def get_customer_aging_detail_bulk(card_codes, aging_date=None):
             'balance_due': _aging_num(r.get('balance_due')),
             'remark': remarks_by_card.get(card, {}).get(row_key, ''),
             'splits': splits_by_card.get(card, {}).get(row_key, []),
-            'b0_30': _aging_num(r.get('b0_30')),
+            'b0_7': _aging_num(r.get('b0_7')),
+            'b8_15': _aging_num(r.get('b8_15')),
+            'b16_30': _aging_num(r.get('b16_30')),
             'b31_60': _aging_num(r.get('b31_60')),
             'b61_90': _aging_num(r.get('b61_90')),
             'b91_120': _aging_num(r.get('b91_120')),
@@ -6719,3 +6740,17 @@ def delete_claim(claim_id):
     """Delete one claim by id. Returns True if a row was removed."""
     deleted, _ = Claim.objects.filter(id=claim_id).delete()
     return bool(deleted)
+
+
+# get_channel_actuals grinds through every raw sales row to bucket them by
+# channel. The answer only depends on the date range, so hold it in the shared
+# on-disk cache: unlike the in-process dict above, that survives a restart and
+# is shared by every worker process.
+def get_channel_actuals(start_date, end_date):
+    from core.kpi_cache import remember, ttl_for_range
+
+    return remember(
+        f'chan_actuals:{start_date}:{end_date}',
+        ttl_for_range(start_date, end_date),
+        lambda: _get_channel_actuals_uncached(start_date, end_date),
+    )

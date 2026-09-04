@@ -49,3 +49,6 @@ Excel File/
 
 # Exported Claude Code chat history (large, local only)
 claude-chat-history.md
+
+# Local cache directory (file-backed Django cache)
+.django-cache/

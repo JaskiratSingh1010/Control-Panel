@@ -151,7 +151,7 @@ def _stub_kpi(label, icon, gradient, extra=None):
 # ---------------------------------------------------------------------------
 
 def get_total_sales_volume(year: int, month: int) -> dict:
-    from dashboard.services.realise.sales import get_sales_data
+    from core.kpi_cache import get_sales_data
 
     start, end = _month_range(year, month)
     py, pm = _prev_month(year, month)
@@ -204,7 +204,7 @@ def get_total_sales_volume(year: int, month: int) -> dict:
 
 
 def get_avg_realisation(year: int, month: int) -> dict:
-    from dashboard.services.realise.sales import get_sales_data
+    from core.kpi_cache import get_sales_data
 
     start, end = _month_range(year, month)
     py, pm = _prev_month(year, month)
@@ -262,7 +262,7 @@ def get_avg_realisation(year: int, month: int) -> dict:
 # ---------------------------------------------------------------------------
 
 def get_cost_of_goods_sold(year: int, month: int) -> dict:
-    from dashboard.cogs_service import get_cogs_data
+    from core.kpi_cache import get_cogs_data
 
     start, end = _month_range(year, month)
     py, pm = _prev_month(year, month)
@@ -308,7 +308,7 @@ def get_cost_of_goods_sold(year: int, month: int) -> dict:
 
 
 def get_operating_expenses(year: int, month: int) -> dict:
-    from dashboard.expenses_service import get_expenses_by_category
+    from core.kpi_cache import get_expenses_by_category
 
     py, pm = _prev_month(year, month)
     
@@ -342,7 +342,7 @@ def get_operating_expenses(year: int, month: int) -> dict:
 
 
 def get_salary_expenditure(year: int, month: int) -> dict:
-    from dashboard.expenses_service import get_expenses_by_category
+    from core.kpi_cache import get_expenses_by_category
 
     py, pm = _prev_month(year, month)
     

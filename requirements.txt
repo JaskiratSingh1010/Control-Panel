@@ -4,3 +4,13 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 whitenoise>=6.0.0
 openpyxl>=3.1.0
+
+# --- web servers (serve.py picks the right one for the machine) ---
+waitress>=3.0.0          ; sys_platform == "win32"
+gunicorn>=21.2.0         ; sys_platform != "win32"
+
+# --- makes static files much smaller (WhiteNoise uses it automatically) ---
+brotli>=1.1.0
+
+# --- optional: only needed if DJANGO_CACHE_URL points at Redis ---
+# redis>=5.0.0

@@ -45,7 +45,7 @@
   table.ad-tb thead th.sortable:hover{background:#eef2f6}
   table.ad-tb thead th .ar{font-size:9px;margin-left:4px;opacity:.75}
   table.ad-tb td{padding:9px 13px;border-bottom:1px solid #eef2f7;color:#334155;white-space:nowrap}
-  table.ad-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  table.ad-tb td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
   table.ad-tb tbody tr:hover td{background:#f8fafc}
   /* Item-type badge (P / C / P+C) and per-invoice credit-period input */
   .ad-pc{display:inline-block;min-width:34px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:999px;border:1px solid transparent}
@@ -89,7 +89,7 @@
   .bal{font-weight:800;color:#0f172a}
   tr.ad-tot td{position:sticky;bottom:0;background:var(--rz-total-bg);color:var(--rz-ink);font-weight:900;border-top:2px solid var(--rz-total-brd);z-index:1}
   tr.ad-tot .neg{color:var(--rz-neg)}
-  td.bk0{background:#f0fdf4}td.bk1{background:#f0fdfa}td.bk2{background:#fffbeb}td.bk3{background:#fff7ed}td.bk4{background:#fef2f2}
+  td.bk0{background:#f2fdf5}td.bk1{background:#eafaf0}td.bk2{background:#e3f7ea}td.bk3{background:#f0fdfa}td.bk4{background:#fffbeb}td.bk5{background:#fff7ed}td.bk6{background:#fef2f2}
   .ad-empty{padding:40px;text-align:center;color:#7b8794}
   /* Clickable pivot rows → documents-behind-it popup */
   tr.ad-piv-row{cursor:pointer}
@@ -207,7 +207,8 @@
   var CATEGORIES = DATA.categories || ['NOT DUE','RTV DEBIT','RTV PICK UP','SHORTAGE','CLAIM','TDS',
     'SHORT & EXCESS','OVERDUE','RC','JE','REVERSE WRONG CLAIM','ADVICE PENDING'];
   var CATEGORY_SET = {}; CATEGORIES.forEach(function(c){ CATEGORY_SET[c.toUpperCase()] = 1; });
-  var BUCKETS = [{key:'b0_30',label:'0 - 30'},{key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
+  var BUCKETS = [{key:'b0_7',label:'0 - 7'},{key:'b8_15',label:'8 - 15'},{key:'b16_30',label:'16 - 30'},
+                 {key:'b31_60',label:'31 - 60'},{key:'b61_90',label:'61 - 90'},
                  {key:'b91_120',label:'91 - 120'},{key:'b121',label:'121+'}];
   // Data-view columns (after the expander) — order matches the rendered <td>s. `lbl` = left-aligned
   // header (text), `num` = numeric sort/right-aligned value. Both flags are independent so Credit

@@ -1,8 +1,9 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}Inventory Dashboard{% endblock %}
 
 {% block extra_styles %}
-<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
 <style>
     :root {
       --bg: #f4f5f7;
@@ -16,7 +17,7 @@
       --mt: #8b8fa3;
       --bd: #ebebef;
       --ac: #0ea5e9;
-      --font: 'Raleway', sans-serif;
+      --font: 'CPNum', 'Raleway', sans-serif;
       --r: 14px;
     }
 
@@ -1801,8 +1802,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="{% static 'vendor/js/chart.umd.min.js' %}"></script>
+<script src="{% static 'vendor/js/chartjs-plugin-datalabels.min.js' %}"></script>
 <script>window.inventoryUser = window.loginUser || {{ login_user_json|safe }};
     // Debounce search inputs: rebuild the table only after the user pauses typing
     // (~200ms) instead of on every keystroke. Keyed by function name.
@@ -1922,10 +1923,17 @@
 
     // ════ DASHBOARD ════
     async function lD() {
-      const k = (await api('/api/kpi' + (C ? '?category=' + encodeURIComponent(C) : '')))[0] || {};
-      const cat = await api('/api/categories' + (C ? '?category=' + encodeURIComponent(C) : ''));
-      const ms = await api('/api/movers_summary?days=30' + (C ? '&category=' + encodeURIComponent(C) : ''));
-      const bi = await api('/api/not_billed_summary');
+      // These four do not depend on each other, so ask for them all at once.
+      // One after another they cost the SUM of the four waits; together they
+      // cost only the slowest one.
+      const catQS = C ? '?category=' + encodeURIComponent(C) : '';
+      const [kRows, cat, ms, bi] = await Promise.all([
+        api('/api/kpi' + catQS),
+        api('/api/categories' + catQS),
+        api('/api/movers_summary?days=30' + (C ? '&category=' + encodeURIComponent(C) : '')),
+        api('/api/not_billed_summary'),
+      ]);
+      const k = kRows[0] || {};
       const nm = ms.find(x => x.Status === 'NON-MOVING') || { Count: 0, Value: 0 };
       const b30 = bi.find(x => x.Period === '30 Days') || { NotBilledSKUs: 0, NotBilledValue: 0 };
       document.getElementById('dK').innerHTML = `<div class="kg">
@@ -1982,21 +1990,26 @@
     // ════ MERGED WAREHOUSE + STOCK ════
     async function lWHStock() {
       whItemCache = {};
-      // Load owners for filter
-      const owners = await api('/api/warehouse_owners');
+      const cat = C ? `?category=${encodeURIComponent(C)}` : '';
+      const mvWhsSel = document.getElementById('mvWhsFilter');
+      const needWarehouses = mvWhsSel.options.length <= 1;
+
+      // Independent of one another - fetch together, not one after the other.
+      const [owners, whs, summary] = await Promise.all([
+        api('/api/warehouse_owners'),
+        needWarehouses ? api('/api/warehouses') : Promise.resolve([]),
+        api(`/api/warehouse_summary${cat}`),
+      ]);
+
       const ownerSel = document.getElementById('whOwnerFilter');
       ownerSel.innerHTML = '<option value="">All Owners</option>';
       owners.forEach(o => { const op = document.createElement('option'); op.value = o.OwnerName; op.textContent = o.OwnerName; ownerSel.appendChild(op) });
 
-      // Load warehouse movement filter dropdown
-      const mvWhsSel = document.getElementById('mvWhsFilter');
-      if (mvWhsSel.options.length <= 1) {
-        const whs = await api('/api/warehouses');
+      if (needWarehouses) {
         whs.forEach(w => { const o = document.createElement('option'); o.value = w.WhsCode; o.textContent = `${w.WhsCode} — ${w.WhsName}`; mvWhsSel.appendChild(o) });
       }
 
-      const cat = C ? `?category=${encodeURIComponent(C)}` : '';
-      whAllData = await api(`/api/warehouse_summary${cat}`);
+      whAllData = summary;
       whFilterTable();
     }
     function whFilterTable() {
@@ -2108,16 +2121,49 @@
       document.getElementById('mvDateFrom').value = ''; document.getElementById('mvDateTo').value = '';
       lMVFetch();
     }
+    // ── Big tables: paint only as many rows as a person can actually look at ──
+    // The Movement tab holds 5,000+ rows. Painting every <tr> again on each
+    // keystroke is what makes the search box feel slow - the browser has to lay
+    // the whole table out before it can show the next character you typed.
+    // Filtering still runs over ALL rows, so the count and the search results
+    // stay complete; we just stop painting past ROW_CAP and offer a button.
+    var ROW_CAP = 400;
+    var _showAllRows = {};
+    var _rerenderFor = {};
+    function cappedRows(id, rows, rerender) {
+      _rerenderFor[id] = rerender;
+      return _showAllRows[id] ? rows : rows.slice(0, ROW_CAP);
+    }
+    function cappedNote(id, shown, total) {
+      if (shown >= total) return '';
+      // No inline onclick here on purpose - the delegated listener below
+      // handles the click, which keeps this string free of nested quotes.
+      return '<div class="em" style="margin-top:8px">Showing the first ' + N(shown) +
+             ' of ' + N(total) + ' matching rows. Narrow it down with the search box, or ' +
+             '<button type="button" class="show-all-rows" data-target="' + id + '" ' +
+             'style="border:0;background:none;color:var(--ac);cursor:pointer;font:inherit;' +
+             'text-decoration:underline;padding:0">show all ' + N(total) + '</button>.</div>';
+    }
+    document.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('.show-all-rows') : null;
+      if (b) showAllRows(b.getAttribute('data-target'));
+    });
+    function showAllRows(id) {
+      _showAllRows[id] = true;
+      if (_rerenderFor[id]) _rerenderFor[id]();
+    }
+
     function rMV() {
       const q = (document.getElementById('mvS').value || '').toLowerCase();
       const whsF = (document.getElementById('mvWhsFilter').value || '');
       let d = mvD_data;
       if (whsF) d = d.filter(r => r.WhsCode === whsF);
       if (q) d = d.filter(r => String(r.ItemCode || '').toLowerCase().includes(q) || String(r.ItemName || '').toLowerCase().includes(q) || String(r.Category || '').toLowerCase().includes(q) || String(r.SubGroup || '').toLowerCase().includes(q) || String(r.Date || '').includes(q) || String(r.WhsCode || '').toLowerCase().includes(q));
+      const mvShown = cappedRows('mvT', d, rMV);
       document.getElementById('mvC').textContent = d.length + ' rows';
       document.getElementById('mvT').innerHTML = d.length ?
         `<table><thead><tr><th>Date</th><th>WH Code</th><th>Warehouse</th><th>Category</th><th>Sub-Group</th><th>Item Code</th><th>Item Name</th><th class="R">In Qty</th><th class="R">Out Qty</th><th class="R">In Value</th><th class="R">Out Value</th><th class="R">Net</th></tr></thead><tbody>` +
-        d.map(r => `<tr>
+        mvShown.map(r => `<tr>
     <td class="m">${r.Date || ''}</td>
     <td class="m" style="color:var(--ac)">${r.WhsCode || ''}</td>
     <td style="font-size:12px;color:var(--tx2)">${r.WhsName || ''}</td>
@@ -2128,7 +2174,7 @@
     <td class="R m">${N(r.InQty)}</td><td class="R m">${N(r.OutQty)}</td>
     <td class="R m">${FV(r.InValue)}</td><td class="R m">${FV(r.OutValue)}</td>
     <td class="R m" style="color:${(r.InValue || 0) - (r.OutValue || 0) >= 0 ? '#059669' : '#ef4444'}">${FV((r.InValue || 0) - (r.OutValue || 0))}</td>
-   </tr>`).join('') + '</tbody></table>' :
+   </tr>`).join('') + '</tbody></table>' + cappedNote('mvT', mvShown.length, d.length) :
         '<div class="em">No data</div>';
     }
 

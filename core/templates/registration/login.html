@@ -1,15 +1,16 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign In — Jivo Control Panel</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: 'Raleway', sans-serif;
+  font-family: 'CPNum', 'Raleway', sans-serif;
   background:
     radial-gradient(circle at 14% 16%, rgba(99,102,241,0.28), transparent 28%),
     radial-gradient(circle at 82% 86%, rgba(15,118,110,0.20), transparent 26%),
@@ -230,6 +231,7 @@ body {
   .showcase-title { font-size: 34px; }
 }
 </style>
+  {% include 'core/_numerals.html' %}
 </head>
 <body>
 <div class="login-shell">

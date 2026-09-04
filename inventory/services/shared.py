@@ -1,8 +1,12 @@
 import datetime as _dt
 import decimal
+import hashlib
 import logging
 import math
 
+from django.conf import settings
+
+from core.kpi_cache import remember
 from core.sap_connector import get_connection
 
 logger = logging.getLogger(__name__)
@@ -60,7 +64,8 @@ def cv(v):
     return str(v)
 
 
-def q(sql, conn_factory=get_connection):
+def _run(sql, conn_factory):
+    """Actually go to SAP. Every query in this app is a read-only SELECT."""
     conn = None
     cursor = None
     try:
@@ -86,3 +91,28 @@ def q(sql, conn_factory=get_connection):
                 conn.close()
             except Exception:
                 pass
+
+
+# Every inventory query is a read-only SELECT, so the answer can be held for a
+# short while. This one wrapper covers all 100+ inventory endpoints: repeat
+# calls are served from the cache, ten users arriving together cause one SAP
+# pull instead of ten, and a stale answer is handed over instantly while a
+# fresh one is fetched behind the scenes.
+#
+# Set INVENTORY_QUERY_CACHE_TTL = 0 in settings to switch this off completely.
+DEFAULT_QUERY_CACHE_TTL = 120
+
+
+def q(sql, conn_factory=get_connection):
+    ttl = getattr(settings, 'INVENTORY_QUERY_CACHE_TTL', DEFAULT_QUERY_CACHE_TTL)
+    if not ttl:
+        return _run(sql, conn_factory)
+
+    # The SQL text already contains every filter, so it alone identifies the
+    # answer. Hash it because cache keys must be short and space-free.
+    key = 'invq:' + hashlib.sha1(sql.encode('utf-8')).hexdigest()
+
+    # q() returns [] both for "no rows" and "the query failed", and the two
+    # cannot be told apart here - so never cache an empty answer.
+    return remember(key, ttl, lambda: _run(sql, conn_factory),
+                    is_usable=lambda rows: bool(rows))

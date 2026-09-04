@@ -1,5 +1,6 @@
 import logging
 import json
+import threading
 from datetime import date
 
 from django.core.cache import cache
@@ -262,6 +263,55 @@ def _resolve_period(request):
     return today.year, today.month
 
 
+# How long a built ticker stays good for.
+TICKER_TTL = 300
+# A failed build is remembered only briefly, so one SAP hiccup does not blank
+# the ticker for five minutes - but ten visitors still do not all retry at once.
+TICKER_FAIL_TTL = 30
+
+_ticker_locks = {}
+_ticker_guard = threading.Lock()
+
+
+def _ticker_key(year, month):
+    return f'home_ticker_{year}_{month:02d}'
+
+
+def _ticker_lock(key):
+    with _ticker_guard:
+        lock = _ticker_locks.get(key)
+        if lock is None:
+            lock = _ticker_locks[key] = threading.Lock()
+        return lock
+
+
+def get_ticker_items(year, month, blocking=False):
+    """The values shown in the top strip.
+
+    blocking=False is what page rendering uses: hand back whatever is already
+    cached, otherwise an empty list straight away. A page must never sit and
+    wait for SAP - the browser asks for the numbers separately.
+
+    blocking=True is what the /api/nav-ticker/ endpoint uses: actually build
+    the thing. Only one thread builds a given month at a time, so ten visitors
+    arriving together cause one SAP pull, not ten.
+    """
+    key = _ticker_key(year, month)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    if not blocking:
+        return []
+
+    with _ticker_lock(key):
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        items = _build_ticker_items(year, month)
+        cache.set(key, items, TICKER_TTL if items else TICKER_FAIL_TTL)
+        return items
+
+
 def _build_ticker_items(year, month):
     items = []
     try:
@@ -321,11 +371,9 @@ def user_profile(request):
     user = request.user
 
     year, month = _resolve_period(request)
-    ticker_key = f'home_ticker_{year}_{month:02d}'
-    ticker_items = cache.get(ticker_key)
-    if ticker_items is None:
-        ticker_items = _build_ticker_items(year, month)
-        cache.set(ticker_key, ticker_items, 180)
+    # Never block the page on SAP: use the cached strip if we have one, else
+    # render empty and let the browser fetch it from /api/nav-ticker/.
+    ticker_items = get_ticker_items(year, month, blocking=False)
 
     period_ctx = {
         'period_year':     year,

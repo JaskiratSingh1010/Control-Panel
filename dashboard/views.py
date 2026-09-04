@@ -12,7 +12,9 @@ from core.decorators import permission_flag_required
 from .cogs_service import get_cogs_data, update_cogs_opt
 from .expenses_service import get_expense_rows, get_expenses_by_category, format_compact_inr
 from .models import ExpenseBudget
-from .services.realise.sales import get_sales_comparison, get_sales_data
+from .services.realise.sales import get_sales_comparison
+# Cached wrapper - same data, but a repeat pull inside the window is free.
+from core.kpi_cache import get_sales_data
 
 MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

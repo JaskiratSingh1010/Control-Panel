@@ -1,0 +1,52 @@
+# systemd unit for the Jivo Control Panel.
+#
+# This is what makes the site come back on its own after a reboot or a crash -
+# the thing a hand-typed `runserver` in a terminal can never do.
+#
+# NOT INSTALLED YET. To install on the Linux server (138.252.101.118):
+#
+#   1. check WorkingDirectory / User below match that machine
+#   2. sudo cp deploy/control-panel.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now control-panel
+#   5. systemctl status control-panel        <- should say "active (running)"
+#
+# Useful afterwards:
+#   sudo systemctl restart control-panel     restart after a code update
+#   journalctl -u control-panel -f           watch the log live
+
+[Unit]
+Description=Jivo Control Panel (Django)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+
+# EDIT THIS to wherever the code actually lives on the server.
+WorkingDirectory=/opt/control-panel
+
+# serve.py picks gunicorn on Linux automatically.
+ExecStart=/opt/control-panel/.venv/bin/python /opt/control-panel/serve.py 0.0.0.0:9080
+
+Environment=PYTHONUNBUFFERED=1
+Environment=DJANGO_SETTINGS_MODULE=config.settings
+# Settings and secrets come from the .env file, which is NOT in git.
+EnvironmentFile=-/opt/control-panel/.env
+
+# Come back automatically if it ever dies.
+Restart=always
+RestartSec=5
+
+# Give in-flight requests a chance to finish on restart.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Basic hardening.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

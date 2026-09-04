@@ -5,7 +5,13 @@ from django.shortcuts import render
 from django.contrib.auth import get_user_model, authenticate, login
 from django.db.utils import OperationalError, ProgrammingError
 
-from .context_processors import build_login_permission_payload
+from .context_processors import (
+    build_login_permission_payload,
+    build_user_permissions,
+    get_ticker_items,
+    _filter_ticker_items,
+    _resolve_period,
+)
 
 
 def serialize_user_permissions(user):
@@ -73,3 +79,16 @@ def coming_soon(request, tab, label):
         'label': label,
         'sidebar_active': tab,
     })
+
+
+@login_required
+def nav_ticker(request):
+    """Top-strip numbers, fetched by the browser after the page is on screen.
+
+    The page itself no longer waits for these - that wait used to be up to
+    11 seconds on every single page.
+    """
+    year, month = _resolve_period(request)
+    items = get_ticker_items(year, month, blocking=True)
+    items = _filter_ticker_items(items, build_user_permissions(request.user))
+    return JsonResponse({'items': items})
