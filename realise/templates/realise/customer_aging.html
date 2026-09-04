@@ -348,11 +348,7 @@
     <div class="ag-cond" id="agCond">
       <button type="button" class="ag-btn" id="agCondBtn"><span class="material-icons">tune</span><span id="agCondLabel">Conditions</span></button>
       <div class="ag-cond-pop" id="agCondPop">
-        <div class="ag-cond-row">Filter rows by</div>
-        <select id="agCondField">
-          <option value="bd">Balance Due</option>
-          <option value="os">Outstanding</option>
-        </select>
+        <div class="ag-cond-row">Outstanding</div>
         <select id="agCondOp">
           <option value="">Show all</option>
           <option value="gte">More than</option>
@@ -479,15 +475,15 @@
   var selectedFormats = [];   // [] = all formats; else only these show
   var signSel = 'both';       // 'both' | 'pos' | 'neg' — Balance Due sign filter
   var segSel  = 'both';       // 'both' | 'b2b' | 'b2c' — Mart B2B/B2C (GSTIN) segment filter
-  // Numeric money condition. `field` says which column it tests: 'bd' = Balance
-  // Due, 'os' = Outstanding. It is applied to the main table AND to both RAW DATA
-  // views - RAW DATA used to ignore it, so setting a condition while that view was
-  // open looked like nothing happened.
-  var cond = {op:'', a:0, b:0, field:'bd'};
+  // The Conditions popup: a numeric test on the Outstanding column.
+  // One copy of the rule, used by the main table (data path and DOM path) and by
+  // both RAW DATA views. RAW DATA used to ignore it, so setting a condition while
+  // that view was open looked like nothing happened.
+  var cond = {op:'', a:0, b:0};
 
-  function condPass(bdVal, osVal){
+  function condPass(osVal){
     if(!cond.op) return true;
-    var v = (cond.field === 'os') ? (Number(osVal)||0) : (Number(bdVal)||0);
+    var v = Number(osVal)||0;
     if(cond.op === 'gte') return v >= cond.a;
     if(cond.op === 'lte') return v <= cond.a;
     if(cond.op === 'between') return v >= cond.a && v <= cond.b;
@@ -712,7 +708,7 @@
     var bd = Number(c.balance_due)||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
-    if(!condPass(bd, c.outstanding)) return false;
+    if(!condPass(c.outstanding)) return false;
     return true;
   }
   // Customers passing the active Format multi-select + search + sign + condition filters.
@@ -996,7 +992,7 @@
     var bd = Number(r.getAttribute('data-bd'))||0;
     if(signSel==='pos' && !(bd>0)) return false;
     if(signSel==='neg' && !(bd<0)) return false;
-    if(!condPass(bd, r.getAttribute('data-os'))) return false;
+    if(!condPass(r.getAttribute('data-os'))) return false;
     return true;
   }
   // Re-sum each group's header + the grand-total row from the customers passing the CURRENT
@@ -1410,7 +1406,7 @@
     var na=active.length, cols=RAW_COLS, nc=cols.length;
     var rows=(RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
-      if(!condPass(r.bal, r.outstanding)) return false;   // the Conditions popup, same rule as the main table
+      if(!condPass(r.outstanding)) return false;   // the Conditions popup, same rule as the main table
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
       if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
@@ -1569,7 +1565,7 @@
     var q=(document.getElementById('agRawSearch').value||'').trim().toLowerCase();
     return (RAW_BEV||[]).filter(function(r){
       if(!dayIncluded(r.days)) return false;
-      if(!condPass(r.bal, r.outstanding)) return false;   // the Conditions popup, same rule as the main table
+      if(!condPass(r.outstanding)) return false;   // the Conditions popup, same rule as the main table
       if(rawSpFilter && !rawSpFilter[String(r.sp||'')]) return false;   // Sales Person multi-select
       if(rawActSpFilter && !rawActSpFilter[String(effActualSp(r)||'')]) return false;   // Actual Sales Person multi-select
       if(rawScope){
@@ -2100,20 +2096,18 @@
 
     document.getElementById('agCondApply').addEventListener('click',function(){
       var op = document.getElementById('agCondOp').value;
-      var fld = document.getElementById('agCondField').value || 'bd';
       var a = parseFloat(document.getElementById('agCondA').value);
       var b = parseFloat(document.getElementById('agCondB').value);
-      if(!op || isNaN(a) || (op==='between' && isNaN(b))) cond = {op:'',a:0,b:0,field:fld};
-      else if(op==='between') cond = {op:op, a:Math.min(a,b), b:Math.max(a,b), field:fld};   // order-independent
-      else cond = {op:op, a:a, b:0, field:fld};
+      if(!op || isNaN(a) || (op==='between' && isNaN(b))) cond = {op:'',a:0,b:0};
+      else if(op==='between') cond = {op:op, a:Math.min(a,b), b:Math.max(a,b)};   // order-independent
+      else cond = {op:op, a:a, b:0};
       document.getElementById('agCondLabel').textContent = cond.op ? 'Conditions •' : 'Conditions';
       condBox.classList.remove('open');
       applyFilters();
       refreshRawIfOpen();
     });
     document.getElementById('agCondClear').addEventListener('click',function(){
-      cond = {op:'',a:0,b:0,field:'bd'};
-      document.getElementById('agCondField').value = 'bd';
+      cond = {op:'',a:0,b:0};
       document.getElementById('agCondOp').value = '';
       document.getElementById('agCondA').value = '';
       document.getElementById('agCondB').value = '';
