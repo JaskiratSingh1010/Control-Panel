@@ -2711,8 +2711,9 @@ def api_export_aging_pivot(request):
     """RAW DATA -> one .xlsx with three plain sheets.
 
         1. Raw Data     every open invoice on screen, every column, as-is
-        2. Actual Name  one line per Actual Sales Person - Balance Due, each aging
-                        bucket, and Outstanding - with a Grand Total
+        2. Actual Name  one line per Actual Sales Person - Balance Due, Outstanding,
+                        Difference (Balance Due - Outstanding) and each aging bucket -
+                        with a Grand Total
         3. Parties      the same line for every customer sitting under those names
 
     Sheets 2 and 3 are ordinary cells, not a live PivotTable: no fills, no styling,
@@ -2784,13 +2785,16 @@ def api_export_aging_pivot(request):
     def out_total(node):
         return round(sum(node['out'].values()), 2)
 
-    # Outstanding sits next to Balance Due, before the aging columns. These two lists are
-    # written in the same order on purpose - change one and you must change the other.
+    # Outstanding sits next to Balance Due, then Difference (Sum of Balance Due -
+    # Outstanding), before the aging columns. These two lists are written in the same
+    # order on purpose - change one and you must change the other.
     def measures(node):
-        return ([round(node['bal'], 2), out_total(node)]
+        bal = round(node['bal'], 2)
+        out = out_total(node)
+        return ([bal, out, round(bal - out, 2)]
                 + [round(node['b'][b['key']], 2) for b in buckets])
 
-    sum_heads = (['Sum of Balance Due', 'Outstanding']
+    sum_heads = (['Sum of Balance Due', 'Outstanding', 'Difference']
                  + ['Sum of %s' % b['label'] for b in buckets])
 
     # -- sheet 2: one line per Actual Sales Person -----------------------------------

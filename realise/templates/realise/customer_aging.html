@@ -79,6 +79,13 @@
   .ag-cond-pop select:focus,.ag-cond-pop input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .ag-cond-inputs{display:flex;align-items:center;gap:8px}
   .ag-cond-inputs span{font-size:12px;color:#64748b;font-weight:700;margin-bottom:8px}
+  .ag-pick-lbl{display:block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+    color:#94a3b8;margin:2px 0 5px}
+  .ag-pick-row{display:flex;gap:6px;margin-bottom:9px}
+  .ag-pick{flex:1;min-width:0;border:1px solid #e2e8f0;background:#f8fafc;border-radius:7px;padding:7px 4px;
+    font-family:inherit;font-size:12px;font-weight:700;color:#475569;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+  .ag-pick:hover{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}
+  .ag-pick.on{background:#4338ca;border-color:#4338ca;color:#fff}
   .ag-cond-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #eef2f6;padding-top:9px}
   .ag-cond-foot a{font-size:12px;font-weight:700;color:#64748b;cursor:pointer}
   .ag-cond-foot button{background:#4338ca;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
@@ -343,15 +350,23 @@
       <div class="ag-cond-pop" id="agCondPop">
         <div class="ag-cond-row">Balance Due</div>
         <select id="agCondOp">
-          <option value="">— no condition —</option>
-          <option value="gte">More than or equal to (≥)</option>
-          <option value="lte">Less than or equal to (≤)</option>
+          <option value="">Show all</option>
+          <option value="gte">More than</option>
+          <option value="lte">Less than</option>
           <option value="between">Between</option>
         </select>
-        <div class="ag-cond-inputs">
-          <input type="number" id="agCondA" placeholder="Value" step="any">
+        {# Boxes stay hidden until a condition is picked - an empty box with nothing chosen above it was the confusing part. #}
+        <div class="ag-cond-inputs" id="agCondFields" style="display:none">
+          <input type="number" id="agCondA" placeholder="Amount" step="any">
           <span id="agCondAnd" style="display:none">and</span>
-          <input type="number" id="agCondB" placeholder="Value" step="any" style="display:none">
+          <input type="number" id="agCondB" placeholder="Amount" step="any" style="display:none">
+        </div>
+        {# Common amounts, one click instead of typing. Still typeable above. #}
+        <div id="agCondPicks" style="display:none">
+          <span class="ag-pick-lbl" id="agPickLblA">Pick an amount</span>
+          <div class="ag-pick-row" id="agPicksA"></div>
+          <span class="ag-pick-lbl" id="agPickLblB" style="display:none">and</span>
+          <div class="ag-pick-row" id="agPicksB" style="display:none"></div>
         </div>
         <div class="ag-cond-foot"><a id="agCondClear">Clear</a><button type="button" id="agCondApply">Apply</button></div>
       </div>
@@ -1989,10 +2004,47 @@
     var condBox = document.getElementById('agCond');
     document.getElementById('agCondBtn').addEventListener('click',function(e){ e.stopPropagation(); condBox.classList.toggle('open'); });
     document.addEventListener('click',function(e){ if(!condBox.contains(e.target)) condBox.classList.remove('open'); });
+    // Amounts offered as one-click buttons. Edit this list to change them.
+    var QUICK_AMOUNTS = [1, 100, 500, 1000];
+
+    function buildPicks(rowId, inputId){
+      var row = document.getElementById(rowId);
+      row.innerHTML = '';
+      QUICK_AMOUNTS.forEach(function(v){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ag-pick';
+        b.textContent = v.toLocaleString('en-IN');
+        b.addEventListener('click', function(){
+          document.getElementById(inputId).value = v;
+          Array.prototype.forEach.call(row.children, function(c){ c.classList.remove('on'); });
+          b.classList.add('on');
+        });
+        row.appendChild(b);
+      });
+      // Typing your own amount un-highlights the buttons, so the popup never
+      // shows a highlighted button that disagrees with the box.
+      document.getElementById(inputId).addEventListener('input', function(){
+        Array.prototype.forEach.call(row.children, function(c){ c.classList.remove('on'); });
+      });
+    }
+    buildPicks('agPicksA','agCondA');
+    buildPicks('agPicksB','agCondB');
+
+    function showCondParts(op){
+      var has = !!op, between = op === 'between';
+      document.getElementById('agCondFields').style.display = has ? '' : 'none';
+      document.getElementById('agCondPicks').style.display  = has ? '' : 'none';
+      document.getElementById('agCondAnd').style.display    = between ? '' : 'none';
+      document.getElementById('agCondB').style.display      = between ? '' : 'none';
+      document.getElementById('agPickLblB').style.display   = between ? '' : 'none';
+      document.getElementById('agPicksB').style.display     = between ? '' : 'none';
+      document.getElementById('agPickLblA').textContent =
+        between ? 'Pick the lower amount' : 'Pick an amount';
+    }
+
     document.getElementById('agCondOp').addEventListener('change',function(){
-      var between = this.value==='between';
-      document.getElementById('agCondAnd').style.display = between ? '' : 'none';
-      document.getElementById('agCondB').style.display = between ? '' : 'none';
+      showCondParts(this.value);
     });
     document.getElementById('agCondApply').addEventListener('click',function(){
       var op = document.getElementById('agCondOp').value;
@@ -2010,8 +2062,9 @@
       document.getElementById('agCondOp').value = '';
       document.getElementById('agCondA').value = '';
       document.getElementById('agCondB').value = '';
-      document.getElementById('agCondAnd').style.display = 'none';
-      document.getElementById('agCondB').style.display = 'none';
+      showCondParts('');
+      Array.prototype.forEach.call(document.querySelectorAll('#agCondPicks .ag-pick'),
+        function(c){ c.classList.remove('on'); });
       document.getElementById('agCondLabel').textContent = 'Conditions';
       condBox.classList.remove('open');
       applyFilters();
