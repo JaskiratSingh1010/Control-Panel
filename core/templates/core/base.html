@@ -394,6 +394,53 @@
 
     </aside>
 
+    <script>
+    (function () {
+      // The sidebar has its own scrollbar. Every page in this app is a full
+      // reload, so without this the sidebar jumps back to the start and you
+      // lose the spot you were clicking from. Remember where it was and put
+      // it back. sessionStorage = remembered for this tab only, forgotten
+      // when the tab closes, which is right for a scroll position.
+      var KEY = 'cpSidebarScroll';
+      var sb = document.querySelector('.cp-sidebar');
+      if (!sb) return;
+
+      function saved() {
+        try { return parseInt(sessionStorage.getItem(KEY) || '0', 10) || 0; }
+        catch (e) { return 0; }
+      }
+      function save() {
+        try { sessionStorage.setItem(KEY, String(sb.scrollTop)); } catch (e) {}
+      }
+
+      // Put it back straight away - this runs before the page is painted, so
+      // there is no visible jump.
+      var y = saved();
+      if (y > 0) sb.scrollTop = y;
+
+      // If the first attempt did not stick (icons/fonts can still be loading,
+      // so the list may have been too short to scroll yet), try once more when
+      // everything has loaded - but only if it is still sitting at the top, so
+      // we never yank the sidebar away from someone who has already scrolled.
+      window.addEventListener('load', function () {
+        var want = saved();
+        if (want > 0 && sb.scrollTop === 0) sb.scrollTop = want;
+      });
+
+      // Store the position as it changes, but not on every single scroll tick.
+      var timer = null;
+      sb.addEventListener('scroll', function () {
+        clearTimeout(timer);
+        timer = setTimeout(save, 120);
+      });
+
+      // Clicking a link leaves the page immediately, so grab the position now.
+      // Capture phase, so it runs before the browser starts navigating.
+      sb.addEventListener('click', save, true);
+      window.addEventListener('pagehide', save);
+    })();
+    </script>
+
     <button class="cp-sidebar-open" type="button" onclick="setControlPanelSidebar(true)" title="Open sidebar" aria-label="Open control panel sidebar">
       <span class="material-icons">menu</span>
     </button>
