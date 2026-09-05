@@ -6,12 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Jivo Control Panel{% endblock %}</title>
-  <link href="{% static 'vendor/css/material-icons.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/css/material-symbols.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/css/lucide.css' %}" rel="stylesheet">
   
-  {# Inter = everything. Archivo = big headings. Caveat = handwriting accent.
-     Spline Sans Mono handles the digits (see core/_numerals.html). All served
-     from our own /static/, so no page waits on Google. #}
+  {% comment %}
+    Inter = everything. Archivo = big headings. Caveat = handwriting accent.
+    Spline Sans Mono handles the digits (see core/_numerals.html). All served
+    from our own /static/, so no page waits on Google.
+    NOTE: {# #} only works on ONE line - across lines Django prints it as text.
+  {% endcomment %}
   <link href="{% static 'vendor/css/inter.css' %}" rel="stylesheet">
   <link href="{% static 'vendor/css/archivo.css' %}" rel="stylesheet">
   <link href="{% static 'vendor/css/caveat.css' %}" rel="stylesheet">
@@ -130,9 +132,11 @@
        sidebar stays put while only .cp-main scrolls. align-self:flex-start stops the flex
        row from stretching it (which would break sticky); overflow-y lets a tall sidebar
        scroll on its own. */
-    .cp-sidebar { width: 240px; background: #f8fafc; color: #334155; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: 100vh; align-self: flex-start; }
-    /* Modern outlined icon set in the sidebar (Material Symbols) — lighter & cleaner than filled. */
-    .cp-sidebar .material-icons, .cp-sidebar-open .material-icons { font-family: 'Material Symbols Outlined'; font-weight: normal; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+    /* 282px, not 240px: "Inventory & Production" needs 165px for its words and
+       at 240px there were only 132px, so it broke onto two lines. 282px leaves
+       about 9px spare, so small font-rendering differences cannot push it
+       back onto a second line. */
+    .cp-sidebar { width: 282px; background: #f8fafc; color: #334155; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: 100vh; align-self: flex-start; }
     /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
        hide all text/labels, and let the floating menu button expand it. */
     /* Smart hover sidebar: collapsed = a slim icon rail that expands on hover and PUSHES
@@ -145,7 +149,7 @@
     }
     body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek,
     body.cp-sidebar-collapsed .cp-sidebar:focus-within {
-      width: 240px; padding: 20px 14px;
+      width: 282px; padding: 20px 14px;   /* keep the hover-out rail the same width */
     }
     /* Icon-only look only while the rail is NOT peeking/focused */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-brand,
@@ -154,7 +158,7 @@
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-logout-form { display: none; }
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav:first-of-type { margin-top: 56px; }  /* clear the floating menu button */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item { justify-content: center; gap: 0; padding: 11px 0; font-size: 0; }
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item .material-icons { font-size: 22px; }
+    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item .ic { font-size: 22px; }
     /* On the slim rail, collapse the group to just its icon (no chevron, no sub-items). */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-sub,
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-group-chev { display: none; }
@@ -171,27 +175,36 @@
     .cp-sidebar-close, .cp-sidebar-open { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .15s, transform .15s; }
     .cp-sidebar-close { width: 30px; height: 30px; border-radius: 8px; background: #f1f5f9; color: #64748b; flex-shrink: 0; }
     .cp-sidebar-close:hover { background: #e2e8f0; color: #334155; }
-    .cp-sidebar-close .material-icons { font-size: 18px; }
+    .cp-sidebar-close .ic { font-size: 18px; }
     .cp-sidebar-open { position: absolute; top: 12px; left: 12px; z-index: 20; width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.4); opacity: 0; pointer-events: none; transform: translateX(-8px); }
     body.cp-sidebar-collapsed .cp-sidebar-open { opacity: 1; pointer-events: auto; transform: translateX(0); }
     .cp-sidebar-open:hover { background: linear-gradient(135deg, #818cf8, #6366f1); }
-    .cp-sidebar-open .material-icons { font-size: 21px; }
+    .cp-sidebar-open .ic { font-size: 21px; }
     .cp-section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.9px; color: #64748b; margin: 16px 6px 6px 6px; text-transform: uppercase; }
     .cp-nav { display: flex; flex-direction: column; gap: 3px; }
-    .cp-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; color: #334155; text-decoration: none; font-size: 14.5px; font-weight: 800; transition: background .15s, color .15s, box-shadow .15s; }
+    .cp-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 10px; border-radius: 10px; color: #334155; text-decoration: none; font-size: 14.5px; font-weight: 800; transition: background .15s, color .15s, box-shadow .15s; }
     .cp-nav-item:hover { background: #eef2ff; color: #1e293b; }
     /* Selected page: a light indigo tint with indigo text, not a dark filled block.
-       Hover is #eef2ff (one shade lighter), so the two never look the same. The small
-       inset bar on the left keeps the selection obvious now that the fill is pale. */
-    .cp-nav-item.active { background: #e0e7ff; color: #4338ca; box-shadow: inset 3px 0 0 #6366f1; }
+       Hover is #eef2ff (one shade lighter), so the two never look the same. */
+    .cp-nav-item.active { background: #e0e7ff; color: #4338ca; }
     .cp-nav-item.active:hover { background: #d7deff; color: #3730a3; }
-    .cp-nav-item.active .material-icons { color: #4f46e5; font-variation-settings: 'FILL' 1, 'wght' 400; }
-    .cp-nav-item .material-icons { font-size: 20px; }
+    .cp-nav-item.active .ic { color: #4f46e5; }
+    .cp-nav-item .ic { font-size: 20px; }
 
     /* ── Collapsible nav group (e.g. Analytical Reports) ── */
     .cp-nav-group { display: flex; flex-direction: column; }
-    .cp-nav-group-btn { width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; justify-content: space-between; }
-    .cp-nav-group-lead { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    /* A <button> centres its text by default, an <a> does not. That is why the
+       wrapped label looked pushed in while every other item lined up. */
+    .cp-nav-group-btn { width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; justify-content: space-between; text-align: left; }
+    /* "Inventory & Production" is the only label long enough to wrap onto two
+       lines. With the default line spacing those two lines sat far apart, which
+       made the row look like it had a gap in front of the words. Tightening the
+       spacing makes a wrapped label read as one block, level with the icon. */
+    .cp-nav-group-lead { display: flex; align-items: center; gap: 11px; min-width: 0; line-height: 1.15; white-space: nowrap; }
+    /* Safety net: if a label ever outgrows the sidebar it gets trimmed with an
+       ellipsis rather than dropping onto a second line. The full text is still
+       in the title attribute, so hovering shows it. */
+    .cp-nav-group-lead, .cp-nav-item { overflow: hidden; text-overflow: ellipsis; }
     .cp-nav-group-chev { font-size: 18px !important; color: #94a3b8; transition: transform .18s ease; }
     .cp-nav-group.open > .cp-nav-group-btn { color: #1e293b; }
     .cp-nav-group.open > .cp-nav-group-btn .cp-nav-group-chev { transform: rotate(180deg); }
@@ -217,6 +230,12 @@
        ".x-wrap{max-width:…}" rule, so this wins without !important. */
     .cp-main > div[class*="-wrap"] { max-width: none; }
   </style>
+  {% comment %}
+    bkdatepicker - our own calendar for every <input type="date"/"month"> and our
+    own list for every <select>, because the browser's versions cannot be styled.
+    Loaded here so EVERY page gets it without changing a single page template.
+  {% endcomment %}
+  <link href="{% static 'core/bkdatepicker.css' %}" rel="stylesheet">
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
@@ -245,7 +264,7 @@
           <div class="cp-brand-subtitle">Control Panel</div>
         </div>
         <button class="cp-sidebar-close" type="button" onclick="toggleControlPanelSidebar()" title="Pin / unpin sidebar" aria-label="Pin or unpin control panel sidebar">
-          <span class="material-icons">close</span>
+          <i class="ic ic-x"></i>
         </button>
       </div>
 
@@ -253,11 +272,11 @@
         <div class="cp-section-label">Main Menu</div>
         <nav class="cp-nav">
           <a class="cp-nav-item {% if sidebar_active == 'home' %}active{% endif %}" href="{% url 'home' %}" title="Control Panel">
-            <span class="material-icons">space_dashboard</span>Control Panel
+            <i class="ic ic-layout-dashboard"></i>Control Panel
           </a>
           {% if can_realise %}
           <a class="cp-nav-item {% if sidebar_active == 'realise' %}active{% endif %}" href="{% url 'realise:dashboard' %}" title="Sales">
-            <span class="material-icons">bolt</span>Sales
+            <i class="ic ic-zap"></i>Sales
           </a>
           {% endif %}
         </nav>
@@ -267,51 +286,51 @@
         <nav class="cp-nav">
           {% if can_inventory %}
           <a class="cp-nav-item {% if sidebar_active == 'inventory' %}active{% endif %}" href="{% url 'inventory:dashboard' %}" title="Inventory">
-            <span class="material-icons">inventory_2</span>Inventory
+            <i class="ic ic-package"></i>Inventory
           </a>
           {% endif %}
           {# ── Sales reports ── #}
           {% if can_compare_sales or can_sales_cn or can_hidden_sales or can_sales_flow or can_dispatch_details or can_realise_calculator %}
           <div class="cp-nav-group{% if sidebar_active == 'compare_sales' or sidebar_active == 'sales_cn' or sidebar_active == 'hidden_sales' or sidebar_active == 'sales_flow' or sidebar_active == 'dispatch_details' or sidebar_active == 'realise_calculator' or sidebar_active == 'rate_list' or sidebar_active == 'plan_vs_done' %} open{% endif %}" data-group="reports-sales">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Sales" aria-label="Toggle Sales reports">
-              <span class="cp-nav-group-lead"><span class="material-icons">trending_up</span>Sales</span>
-              <span class="material-icons cp-nav-group-chev">expand_more</span>
+              <span class="cp-nav-group-lead"><i class="ic ic-trending-up"></i>Sales</span>
+              <i class="ic ic-chevron-down cp-nav-group-chev"></i>
             </button>
             <div class="cp-nav-sub">
               {% if can_compare_sales %}
               <a class="cp-nav-item {% if sidebar_active == 'compare_sales' %}active{% endif %}" href="{% url 'realise:compare_sales' %}" title="Compare Sales">
-                <span class="material-icons">bar_chart</span>Compare Sales
+                <i class="ic ic-chart-column"></i>Compare Sales
               </a>
               {% endif %}
               {% if can_sales_cn %}
               <a class="cp-nav-item {% if sidebar_active == 'sales_cn' %}active{% endif %}" href="{% url 'realise:sales_cn' %}" title="Sales vs Credit Notes">
-                <span class="material-icons">receipt_long</span>Sales vs CN
+                <i class="ic ic-receipt-text"></i>Sales vs CN
               </a>
               {% endif %}
               {% if can_hidden_sales %}
               <a class="cp-nav-item {% if sidebar_active == 'hidden_sales' %}active{% endif %}" href="{% url 'realise:hidden_sales' %}" title="Hidden Customer Sales">
-                <span class="material-icons">visibility_off</span>Hidden Sales
+                <i class="ic ic-eye-off"></i>Hidden Sales
               </a>
               {% endif %}
               {% if can_sales_flow %}
               <a class="cp-nav-item {% if sidebar_active == 'sales_flow' %}active{% endif %}" href="{% url 'realise:sales_flow' %}" title="Sales Document Flow">
-                <span class="material-icons">account_tree</span>Sales Doc Flow
+                <i class="ic ic-network"></i>Sales Doc Flow
               </a>
               {% endif %}
               {% if can_dispatch_details %}
               <a class="cp-nav-item {% if sidebar_active == 'dispatch_details' %}active{% endif %}" href="{% url 'realise:dispatch_details' %}" title="Dispatch Details">
-                <span class="material-icons">local_shipping</span>Dispatch Details
+                <i class="ic ic-truck"></i>Dispatch Details
               </a>
               {% endif %}
               {% if can_realise_calculator %}
               <a class="cp-nav-item {% if sidebar_active == 'realise_calculator' %}active{% endif %}" href="{% url 'realise:realise_calculator' %}" title="Realise Calculator">
-                <span class="material-icons">calculate</span>Realise Calculator
+                <i class="ic ic-calculator"></i>Realise Calculator
               </a>
               <a class="cp-nav-item {% if sidebar_active == 'rate_list' %}active{% endif %}" href="{% url 'realise:rate_list' %}" title="Rate List">
-                <span class="material-icons">sell</span>Rate List
+                <i class="ic ic-tag"></i>Rate List
               </a>
               <a class="cp-nav-item {% if sidebar_active == 'plan_vs_done' %}active{% endif %}" href="{% url 'realise:plan_vs_done' %}" title="Plan vs Done">
-                <span class="material-icons">fact_check</span>Plan vs Done
+                <i class="ic ic-clipboard-check"></i>Plan vs Done
               </a>
               {% endif %}
             </div>
@@ -322,33 +341,33 @@
           {% if can_customer_aging or can_required_credit_limit or can_claims or can_open_payments or can_reconciliation %}
           <div class="cp-nav-group{% if sidebar_active == 'customer_aging' or sidebar_active == 'required_credit_limit' or sidebar_active == 'claims' or sidebar_active == 'open_payments' or sidebar_active == 'reconciliation' %} open{% endif %}" data-group="reports-accounts">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Accounts" aria-label="Toggle Accounts reports">
-              <span class="cp-nav-group-lead"><span class="material-icons">account_balance</span>Accounts</span>
-              <span class="material-icons cp-nav-group-chev">expand_more</span>
+              <span class="cp-nav-group-lead"><i class="ic ic-landmark"></i>Accounts</span>
+              <i class="ic ic-chevron-down cp-nav-group-chev"></i>
             </button>
             <div class="cp-nav-sub">
               {% if can_customer_aging %}
               <a class="cp-nav-item {% if sidebar_active == 'customer_aging' %}active{% endif %}" href="{% url 'realise:customer_aging' %}" title="Customer Aging">
-                <span class="material-icons">account_balance_wallet</span>Customer Aging
+                <i class="ic ic-wallet"></i>Customer Aging
               </a>
               {% endif %}
               {% if can_required_credit_limit %}
               <a class="cp-nav-item {% if sidebar_active == 'required_credit_limit' %}active{% endif %}" href="{% url 'realise:required_credit_limit' %}" title="Required Credit Limit">
-                <span class="material-icons">credit_score</span>Required Credit Limit
+                <i class="ic ic-credit-card"></i>Required Credit Limit
               </a>
               {% endif %}
               {% if can_open_payments %}
               <a class="cp-nav-item {% if sidebar_active == 'open_payments' %}active{% endif %}" href="{% url 'realise:open_payments' %}" title="Open Payments">
-                <span class="material-icons">account_balance</span>Open Payments
+                <i class="ic ic-landmark"></i>Open Payments
               </a>
               {% endif %}
               {% if can_claims %}
               <a class="cp-nav-item {% if sidebar_active == 'claims' %}active{% endif %}" href="{% url 'realise:claims' %}" title="Claims">
-                <span class="material-icons">gavel</span>Claims
+                <i class="ic ic-gavel"></i>Claims
               </a>
               {% endif %}
               {% if can_reconciliation %}
               <a class="cp-nav-item {% if sidebar_active == 'reconciliation' %}active{% endif %}" href="{% url 'inventory:reconciliation' %}" title="Wellness–Mart Reconciliation">
-                <span class="material-icons">account_tree</span>Wellness–Mart Recon
+                <i class="ic ic-network"></i>Wellness–Mart Recon
               </a>
               {% endif %}
             </div>
@@ -359,33 +378,33 @@
           {% if can_stock_available or can_non_inventory or can_oih_vs_stock or can_production or can_daily_production %}
           <div class="cp-nav-group{% if sidebar_active == 'stock_available' or sidebar_active == 'non_inventory' or sidebar_active == 'oih_vs_stock' or sidebar_active == 'production' or sidebar_active == 'daily_production' %} open{% endif %}" data-group="reports-inventory">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Inventory & Production" aria-label="Toggle Inventory & Production reports">
-              <span class="cp-nav-group-lead"><span class="material-icons">inventory</span>Inventory &amp; Production</span>
-              <span class="material-icons cp-nav-group-chev">expand_more</span>
+              <span class="cp-nav-group-lead"><i class="ic ic-boxes"></i>Inventory &amp; Production</span>
+              <i class="ic ic-chevron-down cp-nav-group-chev"></i>
             </button>
             <div class="cp-nav-sub">
               {% if can_stock_available %}
               <a class="cp-nav-item {% if sidebar_active == 'stock_available' %}active{% endif %}" href="{% url 'inventory:stock_available' %}" title="Stock Available">
-                <span class="material-icons">warehouse</span>Stock Available
+                <i class="ic ic-warehouse"></i>Stock Available
               </a>
               {% endif %}
               {% if can_non_inventory %}
               <a class="cp-nav-item {% if sidebar_active == 'non_inventory' %}active{% endif %}" href="{% url 'inventory:non_inventory' %}" title="Finished Goods — Non Moving Stock">
-                <span class="material-icons">inventory_2</span>Non Moving Stock
+                <i class="ic ic-package"></i>Non Moving Stock
               </a>
               {% endif %}
               {% if can_oih_vs_stock %}
               <a class="cp-nav-item {% if sidebar_active == 'oih_vs_stock' %}active{% endif %}" href="{% url 'realise:oih_vs_stock' %}" title="OIH vs Stock">
-                <span class="material-icons">compare_arrows</span>OIH vs Stock
+                <i class="ic ic-arrow-left-right"></i>OIH vs Stock
               </a>
               {% endif %}
               {% if can_production %}
               <a class="cp-nav-item {% if sidebar_active == 'production' %}active{% endif %}" href="{% url 'inventory:production' %}" title="Production Plan">
-                <span class="material-icons">precision_manufacturing</span>Production Plan
+                <i class="ic ic-cog"></i>Production Plan
               </a>
               {% endif %}
               {% if can_daily_production %}
               <a class="cp-nav-item {% if sidebar_active == 'daily_production' %}active{% endif %}" href="{% url 'inventory:daily_production' %}" title="Daily Production Transaction">
-                <span class="material-icons">factory</span>Daily Production
+                <i class="ic ic-factory"></i>Daily Production
               </a>
               {% endif %}
             </div>
@@ -396,13 +415,13 @@
           {% if can_customer_master %}
           <div class="cp-nav-group{% if sidebar_active == 'customer_master' %} open{% endif %}" data-group="reports-master">
             <button type="button" class="cp-nav-item cp-nav-group-btn" onclick="toggleNavGroup(this)" title="Master Data" aria-label="Toggle Master Data">
-              <span class="cp-nav-group-lead"><span class="material-icons">dataset</span>Master Data</span>
-              <span class="material-icons cp-nav-group-chev">expand_more</span>
+              <span class="cp-nav-group-lead"><i class="ic ic-database"></i>Master Data</span>
+              <i class="ic ic-chevron-down cp-nav-group-chev"></i>
             </button>
             <div class="cp-nav-sub">
               {% if can_customer_master %}
               <a class="cp-nav-item {% if sidebar_active == 'customer_master' %}active{% endif %}" href="{% url 'realise:customer_master' %}" title="Customer Master">
-                <span class="material-icons">contacts</span>Customer Master
+                <i class="ic ic-contact-round"></i>Customer Master
               </a>
               {% endif %}
             </div>
@@ -410,12 +429,12 @@
           {% endif %}
           {% if can_expenses %}
           <a class="cp-nav-item {% if sidebar_active == 'expenses' %}active{% endif %}" href="{% url 'dashboard:expenses' %}" title="Expenses">
-            <span class="material-icons">receipt_long</span>Expenses
+            <i class="ic ic-receipt-text"></i>Expenses
           </a>
           {% endif %}
           {% if can_salaries %}
           <a class="cp-nav-item {% if sidebar_active == 'salaries' %}active{% endif %}" href="{% url 'dashboard:salaries' %}" title="Salaries">
-            <span class="material-icons">payments</span>Salaries
+            <i class="ic ic-banknote"></i>Salaries
           </a>
           {% endif %}
         </nav>
@@ -425,7 +444,7 @@
         <div class="cp-section-label">Admin</div>
         <nav class="cp-nav">
           <a class="cp-nav-item {% if sidebar_active == 'user_management' %}active{% endif %}" href="{% url 'user_management' %}" title="User Management">
-            <span class="material-icons">manage_accounts</span>Users
+            <i class="ic ic-user-cog"></i>Users
           </a>
         </nav>
         {% endif %}
@@ -507,7 +526,7 @@
     </script>
 
     <button class="cp-sidebar-open" type="button" onclick="setControlPanelSidebar(true)" title="Open sidebar" aria-label="Open control panel sidebar">
-      <span class="material-icons">menu</span>
+      <i class="ic ic-menu"></i>
     </button>
 
     <main class="cp-main">
@@ -554,6 +573,61 @@
 
   </script>
   {% block extra_scripts %}{% endblock %}
+  {% comment %} Last, so it also picks up anything a page's own script just built. {% endcomment %}
+  <script src="{% static 'core/bkdatepicker.js' %}"></script>
+
+  <script>
+  /* ── No browser tooltips ───────────────────────────────────────────────────
+     That little grey box that pops up about a second after the mouse stops on
+     something is the browser's own tooltip. It comes from title="..." in the
+     HTML, it cannot be styled, and it is not wanted here.
+
+     Two things this does, and why:
+
+     1. The text is copied to aria-label before title is removed - but only when
+        the element has no aria-label already. Screen readers still announce the
+        hint; only the visual pop-up goes. Deleting the text outright would have
+        made the app harder to use for anyone on a screen reader.
+
+     2. A MutationObserver keeps watching. Several pages set titles from their
+        own JavaScript after load (the inventory lock button, the Plan vs Done
+        state picker, buttons built on the fly). A one-time sweep would miss all
+        of those, and the tooltip would come back.
+
+     To bring tooltips back, delete this whole <script> block. Nothing else
+     depends on it - no code anywhere reads a title attribute for logic. */
+  (function () {
+    function strip(el) {
+      if (!el || !el.getAttribute) return;
+      var t = el.getAttribute('title');
+      if (t === null) return;                       // nothing to do
+      if (t && !el.getAttribute('aria-label')) el.setAttribute('aria-label', t);
+      el.removeAttribute('title');                  // re-fires the observer, but
+                                                    // then title is null and we stop
+    }
+    function stripAll(root) {
+      if (!root) return;
+      strip(root);
+      if (!root.querySelectorAll) return;
+      var found = root.querySelectorAll('[title]');
+      for (var i = 0; i < found.length; i++) strip(found[i]);
+    }
+
+    stripAll(document);
+
+    if (window.MutationObserver) {
+      new MutationObserver(function (records) {
+        for (var i = 0; i < records.length; i++) {
+          var r = records[i];
+          if (r.type === 'attributes') strip(r.target);
+          else for (var j = 0; j < r.addedNodes.length; j++) stripAll(r.addedNodes[j]);
+        }
+      }).observe(document.documentElement, {
+        subtree: true, childList: true, attributes: true, attributeFilter: ['title']
+      });
+    }
+  })();
+  </script>
 
 </body>
 </html>
