@@ -41,8 +41,6 @@
   .com-dp-item:hover{background:var(--rz-soft)}
   .com-dp-item input{width:16px;height:16px;cursor:pointer}
   .com-dp-item .com-dp-name{flex:1 1 auto;font-weight:600;color:var(--rz-body)}
-  .com-dp-item .com-pos{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--rz-indigo);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center}
-  .com-dp-item.checked .com-pos{display:inline-flex}
   .com-dp-foot{padding:9px 12px;border-top:1px solid #eef2f6}
   .com-dp-foot button{width:100%;background:var(--rz-indigo-deep);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
   /* Item-first refine bar: Product (U_Sub_Group) + SKU (U_SKU) multi-select filters. */
@@ -91,21 +89,29 @@
   .ois-modal{display:none;position:fixed;inset:0;z-index:900}
   .ois-modal.open{display:block}
   .ois-mbd{position:absolute;inset:0;background:rgba(15,23,42,.45)}
-  .ois-mcard{position:relative;max-width:900px;margin:5vh auto 0;max-height:90vh;display:flex;flex-direction:column;background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow-lg);overflow:hidden}
-  .ois-mhead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid #eef2f6}
+  .ois-mcard{position:relative;width:100%;height:100%;margin:0;display:flex;flex-direction:column;background:var(--rz-card);border:0;border-radius:0;overflow:hidden}
+  .ois-mhead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 26px;border-bottom:1px solid #eef2f6}
   .ois-mtitle{font-size:18px;font-weight:800;color:var(--rz-ink);letter-spacing:-.3px}
   .ois-msub{margin-top:3px;font-size:12px;color:var(--rz-muted)}
   .ois-mx{border:0;background:transparent;color:var(--rz-muted);font-size:24px;line-height:1;cursor:pointer;padding:0 4px}
   .ois-mx:hover{color:var(--rz-ink)}
-  .ois-mkpis{display:flex;gap:10px;flex-wrap:wrap;padding:14px 20px 0}
+  .ois-mkpis{display:flex;gap:10px;flex-wrap:wrap;padding:14px 26px 0}
   .ois-mkpi{flex:1;min-width:150px;background:var(--rz-soft);border:1px solid var(--rz-soft-brd);border-radius:12px;padding:10px 14px}
   .ois-mkpi-l{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
   .ois-mkpi-v{font-size:20px;font-weight:800;color:var(--rz-ink);margin-top:2px;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  .ois-mtabs{display:flex;gap:7px;flex-wrap:wrap;padding:14px 20px 12px}
+  .ois-mtabs{display:flex;gap:7px;flex-wrap:wrap;padding:14px 26px 12px}
   .ois-mtab{border:1px solid #e2e8f0;background:#fff;color:var(--rz-muted);font-family:inherit;font-size:12px;font-weight:700;padding:6px 11px;border-radius:9px;cursor:pointer}
   .ois-mtab:hover:not(.on){background:var(--rz-soft)}
   .ois-mtab.on{background:var(--rz-soft);color:var(--rz-indigo-deep);border-color:var(--rz-soft-brd)}
-  .ois-mbody{overflow:auto;border-top:1px solid #eef2f6}
+  .ois-mbody{flex:1 1 auto;overflow:auto;border-top:1px solid #eef2f6}
+  /* Drill path: Product > Item > Customer ... click a crumb to step back up. */
+  .ois-mcrumbs{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:6px}
+  .ois-crumb{font-size:12px;font-weight:700;color:var(--rz-indigo-deep);cursor:pointer;border-bottom:1px dashed var(--rz-soft-brd)}
+  .ois-crumb:hover{color:var(--rz-ink)}
+  .ois-crumb.on{color:var(--rz-muted);cursor:default;border-bottom:0}
+  .ois-crumb-sep{font-size:12px;color:var(--rz-faint)}
+  /* A popup row that can be opened one level deeper. */
+  table.ois-table tbody tr.ois-mclk{cursor:pointer}
 </style>
 {% endblock %}
 
@@ -180,6 +186,7 @@
       <div class="ois-mhead">
         <div>
           <div class="ois-mtitle" id="oisMTitle">&mdash;</div>
+          <div class="ois-mcrumbs" id="oisMCrumbs"></div>
           <div class="ois-msub" id="oisMSub"></div>
         </div>
         <button type="button" class="ois-mx" id="oisMClose" title="Close">&times;</button>
@@ -410,7 +417,7 @@
         var on=!!chosen[v];
         var item=document.createElement('label');
         item.className='com-dp-item'+(on?' checked':'');
-        item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(show(v))+'</span><span class="com-pos">&#10003;</span>';
+        item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(show(v))+'</span>';
         item.querySelector('input').addEventListener('change',function(){
           if(this.checked)chosen[v]=1; else delete chosen[v];
           item.classList.toggle('checked',this.checked);
@@ -664,13 +671,48 @@
   var BREAK_NAME={item:'Item Name',packtype:'PackType',sku:'SKU',customer:'Customer',
                   sales_person:'Sales Person',state:'State',main_group:'Main Group',
                   so_no:'SO No',variety:'Variety',family:'Family'};
-  var detail=null;   // {node, rows, breaks:[{key,label}], breakKey}
+  var detail=null;   // {node, path:[{dim,value}], breaks:[{key,label}], breakKey}
 
-  // Aggregate a node's rows by one dimension - the popup's table body.
+  // A row's value on one dimension, using the same blank placeholder as the tree.
+  function dimVal(r,dim){ var v=r[dim]; return (v==null||v==='')?'—':String(v); }
+  function dimTest(dim,val){ return function(r){ return dimVal(r,dim)===val; }; }
+
+  // The rows still in view after following the drill path (each step pins one dimension
+  // to one value - e.g. Item = FG0000030, so only that item's orders remain).
+  function detailRows(){
+    var rows=detail.node.srcRows||[];
+    for(var i=0;i<detail.path.length;i++){
+      rows=rows.filter(dimTest(detail.path[i].dim, detail.path[i].value));
+    }
+    return rows;
+  }
+
+  // Dimensions still worth breaking by: not already fixed (by the page's grouping or by a
+  // crumb above) and actually carried by these rows.
+  function availBreaks(rows){
+    var used={}; order.forEach(function(k){used[k]=1;});
+    detail.path.forEach(function(p){used[p.dim]=1;});
+    return (company==='bev'?BEV_BREAK:OIL_BREAK).filter(function(d){
+      if(used[d.key])return false;
+      for(var i=0;i<rows.length;i++){var v=rows[i][d.key]; if(v!==undefined&&v!==null&&v!=='')return true;}
+      return false;
+    });
+  }
+
+  // OIH / Stock / Required for any set of rows - the tree's rules: OIH adds each row's
+  // filtered contribution, Stock counts each item once (never per customer or per SO).
+  function subTotals(rows){
+    var oih=0, items={};
+    for(var i=0;i<rows.length;i++){ oih+=rowOih(rows[i]); if(rows[i].item)items[rows[i].item]=1; }
+    var st=0; for(var it in items)st+=itemStockTotal(it);
+    oih=Math.round(oih*100)/100; st=Math.round(st*100)/100;
+    return {oih:oih, stock:st, req:Math.round((st-oih)*100)/100};
+  }
+
+  // Aggregate rows by one dimension - the popup's table body.
   function groupRows(list,dim){
     var map={};
-    for(var i=0;i<list.length;i++){var r=list[i],v=r[dim];
-      v=(v==null||v==='')?'—':String(v);
+    for(var i=0;i<list.length;i++){var r=list[i],v=dimVal(r,dim);
       var n=map[v]; if(!n){n=map[v]={name:v,oih:0,_items:{}};}
       n.oih+=rowOih(r); if(r.item)n._items[r.item]=1;
     }
@@ -682,50 +724,88 @@
   }
 
   function openDetail(n){
-    var src=n.srcRows||[];
-    var inOrder={}; order.forEach(function(k){inOrder[k]=1;});
-    // Offer only dimensions the loaded rows actually carry, minus the ones already drilled.
-    var breaks=(company==='bev'?BEV_BREAK:OIL_BREAK).filter(function(d){
-      if(inOrder[d.key])return false;
-      for(var i=0;i<src.length;i++){var v=src[i][d.key]; if(v!==undefined&&v!==null&&v!=='')return true;}
-      return false;
-    });
-    if(!src.length||!breaks.length)return;
-    detail={node:n,rows:src,breaks:breaks,breakKey:breaks[0].key};
+    var src=n.srcRows||[]; if(!src.length)return;
+    detail={node:n, path:[], breaks:[], breakKey:null};
+    var b=availBreaks(src);
+    if(!b.length){ detail=null; return; }
+    detail.breakKey=b[0].key;
     document.getElementById('oisModal').classList.add('open');
+    document.body.style.overflow='hidden';       // full screen - freeze the page behind it
     renderDetail();
   }
   function closeDetail(){
     detail=null;
     var m=document.getElementById('oisModal'); if(m)m.classList.remove('open');
+    document.body.style.overflow='';
+  }
+
+  // Clicking a popup row pins that value and opens the next level. Customer is preferred
+  // when it is still free, so clicking an item answers "which customers ordered THIS item"
+  // - only those customers, because the rows are filtered down to that item first.
+  function drillInto(value){
+    if(!detail||value==null)return;
+    var saved=detail.path;
+    detail.path=saved.concat([{dim:detail.breakKey, value:value}]);
+    var rows=detailRows(), b=availBreaks(rows);
+    if(!rows.length||!b.length){ detail.path=saved; return; }   // nothing deeper to show
+    var pick=b[0].key;
+    for(var i=0;i<b.length;i++){ if(b[i].key==='customer'){ pick='customer'; break; } }
+    detail.breakKey=pick;
+    renderDetail();
+  }
+  // Breadcrumb click: back to a shallower level, reopening the break that was shown there.
+  function goLevel(L){
+    if(!detail||L>=detail.path.length)return;
+    detail.breakKey=detail.path[L].dim;
+    detail.path=detail.path.slice(0,L);
+    renderDetail();
   }
 
   function renderDetail(){
     if(!detail)return;
-    var n=detail.node, u=unitLbl();
-    document.getElementById('oisMTitle').textContent=n.name;
+    var u=unitLbl(), rows=detailRows(), t=subTotals(rows);
+    var breaks=availBreaks(rows);
+    if(!breaks.length) breaks=[{key:detail.breakKey, label:BREAK_NAME[detail.breakKey]||detail.breakKey}];
+    var valid=false;
+    for(var i=0;i<breaks.length;i++){ if(breaks[i].key===detail.breakKey){valid=true;break;} }
+    if(!valid) detail.breakKey=breaks[0].key;
+    detail.breaks=breaks;
+
+    document.getElementById('oisMTitle').textContent=detail.node.name;
+    // Breadcrumb: Product > Item > Customer ... click a crumb to step back up.
+    var cr='<span class="ois-crumb'+(detail.path.length?'':' on')+'" data-mlevel="0">'
+           +esc(detail.node.name)+'</span>';
+    detail.path.forEach(function(p,idx){
+      cr+='<span class="ois-crumb-sep">&rsaquo;</span>'
+        + '<span class="ois-crumb'+(idx===detail.path.length-1?' on':'')+'" data-mlevel="'+(idx+1)+'">'
+        + esc(p.value)+'</span>';
+    });
+    document.getElementById('oisMCrumbs').innerHTML=cr;
     document.getElementById('oisMSub').textContent=
-      (DIM_NAME[n.dim]||n.dim)+' · '+detail.rows.length+' open-order row(s)';
+      (DIM_NAME[detail.node.dim]||detail.node.dim)+' · '+rows.length+' open-order row(s)';
+
     function kpi(l,v,cls){return '<div class="ois-mkpi"><div class="ois-mkpi-l">'+esc(l)+'</div>'+
       '<div class="ois-mkpi-v '+cls+'">'+esc(v)+'</div></div>';}
     document.getElementById('oisMKpis').innerHTML=
-      kpi('OIH ('+u+')',num(n.oih),'')+
-      kpi('Stock Avl ('+u+')',num(n.stock),'')+
-      kpi('Required ('+u+')',(n.req>0?'+':'')+num(n.req),n.req<0?'ois-short':(n.req>0?'ois-surplus':''));
-    document.getElementById('oisMTabs').innerHTML=detail.breaks.map(function(d){
+      kpi('OIH ('+u+')',num(t.oih),'')+
+      kpi('Stock Avl ('+u+')',num(t.stock),'')+
+      kpi('Required ('+u+')',(t.req>0?'+':'')+num(t.req),t.req<0?'ois-short':(t.req>0?'ois-surplus':''));
+    document.getElementById('oisMTabs').innerHTML=breaks.map(function(d){
       return '<button type="button" class="ois-mtab'+(d.key===detail.breakKey?' on':'')+
              '" data-mbreak="'+esc(d.key)+'">'+esc(d.label)+'</button>';
     }).join('');
+
     // Warehouse split only makes sense on item rows, and only when the godown list is short.
     var showW=(detail.breakKey==='item' && whs.length>0 && whs.length<=6);
     var stockMap=(unit==='pcs'?itemStockPcs:itemStock);
-    var head='<tr><th>'+esc(BREAK_NAME[detail.breakKey]||detail.breakKey)+'</th>'
+    document.getElementById('oisMHead').innerHTML=
+      '<tr><th>'+esc(BREAK_NAME[detail.breakKey]||detail.breakKey)+'</th>'
       +'<th class="num">OIH ('+u+')</th>'
       +(showW?whs.map(function(w){return '<th class="num">'+esc(w)+'</th>';}).join(''):'')
       +'<th class="num">Stock Avl ('+u+')</th><th class="num">Required ('+u+')</th></tr>';
-    document.getElementById('oisMHead').innerHTML=head;
-    var span=2+(showW?whs.length:0)+2;
-    var list=groupRows(detail.rows,detail.breakKey);
+    var span=4+(showW?whs.length:0);
+    var list=groupRows(rows,detail.breakKey);
+    var canDrill=breaks.length>1;      // something is still free to open underneath
     function label(v){
       if(v!=='—')return v;
       if(detail.breakKey==='sales_person')return 'No person mapped';
@@ -735,21 +815,30 @@
     var body=list.map(function(g){
       var w=''; if(showW){var a=stockMap[g.name]||[];
         w=whs.map(function(_,i){return '<td class="num">'+num(a[i]||0)+'</td>';}).join('');}
-      return '<tr><td>'+esc(label(g.name))+'</td><td class="num">'+num(g.oih)+'</td>'+w
+      var open=canDrill?' class="ois-mclk" data-mval="'+esc(g.name)+'" title="Click to open this row"':'';
+      return '<tr'+open+'><td>'+esc(label(g.name))+'</td><td class="num">'+num(g.oih)+'</td>'+w
         +'<td class="num">'+num(g.stock)+'</td>'+reqCell(g.req)+'</tr>';
     }).join('');
     if(!body)body='<tr><td colspan="'+span+'" class="ois-empty">Nothing to show.</td></tr>';
-    // Node totals, not the column sum: Stock counts each item once, so per-row stock
+    // Level totals, not the column sum: Stock counts each item once, so per-row stock
     // (shared across customers/SOs) does not add up on customer-style breaks.
     var wt=showW?whs.map(function(){return '<td class="num"></td>';}).join(''):'';
-    body+='<tr class="ois-total"><td>TOTAL</td><td class="num">'+num(n.oih)+'</td>'+wt
-      +'<td class="num">'+num(n.stock)+'</td>'+reqCell(n.req)+'</tr>';
+    body+='<tr class="ois-total"><td>TOTAL</td><td class="num">'+num(t.oih)+'</td>'+wt
+      +'<td class="num">'+num(t.stock)+'</td>'+reqCell(t.req)+'</tr>';
     document.getElementById('oisMBody').innerHTML=body;
   }
 
   document.getElementById('oisMTabs').addEventListener('click',function(e){
     var b=e.target&&e.target.closest?e.target.closest('.ois-mtab'):null; if(!b||!detail)return;
     detail.breakKey=b.getAttribute('data-mbreak'); renderDetail();
+  });
+  document.getElementById('oisMBody').addEventListener('click',function(e){
+    var tr=e.target&&e.target.closest?e.target.closest('tr.ois-mclk'):null; if(!tr)return;
+    drillInto(tr.getAttribute('data-mval'));
+  });
+  document.getElementById('oisMCrumbs').addEventListener('click',function(e){
+    var c=e.target&&e.target.closest?e.target.closest('.ois-crumb'):null; if(!c)return;
+    goLevel(Number(c.getAttribute('data-mlevel'))||0);
   });
   document.getElementById('oisMClose').addEventListener('click',closeDetail);
   document.getElementById('oisMbd').addEventListener('click',closeDetail);

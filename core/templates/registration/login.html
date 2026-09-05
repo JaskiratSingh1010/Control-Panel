@@ -9,6 +9,18 @@
 <link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Same two anti-blink rules as the rest of the app, so signing in and moving
+   to the dashboard is a fade instead of a white flash. A cross-page fade only
+   happens when BOTH pages ask for it, which is why this page needs it too. */
+html { background: #f4f6fb; }
+@view-transition { navigation: auto; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: .15s; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
 body {
   font-family: 'CPNum', 'Raleway', sans-serif;
   background:

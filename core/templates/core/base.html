@@ -13,7 +13,23 @@
   {% include 'core/_numerals.html' %}
   <style>
     *, *::before, *::after { box-sizing: border-box; }
+    /* The browser paints the <html> element before it knows about <body>.
+       Without a colour here that moment is plain white - the flash you see
+       between pages. Same grey as the body, so there is nothing to notice. */
+    html { background: #f3f4f6; }
     body { margin: 0; font-family: 'CPNum', 'Raleway', sans-serif; background: #f3f4f6; color: #1f2937; }
+
+    /* Cross-fade from the old page to the new one instead of cutting to blank.
+       Browsers that do not support this just navigate the old way - nothing
+       breaks, it simply is not smoothed. */
+    @view-transition { navigation: auto; }
+    ::view-transition-old(root),
+    ::view-transition-new(root) { animation-duration: .15s; }
+    /* Windows "reduce motion" setting - honour it. */
+    @media (prefers-reduced-motion: reduce) {
+      ::view-transition-old(root),
+      ::view-transition-new(root) { animation: none; }
+    }
 
     /* ── Light & subtle report theme tokens ───────────────────────────────────
        Shared palette for the Realise/report pages so they all read like the Home
@@ -180,6 +196,17 @@
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
+<script>
+  // This has to run before the page is drawn. Left at the bottom (where it used
+  // to be) the sidebar was drawn open first and then snapped shut - that snap is
+  // the blink on refresh. document.body already exists here, but nothing inside
+  // it has been drawn yet, so the change is invisible.
+  try {
+    if (localStorage.getItem('cpSidebarOpen') === '0') {
+      document.body.classList.add('cp-sidebar-collapsed');
+    }
+  } catch (err) {}
+</script>
 
   {# ── TOPBAR removed — brand lives in the sidebar; company-wide ticker retired from the header ── #}
 
@@ -396,6 +423,20 @@
 
     <script>
     (function () {
+      // Re-open the groups the user had open. This sits here, straight after the
+      // sidebar markup, so the groups are already in the page but nothing has
+      // been drawn yet - doing it at the bottom made the menu visibly jump open.
+      // Groups the server already opened (the one holding the current page) are
+      // left alone.
+      document.querySelectorAll('.cp-nav-group').forEach(function (g) {
+        if (g.classList.contains('open')) return;
+        try {
+          if (localStorage.getItem('cpNavGroup_' + (g.dataset.group || 'g')) === '1') g.classList.add('open');
+        } catch (err) {}
+      });
+    })();
+
+    (function () {
       // The sidebar has its own scrollbar. Every page in this app is a full
       // reload, so without this the sidebar jumps back to the start and you
       // lose the spot you were clicking from. Remember where it was and put
@@ -471,22 +512,6 @@
       var open = g.classList.toggle('open');
       try { localStorage.setItem('cpNavGroup_' + (g.dataset.group || 'g'), open ? '1' : '0'); } catch (err) {}
     }
-    // Restore each group's last state — unless the server already opened it (active child).
-    (function () {
-      document.querySelectorAll('.cp-nav-group').forEach(function (g) {
-        if (g.classList.contains('open')) return;
-        try { if (localStorage.getItem('cpNavGroup_' + (g.dataset.group || 'g')) === '1') g.classList.add('open'); } catch (err) {}
-      });
-    })();
-
-    (function () {
-      try {
-        if (localStorage.getItem('cpSidebarOpen') === '0') {
-          document.body.classList.add('cp-sidebar-collapsed');
-        }
-      } catch (err) {}
-    })();
-
     // Smart hover: while collapsed, hovering the rail expands it (overlay); a short delay
     // before collapse prevents flicker if the cursor briefly leaves the edge.
     (function () {
