@@ -3,7 +3,9 @@
 {% block title %}Inventory Dashboard{% endblock %}
 
 {% block extra_styles %}
-<link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
+<link href="{% static 'vendor/css/inter.css' %}" rel="stylesheet">
+<link href="{% static 'vendor/css/archivo.css' %}" rel="stylesheet">
+<link href="{% static 'vendor/css/caveat.css' %}" rel="stylesheet">
 <style>
     :root {
       --bg: #f4f5f7;
@@ -17,7 +19,7 @@
       --mt: #8b8fa3;
       --bd: #ebebef;
       --ac: #0ea5e9;
-      --font: 'CPNum', 'Raleway', sans-serif;
+      --font: 'CPNum', 'Inter', sans-serif;
       --r: 14px;
     }
 
@@ -1820,7 +1822,7 @@
 
     Chart.register(ChartDataLabels);
     Chart.defaults.set('plugins.datalabels', { display: false });
-    Chart.defaults.font.family = 'Raleway'; Chart.defaults.font.weight = 600; Chart.defaults.font.size = 13;
+    Chart.defaults.font.family = 'Inter'; Chart.defaults.font.weight = 600; Chart.defaults.font.size = 13;
 
     // ── STATE ──
     let S = 'dash', C = '', SCH = 'jivo_oil', ch = {}, DIVISION = 'oils';
@@ -1949,22 +1951,22 @@
       if (ins.length) { nt.style.display = ''; nt.innerHTML = '<b>⚠ Attention Required:</b><br>' + ins.join('<br>') } else { nt.style.display = 'none' }
       mc('cPie', {
         type: 'doughnut', data: { labels: cat.map(c => c.Category), datasets: [{ data: cat.map(c => c.Value || 0), backgroundColor: ['#6366f1', '#f59e0b', '#06b6d4'], borderWidth: 3, borderColor: '#fff', borderRadius: 6, hoverOffset: 8 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { font: { size: 12, weight: 700, family: 'Raleway' }, padding: 12, usePointStyle: true } }, datalabels: { display: true, color: '#fff', font: { weight: 800, size: 13, family: 'Raleway' }, formatter: (v, c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return t > 0 ? Math.round(v / t * 100) + '%' : '' } } } }
+        options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { font: { size: 12, weight: 700, family: 'Inter' }, padding: 12, usePointStyle: true } }, datalabels: { display: true, color: '#fff', font: { weight: 800, size: 13, family: 'Inter' }, formatter: (v, c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return t > 0 ? Math.round(v / t * 100) + '%' : '' } } } }
       });
       const mC = { 'FAST': '#10b981', 'MEDIUM': '#6366f1', 'SLOW': '#f59e0b', 'NON-MOVING': '#ef4444' };
       const mS = [...ms].sort((a, b) => (b.Value || 0) - (a.Value || 0));
       mc('cMov', {
         type: 'bar', data: { labels: mS.map(s => s.Status), datasets: [{ data: mS.map(s => s.Value || 0), backgroundColor: mS.map(s => mC[s.Status] || '#d1d5db'), borderRadius: 8, barThickness: 28 }] },
         options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'right', color: '#374151', font: { weight: 800, size: 12, family: 'Raleway' }, formatter: v => Fs(v) } },
-          scales: { x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Raleway', size: 11, weight: 700 } } }, y: { grid: { display: false }, ticks: { font: { size: 12, weight: 800, family: 'Raleway' } } } }
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'right', color: '#374151', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) } },
+          scales: { x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Inter', size: 11, weight: 700 } } }, y: { grid: { display: false }, ticks: { font: { size: 12, weight: 800, family: 'Inter' } } } }
         }
       });
       mc('cBill', {
         type: 'bar', data: { labels: bi.map(b => b.Period), datasets: [{ data: bi.map(b => b.NotBilledValue || 0), backgroundColor: ['#ef4444', '#f59e0b', '#6366f1'], borderRadius: 8, barThickness: 40 }] },
         options: {
-          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', color: '#374151', font: { weight: 800, size: 12, family: 'Raleway' }, formatter: v => Fs(v) } },
-          scales: { y: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Raleway', size: 11, weight: 700 } } }, x: { grid: { display: false }, ticks: { font: { size: 12, weight: 700, family: 'Raleway' } } } }
+          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', color: '#374151', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) } },
+          scales: { y: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Inter', size: 11, weight: 700 } } }, x: { grid: { display: false }, ticks: { font: { size: 12, weight: 700, family: 'Inter' } } } }
         }
       });
     }

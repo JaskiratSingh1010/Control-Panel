@@ -9,7 +9,12 @@
   <link href="{% static 'vendor/css/material-icons.css' %}" rel="stylesheet">
   <link href="{% static 'vendor/css/material-symbols.css' %}" rel="stylesheet">
   
-  <link href="{% static 'vendor/css/raleway.css' %}" rel="stylesheet">
+  {# Inter = everything. Archivo = big headings. Caveat = handwriting accent.
+     Spline Sans Mono handles the digits (see core/_numerals.html). All served
+     from our own /static/, so no page waits on Google. #}
+  <link href="{% static 'vendor/css/inter.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/css/archivo.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/css/caveat.css' %}" rel="stylesheet">
   {% include 'core/_numerals.html' %}
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -17,7 +22,12 @@
        Without a colour here that moment is plain white - the flash you see
        between pages. Same grey as the body, so there is nothing to notice. */
     html { background: #f3f4f6; }
-    body { margin: 0; font-family: 'CPNum', 'Raleway', sans-serif; background: #f3f4f6; color: #1f2937; }
+    body { margin: 0; font-family: 'CPNum', 'Inter', sans-serif; background: #f3f4f6; color: #1f2937; }
+
+    /* Archivo on the big headings, the way the E-Commerce app uses it.
+       Plain h1/h2 selectors, so any page that sets its own heading font still
+       wins - this only fills in where nothing else was specified. */
+    h1, h2 { font-family: var(--font-display); }
 
     /* Cross-fade from the old page to the new one instead of cutting to blank.
        Browsers that do not support this just navigate the old way - nothing
@@ -63,6 +73,16 @@
          every digit is the same width and columns line up. Change this one line to
          re-tone every number in the whole control panel at once.                        */
       --rz-num: 'CPNum', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      /* The four faces, matching the Jivo E-Commerce app.
+           --font-body    Inter    everything: text, tables, buttons, labels
+           --font-display Archivo  big headings
+           --font-hand    Caveat   handwriting accent (declared, not yet used)
+           --rz-num       Spline Sans Mono, digits only (see _numerals.html)
+         A font is only downloaded when something actually uses it, so
+         declaring Caveat here costs nothing until you put it on an element. */
+      --font-body:    'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-display: 'Archivo', 'Inter', system-ui, sans-serif;
+      --font-hand:    'Caveat', 'Inter', cursive;
       /* Big headline figures (the KPI stat cards) do NOT use the mono face. The
          Spline Sans Mono subset only ships one weight, so a 900-weight KPI value
          came out looking thin. This plain sans stack is what the live server uses,
@@ -77,11 +97,11 @@
     }
 
     /* ── Numeric values: subtle, upright figures across every report ───────────
-       Numbers in these pages were inheriting Raleway, whose numerals look slanted /
+       Numbers in these pages were inheriting Inter, whose numerals look slanted /
        "cursive". Force a neutral tabular sans + normal style on the numeric containers
        used app-wide: KPI stat values (*-kpi-v), the shared .num table cell, and the
        common per-report money/qty cell classes. Selectors only hit number-only elements,
-       so prose (party names, headings) keeps Raleway. Edit --rz-num to re-tone at once. */
+       so prose (party names, headings) keeps Inter. Edit --rz-num to re-tone at once. */
     /* the "KPI difference" popup: every column except the category name */
     .glimpse-table td:not(:first-child), .glimpse-diff,
     .num, td.num, .op-hi, .dd-mono,
@@ -160,8 +180,12 @@
     .cp-nav { display: flex; flex-direction: column; gap: 3px; }
     .cp-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; color: #334155; text-decoration: none; font-size: 14.5px; font-weight: 800; transition: background .15s, color .15s, box-shadow .15s; }
     .cp-nav-item:hover { background: #eef2ff; color: #1e293b; }
-    .cp-nav-item.active { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 6px 18px rgba(79,70,229,0.5); }
-    .cp-nav-item.active .material-icons { color: #fff; font-variation-settings: 'FILL' 1, 'wght' 400; }
+    /* Selected page: a light indigo tint with indigo text, not a dark filled block.
+       Hover is #eef2ff (one shade lighter), so the two never look the same. The small
+       inset bar on the left keeps the selection obvious now that the fill is pale. */
+    .cp-nav-item.active { background: #e0e7ff; color: #4338ca; box-shadow: inset 3px 0 0 #6366f1; }
+    .cp-nav-item.active:hover { background: #d7deff; color: #3730a3; }
+    .cp-nav-item.active .material-icons { color: #4f46e5; font-variation-settings: 'FILL' 1, 'wght' 400; }
     .cp-nav-item .material-icons { font-size: 20px; }
 
     /* ── Collapsible nav group (e.g. Analytical Reports) ── */
