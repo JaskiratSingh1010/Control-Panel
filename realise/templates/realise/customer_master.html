@@ -13,10 +13,10 @@
     background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .cm-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .cm-kpi .cm-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .cm-kpi .cm-kpi-l .material-icons{color:var(--kpi-ic,var(--rz-indigo))}
+  .cm-kpi .cm-kpi-l .ic{color:var(--kpi-ic,var(--rz-indigo))}
   .cm-kpi .cm-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink)}
   .cm-kpi .cm-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .cm-kpi .material-icons.cm-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,var(--rz-indigo));opacity:.08}
+  .cm-kpi .ic.cm-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,var(--rz-indigo));opacity:.08}
   .k-cust{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-gst{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-act{--kpi-acc:var(--rz-acc-green);--kpi-ic:#16a34a}
@@ -79,7 +79,7 @@
     </div>
     <div class="cm-spacer"></div>
     <div class="cm-fld"><span class="cm-lbl">&nbsp;</span>
-      <a class="cm-export" id="cmExport" href="{% url 'realise:export_customer_master' %}"><span class="material-icons" style="font-size:16px">download</span>Export Excel</a>
+      <a class="cm-export" id="cmExport" href="{% url 'realise:export_customer_master' %}"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</a>
     </div>
   </div>
 
@@ -155,15 +155,15 @@
     var gst=0,act=0,states={};
     a.forEach(function(r){if(r.gstin)gst++;if(r.status==='Active')act++;if(r.state)states[r.state]=1;});
     var cards=[
-      {c:'k-cust',ic:'groups',l:'Customers',v:fN(a.length),m:'In the master'},
-      {c:'k-gst',ic:'receipt_long',l:'With GSTIN',v:fN(gst),m:(a.length?Math.round(gst/a.length*100):0)+'% registered'},
-      {c:'k-act',ic:'check_circle',l:'Active',v:fN(act),m:'Not frozen / inactive'},
-      {c:'k-state',ic:'public',l:'States',v:fN(Object.keys(states).length),m:'Geographic spread'}
+      {c:'k-cust',ic:'users',l:'Customers',v:fN(a.length),m:'In the master'},
+      {c:'k-gst',ic:'receipt-text',l:'With GSTIN',v:fN(gst),m:(a.length?Math.round(gst/a.length*100):0)+'% registered'},
+      {c:'k-act',ic:'circle-check',l:'Active',v:fN(act),m:'Not frozen / inactive'},
+      {c:'k-state',ic:'globe',l:'States',v:fN(Object.keys(states).length),m:'Geographic spread'}
     ];
     document.getElementById('cmKpis').innerHTML=cards.map(function(k){
-      return '<div class="cm-kpi '+k.c+'"><div class="cm-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="cm-kpi '+k.c+'"><div class="cm-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="cm-kpi-v">'+k.v+'</div><div class="cm-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons cm-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic cm-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 

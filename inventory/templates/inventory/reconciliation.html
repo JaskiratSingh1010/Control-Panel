@@ -242,6 +242,47 @@
   var popCell=null;
   var LDG=null;          // ledgers payload (lazy-loaded when the Ledgers tab is opened)
   var activeTab='recon'; // 'recon' | 'ledger'
+  var reconLoaded=false; // has the chains table been fetched in this page life?
+
+  /* ── Remember the view across a refresh ──────────────────────────────────
+     Everything above lives only in memory, so F5 used to drop the reader back on
+     Oil › Reconciliation › Broken with the default dates. We keep the picks in
+     sessionStorage (this browser tab only, cleared when the tab closes - the same
+     rule the sidebar uses for its scroll position) and put them back on load. */
+  var RC_STATE_KEY='rcView_v1';
+  function saveState(){
+    try{
+      sessionStorage.setItem(RC_STATE_KEY, JSON.stringify({
+        schema:schema, tab:activeTab, filter:filter, search:search,
+        from:document.getElementById('rcFrom').value,
+        to:document.getElementById('rcTo').value,
+        drill:drill, drillMode:drillMode
+      }));
+    }catch(e){}
+  }
+  function restoreState(){
+    var st=null;
+    try{ st=JSON.parse(sessionStorage.getItem(RC_STATE_KEY)||'null'); }catch(e){}
+    if(!st) return;
+    if(st.schema==='oil'||st.schema==='beverages'){
+      schema=st.schema;
+      [].forEach.call(document.getElementById('rcCo').children,function(b){
+        b.classList.toggle('on', b.getAttribute('data-schema')===schema);
+      });
+    }
+    if(['broken','mismatch','incomplete','matched','all'].indexOf(st.filter)!==-1) filter=st.filter;
+    if(st.from) document.getElementById('rcFrom').value=st.from;
+    if(st.to) document.getElementById('rcTo').value=st.to;
+    if(st.search){
+      search=st.search;
+      var si=document.getElementById('rcSearch');
+      si.value=st.search;
+      document.getElementById('rcSearchClear').style.display='block';
+    }
+    if(st.drill) for(var k in drill) drill[k]=!!st.drill[k];
+    if(st.drillMode==='eq'||st.drillMode==='neq') drillMode=st.drillMode;
+    if(st.tab==='ledger') paintTab('ledger');   // reloadActive() below does the one fetch
+  }
 
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -252,6 +293,7 @@
   function findChain(po){var a=DATA.chains||[];for(var i=0;i<a.length;i++){if(String(a[i].po)===String(po))return a[i];}return null;}
 
   function load(){
+    reconLoaded=true;
     document.getElementById('rcBody').innerHTML='<tr><td colspan="10" class="rc-empty">Loading…</td></tr>';
     fetch('/inventory/reconciliation/api/data/?'+qs(),{headers:{'X-CSRFToken':csrf()}})
       .then(function(r){return r.ok?r.json():{data:{}};})
@@ -288,18 +330,24 @@
         renderLedger('rcLdgWell', wellTitle(),'well', LDG.wellness); })
       .catch(function(){ document.getElementById('rcLdgMart').innerHTML='<div class="rc-ldg-empty">Could not load ledgers.</div>'; });
   }
-  function switchTab(t){
+  function paintTab(t){          // show a tab; fetches nothing
     activeTab=t;
     [].forEach.call(document.getElementById('rcTabs').children,function(b){ b.classList.toggle('on', b.getAttribute('data-tab')===t); });
     document.getElementById('rcPanelRecon').style.display = t==='recon' ? '' : 'none';
     document.getElementById('rcPanelLedger').style.display = t==='ledger' ? '' : 'none';
     document.getElementById('rcKpis').style.display = t==='recon' ? '' : 'none';  // recon-only summary
     document.getElementById('rcChips').style.display = t==='recon' ? 'flex' : 'none';  // recon-only status filter
+  }
+  function switchTab(t){         // show a tab and load whatever it is missing
+    paintTab(t);
     if(t==='ledger' && LDG===null) loadLedgers();
+    if(t==='recon' && !reconLoaded) load();     // first visit after a refresh on Ledgers
+    saveState();
   }
   // Reload the data behind whichever tab is active (used by Apply and the company toggle);
   // the other tab is invalidated so it refetches with the new window/company when next shown.
-  function reloadActive(){ LDG=null; if(activeTab==='ledger'){ loadLedgers(); } else { load(); } }
+  function reloadActive(){ LDG=null; reconLoaded=false;
+    if(activeTab==='ledger'){ loadLedgers(); } else { load(); } }
   function exportLedgersCSV(){
     if(!LDG) return;
     function cell(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v;}
@@ -470,7 +518,7 @@
       html+=docs.map(function(d){
         var mk='';
         if(isAr){ var s=stateOf(d);
-          mk=s==='ok'?'<span class="mk ok">✓ matched</span>':(s==='cn'?'<span class="mk cn">↩ credited</span>':'<span class="mk no">✗ pending</span>'); }
+          mk=s==='ok'?'<span class="mk ok"><i class="ic ic-check"></i> matched</span>':(s==='cn'?'<span class="mk cn"><i class="ic ic-undo-2"></i> credited</span>':'<span class="mk no"><i class="ic ic-x"></i> pending</span>'); }
         // "kis reference pe kata" — the base document this one was copied from.
         var refv=d.ref||(node==='so'?chain.po:''), rref='';
         if(reflbl&&refv){ rref='<div class="rc-pop-ref">↳ '+reflbl+' '+esc(refv)+'</div>'; }
@@ -488,11 +536,11 @@
 
   document.getElementById('rcChips').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
-    filter=b.getAttribute('data-f'); renderChips(); renderKpis(); renderTable();
+    filter=b.getAttribute('data-f'); renderChips(); renderKpis(); renderTable(); saveState();
   });
   // KPI cards are clickable filters (mirror the status chips); keep the highlighted card in step.
   function kpiPick(card){ var f=card&&card.getAttribute('data-f'); if(!f)return;
-    filter=f; renderChips(); renderKpis(); renderTable(); }
+    filter=f; renderChips(); renderKpis(); renderTable(); saveState(); }
   document.getElementById('rcKpis').addEventListener('click',function(e){
     kpiPick(e.target.closest('.rc-kpi'));
   });
@@ -505,20 +553,20 @@
   function applySearch(){
     search=(rcSearchInput.value||'').trim().toLowerCase();
     rcSearchClear.style.display=search?'block':'none';
-    renderTable();
+    renderTable(); saveState();
   }
   rcSearchInput.addEventListener('input',applySearch);
   rcSearchClear.addEventListener('click',function(){ rcSearchInput.value=''; applySearch(); rcSearchInput.focus(); });
   document.getElementById('rcDrill').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
-    var n=b.getAttribute('data-node'); drill[n]=!drill[n]; renderDrill(); renderTable();
+    var n=b.getAttribute('data-node'); drill[n]=!drill[n]; renderDrill(); renderTable(); saveState();
   });
   document.getElementById('rcDrillMode').addEventListener('click',function(e){
     var b=e.target.closest('button'); if(!b)return;
-    drillMode=b.getAttribute('data-mode'); renderDrill(); renderTable();
+    drillMode=b.getAttribute('data-mode'); renderDrill(); renderTable(); saveState();
   });
   document.getElementById('rcDrillClear').addEventListener('click',function(){
-    for(var k in drill)drill[k]=false; renderDrill(); renderTable();
+    for(var k in drill)drill[k]=false; renderDrill(); renderTable(); saveState();
   });
 
   // Clickable amount cells → document-number popover.
@@ -545,10 +593,13 @@
     var s=b.getAttribute('data-schema'); if(s===schema)return;
     schema=s;
     [].forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});
-    reloadActive();
+    saveState(); reloadActive();
   });
 
-  document.getElementById('rcApply').addEventListener('click',reloadActive);
+  document.getElementById('rcApply').addEventListener('click',function(){ saveState(); reloadActive(); });
+  // a date typed but not applied is still worth remembering
+  document.getElementById('rcFrom').addEventListener('change',saveState);
+  document.getElementById('rcTo').addEventListener('change',saveState);
   document.getElementById('rcExport').addEventListener('click',function(){
     if(activeTab==='ledger'){ exportLedgersCSV(); return; }
     var only=(filter==='matched'||filter==='all')?'all':'broken';
@@ -559,7 +610,8 @@
     window.location.href='/inventory/reconciliation/export/?'+p.join('&');
   });
 
-  load();
+  restoreState();
+  reloadActive();   // fetches only the tab the reader was last on
 })();
 </script>
 {% endblock %}

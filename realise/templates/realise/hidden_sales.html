@@ -22,7 +22,7 @@
   .hs-pop{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:24px 28px;min-width:280px;max-width:92vw;position:relative;overflow:hidden}
   .hs-pop::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .hs-pop-l{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
-  .hs-pop-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .hs-pop-l .ic{color:var(--kpi-ic,#6366f1)}
   .hs-pop-v{font-size:44px;font-weight:900;letter-spacing:-1px;line-height:1.05;margin:12px 0 6px;color:var(--rz-ink);font-variant-numeric:tabular-nums}
   .hs-pop-m{font-size:13px;font-weight:600;color:var(--rz-muted)}
   .hs-pop-x{position:absolute;top:12px;right:14px;border:0;background:transparent;color:var(--rz-faint);font-size:22px;line-height:1;cursor:pointer}
@@ -36,10 +36,10 @@
   .hs-pop-empty{padding:10px 0;font-size:12.5px;color:var(--rz-faint)}
   .hs-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .hs-kpi .hs-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .hs-kpi .hs-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .hs-kpi .hs-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .hs-kpi .hs-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
   .hs-kpi .hs-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .hs-kpi .material-icons.hs-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .hs-kpi .ic.hs-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-val{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-ltr{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-inv{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
@@ -54,8 +54,8 @@
   .hs-bar input[type=search]{min-width:200px}
   .hs-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .hs-bar input[type=search]:focus,.hs-bar input[type=date]:focus,.hs-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .hs-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .hs-fetch:hover{background:var(--rz-indigo-deep)}
+  .hs-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .hs-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
   .hs-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .hs-export:hover{background:#ecfdf5;border-color:#a7f3d0}
 
@@ -167,7 +167,7 @@
       </div>
     </div>
     <div class="hs-fld"><span class="hs-lbl">&nbsp;</span>
-      <button class="hs-export" id="hsExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+      <button class="hs-export" id="hsExport" title="Export the current view to Excel"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</button>
     </div>
   </div>
 
@@ -306,19 +306,19 @@
     });
     var nInv=fN(Object.keys(docs).length), nCust=fN(Object.keys(custs).length);
     var cards=[
-      {c:'k-val',ic:'payments',l:'Hidden Value',v:abbr(val),vf:'₹'+fN(val),m:'Σ invoice line value (₹)'},
-      {c:'k-prem',ic:'workspace_premium',l:'Premium',v:abbr(prem),vf:'₹'+fN(prem),m:'Hidden premium value (₹)'},
-      {c:'k-comm',ic:'inventory_2',l:'Commodity',v:abbr(comm),vf:'₹'+fN(comm),m:'Hidden commodity value (₹)'},
-      {c:'k-ltr',ic:'water_drop',l:'Hidden Litres',v:abbrQ(lit),vf:fN(Math.round(lit))+' L',m:'Quantity × pack size'},
-      {c:'k-inv',ic:'visibility_off',l:'Invoices',v:nInv,vf:nInv,m:'Hidden invoices'},
-      {c:'k-cust',ic:'storefront',l:'Customers',v:nCust,vf:nCust,m:'With hidden sales'}
+      {c:'k-val',ic:'banknote',l:'Hidden Value',v:abbr(val),vf:'₹'+fN(val),m:'Σ invoice line value (₹)'},
+      {c:'k-prem',ic:'award',l:'Premium',v:abbr(prem),vf:'₹'+fN(prem),m:'Hidden premium value (₹)'},
+      {c:'k-comm',ic:'package',l:'Commodity',v:abbr(comm),vf:'₹'+fN(comm),m:'Hidden commodity value (₹)'},
+      {c:'k-ltr',ic:'droplet',l:'Hidden Litres',v:abbrQ(lit),vf:fN(Math.round(lit))+' L',m:'Quantity × pack size'},
+      {c:'k-inv',ic:'eye-off',l:'Invoices',v:nInv,vf:nInv,m:'Hidden invoices'},
+      {c:'k-cust',ic:'store',l:'Customers',v:nCust,vf:nCust,m:'With hidden sales'}
     ];
     hsKpiCards=cards;
     document.getElementById('hsKpis').innerHTML=cards.map(function(k,i){
       return '<div class="hs-kpi '+k.c+'" role="button" tabindex="0" data-kpi="'+i+'" title="Click for detail">'
-        +'<div class="hs-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+        +'<div class="hs-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="hs-kpi-v">'+k.v+'</div><div class="hs-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons hs-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic hs-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
   // Click / keyboard-activate a KPI -> detail popup with its full value + meaning.
@@ -354,7 +354,7 @@
     var pop=document.getElementById('hsPop');
     pop.className='hs-pop '+k.c;
     pop.innerHTML='<button class="hs-pop-x" onclick="closeHsKpi()" aria-label="Close">&times;</button>'
-      +'<div class="hs-pop-l"><span class="material-icons" style="font-size:17px">'+k.ic+'</span>'+esc(k.l)+'</div>'
+      +'<div class="hs-pop-l"><i class="ic ic-'+k.ic+'" style="font-size:17px"></i>'+esc(k.l)+'</div>'
       +'<div class="hs-pop-v">'+k.vf+'</div><div class="hs-pop-m">'+esc(k.m)+'</div>'
       +'<div class="hs-pop-bdh">'+esc(bd.head)+' breakdown</div>'
       +'<div class="hs-pop-bd">'+body+'</div>'+more;

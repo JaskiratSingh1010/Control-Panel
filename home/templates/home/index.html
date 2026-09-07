@@ -34,7 +34,7 @@
   .kpi-card.gradient-grey   { --kpi-accent:#6b7280; --kpi-tint:#f3f4f6; --kpi-ic:#6b7280; }
   .kpi-head { display: flex; align-items: flex-start; justify-content: space-between; }
   .kpi-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--kpi-tint, var(--rz-soft)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .kpi-icon .material-icons { font-size: 20px; color: var(--kpi-ic, var(--rz-indigo)); }
+  .kpi-icon .ic { font-size: 20px; color: var(--kpi-ic, var(--rz-indigo)); }
   /* Trend pill is coloured by MEANING (green = good move, red = bad move), not by arrow. */
   .kpi-trend { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 800; }
   .kpi-trend.good { background: #dcfce7; color: #15803d; }
@@ -122,7 +122,7 @@
     <div class="glimpse-head">
       <h2 class="glimpse-title" id="kpiGlimpseTitle">KPI Difference</h2>
       <button class="glimpse-close" type="button" id="kpiGlimpseClose" aria-label="Close">
-        <span class="material-icons">close</span>
+        <i class="ic ic-x"></i>
       </button>
     </div>
     <div class="glimpse-body" id="kpiGlimpseBody"></div>

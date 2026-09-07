@@ -18,7 +18,7 @@
   .pd-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
   .pd-export{align-self:center;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--rz-card-brd);color:var(--rz-indigo-deep);font-family:inherit;font-size:12.5px;font-weight:800;padding:9px 15px;border-radius:10px;cursor:pointer;transition:background .15s,border-color .15s}
   .pd-export:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
-  .pd-export .material-icons{font-size:17px}
+  .pd-export .ic{font-size:17px}
   .pd-seg{display:inline-flex;border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;background:#fff}
   .pd-seg button{font-family:inherit;font-size:12.5px;font-weight:700;color:var(--rz-muted);background:#fff;border:0;padding:8px 12px;cursor:pointer}
   .pd-seg button+button{border-left:1px solid #e2e8f0}
@@ -70,10 +70,10 @@
   .pd-edit{border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center}
   .pd-edit:hover{background:#ffedd5}
   .pd-edit.on{background:#c2410c;color:#fff;border-color:#c2410c}
-  .pd-edit .material-icons{font-size:16px}
+  .pd-edit .ic{font-size:16px}
   .pd-add{border:1px solid #bbf7d0;background:#f0fdf4;color:#15803d;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center}
   .pd-add:hover{background:#dcfce7}
-  .pd-add .material-icons{font-size:18px}
+  .pd-add .ic{font-size:18px}
   .pd-del{border:1px solid #fecdd6;background:#fff;color:#e11d48;border-radius:8px;width:30px;height:30px;cursor:pointer;font-family:inherit;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
   .pd-del:hover{background:#fff1f3}
   .pd-card.open .pd-chev{transform:rotate(180deg)}
@@ -86,8 +86,8 @@
   .pd-plan-h.hdr{cursor:pointer;display:inline-flex;align-items:center;gap:2px;user-select:none;
     border-radius:8px;padding:3px 9px 3px 4px;margin-left:-4px;transition:background .15s}
   .pd-plan-h.hdr:hover{background:#eef2ff}
-  .pd-plan-h.hdr .material-icons{font-size:18px;display:inline-block;transition:transform .18s;transform:rotate(-90deg)}
-  .pd-plan-h.hdr.open .material-icons{transform:none}
+  .pd-plan-h.hdr .ic{font-size:18px;display:inline-block;transition:transform .18s;transform:rotate(-90deg)}
+  .pd-plan-h.hdr.open .ic{transform:none}
   .pd-plan-n{margin-left:8px;padding:2px 8px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;
     color:#4338ca;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:none}
   /* Scroll box, not the page: the header can only stick to its own scroll container, so the
@@ -152,12 +152,12 @@
   table.pd-tbl>tbody>tr.pd-more:hover>td{background:#e6ecf3}
   table.pd-tbl>tbody>tr.pd-more>td.l{font-size:12.5px}
   /* Inline-block, not flex: a flex `td` with colspan collapses the column widths in Safari. */
-  table.pd-tbl>tbody>tr.pd-more>td .material-icons{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
-  table.pd-tbl>tbody>tr.pd-more.open>td .material-icons{transform:rotate(180deg)}
+  table.pd-tbl>tbody>tr.pd-more>td .ic{font-size:18px;color:#94a3b8;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
+  table.pd-tbl>tbody>tr.pd-more.open>td .ic{transform:rotate(180deg)}
   /* Target / segment rows that head a collapsible group */
   table.pd-tbl>tbody>tr.hdr>td{cursor:pointer}
-  table.pd-tbl>tbody>tr.hdr>td .material-icons{font-size:18px;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
-  table.pd-tbl>tbody>tr.hdr.open>td .material-icons{transform:rotate(180deg)}
+  table.pd-tbl>tbody>tr.hdr>td .ic{font-size:18px;vertical-align:-4px;margin-right:4px;display:inline-block;transition:transform .18s}
+  table.pd-tbl>tbody>tr.hdr.open>td .ic{transform:rotate(180deg)}
   table.pd-tbl>tbody>tr.pd-tgt>td{background:#fff7ed;border-top:2px solid #fed7aa;color:#9a3412;font-weight:800;padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums}
   table.pd-tbl>tbody>tr.pd-tgt>td.l{background:#fff7ed;color:#c2410c;text-align:left;text-transform:uppercase;font-size:11px;letter-spacing:.4px}
   table.pd-tbl>tbody>tr.pd-tgt>td.sep{border-left:2px solid var(--rz-line)}
@@ -263,7 +263,7 @@
 
   .pk-form{padding:16px;border-top:1px solid #eef2f6}
   .pk-item{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--rz-ink);margin-bottom:14px}
-  .pk-item .material-icons{font-size:18px;color:var(--rz-indigo)}
+  .pk-item .ic{font-size:18px;color:var(--rz-indigo)}
   .pk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
   .pk-grid label{display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:800;
     letter-spacing:.5px;text-transform:uppercase;color:var(--rz-muted)}
@@ -329,7 +329,7 @@
     <div class="pd-fld"><span class="pd-lbl">Channel</span><select id="pdChannel"><option value="">All channels</option></select></div>
     <div class="pd-fld"><span class="pd-lbl">Search</span><input type="search" id="pdSearch" placeholder="Result name…" autocomplete="off"></div>
     <span class="pd-count" id="pdCount"></span>
-    <button type="button" class="pd-export" id="pdExport" title="Download every saved result's Plan vs Done table (Excel)"><span class="material-icons">download</span>Export Excel</button>
+    <button type="button" class="pd-export" id="pdExport" title="Download every saved result's Plan vs Done table (Excel)"><i class="ic ic-download"></i>Export Excel</button>
   </div>
 
   <div id="pdList"><div class="pd-empty">Loading…</div></div>
@@ -341,7 +341,7 @@
         <span class="t">Select item</span>
         <input type="search" id="pkSearch" placeholder="Search item code / name…" autocomplete="off">
         <button class="rc-modal-clear" id="pkClear" title="Reset size / variety / search">Clear</button>
-        <button class="rc-modal-x" id="pkClose" title="Close">✕</button>
+        <button class="rc-modal-x" id="pkClose" title="Close"><i class="ic ic-x"></i></button>
       </div>
       <div class="rc-modal-body">
         <div class="rc-col" id="pkVar"></div>
@@ -350,7 +350,7 @@
       </div>
       <!-- step 2: the picked item's plan line. Box Ltrs and Relise are derived, never typed. -->
       <div class="pk-form" id="pkForm" hidden>
-        <div class="pk-item"><span class="material-icons">inventory_2</span>
+        <div class="pk-item"><i class="ic ic-package"></i>
           <span id="pkFormName"></span><span class="pd-code" id="pkFormCode"></span></div>
         <div class="pk-grid">
           <label>Retailer ₹<input type="number" step="any" min="0" id="pkRetailer" placeholder="0"></label>
@@ -549,7 +549,7 @@
   function segHeadRow(g,moreId,okey){
     return '<tr class="pd-seg'+(moreId?(isOpen(okey)?' hdr open':' hdr')+'" data-more="'+moreId
               +'" data-okey="'+esc(okey||''):'')+'"><td class="l" colspan="6">'
-      +(moreId?'<span class="material-icons">expand_more</span>':'')
+      +(moreId?'<i class="ic ic-chevron-down"></i>':'')
       +esc(g.seg||'UNCLASSIFIED')
       +' · '+g.rows.length+' item'+(g.rows.length===1?'':'s')+'</td>'
       +'<td class="'+(g.ltr<0?'r':'pd-done')+' sep">'+fN(Math.round(g.ltr))+'</td><td></td>'
@@ -642,7 +642,7 @@
     return '<tr class="pd-tgt'+(/TOTAL$/.test(label)?' tot':'')
         +(moreId?(isOpen(okey)?' hdr open':' hdr')+'" data-more="'+moreId
                  +'" data-okey="'+esc(okey||''):'')+'"><td class="l">'
-      +(moreId?'<span class="material-icons">expand_more</span>':'')+esc(label)+'</td>'
+      +(moreId?'<i class="ic ic-chevron-down"></i>':'')+esc(label)+'</td>'
       +'<td></td><td></td><td></td>'
       +'<td>'+fN(Math.round(t.ltrs))+'</td><td class="pd-rl">'+f2(t.rate)+'</td>'
       +'<td class="'+(doneLtr<0?'r':'pd-done')+' sep">'+fN(Math.round(doneLtr))+'</td>'
@@ -825,7 +825,7 @@
   function itemCell(item,code,badge){
     if(!code)return '<td class="l">'+esc(item)+'</td>';
     return '<td class="l pd-item" data-code="'+esc(code)+'">'
-      +'<span class="material-icons pd-ichev">chevron_right</span>'
+      +'<i class="ic ic-chevron-right pd-ichev"></i>'
       +esc(item)+'<span class="pd-code">'+esc(code)+'</span>'
       +(badge?'<span class="pd-inplan">'+esc(badge)+'</span>':'')+'</td>';
   }
@@ -994,7 +994,7 @@
        totals and the target rows off screen, and those are what most readings need. */
     var pgid='pg'+(++UID), pgk='p:'+rid+'|'+pidx;
     return '<div class="pd-plan-h hdr'+openCls(pgk)+'" data-more="'+pgid+'" data-okey="'+esc(pgk)+'">'
-      +'<span class="material-icons">expand_more</span>'
+      +'<i class="ic ic-chevron-down"></i>'
       +'<span class="pd-plan-t">'+esc(p.name||'Plan')+'</span>'
       +'<span class="pd-plan-n">'+j.rows.length+' item'+(j.rows.length===1?'':'s')+'</span></div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
@@ -1236,9 +1236,9 @@
           +(a.plan?' · '+f2(a.pct)+'%':'')+'</span>'
         +'<div class="pd-sp"><span class="pd-meta">saved '+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
         +'<button class="pd-add" data-add="'+o.id+'|'+esc(o.state)+'|'+esc(tgtCh)+'|plan" title="Add an item to this plan">'
-          +'<span class="material-icons">add</span></button>'
-        +'<button class="pd-del" title="Delete this saved result" data-del="'+o.id+'">✕</button>'
-        +'<span class="material-icons pd-chev">expand_more</span></div>'
+          +'<i class="ic ic-plus"></i></button>'
+        +'<button class="pd-del" title="Delete this saved result" data-del="'+o.id+'"><i class="ic ic-x"></i></button>'
+        +'<i class="ic ic-chevron-down pd-chev"></i></div>'
       +'</div><div class="pd-body">'+dry+tables+'</div></div>';
   }
 
@@ -1406,11 +1406,11 @@
             +(x.doneLtr?' · ₹'+f2(x.doneRev/x.doneLtr)+'/L':'')+'</span>')
         +'<div class="pd-sp">'
           +'<button class="pd-add" data-add="T:'+esc(key.replace('|','~'))+'|'+esc(st)+'|'+esc(ch)+'|target|'+esc(key)+'" title="Add an item to this target">'
-            +'<span class="material-icons">add</span></button>'
+            +'<i class="ic ic-plus"></i></button>'
           +'<button class="pd-edit'+(ed?' on':'')+'" data-edit="'+esc(key)+'" title="'
             +(ed?'Stop editing':'Set Retailer / Scheme / To be sale on these items')+'">'
-            +'<span class="material-icons">'+(ed?'close':'edit')+'</span></button>'
-          +'<span class="material-icons pd-chev">expand_more</span></div>'
+            +'<i class="ic ic-'+(ed?'x':'pencil')+'"></i></button>'
+          +'<i class="ic ic-chevron-down pd-chev"></i></div>'
       +'</div><div class="pd-body">'
       +'<div class="pd-plan-h">'+(t?'Target — Update Targets':'Sold this month — nothing planned or targeted')+'</div>'
       +'<div class="pd-tbl-wrap"><table class="pd-tbl"><thead>'
@@ -1832,7 +1832,7 @@
       return '<div class="com-dp-item'+(on?' checked':'')+'" data-p="'+esc(n)+'">'
         +'<input type="checkbox"'+(on?' checked':'')+'>'
         +'<span class="com-dp-name">'+(n==='—'?'Unassigned':esc(n))+'</span>'
-        +'<span class="com-pos">✓</span></div>';
+        +'<span class="com-pos"><i class="ic ic-check"></i></span></div>';
     }).join('');
   }
   function persLabel(){
@@ -2057,7 +2057,7 @@
   // Read a cell as plain text, dropping any Material-icons glyph text (chevron_right, expand_more…).
   function cellText(c){
     var clone=c.cloneNode(true);
-    Array.prototype.forEach.call(clone.querySelectorAll('.material-icons'), function(ic){ ic.parentNode.removeChild(ic); });
+    Array.prototype.forEach.call(clone.querySelectorAll('.ic'), function(ic){ ic.parentNode.removeChild(ic); });
     var code=clone.querySelector('.pd-code'); if(code) code.textContent=' '+(code.textContent||'');   // keep item name / code apart
     return (clone.textContent||'').replace(/\s+/g,' ').trim();
   }

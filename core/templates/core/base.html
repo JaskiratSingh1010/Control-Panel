@@ -1,8 +1,15 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
   <meta charset="UTF-8">
+  {% comment %}
+    Chrome kept mis-reading these pages as Spanish and popping up its "Translate?"
+    bar on every page change. translate="no" on <html> plus this meta tag tell it
+    the page is already in the reader's language, so it stops asking. The login
+    page was fixed this way already; this is the same fix for every other page.
+  {% endcomment %}
+  <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Jivo Control Panel{% endblock %}</title>
@@ -125,7 +132,71 @@
 
 
     /* ── Shell ── */
-    .cp-shell { display: flex; min-height: 100vh; position: relative; }
+    /* ---- Top bar ---------------------------------------------------------------
+       A thin strip across the top holding the profile button. It used to live at the
+       bottom of the sidebar, where it took space from the menu and disappeared on the
+       collapsed rail. The bar is a normal block above the shell, so the sidebar simply
+       starts 56px lower - no overlapping, nothing floating. */
+    .cp-topbar { height: 56px; display: flex; align-items: center; background: #fff;
+                 border-bottom: 1px solid #e5e7eb; position: relative; z-index: 200; }
+    /* The logo block lines up exactly with the sidebar below it. --cp-sbw is written
+       by JS from the sidebar's real width, so this follows the sidebar through every
+       state - open, collapsed rail, and the hover-peek in between - with no guessing. */
+    .cp-topbar-brand { width: var(--cp-sbw, 282px); flex-shrink: 0; height: 100%;
+                       display: flex; align-items: center; gap: 10px; padding: 0 14px;
+                       border-right: 1px solid #e5e7eb; overflow: hidden;
+                       transition: width .22s ease, padding .22s ease; }
+    .cp-topbar-rest { flex: 1; display: flex; align-items: center; justify-content: flex-end;
+                      gap: 10px; padding: 0 20px; min-width: 0; }
+    /* The arrow straddles the divider, half on each side, like a seam button. */
+    .cp-topbar .cp-sb-arrow { position: absolute; left: var(--cp-sbw, 282px); top: 50%;
+                              margin: -13px 0 0 -13px; opacity: 1; pointer-events: auto;
+                              z-index: 3; transition: left .22s ease; }
+    /* On the narrow rail there is only room for the logo. */
+    body.cp-sb-narrow .cp-topbar-brand { padding: 0 8px; }
+    body.cp-sb-narrow .cp-brand-copy { display: none; }
+    .cp-userwrap { position: relative; }
+    /* A plain square icon button - no name, no role. The details live in the menu. */
+    .cp-userbtn { width: 36px; height: 36px; padding: 0; display: inline-flex;
+                  align-items: center; justify-content: center; border: 1px solid #e5e7eb;
+                  background: #fff; border-radius: 10px; cursor: pointer; color: #475569;
+                  transition: background .15s, border-color .15s, color .15s; }
+    .cp-userbtn:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+    .cp-userbtn[aria-expanded="true"] { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
+    .cp-userbtn .ic { font-size: 18px; }
+    /* The one icon lucide.css does not ship - added here so the vendor file stays as it came. */
+    .ic-log-out { --ic: url("data:image/svg+xml;base64,PHN2ZyBjbGFzcz0ibHVjaWRlIGx1Y2lkZS1sb2ctb3V0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiID4gPHBhdGggZD0iTTkgMjFINWEyIDIgMCAwIDEtMi0yVjVhMiAyIDAgMCAxIDItMmg0IiAvPiA8cG9seWxpbmUgcG9pbnRzPSIxNiAxNyAyMSAxMiAxNiA3IiAvPiA8bGluZSB4MT0iMjEiIHgyPSI5IiB5MT0iMTIiIHkyPSIxMiIgLz4gPC9zdmc+"); }
+    /* Menu rows */
+    .cp-userpop-item { display: flex; align-items: center; gap: 10px; width: 100%;
+                       border: 0; background: transparent; padding: 9px 10px; border-radius: 9px;
+                       font: inherit; font-size: 13px; font-weight: 700; color: #334155;
+                       cursor: pointer; text-align: left; }
+    .cp-userpop-item:hover { background: #f1f5f9; }
+    .cp-userpop-item .ic { font-size: 16px; color: #64748b; }
+    .cp-userpop-item.danger { color: #dc2626; }
+    .cp-userpop-item.danger .ic { color: #dc2626; }
+    .cp-userpop-item.danger:hover { background: #fef2f2; }
+    .cp-userpop-sep { height: 1px; background: #eef2f6; margin: 6px 0; }
+    .cp-userpop-det { display: none; }
+    .cp-userpop-det.open { display: block; }
+    /* The panel that opens under it. */
+    .cp-userpop { position: absolute; right: 0; top: calc(100% + 8px); width: 240px;
+                  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+                  box-shadow: 0 12px 34px rgba(15,23,42,.14); padding: 8px; display: none; }
+    .cp-userpop.open { display: block; }
+    .cp-userpop-head { display: flex; align-items: center; gap: 11px; padding-bottom: 12px;
+                       border-bottom: 1px solid #eef2f6; }
+    .cp-userpop-head .cp-avatar { width: 42px; height: 42px; font-size: 15px; }
+    .cp-userpop-name { font-size: 14px; font-weight: 800; color: #0f172a; word-break: break-word; }
+    .cp-userpop-role { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .cp-userpop-row { display: flex; justify-content: space-between; gap: 10px;
+                      font-size: 12px; padding: 9px 0; border-bottom: 1px solid #f1f5f9; }
+    .cp-userpop-row span:first-child { color: #94a3b8; font-weight: 700; }
+    .cp-userpop-row span:last-child { color: #334155; font-weight: 700; text-align: right;
+                                      word-break: break-word; }
+    .cp-userpop .cp-logout-btn { margin-top: 12px; }
+
+    .cp-shell { display: flex; min-height: calc(100vh - 56px); position: relative; }
 
     /* ── Sidebar ── */
     /* Frozen in place: sticky just below the 56px topbar and exactly viewport-tall, so the
@@ -136,7 +207,7 @@
        at 240px there were only 132px, so it broke onto two lines. 282px leaves
        about 9px spare, so small font-rendering differences cannot push it
        back onto a second line. */
-    .cp-sidebar { width: 282px; background: #f8fafc; color: #334155; padding: 20px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: 100vh; align-self: flex-start; }
+    .cp-sidebar { width: 282px; background: #f8fafc; color: #334155; padding: 14px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: calc(100vh - 56px); align-self: flex-start; }
     /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
        hide all text/labels, and let the floating menu button expand it. */
     /* Smart hover sidebar: collapsed = a slim icon rail that expands on hover and PUSHES
@@ -149,38 +220,43 @@
     }
     body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek,
     body.cp-sidebar-collapsed .cp-sidebar:focus-within {
-      width: 282px; padding: 20px 14px;   /* keep the hover-out rail the same width */
+      width: 282px; padding: 14px 14px;   /* keep the hover-out rail the same width */
     }
     /* Icon-only look only while the rail is NOT peeking/focused */
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-brand,
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label,
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-user-badge,
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-logout-form { display: none; }
-    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav:first-of-type { margin-top: 56px; }  /* clear the floating menu button */
+    body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label { display: none; }
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item { justify-content: center; gap: 0; padding: 11px 0; font-size: 0; }
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item .ic { font-size: 22px; }
     /* On the slim rail, collapse the group to just its icon (no chevron, no sub-items). */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-sub,
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-group-chev { display: none; }
-    /* The floating "pin" button shows on the slim rail; it hides while peeking (the
-       in-rail close/pin button takes over once the rail is expanded). */
-    body.cp-sidebar-collapsed .cp-sidebar-open { top: 14px; left: 14px; }
-    body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek ~ .cp-sidebar-open { opacity: 0; pointer-events: none; }
-    .cp-brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 18px 6px; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
+    /* Was a block at the top of the sidebar; now a row inside the top bar, so the
+       old bottom border and padding are gone and the logo is bar-height. */
+    .cp-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .cp-brand-copy { min-width: 0; flex: 1; }
-    .cp-brand-logo { width: 56px; height: 56px; border-radius: 12px; background: #fff; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.12); overflow: hidden; padding: 2px; flex-shrink: 0; }
+    .cp-brand-logo { width: 38px; height: 38px; border-radius: 10px; background: #fff; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.12); overflow: hidden; padding: 2px; flex-shrink: 0; }
     .cp-brand-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .cp-brand-title { font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: -.2px; }
-    .cp-brand-subtitle { font-size: 12px; font-weight: 700; color: #64748b; }
-    .cp-sidebar-close, .cp-sidebar-open { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .15s, transform .15s; }
-    .cp-sidebar-close { width: 30px; height: 30px; border-radius: 8px; background: #f1f5f9; color: #64748b; flex-shrink: 0; }
-    .cp-sidebar-close:hover { background: #e2e8f0; color: #334155; }
-    .cp-sidebar-close .ic { font-size: 18px; }
-    .cp-sidebar-open { position: absolute; top: 12px; left: 12px; z-index: 20; width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.4); opacity: 0; pointer-events: none; transform: translateX(-8px); }
-    body.cp-sidebar-collapsed .cp-sidebar-open { opacity: 1; pointer-events: auto; transform: translateX(0); }
-    .cp-sidebar-open:hover { background: linear-gradient(135deg, #818cf8, #6366f1); }
-    .cp-sidebar-open .ic { font-size: 21px; }
+    .cp-brand-title { font-size: 15px; font-weight: 900; color: #0f172a; letter-spacing: -.2px; white-space: nowrap; }
+    .cp-brand-subtitle { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+    .cp-sb-arrow { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: background .15s, color .15s, opacity .15s, transform .15s, border-color .15s; }
+    /* Round arrow that closes the sidebar (it replaced the old X). It stays invisible
+       until the pointer is on the sidebar, so the header reads clean; :focus-within
+       keeps it reachable for anyone using the keyboard instead of a mouse. */
+    .cp-sb-arrow { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+                   border: 1px solid #e5e7eb; background: #fff; color: #64748b;
+                   box-shadow: 0 2px 6px rgba(15,23,42,.10);
+                   opacity: 0; pointer-events: none; }
+    /* It used to hide until the sidebar was hovered. In the top bar it is always
+       visible - it is the only way to reopen a collapsed sidebar. */
+    .cp-sb-arrow:hover { background: var(--rz-soft, #eef2ff); color: var(--rz-indigo-deep, #4338ca); border-color: var(--rz-soft-brd, #e0e7ff); }
+    /* The icon set only ships ic-chevron-right, so it is turned round to point LEFT
+       while the sidebar is open (click = close), and left as-is once collapsed
+       (click = open). */
+    .cp-sb-arrow .ic { font-size: 16px; transform: rotate(180deg); transition: transform .2s ease; }
+    body.cp-sidebar-collapsed .cp-sb-arrow .ic { transform: rotate(0deg); }
     .cp-section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.9px; color: #64748b; margin: 16px 6px 6px 6px; text-transform: uppercase; }
+    /* The 16px above each label separated it from the block before it. The first one
+       now sits at the very top of the sidebar, so it needs no gap of its own. */
+    .cp-section-label:first-child { margin-top: 0; }
     .cp-nav { display: flex; flex-direction: column; gap: 3px; }
     .cp-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 10px; border-radius: 10px; color: #334155; text-decoration: none; font-size: 14.5px; font-weight: 800; transition: background .15s, color .15s, box-shadow .15s; }
     .cp-nav-item:hover { background: #eef2ff; color: #1e293b; }
@@ -212,17 +288,36 @@
     .cp-nav-group.open > .cp-nav-sub { display: flex; }
     .cp-nav-sub .cp-nav-item { font-size: 12.5px; padding: 8px 11px; }
 
-    /* ── User badge ── */
-    .cp-user-badge { margin-top: auto; padding: 10px; background: #f1f5f9; border: 1px solid #e5e7eb; border-radius: 11px; display: flex; align-items: center; gap: 10px; }
+    /* ── Avatar + sign-out button (used by the top bar profile menu) ── */
     .cp-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 9px rgba(99,102,241,0.4); }
-    .cp-user-name { font-size: 12px; font-weight: 700; color: #0f172a; }
-    .cp-user-role { font-size: 10px; color: #64748b; text-transform: capitalize; }
-    .cp-logout-form { margin-top: 8px; }
     .cp-logout-btn { width: 100%; padding: 9px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 9px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; transition: background .15s, color .15s, border-color .15s; }
     .cp-logout-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
 
     /* ── Main content ── */
     .cp-main { flex: 1; padding: 28px 32px; overflow: auto; min-width: 0; }
+
+    /* Hide the grey scrollbars on the sidebar and the content area. Both still
+       scroll exactly as before - wheel, trackpad, keyboard, drag - the bar is
+       just not drawn. scrollbar-width is the standard property (Firefox and new
+       Chrome/Edge); the ::-webkit- rule covers older Chrome/Edge/Safari. */
+    .cp-sidebar, .cp-main { scrollbar-width: none; -ms-overflow-style: none; }
+    .cp-sidebar::-webkit-scrollbar, .cp-main::-webkit-scrollbar { width: 0; height: 0; }
+
+    /* ---- Drag handle ---------------------------------------------------------------
+       The real bars above are hidden, which looks clean but leaves no way to SEE that
+       there is more below, and nothing to grab. This is a slim grip drawn over the
+       right edge of a scrolling area: grab it, pull down, the area scrolls down.
+       It only appears when the content is actually taller than the space. */
+    .cp-dbar { position: fixed; width: 12px; z-index: 60; opacity: 0; pointer-events: none;
+               transition: opacity .18s ease; }
+    .cp-dbar.on { opacity: .55; pointer-events: auto; }
+    .cp-dbar.on:hover, .cp-dbar.drag { opacity: 1; }
+    .cp-dbar-thumb { position: absolute; top: 0; left: 3px; width: 6px; border-radius: 4px;
+                     background: #94a3b8; cursor: grab; }
+    .cp-dbar-thumb:hover { background: #64748b; }
+    .cp-dbar.drag .cp-dbar-thumb { background: #475569; cursor: grabbing; }
+    /* While dragging, stop the pointer selecting text everywhere else. */
+    body.cp-dbar-dragging { user-select: none; }
     /* (push mode) content sits flush after the flex sidebar — no extra left padding. */
     /* Dashboard pages auto-size to the available width at any screen size / zoom: drop the
        per-page fixed max-width caps on the content root (the single ".<name>-wrap" div that
@@ -235,7 +330,8 @@
     own list for every <select>, because the browser's versions cannot be styled.
     Loaded here so EVERY page gets it without changing a single page template.
   {% endcomment %}
-  <link href="{% static 'core/bkdatepicker.css' %}" rel="stylesheet">
+  {% comment %} ?v= forces browsers to fetch a fresh copy - bump it on every change. {% endcomment %}
+  <link href="{% static 'core/bkdatepicker.css' %}?v=3" rel="stylesheet">
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
@@ -253,20 +349,60 @@
 
   {# ── TOPBAR removed — brand lives in the sidebar; company-wide ticker retired from the header ── #}
 
-  {# ── SHELL (sidebar + main) ── #}
-  <div class="cp-shell">
-    <aside class="cp-sidebar">
-
+  {# ── TOP BAR (profile + sign out) ── #}
+  {% if user.is_authenticated %}
+  <header class="cp-topbar">
+    <div class="cp-topbar-brand">
       <div class="cp-brand">
         <div class="cp-brand-logo"><img src="{% static 'core/jivo-logo.jpg' %}" alt="Jivo" onerror="this.style.display='none';this.parentNode.textContent='JG';"></div>
         <div class="cp-brand-copy">
           <div class="cp-brand-title">Jivo Group</div>
           <div class="cp-brand-subtitle">Control Panel</div>
         </div>
-        <button class="cp-sidebar-close" type="button" onclick="toggleControlPanelSidebar()" title="Pin / unpin sidebar" aria-label="Pin or unpin control panel sidebar">
-          <i class="ic ic-x"></i>
-        </button>
       </div>
+    </div>
+    <button class="cp-sb-arrow" type="button" onclick="toggleControlPanelSidebar()" aria-label="Close or open the control panel sidebar">
+      <i class="ic ic-chevron-right"></i>
+    </button>
+    <div class="cp-topbar-rest">
+    <div class="cp-userwrap">
+      <button type="button" class="cp-userbtn" id="cpUserBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account">
+        <i class="ic ic-user"></i>
+      </button>
+      <div class="cp-userpop" id="cpUserPop" role="menu">
+        {# Profile opens the details below it - there is no separate profile page. #}
+        <button type="button" class="cp-userpop-item" id="cpProfileBtn" aria-expanded="false">
+          <i class="ic ic-user"></i>Profile
+        </button>
+        <div class="cp-userpop-det" id="cpProfileDet">
+          <div class="cp-userpop-head">
+            <div class="cp-avatar">{{ display_name|slice:":2"|upper }}</div>
+            <div>
+              <div class="cp-userpop-name">{{ display_name }}</div>
+              <div class="cp-userpop-role">{{ role }}</div>
+            </div>
+          </div>
+          <div class="cp-userpop-row"><span>Username</span><span>{{ user.get_username }}</span></div>
+          {% if user.email %}
+            <div class="cp-userpop-row"><span>Email</span><span>{{ user.email }}</span></div>
+          {% endif %}
+        </div>
+        <div class="cp-userpop-sep"></div>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="cp-userpop-item danger">
+            <i class="ic ic-log-out"></i>Sign out
+          </button>
+        </form>
+      </div>
+    </div>
+    </div>
+  </header>
+  {% endif %}
+
+  {# ── SHELL (sidebar + main) ── #}
+  <div class="cp-shell">
+    <aside class="cp-sidebar">
 
       {% if is_authenticated %}
         <div class="cp-section-label">Main Menu</div>
@@ -449,17 +585,6 @@
         </nav>
         {% endif %}
 
-        <div class="cp-user-badge">
-          <div class="cp-avatar">{{ display_name|slice:":2"|upper }}</div>
-          <div>
-            <div class="cp-user-name">{{ display_name }}</div>
-            <div class="cp-user-role">{{ role }}</div>
-          </div>
-        </div>
-        <form class="cp-logout-form" method="post" action="{% url 'logout' %}">
-          {% csrf_token %}
-          <button type="submit" class="cp-logout-btn">Sign out</button>
-        </form>
       {% endif %}
 
     </aside>
@@ -525,9 +650,6 @@
     })();
     </script>
 
-    <button class="cp-sidebar-open" type="button" onclick="setControlPanelSidebar(true)" title="Open sidebar" aria-label="Open control panel sidebar">
-      <i class="ic ic-menu"></i>
-    </button>
 
     <main class="cp-main">
       {% block content %}{% endblock %}
@@ -541,6 +663,14 @@
       document.body.classList.toggle('cp-sidebar-collapsed', !open);
       var sb = document.querySelector('.cp-sidebar');
       if (sb) sb.classList.remove('cp-sb-peek');   // pinning/unpinning clears any hover-peek
+      /* Let go of the button that was just clicked. The rail stays full width while
+         anything inside it still has keyboard focus (the :focus-within rule above),
+         so without this the sidebar would not actually close until you clicked
+         somewhere else on the page. */
+      if (!open && sb && document.activeElement && sb.contains(document.activeElement)
+          && document.activeElement.blur) {
+        document.activeElement.blur();
+      }
       try { localStorage.setItem('cpSidebarOpen', open ? '1' : '0'); } catch (err) {}
     }
     // Pin (expand & lock) when collapsed; unpin (back to hover-rail) when expanded.
@@ -574,7 +704,188 @@
   </script>
   {% block extra_scripts %}{% endblock %}
   {% comment %} Last, so it also picks up anything a page's own script just built. {% endcomment %}
-  <script src="{% static 'core/bkdatepicker.js' %}"></script>
+  <script src="{% static 'core/bkdatepicker.js' %}?v=3"></script>
+
+  <script>
+  /* ── Keep the top bar lined up with the sidebar ────────────────────────────
+     The logo block and the divider arrow must sit exactly above the sidebar's
+     right edge. Rather than hard-coding 282px and 64px in two places, we measure
+     the sidebar and publish its width as --cp-sbw. That way the bar follows every
+     state, including the hover-peek, and stays correct if the width ever changes. */
+  (function () {
+    var sb = document.querySelector('.cp-sidebar');
+    if (!sb) return;
+    var last = -1;
+    function sync() {
+      var w = Math.round(sb.getBoundingClientRect().width);
+      if (w === last) return;
+      last = w;
+      document.documentElement.style.setProperty('--cp-sbw', w + 'px');
+      // Below this there is only room for the logo, not the wording.
+      document.body.classList.toggle('cp-sb-narrow', w < 140);
+    }
+    if (window.ResizeObserver) { new ResizeObserver(sync).observe(sb); }
+    window.addEventListener('resize', sync);
+    sb.addEventListener('transitionend', sync);
+    sync();
+  })();
+  </script>
+
+  <script>
+  /* ── Profile menu ──────────────────────────────────────────────────────────
+     Click the button to open. It closes when the pointer moves off it, when you
+     click outside, when you click the button again, or on Esc.
+
+     The move-away close waits a moment first. There is an 8px gap between the
+     button and the panel, and the pointer is briefly outside both while crossing
+     it - without the pause the menu would shut in your face on the way down.
+     Coming back inside cancels the pending close.
+
+     Touch devices never send mouseleave, so tapping outside still closes it. */
+  (function () {
+    var btn = document.getElementById('cpUserBtn');
+    var pop = document.getElementById('cpUserPop');
+    if (!btn || !pop) return;
+    var CLOSE_DELAY = 350, timer = null;
+    function cancelClose() { if (timer) { clearTimeout(timer); timer = null; } }
+    function show(open) {
+      if (open) cancelClose();
+      pop.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      show(!pop.classList.contains('open'));
+    });
+
+    // The wrapper holds both the button and the panel, so moving between them
+    // does not count as leaving.
+    var wrap = btn.parentNode;
+    if (wrap) {
+      wrap.addEventListener('mouseleave', function () {
+        cancelClose();
+        timer = setTimeout(function () { timer = null; show(false); }, CLOSE_DELAY);
+      });
+      wrap.addEventListener('mouseenter', cancelClose);
+    }
+    // Clicks inside the panel (the Sign out form) must not close it first.
+    pop.addEventListener('click', function (e) { e.stopPropagation(); });
+    // "Profile" folds the account details open underneath it.
+    var pbtn = document.getElementById('cpProfileBtn');
+    var pdet = document.getElementById('cpProfileDet');
+    if (pbtn && pdet) {
+      pbtn.addEventListener('click', function () {
+        var open = !pdet.classList.contains('open');
+        pdet.classList.toggle('open', open);
+        pbtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+    document.addEventListener('click', function () { show(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') show(false);
+    });
+  })();
+  </script>
+
+  <script>
+  /* ── Drag-to-scroll handle ─────────────────────────────────────────────────
+     The sidebar and the content area both have their scrollbars hidden. The wheel
+     still works, but there was nothing to see and nothing to grab. This draws a
+     slim grip over the right edge of each: pull it down and the area scrolls down.
+
+     How it is positioned: the grip is a fixed element sitting on top, not a child
+     of the scrolling box - a child would scroll away with the content. Its place is
+     recalculated whenever the box scrolls, resizes, or its contents change (opening
+     a menu group makes the sidebar taller).
+
+     The grip's LENGTH shows how much of the content you can see, exactly like a real
+     scrollbar: a short grip means there is a lot more below. */
+  (function () {
+    function attach(box) {
+      if (!box) return;
+      var bar = document.createElement('div');
+      var thumb = document.createElement('div');
+      bar.className = 'cp-dbar';
+      thumb.className = 'cp-dbar-thumb';
+      bar.appendChild(thumb);
+      document.body.appendChild(bar);
+
+      var MIN_GRIP = 32;          // never smaller than this, or it cannot be grabbed
+      var queued = false;
+
+      function draw() {
+        queued = false;
+        var view = box.clientHeight, all = box.scrollHeight;
+        var r = box.getBoundingClientRect();
+        bar.style.top = r.top + 'px';
+        bar.style.height = r.height + 'px';
+        bar.style.left = (r.right - 14) + 'px';
+
+        if (all <= view + 1) { bar.classList.remove('on'); return; }   // nothing to scroll
+        bar.classList.add('on');
+
+        var grip = Math.max(MIN_GRIP, Math.round(view * view / all));
+        var travel = view - grip;                 // how far the grip can move
+        var scrollable = all - view;              // how far the content can move
+        var y = scrollable > 0 ? (box.scrollTop / scrollable) * travel : 0;
+        thumb.style.height = grip + 'px';
+        thumb.style.transform = 'translateY(' + Math.round(y) + 'px)';
+      }
+      // Redraws are cheap but can be asked for in bursts; do at most one per frame.
+      function update() {
+        if (queued) return;
+        queued = true;
+        window.requestAnimationFrame(draw);
+      }
+
+      var dragging = false, grabY = 0, grabScroll = 0;
+      thumb.addEventListener('pointerdown', function (e) {
+        dragging = true; grabY = e.clientY; grabScroll = box.scrollTop;
+        try { thumb.setPointerCapture(e.pointerId); } catch (_) {}
+        bar.classList.add('drag');
+        document.body.classList.add('cp-dbar-dragging');
+        e.preventDefault(); e.stopPropagation();
+      });
+      thumb.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var view = box.clientHeight, all = box.scrollHeight;
+        var travel = view - thumb.offsetHeight, scrollable = all - view;
+        if (travel <= 0) return;
+        // Move the content further than the grip, in the same proportion.
+        box.scrollTop = grabScroll + (e.clientY - grabY) * (scrollable / travel);
+      });
+      function stop() {
+        dragging = false;
+        bar.classList.remove('drag');
+        document.body.classList.remove('cp-dbar-dragging');
+      }
+      thumb.addEventListener('pointerup', stop);
+      thumb.addEventListener('pointercancel', stop);
+
+      // Clicking the empty part of the bar jumps one screenful that way.
+      bar.addEventListener('pointerdown', function (e) {
+        if (e.target === thumb) return;
+        var top = bar.getBoundingClientRect().top + thumb.offsetTop;
+        box.scrollTop += (e.clientY < top ? -0.9 : 0.9) * box.clientHeight;
+      });
+
+      box.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+      if (window.ResizeObserver) { new ResizeObserver(update).observe(box); }
+      if (window.MutationObserver) {
+        // Opening a menu group changes the height, so watch the contents too.
+        new MutationObserver(update).observe(box,
+          { subtree: true, childList: true, attributes: true });
+      }
+      // The sidebar animates its width; catch the size it settles at.
+      box.addEventListener('transitionend', update);
+      update();
+    }
+
+    attach(document.querySelector('.cp-sidebar'));
+    attach(document.querySelector('.cp-main'));
+  })();
+  </script>
 
   <script>
   /* ── No browser tooltips ───────────────────────────────────────────────────

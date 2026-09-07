@@ -131,12 +131,26 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 #
 # Remember: after changing any static file you must run
 #     python manage.py collectstatic
+#
+# Hashed names are for the SERVER only. On a developer machine they get in the way:
+# the manifest (staticfiles.json) is read once when the process starts, so the moment
+# you edit a CSS/JS file and re-run collectstatic, the running server is holding an old
+# manifest and every page dies with "Missing staticfiles manifest entry" - a 500.
+#
+# So in DEBUG we use Django's plain storage: files are served straight from each app's
+# static folder under their real names. Edit, refresh, done - collectstatic is not
+# needed locally at all. Production is untouched and still gets the hashed, compressed
+# files, because DEBUG is False there.
+_STATIC_BACKEND = (
+    'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
+    else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+)
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': _STATIC_BACKEND,
     },
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

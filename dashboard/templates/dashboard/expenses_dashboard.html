@@ -8,7 +8,7 @@
 .dash-title h1{font-size:24px;line-height:1;margin:0;font-weight:800}
 .title-mark{width:5px;height:28px;border-radius:4px;background:#635bff}
 .title-pill{font-size:13px;font-weight:700;color:#3730a3;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:4px 12px}
-.filter-bar{background:rgba(255,255,255,.92);border:1px solid #ddd6fe;border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:repeat(6,minmax(118px,1fr));gap:14px;box-shadow:0 16px 40px rgba(79,70,229,.08);margin-bottom:10px}
+.filter-bar{background:rgba(255,255,255,.92);border:1px solid #ddd6fe;border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:100px 100px 158px 158px minmax(170px,1fr) minmax(130px,1fr);gap:14px;box-shadow:0 16px 40px rgba(79,70,229,.08);margin-bottom:10px}
 .fg label{display:block;font-size:13px;font-weight:750;color:#37305f;margin-bottom:7px}
 .fg input,.fg select{width:100%;height:52px;border:1px solid #ddd6fe;border-radius:12px;background:#fff;padding:0 14px;font:inherit;font-size:15px;color:#0f172a;outline:none}
 .fg input:focus,.fg select:focus{border-color:#635bff;box-shadow:0 0 0 3px rgba(99,91,255,.12)}
@@ -36,12 +36,12 @@
 <div class="dash-page">
   <div class="dash-title"><span class="title-mark"></span><h1>Expenses Dashboard</h1><span class="title-pill">Grouped by Budget Head - Salary on separate page</span></div>
   <div class="filter-bar">
-    <div class="fg"><label>Month</label><select id="monthSelect" onchange="applyMonthYearRange()"></select></div>
-    <div class="fg"><label>Year</label><select id="yearSelect" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>Month</label><select id="monthSelect" class="csel" onchange="applyMonthYearRange()"></select></div>
+    <div class="fg"><label>Year</label><select id="yearSelect" class="csel" onchange="applyMonthYearRange()"></select></div>
     <div class="fg"><label>From Date</label><input type="date" id="fromDate" value="{{ from_date }}"></div>
     <div class="fg"><label>To Date</label><input type="date" id="toDate" value="{{ to_date }}"></div>
     <div class="fg"><label>Account Name</label><input type="search" id="accountName" placeholder="Search account"></div>
-    <div class="fg"><label>Expense Type</label><select id="expenseType"><option value="all">All</option><option value="direct">Direct</option><option value="indirect">Indirect</option></select></div>
+    <div class="fg"><label>Expense Type</label><select id="expenseType" class="csel"><option value="all">All</option><option value="direct">Direct</option><option value="indirect">Indirect</option></select></div>
     <div class="filter-actions">
       <button class="btn btn-primary" onclick="loadExpenses()">Apply</button>
       <button class="btn btn-ghost" onclick="openBudgetModal()">Update Budget</button>
@@ -113,6 +113,12 @@ function toggleGroup(i){document.getElementById('g'+i).classList.toggle('open')}
 async function openBudgetModal(){budgetModal.classList.add('show');var month=Number(fromDate.value.slice(5,7)),year=Number(fromDate.value.slice(0,4));var res=await fetch('/api/expenses-budgets/?month='+month+'&year='+year);var data=await res.json();var saved=data.budgets||{};budgetRows.innerHTML=expenseGroups.map(function(g){return '<div class="budget-row"><strong>'+esc(g.category)+'</strong><input type="number" data-budget="'+esc(g.category)+'" value="'+(saved[g.category]||g.budget_total||0)+'"></div>'}).join('')||'<div class="empty">Load expenses first.</div>'}
 function closeBudgetModal(){budgetModal.classList.remove('show')}
 async function saveBudgets(){var month=Number(fromDate.value.slice(5,7)),year=Number(fromDate.value.slice(0,4)),budgets={};document.querySelectorAll('#budgetRows input').forEach(function(i){budgets[i.dataset.budget]=Number(i.value)||0});await fetch('/api/expenses-budgets-update/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({month:month,year:year,budgets:budgets})});closeBudgetModal();loadExpenses()}
-document.addEventListener('DOMContentLoaded',function(){initPeriodControls();loadExpenses()});
+document.addEventListener('DOMContentLoaded',function(){
+  initPeriodControls();
+  // our own dropdown - the browser's <select> popup cannot be sized (see core/_compact_select.html)
+  document.querySelectorAll('select.csel').forEach(CompactSelect.upgrade);
+  loadExpenses();
+});
 </script>
+{% include 'core/_compact_select.html' %}
 {% endblock %}

@@ -14,10 +14,10 @@
           background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .dd-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .dd-kpi .dd-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .dd-kpi .dd-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .dd-kpi .dd-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .dd-kpi .dd-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
   .dd-kpi .dd-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .dd-kpi .material-icons.dd-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .dd-kpi .ic.dd-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-inv{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-disp{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-cust{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0891b2}
@@ -30,8 +30,8 @@
   .dd-bar input[type=search]{min-width:240px}
   .dd-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .dd-bar input[type=search]:focus,.dd-bar input[type=date]:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .dd-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .dd-fetch:hover{background:var(--rz-indigo-deep)}
+  .dd-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .dd-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
   .dd-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .dd-export:hover{background:#ecfdf5;border-color:#a7f3d0}
 
@@ -68,7 +68,7 @@
       <input type="search" id="ddSearch" placeholder="Customer / inv no / bilty / vehicle / transporter…" autocomplete="off">
     </div>
     <div class="dd-fld"><span class="dd-lbl">&nbsp;</span>
-      <button class="dd-export" id="ddExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+      <button class="dd-export" id="ddExport" title="Export the current view to Excel"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</button>
     </div>
     <span class="dd-count" id="ddCount"></span>
   </div>
@@ -140,15 +140,15 @@
       if(String(r.bilty||'').trim())disp++;
     });
     var cards=[
-      {c:'k-inv',ic:'receipt_long',l:'Invoices',v:fN(a.length),m:'A/R invoices in range'},
-      {c:'k-disp',ic:'local_shipping',l:'Dispatched',v:fN(disp),m:'With a bilty number'},
-      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'},
-      {c:'k-trans',ic:'commute',l:'Transporters',v:fN(Object.keys(trans).length),m:'Distinct transporters'}
+      {c:'k-inv',ic:'receipt-text',l:'Invoices',v:fN(a.length),m:'A/R invoices in range'},
+      {c:'k-disp',ic:'truck',l:'Dispatched',v:fN(disp),m:'With a bilty number'},
+      {c:'k-cust',ic:'store',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'},
+      {c:'k-trans',ic:'bus',l:'Transporters',v:fN(Object.keys(trans).length),m:'Distinct transporters'}
     ];
     document.getElementById('ddKpis').innerHTML=cards.map(function(k){
-      return '<div class="dd-kpi '+k.c+'"><div class="dd-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="dd-kpi '+k.c+'"><div class="dd-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="dd-kpi-v">'+k.v+'</div><div class="dd-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons dd-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic dd-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 

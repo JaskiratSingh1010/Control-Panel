@@ -162,7 +162,7 @@ def get_total_sales_volume(year: int, month: int) -> dict:
         prev_result = get_sales_data(prev_start, prev_end) or {}
     except Exception as e:
         logger.error('[home] get_total_sales_volume failed: %s', e)
-        return _stub_kpi('Total Sales Volume', 'local_shipping', 'blue')
+        return _stub_kpi('Total Sales Volume', 'truck', 'blue')
 
     curr_ltrs = curr_result.get('total_litres', 0) or 0
     prev_ltrs = prev_result.get('total_litres', 0) or 0
@@ -179,7 +179,7 @@ def get_total_sales_volume(year: int, month: int) -> dict:
 
     return {
         'label':       'Total Sales Volume',
-        'icon':        'local_shipping',
+        'icon':        'truck',
         'gradient':    'blue',
         'value':       _format_litres(curr_ltrs),
         'current_value': _format_litres(curr_ltrs),
@@ -215,7 +215,7 @@ def get_avg_realisation(year: int, month: int) -> dict:
         prev_result = get_sales_data(prev_start, prev_end) or {}
     except Exception as e:
         logger.error('[home] get_avg_realisation failed: %s', e)
-        return _stub_kpi('Avg. Realisation', 'show_chart', 'green')
+        return _stub_kpi('Avg. Realisation', 'chart-line', 'green')
 
     curr_ltrs = curr_result.get('total_litres', 0) or 0
     curr_rev  = curr_result.get('total_revenue', 0) or 0
@@ -235,7 +235,7 @@ def get_avg_realisation(year: int, month: int) -> dict:
 
     return {
         'label':       'Avg. Realisation',
-        'icon':        'show_chart',
+        'icon':        'chart-line',
         'gradient':    'green',
         'value':       f'₹{curr_rate:.2f}/L',
         'current_value': f'₹{curr_rate:.2f}/L',
@@ -273,7 +273,7 @@ def get_cost_of_goods_sold(year: int, month: int) -> dict:
         prev = get_cogs_data(prev_start, prev_end, 'Y') or {}
     except Exception as e:
         logger.error('[home] get_cost_of_goods_sold failed: %s', e)
-        return _stub_kpi('Cost of Goods Sold', 'receipt_long', 'orange')
+        return _stub_kpi('Cost of Goods Sold', 'receipt-text', 'orange')
 
     curr_total = curr.get('total_cogs', 0) or 0
     prev_total = prev.get('total_cogs', 0) or 0
@@ -284,7 +284,7 @@ def get_cost_of_goods_sold(year: int, month: int) -> dict:
 
     return {
         'label':       'Cost of Goods Sold',
-        'icon':        'receipt_long',
+        'icon':        'receipt-text',
         'gradient':    'orange',
         'value':       _format_inr_compact(curr_total) if unlocked else _format_litres(curr_total_liter),
         'current_value': _format_inr_compact(curr_total) if unlocked else None,
@@ -317,14 +317,14 @@ def get_operating_expenses(year: int, month: int) -> dict:
         prev = get_expenses_by_category(pm, py) or {}
     except Exception as e:
         logger.error('[home] get_operating_expenses failed: %s', e)
-        return _stub_kpi('Operating Expenses', 'account_balance_wallet', 'red')
+        return _stub_kpi('Operating Expenses', 'wallet', 'red')
 
     curr_total = sum(curr.values()) if curr else 0
     prev_total = sum(prev.values()) if prev else 0
 
     return {
         'label':       'Operating Expenses',
-        'icon':        'account_balance_wallet',
+        'icon':        'wallet',
         'gradient':    'red',
         'value':       _format_inr_compact(curr_total),
         'current_value': _format_inr_compact(curr_total),
@@ -351,14 +351,14 @@ def get_salary_expenditure(year: int, month: int) -> dict:
         prev = get_expenses_by_category(pm, py) or {}
     except Exception as e:
         logger.error('[home] get_salary_expenditure failed: %s', e)
-        return _stub_kpi('Salary Expenditure', 'people', 'purple')
+        return _stub_kpi('Salary Expenditure', 'users', 'purple')
 
     curr_salary = curr.get('Salaries & HR', 0) if curr else 0
     prev_salary = prev.get('Salaries & HR', 0) if prev else 0
 
     return {
         'label':       'Salary Expenditure',
-        'icon':        'people',
+        'icon':        'users',
         'gradient':    'purple',
         'value':       _format_inr_compact(curr_salary),
         'current_value': _format_inr_compact(curr_salary),
@@ -395,7 +395,7 @@ def get_inventory_value(year: int, month: int) -> dict:
 
         return {
             'label':       'Inventory Value',
-            'icon':        'inventory_2',
+            'icon':        'package',
             'gradient':    'indigo',
             'value':       _format_inr_compact(total_value),
             'sub_value':   f'{_indian_grouping(round(total_skus))} SKUs',
@@ -411,6 +411,6 @@ def get_inventory_value(year: int, month: int) -> dict:
     except Exception as e:
         logger.error('[home] get_inventory_value failed: %s', e)
         return _stub_kpi(
-            'Inventory Value', 'inventory_2', 'indigo',
+            'Inventory Value', 'package', 'indigo',
             extra={'sku_count': None, 'warehouse_count': 0, 'unit_count': None},
         )

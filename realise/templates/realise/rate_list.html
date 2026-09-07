@@ -143,9 +143,9 @@
           +' title="Month this plan is FOR — Plan vs Done only shows it against this month’s sales. Clear it to show the plan in every month.">'
         +'<span class="rl-chip scope">'+esc(o.scope==='GRID'?'Planning Grid':(o.scope==='ORDER'?'Old + New Order':(o.scope==='BOTH'?'Existing + New':(o.scope==='A'?'Existing Plan':'New Plan'))))+'</span>'
         +'<div class="rl-sp"><span class="rl-meta">'+esc(o.created_at)+(o.created_by?' · '+esc(o.created_by):'')+'</span>'
-        +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><span class="material-icons" style="font-size:14px">edit</span>Load &amp; Edit</button>'
-        +'<button class="rl-del" title="Delete" data-del="'+o.id+'">✕</button>'
-        +'<span class="material-icons rl-chev">expand_more</span></div>'
+        +'<button class="rl-load" title="Load into the Realise Calculator to edit" data-load="'+o.id+'"><i class="ic ic-pencil" style="font-size:14px"></i>Load &amp; Edit</button>'
+        +'<button class="rl-del" title="Delete" data-del="'+o.id+'"><i class="ic ic-x"></i></button>'
+        +'<i class="ic ic-chevron-down rl-chev"></i></div>'
       +'</div><div class="rl-body">'+body+'</div></div>';
   }
 

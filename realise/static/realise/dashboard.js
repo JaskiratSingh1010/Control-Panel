@@ -1520,7 +1520,35 @@ function getFilteredChannelRows(){
   }
   return rows;
 }
-function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr,balLtr){
+/* Fills one "<rate>/LTR - Rs<money>" line under a KPI figure. Done Ltr and OIH Ltr
+   both use it, so the two lines can never drift apart.
+     el       the small div under the litres
+     litres   the litres that line describes
+     perLitre the realise rate for them (money / litres), worked out by the caller
+     what     wording for the tooltip, e.g. "Done" or "open-order"
+   No Rs on the rate - the "/LTR" already says what it is; the money keeps its Rs. */
+function setRealiseLine(el,litres,perLitre,what,emptyText){
+  if(!el)return;
+  var rate=(perLitre&&isFinite(perLitre))?Number(perLitre):0;
+  if(rate!==0){
+    /* Left = the realise itself (₹ per litre), set large. Right = what those litres
+       add up to. The word TOTAL is there because readers could not tell which of the
+       two numbers was "the realise"; the ₹ makes the rate read as money at a glance. */
+    el.innerHTML='<span class="k-rate">₹'+fNp(rate,2)+'<span class="u">/LTR</span></span>'
+                +'<span class="k-money"><span class="u">TOTAL</span> '+fRsShort((litres||0)*rate)+'</span>';
+    el.title='Realise of the '+what+' litres. Left = the realise itself, ₹ per litre. '
+            +'Right = the total those litres come to (rate × litres).';
+  }else if((litres||0)!==0){        // a balance can be negative, so test for 'not zero'
+    // Litres are there but no value came with them, so a rate cannot be worked out. Say
+    // so rather than showing a bare dash, which looks like the figure failed to load.
+    el.innerHTML='<span class="u">'+(emptyText||'no revenue data')+'</span>';
+    el.title='These '+what+' litres carry no value, so a ₹ per litre realise cannot be calculated';
+  }else{
+    el.innerHTML='&mdash;';
+    el.title='';
+  }
+}
+function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr,balLtr,oihRealise){
   // Bal Ltr mirrors the table's primary "Bal" column = (effective target − Done − OIH). Callers
   // pass balLtr explicitly when the table uses a flex-adjusted target; otherwise default to
   // Target − Done − OIH so the KPI strip stays consistent with the per-row / TOTAL "Bal".
@@ -1529,7 +1557,9 @@ function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr,b
   var elDone=document.getElementById('sc2KpiDone');
   var elOih=document.getElementById('sc2KpiOih');
   var elBal=document.getElementById('sc2KpiBal');
-  var elTargetRealise=document.getElementById('sc2KpiTargetRealise');
+  /* The old "Actual Realise" card is gone - its figure is the ₹/LTR half of the
+     realise line under Done Ltr now. The lookup stays (and is guarded) so nothing
+     breaks if that card is ever put back. */
   var elCurrentRealise=document.getElementById('sc2KpiCurrentRealise');
   if(elTarget)elTarget.innerHTML=fN(targetLtr||0);
   if(elDone)elDone.innerHTML=fN(doneLtr||0);
@@ -1538,8 +1568,27 @@ function setSlideTwoKpis(targetLtr,doneLtr,targetRealise,currentRealise,oihLtr,b
     elBal.innerHTML=fN(bal);
     elBal.className=bal>=0?'pos':'neg';
   }
-  if(elTargetRealise)elTargetRealise.innerHTML=(targetRealise&&isFinite(targetRealise))?'₹'+fNp(targetRealise,2):'&mdash;';
   if(elCurrentRealise)elCurrentRealise.innerHTML=(currentRealise&&isFinite(currentRealise))?'₹'+fNp(currentRealise,2):'&mdash;';
+  /* The realise line under a litres figure, shown two ways:
+       rate  = ₹ per litre
+       money = rate × litres = what those litres come to.
+     Done uses line_total ÷ litres (sc2Realise) — the figure the old "Actual Realise"
+     card used to show on its own. OIH uses the same shape on open orders:
+     open_value ÷ open_qty. */
+  setRealiseLine(document.getElementById('sc2KpiTargetRealise'), targetLtr, targetRealise, 'Target', 'no target realise');
+  setRealiseLine(document.getElementById('sc2KpiDoneRealise'),   doneLtr,   currentRealise, 'Done');
+  setRealiseLine(document.getElementById('sc2KpiOihRealise'),    oihLtr,    oihRealise,     'open-order');
+  /* Bal realise = (target revenue − done revenue) ÷ balance litres: the ₹ per litre
+     still needed on what is left in order to reach the target revenue. This is the
+     SAME formula the "Bal Realise" column in the tables uses, so the card and the
+     table can never disagree. It only means anything when a target exists - with no
+     target there is no target revenue to measure the balance against.
+     Its TOTAL works out to (target revenue − done revenue): the money still to earn. */
+  var balRealise=((targetLtr||0)>0&&bal!==0)
+    ? (((targetLtr||0)*(targetRealise||0))-((doneLtr||0)*(currentRealise||0)))/bal : 0;
+  setRealiseLine(document.getElementById('sc2KpiBalRealise'), bal, balRealise,
+                 'balance', 'needs a target');
+
   sc2RenderTopKpis();
 }
 // ── Slide 2 Top Customers / Top Months (by Done litres; honours the Segment filter) ──
@@ -2208,7 +2257,9 @@ function renderSlideTwoCommodity(){
   var tree=buildCommodityTree(rows,oih,last,comOrder);
   // Bal Ltr KPI = the TOTAL row's "Bal" = flex-adjusted target − Done − OIH (matches comCellsTotal).
   var comFlex=sc2FlexOn()?comFlexTotal(tree,tot.target||0):(tot.target||0);
-  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih, comFlex-((tot.done||0)+(tot.oih||0)));
+  setSlideTwoKpis(tot.target,tot.done,tot.targetRealise,tot.done>0?tot.lineTotal/tot.done:0,tot.oih,
+                comFlex-((tot.done||0)+(tot.oih||0)),
+                (tot.oih||0)>0?((tot.oihLineTotal||0)/tot.oih):0);
   sc2CsvRows=buildCommodityCsvRows(tree,tot);
   grid.innerHTML=renderCommodityTable(tree,tot);
   // First paint has no OIH yet — fetch the live snapshot, then repaint.
@@ -2472,7 +2523,8 @@ function themedChannelCardHtml(item){
   return '<div class="sc2-card '+(item.name==='REST'?'sc2-card-rest':'sc2-card-main')+'" style="--accent:'+accent.band+';--accent-strong:'+accent.ring+';cursor:pointer" onclick="openChannelDetail('+"'"+esc(item.name)+"'"+')">'
     +'<div class="sc2-titlebar">'
       +'<div class="sc2-icon">'+esc(shortCode)+'</div>'
-      +'<div class="sc2-titletext"><strong>'+esc(item.name)+' - '+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
+      // No "GT - " style prefix: the round badge to the left already shows the code.
+      +'<div class="sc2-titletext"><strong>'+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
     +'</div>'
     +'<div class="sc2-thead sc2-oih">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(firstColLabel)+'</div>'
@@ -3499,7 +3551,8 @@ async function renderSlideTwo(){
     var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
     // Bal Ltr KPI = the TOTAL row's "Bal" = flex-adjusted target − Done − OIH (so it matches).
     var dBal=sc2DynFlexTotal(dt.target)-((dt.done||0)+(dt.oih||0));
-    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih,dBal);
+    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih,dBal,
+                    (dt.oih||0)>0?((dt.oihLineTotal||0)/dt.oih):0);
     sc2CsvRows=sc2DynCsvRows(sc2DynTree,dt);
     sc2DynFitHeight();                         // grow the body to fill the slide
     return;
@@ -3508,7 +3561,7 @@ async function renderSlideTwo(){
   var targetNodes=[], oihRows=[];
   try{ targetNodes=await fetchTargetNodes(period.month,period.year); }catch(e){ targetNodes=[]; }
   try{ oihRows=await fetchOrderInHandRows(); }catch(e){ oihRows=[]; }
-  var cardByName={}, crByName={}, agg={target:0,done:0,oih:0,lineTotal:0,trW:0,trWsum:0};
+  var cardByName={}, crByName={}, agg={target:0,done:0,oih:0,lineTotal:0,oihLineTotal:0,trW:0,trWsum:0};
   // E-Com takes REST's old grid slot (4th cell); Horeca, CSD then REST flow below in
   // the same 2-col grid, which scrolls. Keep in sync with CHANNEL_BLOCKS.
   var layoutNames=['GT','ROI','MT','ECOM','HORECA','CSD','REST'];
@@ -3518,6 +3571,7 @@ async function renderSlideTwo(){
     var ct=cardRowsTotal(cr);
     crByName[name]={rows:cr, total:ct, label:name==='REST'?'Main Group':'State/Area'};
     agg.target+=ct.target; agg.done+=ct.done; agg.oih+=ct.oih; agg.lineTotal+=ct.lineTotal;
+    agg.oihLineTotal+=ct.oihLineTotal||0;   // open-order value, for the OIH realise line
     if(ct.target>0){ agg.trWsum+=ct.targetRealise*ct.target; agg.trW+=ct.target; }
     cardByName[name]=themedChannelCardHtml({
       name:name, members:block.members,
@@ -3530,7 +3584,9 @@ async function renderSlideTwo(){
   }
   var kpiTargetRealise=agg.trW>0?agg.trWsum/agg.trW:0;
   var kpiTarget=agg.target+(sc2Seg()===''?commodityTargetTotal():0);
-  setSlideTwoKpis(kpiTarget,agg.done,kpiTargetRealise,sc2Realise(rows),agg.oih);
+  // balLtr stays undefined on purpose so it keeps defaulting to Target - Done - OIH.
+  setSlideTwoKpis(kpiTarget,agg.done,kpiTargetRealise,sc2Realise(rows),agg.oih,undefined,
+                  (agg.oih||0)>0?((agg.oihLineTotal||0)/agg.oih):0);
   sc2CsvRows=buildChannelCsvRows(layoutNames,crByName,agg,sc2Realise(rows));
   var html='';
   for(var li=0;li<layoutNames.length;li++){ if(cardByName[layoutNames[li]])html+=cardByName[layoutNames[li]]; }
@@ -4001,6 +4057,16 @@ function buildExcelLayoutRows(title){
 
 function fN(n,d){d=d||0;if(n===null||n===undefined||isNaN(n))return'&mdash;';return new Intl.NumberFormat('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n);}
 function fNp(n,d){d=d||0;if(n===null||n===undefined||isNaN(n))return'—';return new Intl.NumberFormat('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n);}
+/* Rupees in Indian short form, so a big revenue figure fits inside a KPI card:
+   4,43,26,000 -> "₹4.43 Cr". "Lakh" is spelled out on purpose - a bare "L" next to
+   a litres figure reads as litres. */
+function fRsShort(n){
+  n=Number(n)||0;
+  var sign=n<0?'-':'', a=Math.abs(n);
+  if(a>=1e7)return sign+'₹'+fNp(a/1e7,2)+' Cr';
+  if(a>=1e5)return sign+'₹'+fNp(a/1e5,2)+' Lakh';
+  return sign+'₹'+fNp(a,0);
+}
 function fC(n){if(n===null||n===undefined||isNaN(n))return'&mdash;';return'₹'+new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(n));}
 function vc(v){return v>0?'v-pos':v<0?'v-neg':'v-zero';}
 function showToast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='toast toast-'+(type||'info')+' show';setTimeout(function(){el.classList.remove('show');},3500);}

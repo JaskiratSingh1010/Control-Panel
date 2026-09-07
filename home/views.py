@@ -88,7 +88,7 @@ def index(request):
                     kpis[name] = future.result()
                 except Exception as e:
                     logger.error('[home] KPI "%s" raised: %s', name, e)
-                    kpis[name] = services._stub_kpi(name, 'error', 'grey')
+                    kpis[name] = services._stub_kpi(name, 'circle-alert', 'grey')
         cache.set(cache_key, kpis, CACHE_TTL)
 
     # Tag each KPI with its trend direction semantics (idempotent — safe on cached payloads too).

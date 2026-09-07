@@ -13,10 +13,10 @@
     background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .cl-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .cl-kpi .cl-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .cl-kpi .cl-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .cl-kpi .cl-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .cl-kpi .cl-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink)}
   .cl-kpi .cl-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .cl-kpi .material-icons.cl-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .cl-kpi .ic.cl-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-cnt{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-amt{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#7c3aed}
   .k-pass{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
@@ -117,7 +117,7 @@
   <div class="cl-kpis" id="clKpis"></div>
 
   <div class="cl-bar">
-    <button class="cl-add" id="clAdd"><span class="material-icons" style="font-size:18px">add</span>Add Claim</button>
+    <button class="cl-add" id="clAdd"><i class="ic ic-plus" style="font-size:18px"></i>Add Claim</button>
     <div class="cl-fld"><span class="cl-lbl">Month / Year</span>
       <select id="clMonth"><option value="">All months</option></select>
     </div>
@@ -159,8 +159,8 @@
     <div class="cl-spacer"></div>
     <div class="cl-fld"><span class="cl-lbl">&nbsp;</span>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="cl-export" id="clExport"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
-        <button class="cl-upload" id="clUpload" title="Import claims from an .xlsx/.csv in the export format (adds new claims)"><span class="material-icons" style="font-size:16px">upload</span>Upload Excel</button>
+        <button class="cl-export" id="clExport"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</button>
+        <button class="cl-upload" id="clUpload" title="Import claims from an .xlsx/.csv in the export format (adds new claims)"><i class="ic ic-upload" style="font-size:16px"></i>Upload Excel</button>
         <input type="file" id="clUploadFile" accept=".xlsx,.csv" style="display:none">
       </div>
     </div>
@@ -180,7 +180,7 @@
 <!-- Add / Edit modal -->
 <div class="cl-modal" id="clModal">
   <div class="cl-dialog">
-    <div class="cl-dhead"><h3 id="clDlgTitle">Add Claim</h3><span class="material-icons cl-dclose" id="clDlgX">close</span></div>
+    <div class="cl-dhead"><h3 id="clDlgTitle">Add Claim</h3><i class="ic ic-x cl-dclose" id="clDlgX"></i></div>
     <div class="cl-form">
       <div class="cl-ffld"><label>Receiving Date *</label><input type="date" id="fDate"></div>
       <div class="cl-ffld"><label>Claim Pass Date</label><input type="date" id="fPassDate"></div>
@@ -277,14 +277,14 @@
     a.forEach(function(r){amt+=Number(r.claim_amount)||0;pass+=Number(r.claim_passed)||0;hold+=Number(r.hold_amount)||0;});
     var cards=[
       {c:'k-cnt',ic:'gavel',l:'Claims',v:fN(a.length),m:'In this selection'},
-      {c:'k-amt',ic:'request_quote',l:'Claim Amount',v:abbr(amt),m:'Σ claim amount (₹)'},
-      {c:'k-pass',ic:'task_alt',l:'Passed',v:abbr(pass),m:'Σ claim passed (₹)'},
-      {c:'k-hold',ic:'pan_tool',l:'On Hold',v:abbr(hold),m:'Σ hold amount (₹)'}
+      {c:'k-amt',ic:'receipt-indian-rupee',l:'Claim Amount',v:abbr(amt),m:'Σ claim amount (₹)'},
+      {c:'k-pass',ic:'circle-check-big',l:'Passed',v:abbr(pass),m:'Σ claim passed (₹)'},
+      {c:'k-hold',ic:'hand',l:'On Hold',v:abbr(hold),m:'Σ hold amount (₹)'}
     ];
     document.getElementById('clKpis').innerHTML=cards.map(function(k){
-      return '<div class="cl-kpi '+k.c+'"><div class="cl-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="cl-kpi '+k.c+'"><div class="cl-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="cl-kpi-v">'+k.v+'</div><div class="cl-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons cl-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic cl-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 
@@ -322,8 +322,8 @@
         var title=(c.k==='reason_of_hold'||c.k==='party_name'||c.k==='item')?(' title="'+esc(r[c.k]||'')+'"'):'';
         return '<td class="'+cls+'"'+title+'>'+cellHtml(c,r)+'</td>';
       }).join('')
-      +'<td class="act"><span class="material-icons cl-ico edit" data-edit="'+r.id+'" title="Edit">edit</span>'
-      +'<span class="material-icons cl-ico del" data-del="'+r.id+'" title="Delete">delete</span></td></tr>';
+      +'<td class="act"><i class="ic ic-pencil cl-ico edit" data-edit="'+r.id+'" title="Edit"></i>'
+      +'<i class="ic ic-trash-2 cl-ico del" data-del="'+r.id+'" title="Delete"></i></td></tr>';
     }).join('');
     html+='<tr class="cl-total"><td>TOTAL</td>'+
       '<td></td><td></td><td></td><td></td><td></td><td></td><td></td>'+
@@ -411,7 +411,7 @@
     types.forEach(function(t){
       var on=!typeSet||typeSet.has(t);
       var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
-      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(t)+'</span><span class="com-pos">✓</span>';
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(t)+'</span><span class="com-pos"><i class="ic ic-check"></i></span>';
       item.querySelector('input').addEventListener('change',function(){
         // Materialize the working set from current selection
         var cur=new Set(); document.querySelectorAll('#clTypeList input:checked').forEach(function(cb){cur.add(cb.parentNode.querySelector('.com-dp-name').textContent);});
@@ -439,7 +439,7 @@
     parties.forEach(function(p){
       var on=!partySet||partySet.has(p);
       var item=document.createElement('label'); item.className='com-dp-item'+(on?' checked':'');
-      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(p)+'</span><span class="com-pos">✓</span>';
+      item.innerHTML='<input type="checkbox" '+(on?'checked':'')+'><span class="com-dp-name">'+esc(p)+'</span><span class="com-pos"><i class="ic ic-check"></i></span>';
       item.querySelector('input').addEventListener('change',function(){
         var cur=new Set(); document.querySelectorAll('#clPtyList input:checked').forEach(function(cb){cur.add(cb.parentNode.querySelector('.com-dp-name').textContent);});
         item.classList.toggle('checked',this.checked);

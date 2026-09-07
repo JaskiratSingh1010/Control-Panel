@@ -2329,10 +2329,16 @@ def get_order_in_hand_by_person():
 
 
 def _open_order_litres_by_group_code_customer():
-    """[{GRP, ST, CUST, SUBG, UTYPE, OPEN_QTY}] open-order litres split by customer and
-    by product/type (from the order line's item) so the dashboard can filter Order-in-
-    Hand by Premium/Commodity the same way Done is filtered. State/city come from the
-    order's ship-to address (CRD1), not the BP-master HQ."""
+    """[{GRP, ST, CUST, SUBG, UTYPE, OPEN_QTY, OPEN_VAL}] open-order litres AND value,
+    split by customer and by product/type (from the order line's item) so the dashboard
+    can filter Order-in-Hand by Premium/Commodity the same way Done is filtered.
+    State/city come from the order's ship-to address (CRD1), not the BP-master HQ.
+
+    OPEN_VAL pro-rates the still-open share of each line's LineTotal, so a part-delivered
+    order only counts what is still to go. It is EX-GST on purpose: Done's line_total
+    (from REPORT_SALES_ANALYSIS) is ex-GST, and the OIH realise (₹/litre) is meant to be
+    read next to the Done realise. The Required Credit Limit report deliberately uses the
+    tax-INCLUSIVE version instead, because that has to tie to the customer ledger."""
     sql = f'''
         SELECT COALESCE(TRIM(C."U_Main_Group"), '') AS "GRP",
                {_SHIPTO_STATE} AS "ST",
@@ -2343,7 +2349,10 @@ def _open_order_litres_by_group_code_customer():
                COALESCE(TRIM(I."U_TYPE"), '')        AS "UTYPE",
                COALESCE(TRIM(I."ItemName"), '')      AS "ITEM",
                COALESCE(TRIM(I."U_SKU"), '')         AS "SKU",
-               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY"
+               SUM(L."OpenQty" * COALESCE(I."SalPackUn", 0)) AS "OPEN_QTY",
+               SUM(CASE WHEN L."Quantity" <> 0
+                        THEN L."OpenQty" / L."Quantity" * L."LineTotal"
+                        ELSE 0 END)                   AS "OPEN_VAL"
         FROM "{SAP_SCHEMA}"."ORDR" H
         JOIN "{SAP_SCHEMA}"."RDR1" L ON L."DocEntry" = H."DocEntry"
         JOIN "{SAP_SCHEMA}"."OCRD" C ON C."CardCode" = H."CardCode"
@@ -2365,8 +2374,9 @@ def _open_order_litres_by_group_code_customer():
 
 def get_order_in_hand_rows():
     """Granular open-order rows: {main_group, state(name), sales_person, card_name,
-    u_type, u_sub_group, item_name, open_qty}. open_qty is in LITRES (Quantity *
-    OITM.SalPackUn), matching Done. u_type/u_sub_group/item_name let the dashboard
+    u_type, u_sub_group, item_name, open_qty, open_value}. open_qty is in LITRES
+    (Quantity * OITM.SalPackUn), matching Done; open_value is the still-open ₹ of those
+    lines (ex-GST, like Done's line_total) so the dashboard can show an OIH realise. u_type/u_sub_group/item_name let the dashboard
     split Order-in-Hand by segment, product, and item; card_name attributes to a real
     buyer. State comes from the order's ship-to address (CRD1) so it matches Done
     (OCRD.State1 is unreliable for national accounts); person follows that state."""
@@ -2384,6 +2394,7 @@ def get_order_in_hand_rows():
             'item_name': _normalize_name(d.get('ITEM')),
             'sku': _normalize_name(d.get('SKU')),
             'open_qty': float(d.get('OPEN_QTY') or 0),
+            'open_value': float(d.get('OPEN_VAL') or 0),
         })
     return rows
 
@@ -5776,7 +5787,8 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
 
     def build(extras):
         return f'''
-        SELECT T4."SlpName" AS "sp", T0."CardCode" AS "code", T0."CardName" AS "name",
+        SELECT COALESCE(T6."SlpName", '-No Sales Employee / Buyer-') AS "sp",
+               T0."CardCode" AS "code", T0."CardName" AS "name",
                T0."DocNum" AS "doc", TO_VARCHAR(T0."DocDate",'YYYY-MM-DD') AS "date",
                DAYS_BETWEEN(T0."DocDate", {ag}) AS "days",
                TO_VARCHAR(T5."LastTransDate",'YYYY-MM-DD') AS "ltd",
@@ -5787,6 +5799,7 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
         FROM {B}.OINV T0
         INNER JOIN {B}.OCRD T3 ON T0."CardCode" = T3."CardCode"
         INNER JOIN {B}.OSLP T4 ON T3."SlpCode" = T4."SlpCode"
+        LEFT  JOIN {B}.OSLP T6 ON T0."SlpCode" = T6."SlpCode"
         LEFT JOIN (SELECT T1."ShortName" AS "CardCode", MAX(T1."RefDate") AS "LastTransDate"
                    FROM {B}.JDT1 T1 GROUP BY T1."ShortName") T5 ON T0."CardCode" = T5."CardCode"
         WHERE T0."DocType" = 'I' AND T0."DocStatus" = 'O' AND T0."CANCELED" = 'N'
@@ -5808,6 +5821,12 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
     for r in raw or []:
         tdd = r.get('tdd')
         rows.append({
+            # The sales employee written ON THE INVOICE (OINV.SlpCode), i.e. who actually
+            # raised it - not the person the customer happens to be assigned to today
+            # (OCRD.SlpCode). Those differ whenever a customer changes hands: the old
+            # invoices used to follow the new owner, which hid who really made the sale.
+            # SAP leaves this empty on many invoices; those keep SAP's own
+            # '-No Sales Employee / Buyer-' label rather than being guessed at.
             'sp': _clean_salesperson(r.get('sp')) or '—',
             'code': _bev_cell(r.get('code')),
             'name': _bev_cell(r.get('name')) or _bev_cell(r.get('code')),
@@ -5867,6 +5886,73 @@ def get_customer_aging_beverages(aging_date=None):
     payload['aging_date'] = key
     _bev_aging_cache[key] = (now + _AGING_TTL, payload)
     return payload
+
+
+# Which SAP company database each Customer Aging tab reads.
+_AR_ITEM_SCHEMA = {'oil': SAP_SCHEMA, 'bev': BEVERAGES_SCHEMA, 'mart': MART_SCHEMA}
+
+# HANA has a ceiling on how many values fit in one IN (...) list, and a huge list is slow
+# anyway. Ask for the invoices in batches of this size and stitch the answers together.
+_ITEM_DOC_CHUNK = 500
+
+
+def get_aging_invoice_items(company, doc_nums):
+    """Line items of the given OPEN invoices, for the Customer Aging drill popup.
+
+    Give it document numbers (the ones already on screen) and it returns one row per
+    invoice + item: which invoice, which item, how much and how many. The popup groups
+    them by item for its first level, then filters back down to invoices for its second.
+
+    Why it re-checks DocStatus='O' instead of trusting the numbers passed in: the caller
+    is a browser, and a stale tab could ask for invoices that have since been paid. The
+    WHERE clause is the same one the RAW DATA list itself uses, so the popup can never
+    show a document the report would not.
+    """
+    schema = _AR_ITEM_SCHEMA.get(company) or SAP_SCHEMA
+
+    # Only digits survive - these arrive from the browser and go into a SQL IN list.
+    docs, seen = [], set()
+    for d in (doc_nums or []):
+        d = str(d or '').strip()
+        if d.isdigit() and d not in seen:
+            seen.add(d)
+            docs.append(int(d))
+    if not docs:
+        return []
+
+    out = []
+    for i in range(0, len(docs), _ITEM_DOC_CHUNK):
+        batch = docs[i:i + _ITEM_DOC_CHUNK]
+        marks = ','.join(['?'] * len(batch))
+        sql = f'''
+        SELECT T0."DocNum"      AS "doc",
+               T1."ItemCode"    AS "item_code",
+               COALESCE(T2."ItemName", T1."Dscription") AS "item_name",
+               SUM(T1."Quantity")  AS "qty",
+               SUM(T1."LineTotal") AS "amount"
+        FROM {schema}.OINV T0
+        INNER JOIN {schema}.INV1 T1 ON T0."DocEntry" = T1."DocEntry"
+        LEFT  JOIN {schema}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
+        WHERE T0."DocType" = 'I' AND T0."DocStatus" = 'O' AND T0."CANCELED" = 'N'
+          AND T0."DocNum" IN ({marks})
+        GROUP BY T0."DocNum", T1."ItemCode", T2."ItemName", T1."Dscription"
+        ORDER BY T0."DocNum"
+        '''
+        try:
+            rows = sap_connector.execute_query(sql, tuple(batch))
+        except Exception as exc:
+            logger.exception('[aging-items] %s line-item query failed', company)
+            raise RuntimeError(str(exc))
+        for r in rows or []:
+            name = _bev_cell(r.get('item_name')) or _bev_cell(r.get('item_code')) or '\u2014'
+            out.append({
+                'doc': _bev_cell(r.get('doc')),
+                'item_code': _bev_cell(r.get('item_code')),
+                'item_name': name,
+                'qty': _aging_num(r.get('qty')),
+                'amount': _aging_num(r.get('amount')),
+            })
+    return out
 
 
 def get_customer_aging_oil_ar(aging_date=None):

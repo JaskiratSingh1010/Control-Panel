@@ -2749,6 +2749,27 @@ def api_export_aging_pivot(request):
         return JsonResponse({'error': 'too many rows for one export'}, status=400)
 
     bold = {'bold': True}
+    # Colours, matching the aging table on screen: a dark header strip, then the same
+    # green-to-red tint running across the seven age columns.
+    head = {'bold': True, 'fill': '0F172A', 'color': 'FFFFFF'}
+    BUCKET_TINT = ['F2FDF5', 'EAFAF0', 'E3F7EA', 'F0FDFA', 'FFFBEB', 'FFF7ED', 'FEF2F2']
+
+    def tint(i):
+        """Fill for the i-th aging column; cycles if a bucket is ever added."""
+        return BUCKET_TINT[i % len(BUCKET_TINT)]
+
+    def money_row(lead, node_measures, strong=False):
+        """One data line: plain leading cells, then the measures with the age columns
+        tinted. `strong` is for a Total line."""
+        style = dict(bold) if strong else {}
+        cells = list(lead)
+        n_plain = len(node_measures) - len(buckets)          # Balance / Outstanding / Difference
+        for i, v in enumerate(node_measures):
+            if i < n_plain:
+                cells.append({'value': v, **style} if style else v)
+            else:
+                cells.append({'value': v, 'fill': tint(i - n_plain), **style})
+        return cells
     buckets = services.AGING_BUCKETS
 
     def num(v):
@@ -2758,7 +2779,10 @@ def api_export_aging_pivot(request):
             return 0.0
 
     # -- sheet 1: the raw table, exactly as shown -------------------------------------
-    raw_sheet = [[{'value': str(c), **bold} for c in columns]]
+    # Which company tab the browser is on - decides the SAP database the Item tab reads.
+    company = (body.get('company') or 'oil').strip().lower()
+
+    raw_sheet = [[{'value': str(c), **head} for c in columns]]
     for r in rows:
         if isinstance(r, list):
             raw_sheet.append(list(r))
@@ -2783,7 +2807,9 @@ def api_export_aging_pivot(request):
 
     # The page posts each invoice as a compact array (no repeated key names — it keeps the
     # upload small on a big book). A stale cached page may still post dicts, so take both.
-    agg_fields = ('actual', 'code', 'cust', 'bal', 'outstanding', 'bucket', 'remark')
+    # Order must match the array the browser sends. 'doc' is appended last so an
+    # older cached page that omits it still lines up on every earlier field.
+    agg_fields = ('actual', 'code', 'cust', 'bal', 'outstanding', 'bucket', 'remark', 'doc')
 
     by_actual, by_party, order_a, order_p = {}, {}, [], []
     for raw_item in agg:
@@ -2822,44 +2848,102 @@ def api_export_aging_pivot(request):
 
     # -- sheet 2: one line per Actual Sales Person -----------------------------------
     order_a.sort(key=lambda a: -abs(by_actual[a]['bal']))
-    actual_sheet = [[{'value': 'Row Labels', **bold}] + [{'value': h, **bold} for h in sum_heads]]
+    actual_sheet = [[{'value': 'Row Labels', **head}] + [{'value': h, **head} for h in sum_heads]]
     grand = blank()
     for a in order_a:
-        actual_sheet.append([a] + measures(by_actual[a]))
+        actual_sheet.append(money_row([a], measures(by_actual[a])))
         grand['bal'] += by_actual[a]['bal']
         for b in buckets:
             grand['b'][b['key']] += by_actual[a]['b'][b['key']]
         grand['out'][a] = out_total(by_actual[a])      # already de-duplicated per group
-    actual_sheet.append([{'value': 'Grand Total', **bold}]
-                        + [{'value': v, **bold} for v in measures(grand)])
+    actual_sheet.append(money_row([{'value': 'Grand Total', **bold}], measures(grand), True))
 
     # -- sheet 3: the parties under those names --------------------------------------
     # Remarks sit next to the customer name (this sheet only — the Actual Name sheet rolls up
     # too many customers for a remark list to mean anything). A customer's invoices often share
     # one remark, so the distinct ones are joined rather than repeated.
     order_p.sort(key=lambda k: (k[0], -abs(by_party[k]['bal'])))
-    party_sheet = [[{'value': 'Actual Sales Person', **bold}, {'value': 'Row Labels', **bold},
-                    {'value': 'Remarks', **bold}]
-                   + [{'value': h, **bold} for h in sum_heads]]
+    party_sheet = [[{'value': 'Actual Sales Person', **head}, {'value': 'Row Labels', **head},
+                    {'value': 'Remarks', **head}]
+                   + [{'value': h, **head} for h in sum_heads]]
     pgrand = blank()
     for actual, cust in order_p:
         node = by_party[(actual, cust)]
-        party_sheet.append([actual, cust, ', '.join(node['rmk'])] + measures(node))
+        party_sheet.append(money_row([actual, cust, ', '.join(node['rmk'])], measures(node)))
         pgrand['bal'] += node['bal']
         for b in buckets:
             pgrand['b'][b['key']] += node['b'][b['key']]
         pgrand['out'][(actual, cust)] = out_total(node)
-    party_sheet.append([{'value': 'Grand Total', **bold}, '', '']
-                       + [{'value': v, **bold} for v in measures(pgrand)])
+    party_sheet.append(money_row([{'value': 'Grand Total', **bold}, '', ''],
+                                 measures(pgrand), True))
 
-    content = build_workbook([
-        ('Raw Data', raw_sheet),
-        ('Actual Name', actual_sheet),
-        ('Parties', party_sheet),
-    ])
+    # -- the Item tab: a live PivotTable, Actual Sales Person then the items under it --
+    # Its numbers are line-level (one row per invoice + item), which is why they cannot
+    # live on the Raw Data tab: that one is invoice-level, and repeating an invoice for
+    # each of its items would multiply Balance Due by the item count. So the pivot reads
+    # its own sheet, "Item Data", and Raw Data stays correct.
+    item_head = ['Actual Sales Person', 'Customer', 'Doc No', 'Item', 'Quantity', 'Amount']
+    item_sheet = [[{'value': h, **head} for h in item_head]]
+    who = {}                     # doc number -> (actual sales person, customer)
+    for raw_item in agg:
+        # The browser sends compact arrays, not objects - decode them the same way the
+        # grouping above does. (Handling only dicts here is what silently emptied this
+        # map, and the Item tab then vanished with no error at all.)
+        if isinstance(raw_item, dict):
+            item = raw_item
+        elif isinstance(raw_item, (list, tuple)):
+            item = dict(zip(agg_fields, raw_item))
+        else:
+            continue
+        d = str(item.get('doc') or '').strip()
+        if d:
+            who[d] = (str(item.get('actual') or '').strip() or '(blank)',
+                      str(item.get('cust') or '').strip() or '(blank)')
+    try:
+        lines = services.get_aging_invoice_items(company, list(who.keys())) if who else []
+    except Exception:                            # SAP down - ship the rest of the book
+        # exception() not warning(): this block once swallowed a plain NameError and the
+        # Item tab just quietly vanished. The traceback makes that impossible to miss.
+        logger.exception('[AGING] item tab skipped')
+        lines = []
+    for ln in lines:
+        actual, cust = who.get(str(ln.get('doc')), ('(blank)', '(blank)'))
+        item_sheet.append([actual, cust, str(ln.get('doc') or ''),
+                           str(ln.get('item_name') or ''),
+                           num(ln.get('qty')), num(ln.get('amount'))])
+
+    # Plain sheets, no PivotTable. A pivot is read-only, needs a hidden source sheet and
+    # will not even draw until Excel is allowed to refresh - too much in the way of simply
+    # reading the numbers. The Item tab is now an ordinary table of the same figures.
+    tabs = [('Raw Data', raw_sheet), ('Actual Name', actual_sheet), ('Parties', party_sheet)]
+    if len(item_sheet) > 1:
+        tabs.insert(1, ('Item', item_sheet))
+    content = build_workbook(tabs)
     name = str(body.get('filename') or 'Customer Aging').strip() or 'Customer Aging'
     name = re.sub(r'[\\/:*?"<>|]+', '_', name)[:80]
     response = HttpResponse(
         content, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="%s.xlsx"' % name
     return response
+
+
+@permission_flag_required('can_customer_aging', json_response=True)
+@require_http_methods(['POST'])
+def api_aging_invoice_items(request):
+    """Line items of the invoices behind one Customer Aging pivot row.
+
+    The browser posts the document numbers it is already showing for that row, so the
+    popup matches the filters on screen exactly - no need to re-run any of them here.
+    """
+    body = _parse_body(request)
+    company = (body.get('company') or 'oil').strip().lower()
+    docs = body.get('docs')
+    if not isinstance(docs, list) or not docs:
+        return JsonResponse({'error': 'no invoices supplied'}, status=400)
+    if len(docs) > 5000:
+        return JsonResponse({'error': 'too many invoices for one drill'}, status=400)
+    try:
+        rows = services.get_aging_invoice_items(company, docs)
+    except RuntimeError as e:
+        return JsonResponse({'error': str(e)}, status=502)
+    return JsonResponse({'status': 'ok', 'rows': rows})

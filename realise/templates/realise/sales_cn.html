@@ -14,10 +14,10 @@
     background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .scn-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .scn-kpi .scn-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .scn-kpi .scn-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .scn-kpi .scn-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .scn-kpi .scn-kpi-v{font-size:30px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink)}
   .scn-kpi .scn-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .scn-kpi .material-icons.scn-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .scn-kpi .ic.scn-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-sales{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-cn{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
   .k-net{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
@@ -136,7 +136,7 @@
       </div>
     </div>
     <div class="scn-fld"><span class="scn-lbl">&nbsp;</span>
-      <button class="scn-export" id="scnExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+      <button class="scn-export" id="scnExport" title="Export the current view to Excel"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</button>
     </div>
   </div>
 
@@ -262,14 +262,14 @@
     var unit=mode==='rev'?'':(' '+measure);
     var fmtK=mode==='rev'?abbr:function(v){return abbrQ(v)+unit;};
     var cards=[
-      {c:'k-sales',ic:'trending_up',l:'Total Sales',v:fmtK(m[0]),s:'Gross invoices (OINV)'},
-      {c:'k-cn',ic:'receipt_long',l:'Total CN',v:fmtK(m[1]),s:(mode==='rev'?('Goods '+abbr(tot.gr)+' + Services '+abbr(tot.sv)):'CN for Goods only')},
-      {c:'k-net',ic:'account_balance',l:'Net Sales',v:fmtK(m[4]),s:'Total Sales − Total CN'}
+      {c:'k-sales',ic:'trending-up',l:'Total Sales',v:fmtK(m[0]),s:'Gross invoices (OINV)'},
+      {c:'k-cn',ic:'receipt-text',l:'Total CN',v:fmtK(m[1]),s:(mode==='rev'?('Goods '+abbr(tot.gr)+' + Services '+abbr(tot.sv)):'CN for Goods only')},
+      {c:'k-net',ic:'landmark',l:'Net Sales',v:fmtK(m[4]),s:'Total Sales − Total CN'}
     ];
     document.getElementById('scnKpis').innerHTML=cards.map(function(k){
-      return '<div class="scn-kpi '+k.c+'"><div class="scn-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="scn-kpi '+k.c+'"><div class="scn-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="scn-kpi-v">'+k.v+'</div><div class="scn-kpi-m">'+esc(k.s)+'</div>'
-        +'<span class="material-icons scn-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic scn-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 

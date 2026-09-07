@@ -2,7 +2,7 @@
      {% if kpi.extra.is_cogs %}data-from-date="{{ kpi.extra.from_date }}" data-to-date="{{ kpi.extra.to_date }}"{% endif %}
      {% if kpi.extra.glimpse_rows and not is_inventory %}role="button" tabindex="0" data-glimpse-source="{{ kpi.extra.glimpse_id }}" data-glimpse-title="{{ kpi.extra.glimpse_title|default:kpi.label }}"{% endif %}>
   <div class="kpi-head">
-    <div class="kpi-icon"><span class="material-icons">{{ kpi.icon }}</span></div>
+    <div class="kpi-icon"><i class="ic ic-{{ kpi.icon }}"></i></div>
     {% if kpi.trend is not None %}
       {# Colour by MEANING: a rise is "good" (green) for revenue KPIs, "bad" (red) for cost KPIs. #}
       {% if kpi.trend > 0 %}

@@ -12,10 +12,10 @@
   .dp-kpi{position:relative;overflow:hidden;border-radius:16px;padding:18px 20px;color:var(--rz-ink);background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .dp-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .dp-kpi .dp-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .dp-kpi .dp-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .dp-kpi .dp-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .dp-kpi .dp-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink)}
   .dp-kpi .dp-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .dp-kpi .material-icons.dp-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .dp-kpi .ic.dp-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-ltr{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-box{--kpi-acc:var(--rz-acc-amber);--kpi-ic:#d97706}
   .k-qty{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
@@ -27,8 +27,8 @@
   .dp-bar input[type=date],.dp-bar input[type=search]{font-family:inherit;font-size:13px;font-weight:600;color:#1f2937;border:1px solid #d9e5ee;border-radius:9px;padding:8px 10px;background:#fff;outline:none}
   .dp-bar input[type=search]{min-width:200px}
   .dp-bar input[type=search]:focus,.dp-bar input[type=date]:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .dp-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .dp-fetch:hover{background:var(--rz-indigo-deep)}
+  .dp-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .dp-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
 
   .com-drill-box{position:relative}
   .com-drill-btn{display:inline-flex;align-items:center;gap:10px;min-width:170px;justify-content:space-between;background:#fff;border:1px solid #d9e5ee;color:var(--rz-indigo);font-weight:700;font-size:12px;padding:8px 10px;border-radius:9px;cursor:pointer;font-family:inherit}
@@ -192,15 +192,15 @@
   function renderKpis(){
     var t=blank(); activeRows().forEach(function(r){addRow(t,r);});
     var cards=[
-      {c:'k-ltr',ic:'water_drop',l:'Total Litres',v:abbrQ(t.litres),m:'Completed × pack size'},
-      {c:'k-box',ic:'inventory_2',l:'Total Boxes',v:abbrQ(t.boxes),m:'Completed ÷ box size'},
-      {c:'k-qty',ic:'done_all',l:'Completed Qty',v:abbrQ(t.completed),m:'Units produced'},
+      {c:'k-ltr',ic:'droplet',l:'Total Litres',v:abbrQ(t.litres),m:'Completed × pack size'},
+      {c:'k-box',ic:'package',l:'Total Boxes',v:abbrQ(t.boxes),m:'Completed ÷ box size'},
+      {c:'k-qty',ic:'check-check',l:'Completed Qty',v:abbrQ(t.completed),m:'Units produced'},
       {c:'k-wo',ic:'factory',l:'Work Orders',v:fN(t.wo),m:'Standard production orders'}
     ];
     document.getElementById('dpKpis').innerHTML=cards.map(function(k){
-      return '<div class="dp-kpi '+k.c+'"><div class="dp-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="dp-kpi '+k.c+'"><div class="dp-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="dp-kpi-v">'+k.v+'</div><div class="dp-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons dp-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic dp-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 

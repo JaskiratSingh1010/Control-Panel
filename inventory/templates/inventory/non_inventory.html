@@ -20,7 +20,7 @@
   .ni-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ni-search:focus-within{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.14)}
-  .ni-search .material-icons{font-size:19px;color:#94a3b8}
+  .ni-search .ic{font-size:19px;color:#94a3b8}
   .ni-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
   .ni-count{font-size:12px;font-weight:700;color:#475569;white-space:nowrap}
 
@@ -31,7 +31,7 @@
   .ni-move input:focus{border-color:#0d9488;box-shadow:0 0 0 2px rgba(13,148,136,.14)}
   .ni-xc{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:12.5px;font-weight:700;color:#0f766e;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ni-xc:hover{border-color:#0d9488;background:#f0fdfa}
-  .ni-xc .material-icons{font-size:17px}
+  .ni-xc .ic{font-size:17px}
 
   /* Group By control (dimensions → pivot), styled like OIH vs Stock */
   .ni-gb{display:inline-flex;align-items:center;gap:8px}
@@ -51,11 +51,11 @@
   .ni-gb-item.on{background:#ecfdf5}
   .ni-gb-item input{accent-color:#0d9488;width:15px;height:15px;cursor:pointer;flex-shrink:0}
   .ni-gb-name{flex:1}
-  .ni-gb-pos{min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;background:#0d9488;border-radius:999px}
+  .ni-gb-pos{min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#0f766e;background:#ccfbf1;border-radius:999px}
   .ni-gb-item:not(.on) .ni-gb-pos{background:transparent}
   .ni-gb-foot{padding:10px 14px;border-top:1px solid #eef2f7}
-  .ni-gb-foot button{width:100%;background:#0d9488;color:#fff;border:0;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
-  .ni-gb-foot button:hover{background:#0f766e}
+  .ni-gb-foot button{width:100%;background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .ni-gb-foot button:hover{background:#ccfbf1;border-color:#5eead4}
 
   /* Separate value filters (SKU / Type) */
   .ni-vfs{display:inline-flex;align-items:center;gap:8px}
@@ -63,7 +63,7 @@
   .ni-vf-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:12.5px;font-weight:700;color:#334155;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ni-vf-btn:hover{border-color:#0d9488}
   .ni-vf.on .ni-vf-btn{border-color:#0d9488;color:#0f766e;background:#f0fdfa}
-  .ni-vf-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:800;color:#fff;background:#0d9488;border-radius:999px}
+  .ni-vf-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:800;color:#0f766e;background:#ccfbf1;border-radius:999px}
   .ni-vf-panel{position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:240px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.2);display:none;overflow:hidden}
   .ni-vf.open .ni-vf-panel{display:block}
   .ni-vf-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eef2f7}
@@ -73,8 +73,8 @@
   .ni-vf-q:focus{border-color:#0d9488;box-shadow:0 0 0 2px rgba(13,148,136,.14)}
   .ni-vf-list{max-height:240px;overflow:auto;padding:0 6px 6px}
   .ni-vf-foot{padding:10px 14px;border-top:1px solid #eef2f7}
-  .ni-vf-foot button{width:100%;background:#0d9488;color:#fff;border:0;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
-  .ni-vf-foot button:hover{background:#0f766e}
+  .ni-vf-foot button{width:100%;background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4;border-radius:9px;padding:9px 0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .ni-vf-foot button:hover{background:#ccfbf1;border-color:#5eead4}
 
   .ni-card{background:#fff;border:1px solid #e8edf6;border-radius:16px;overflow:hidden;box-shadow:0 14px 34px rgba(15,23,42,.08)}
   .ni-tw{overflow:auto;max-height:74vh}
@@ -107,8 +107,8 @@
   .ni-grow:hover td{background:#ccfbf1}
   .ni-glbl{font-weight:800;color:#0f766e}
   .ni-gchev{display:inline-flex;vertical-align:middle;color:#0d9488}
-  .ni-gchev .material-icons{font-size:18px;transition:transform .15s}
-  .ni-gchev.on .material-icons{transform:rotate(90deg)}
+  .ni-gchev .ic{font-size:18px;transition:transform .15s}
+  .ni-gchev.on .ic{transform:rotate(90deg)}
   .ni-gchev-none{display:inline-block;width:18px;vertical-align:middle}
   .ni-grow.ni-noexp{cursor:default}
   .ni-gval{vertical-align:middle}
@@ -171,11 +171,11 @@
         </div>
       </div>
     </div>
-    <button type="button" class="ni-xc" id="niXC" style="display:none"><span class="material-icons">unfold_more</span><span id="niXCLbl">Expand all</span></button>
+    <button type="button" class="ni-xc" id="niXC" style="display:none"><i class="ic ic-chevrons-up-down"></i><span id="niXCLbl">Expand all</span></button>
     <div class="ni-vfs" id="niWhFilter"></div>
     <div class="ni-vfs" id="niVFilters"></div>
     <label class="ni-search">
-      <span class="material-icons">search</span>
+      <i class="ic ic-search"></i>
       <input type="text" id="niSearch" placeholder="Search item code, name, variety, SKU…" autocomplete="off">
     </label>
     <span class="ni-count" id="niCount"></span>
@@ -329,7 +329,7 @@
 
   function groupRow(value, depth, path, a, open, hasChildren){
     var chev = hasChildren
-      ? '<span class="ni-gchev'+(open?' on':'')+'"><span class="material-icons">chevron_right</span></span>'
+      ? '<span class="ni-gchev'+(open?' on':'')+'"><i class="ic ic-chevron-right"></i></span>'
       : '<span class="ni-gchev-none"></span>';
     return '<tr class="ni-grow'+(hasChildren?'':' ni-noexp')+'"'+(hasChildren?' data-exp="1"':'')+' data-path="'+attr(path)+'">'+
       '<td class="ni-lbl ni-glbl" colspan="11" style="padding-left:'+(10+depth*18)+'px">'+
@@ -390,7 +390,9 @@
     if(!curExpPaths.length){ xc.style.display='none'; return; }
     xc.style.display='';
     var anyClosed = curExpPaths.some(function(p){ return !isOpen(p); });
-    xc.querySelector('.material-icons').textContent = anyClosed ? 'unfold_more' : 'unfold_less';
+    var xci=xc.querySelector('.ic');   // svg icon: swap the class, there is no text to set
+    xci.classList.toggle('ic-chevrons-up-down', anyClosed);
+    xci.classList.toggle('ic-chevrons-down-up', !anyClosed);
     document.getElementById('niXCLbl').textContent = anyClosed ? 'Expand all' : 'Collapse all';
   }
 

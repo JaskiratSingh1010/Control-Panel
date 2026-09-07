@@ -1,0 +1,167 @@
+/* ============================================================================
+   bkdatepicker - one look for every calendar and every dropdown list
+   ----------------------------------------------------------------------------
+   The browser draws its own calendar for <input type="date"> and its own list
+   for <select>. Neither can be styled, so they never match the panel. This file
+   styles the replacements that bkdatepicker.js puts in their place.
+
+   THIS FILE IS ONLY LOOKS. No behaviour lives here.
+
+   Where to change what
+   --------------------
+     Selected day colour ........ .bkdp-grid button.is-selected
+     Rounded vs square days ..... border-radius in .bkdp-grid button
+     Bigger / smaller days ...... width + height in .bkdp-grid button
+     Weekday row (Su Mo Tu) ..... .bkdp-weekdays span
+     Dropdown row height ........ padding in .bksel-opt
+     Accent colour .............. --bk-accent below
+
+   Colours come from the panel's own tokens (--rz-*, set in core/base.html), so
+   the calendar always matches the rest of the site. The fallbacks after each
+   comma are only used if a page is opened without those tokens.
+   ========================================================================== */
+
+:root {
+  --bk-accent:      var(--rz-indigo, #6366f1);      /* selected fill          */
+  --bk-accent-ink:  var(--rz-indigo-deep, #4338ca); /* accent text           */
+  --bk-soft:        var(--rz-soft, #eef2ff);        /* hover / soft fill     */
+  --bk-soft-brd:    var(--rz-soft-brd, #e0e7ff);
+  --bk-card:        var(--rz-card, #ffffff);
+  --bk-card-brd:    var(--rz-card-brd, #ecebf5);
+  --bk-ink:         var(--rz-ink, #0f172a);
+  --bk-body:        var(--rz-body, #334155);
+  --bk-muted:       var(--rz-muted, #64748b);
+  --bk-faint:       var(--rz-faint, #94a3b8);
+  --bk-line:        var(--rz-line, #e5e7eb);
+  --bk-shadow:      var(--rz-shadow-lg, 0 12px 32px rgba(15, 23, 42, .14));
+  --bk-radius:      14px;
+}
+
+/* ── the date field itself ────────────────────────────────────────────────
+   Hide the browser's own calendar button (and its grey hover blob) so nothing is
+   painted behind the date, and clicking the field opens OUR calendar instead.
+
+   These rules deliberately do NOT depend on the .bkdp-on class the script adds:
+   if the script is slow, cached or blocked, the browser's button must still stay
+   hidden. No icon of our own is drawn on the field any more - it was landing on
+   top of the digits on compact fields such as Customer Aging's "As of" box. */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: none !important;
+}
+input[type="date"]::-webkit-inner-spin-button,
+input[type="month"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button,
+input[type="month"]::-webkit-clear-button { display: none !important; -webkit-appearance: none !important; }
+
+input[type="date"].bkdp-on,
+input[type="month"].bkdp-on { cursor: pointer; background-image: none; }
+/* Firefox has no indicator to hide; it also gets the icon above. */
+@supports (-moz-appearance: none) {
+  input[type="date"].bkdp-on, input[type="month"].bkdp-on { -moz-appearance: textfield; }
+}
+
+/* ── shared popup shell (calendar + dropdown) ─────────────────────────────── */
+.bkdp, .bksel {
+  position: fixed;
+  z-index: 99999;
+  box-sizing: border-box;
+  display: none;
+  background: var(--bk-card);
+  border: 1px solid var(--bk-card-brd);
+  border-radius: var(--bk-radius);
+  box-shadow: var(--bk-shadow);
+  font-family: var(--font-body, 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif);
+  color: var(--bk-body);
+  animation: bk-in .12s ease-out;
+}
+.bkdp.is-open, .bksel.is-open { display: block; }
+.bkdp *, .bksel * { box-sizing: border-box; }
+@keyframes bk-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bkdp, .bksel { animation: none; } }
+
+/* ── calendar ─────────────────────────────────────────────────────────────── */
+.bkdp { width: 268px; padding: 12px; }
+
+.bkdp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.bkdp-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; cursor: pointer; padding: 5px 8px; border-radius: 9px;
+  font: inherit; font-size: 13.5px; font-weight: 800; color: var(--bk-ink);
+}
+.bkdp-title:hover { background: var(--bk-soft); color: var(--bk-accent-ink); }
+.bkdp-title .bk-caret { font-size: 9px; color: var(--bk-faint); }
+
+.bkdp-nav { display: inline-flex; gap: 4px; }
+.bkdp-nav button {
+  width: 28px; height: 28px; border: 0; border-radius: 9px; cursor: pointer;
+  background: none; color: var(--bk-muted); font: inherit; font-size: 15px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.bkdp-nav button:hover { background: var(--bk-soft); color: var(--bk-accent-ink); }
+
+.bkdp-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 3px; }
+.bkdp-weekdays span {
+  text-align: center; font-size: 10.5px; font-weight: 800; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--bk-faint); padding: 4px 0;
+}
+
+.bkdp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.bkdp-grid button {
+  height: 32px; border: 0; border-radius: 9px; cursor: pointer;
+  background: none; color: var(--bk-body);
+  font-family: var(--rz-num, inherit); font-size: 12.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.bkdp-grid button:hover:not(:disabled):not(.is-selected) { background: var(--bk-soft); color: var(--bk-accent-ink); }
+.bkdp-grid button.is-out { color: var(--bk-faint); font-weight: 500; }
+.bkdp-grid button.is-today:not(.is-selected) { box-shadow: inset 0 0 0 1.5px var(--bk-soft-brd); color: var(--bk-accent-ink); font-weight: 800; }
+.bkdp-grid button.is-selected { background: var(--bk-accent); color: #fff; font-weight: 800; }
+.bkdp-grid button:disabled { color: #cbd5e1; cursor: not-allowed; }
+
+/* month / year chooser page */
+.bkdp-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.bkdp-list.is-years { grid-template-columns: repeat(4, 1fr); max-height: 232px; overflow: auto; }
+.bkdp-list button {
+  padding: 9px 4px; border: 0; border-radius: 9px; cursor: pointer; background: none;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--bk-body);
+}
+.bkdp-list button:hover:not(.is-selected) { background: var(--bk-soft); color: var(--bk-accent-ink); }
+.bkdp-list button.is-selected { background: var(--bk-accent); color: #fff; }
+.bkdp-list button:disabled { color: #cbd5e1; cursor: not-allowed; }
+
+.bkdp-foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--bk-line); }
+.bkdp-foot button {
+  border: 0; background: none; cursor: pointer; padding: 3px 6px; border-radius: 7px;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--bk-accent-ink);
+}
+.bkdp-foot button:hover { background: var(--bk-soft); }
+
+/* ── dropdown list (replaces the browser's <select> list) ─────────────────── */
+.bksel { padding: 5px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.bksel-opt {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 11px; border: 0; border-radius: 9px; cursor: pointer; background: none;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--bk-body);
+  text-align: left; line-height: 1.35;
+}
+.bksel-opt:hover:not(:disabled) { background: var(--bk-soft); color: var(--bk-accent-ink); }
+.bksel-opt.is-selected { background: var(--bk-soft); color: var(--bk-accent-ink); font-weight: 800; }
+.bksel-opt:disabled { color: var(--bk-faint); cursor: not-allowed; }
+.bksel-opt .bk-lbl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bksel-opt .bk-tick { flex: 0 0 auto; color: var(--bk-accent); font-size: 12px; font-weight: 800; visibility: hidden; }
+.bksel-opt.is-selected .bk-tick { visibility: visible; }
+.bksel-group {
+  padding: 9px 11px 4px; font-size: 10px; font-weight: 800; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--bk-faint);
+}
+.bksel-empty { padding: 14px 11px; font-size: 12.5px; color: var(--bk-faint); text-align: center; }
+
+/* Keep the select looking like a normal field once the script owns its list. */
+select.bksel-on { cursor: pointer; }

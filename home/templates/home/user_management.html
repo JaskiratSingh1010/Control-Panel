@@ -51,7 +51,7 @@
 {% block content %}
 <div class="um-wrap">
   <div class="um-hero">
-    <h1 class="um-h1"><span class="material-icons">manage_accounts</span>User Management</h1>
+    <h1 class="um-h1"><i class="ic ic-user-cog"></i>User Management</h1>
     <p class="um-sub">Create users and grant access per report — no Django admin needed. Changes apply on the user's next page load.</p>
   </div>
 
@@ -135,9 +135,9 @@
   function renderCreate(){
     var box = document.getElementById('umCreate');
     box.innerHTML = '<div class="um-card new" id="umNew">'+
-      '<div class="um-title"><span class="material-icons um-material">person_add</span>Create new user</div>'+
+      '<div class="um-title"><i class="ic ic-user-plus um-material"></i>Create new user</div>'+
       bodyHTML({}, true)+
-      '<div class="um-actions"><button type="button" class="um-btn primary" data-act="create"><span class="material-icons um-material">check</span>Create user</button>'+
+      '<div class="um-actions"><button type="button" class="um-btn primary" data-act="create"><i class="ic ic-check um-material"></i>Create user</button>'+
       '<span class="um-status"></span></div>'+
     '</div>';
   }
@@ -151,12 +151,12 @@
       if(!u.is_active) badges += '<span class="um-badge off">Inactive</span>';
       if(u.id===SELF_ID) badges += '<span class="um-badge you">You</span>';
       var actions = canEdit
-        ? '<button type="button" class="um-btn primary" data-act="save"><span class="material-icons um-material">save</span>Save</button>'+
-          (u.id!==SELF_ID ? '<button type="button" class="um-btn danger" data-act="delete"><span class="material-icons um-material">delete</span>Delete</button>' : '')+
+        ? '<button type="button" class="um-btn primary" data-act="save"><i class="ic ic-save um-material"></i>Save</button>'+
+          (u.id!==SELF_ID ? '<button type="button" class="um-btn danger" data-act="delete"><i class="ic ic-trash-2 um-material"></i>Delete</button>' : '')+
           '<span class="um-status"></span>'
         : '';
       return '<div class="um-card" data-id="'+u.id+'">'+
-        '<div class="um-row"><div class="um-title"><span class="material-icons um-material">person</span>'+esc(u.username)+
+        '<div class="um-row"><div class="um-title"><i class="ic ic-user um-material"></i>'+esc(u.username)+
           (u.first_name?' <span style="font-weight:600;color:#64748b">· '+esc(u.first_name)+'</span>':'')+'</div>'+
           '<div class="um-spacer"></div>'+badges+'</div>'+
         (canEdit ? bodyHTML(u, false) : '')+
@@ -186,7 +186,7 @@
       var data = collect(card); data.id = id;
       save.disabled = true; setStatus(card,'Saving…',true);
       post(SAVE_URL, data).then(function(res){
-        if(res.ok && res.j.status==='ok'){ setStatus(card,'Saved ✓',true); }
+        if(res.ok && res.j.status==='ok'){ setStatus(card,'Saved',true); }
         else { setStatus(card, res.j.error||'Failed', false); }
         save.disabled = false;
       }).catch(function(){ setStatus(card,'Failed',false); save.disabled=false; });

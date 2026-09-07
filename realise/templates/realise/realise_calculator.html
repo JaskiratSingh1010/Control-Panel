@@ -14,10 +14,10 @@
           background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .rc-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .rc-kpi .rc-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .rc-kpi .rc-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .rc-kpi .rc-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .rc-kpi .rc-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
   .rc-kpi .rc-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .rc-kpi .material-icons.rc-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .rc-kpi .ic.rc-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-rev{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-vol{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
   .k-rl{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0891b2}
@@ -27,7 +27,7 @@
   .rc-calc{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;box-shadow:var(--rz-shadow);margin:0 0 16px;overflow:hidden}
   .rc-calc-tabs{display:flex;gap:2px;border-bottom:1px solid var(--rz-card-brd);background:#f8fafc;padding:0 6px;align-items:center}
   .rc-tab{border:0;background:none;font-family:inherit;font-size:12.5px;font-weight:800;color:var(--rz-muted);padding:13px 15px;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;text-transform:uppercase;letter-spacing:.3px}
-  .rc-tab .material-icons{font-size:17px}
+  .rc-tab .ic{font-size:17px}
   .rc-tab.on{color:var(--rz-indigo);border-bottom-color:var(--rz-indigo)}
   .rc-tab-note{margin-left:auto;font-size:11px;font-weight:600;color:var(--rz-muted);padding-right:12px}
   .rc-pane{padding:16px 18px}
@@ -148,8 +148,8 @@
   .rc-bar input[type=search]{min-width:210px}
   .rc-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .rc-bar input:focus,.rc-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .rc-fetch:hover{background:var(--rz-indigo-deep)}
+  .rc-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .rc-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
   .rc-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .rc-export:hover{background:#ecfdf5;border-color:#a7f3d0}
   .rc-count{font-size:12px;font-weight:700;color:var(--rz-muted);align-self:center;margin-left:auto}
@@ -220,9 +220,9 @@
   <!-- ══ Interactive calculator: Planning Grid + Compare ══ -->
   <div class="rc-calc">
     <div class="rc-calc-tabs">
-      <button class="rc-tab on" data-tab="grid"><span class="material-icons">table_chart</span>Planning Grid</button>
-      <button class="rc-tab" data-tab="cmp"><span class="material-icons">compare_arrows</span>Compare</button>
-      <button class="rc-tab" data-tab="ord"><span class="material-icons">receipt_long</span>New vs Old Order</button>
+      <button class="rc-tab on" data-tab="grid"><i class="ic ic-table"></i>Planning Grid</button>
+      <button class="rc-tab" data-tab="cmp"><i class="ic ic-arrow-left-right"></i>Compare</button>
+      <button class="rc-tab" data-tab="ord"><i class="ic ic-receipt-text"></i>New vs Old Order</button>
       <span class="rc-tab-note">Realise ₹/L = (Retailer ÷ margins ÷ (1+GST%) × pcs/box − discount) ÷ (box + scheme litres)</span>
     </div>
 
@@ -252,9 +252,9 @@
       <div class="rc-grid-actions">
         <button class="rc-gadd" id="gridAdd">+ Add row</button>
         <button class="rc-gclear" id="gridClear">Clear all</button>
-        <button class="rc-gsave" id="gridSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
-        <button class="rc-gexport" id="gridExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel</button>
-        <button class="rc-gupload" id="gridUpload"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+        <button class="rc-gsave" id="gridSave"><i class="ic ic-save" style="font-size:15px"></i>Save Result</button>
+        <button class="rc-gexport" id="gridExport"><i class="ic ic-download" style="font-size:15px"></i>Export Excel</button>
+        <button class="rc-gupload" id="gridUpload"><i class="ic ic-upload" style="font-size:15px"></i>Upload Excel</button>
         <span class="rc-ghint">Upload an .xlsx with an <b>Item Code</b> column to fill rows.</span>
       </div>
       <div class="rc-sum" id="gridSum"></div>
@@ -284,7 +284,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="cmpAddA">+ Add row</button>
           <button class="rc-gclear" id="cmpClearA">Clear all</button>
-          <button class="rc-gupload" id="cmpUploadA"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+          <button class="rc-gupload" id="cmpUploadA"><i class="ic ic-upload" style="font-size:15px"></i>Upload Excel</button>
         </div>
         <div class="rc-sum" id="cmpSumA"></div>
       </div>
@@ -308,7 +308,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="cmpAddB">+ Add row</button>
           <button class="rc-gclear" id="cmpClearB">Clear all</button>
-          <button class="rc-gupload" id="cmpUploadB"><span class="material-icons" style="font-size:15px">upload</span>Upload Excel</button>
+          <button class="rc-gupload" id="cmpUploadB"><i class="ic ic-upload" style="font-size:15px"></i>Upload Excel</button>
         </div>
         <div class="rc-sum" id="cmpSumB"></div>
       </div>
@@ -317,8 +317,8 @@
       <div class="rc-cmp-vs-h">Existing vs New Plan</div>
       <div class="rc-sum" id="cmpVs"></div>
       <div class="rc-grid-actions" style="margin-top:16px">
-        <button class="rc-gsave" id="cmpSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
-        <button class="rc-gexport" id="cmpExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel (Existing + New)</button>
+        <button class="rc-gsave" id="cmpSave"><i class="ic ic-save" style="font-size:15px"></i>Save Result</button>
+        <button class="rc-gexport" id="cmpExport"><i class="ic ic-download" style="font-size:15px"></i>Export Excel (Existing + New)</button>
         <span class="rc-ghint">Save to the Rate List (by state) or export both plans with live formulas.</span>
       </div>
     </div>
@@ -327,7 +327,7 @@
     <div class="rc-pane" id="paneOrd" hidden>
       <p class="rc-cmp-note">Upload an order export — it fills the <b>Old Order</b> (as-billed prices). The <b>New Order</b> starts as an editable copy: change prices/margins to see the new realise &amp; the difference. <b>Price List (Basic)</b> is ex-GST, so it's grossed up by GST and set as Retailer — the order's revenue reproduces exactly.</p>
       <div class="rc-grid-actions" style="margin-bottom:6px">
-        <button class="rc-gupload" id="ordUpload"><span class="material-icons" style="font-size:15px">upload</span>Upload Order Excel</button>
+        <button class="rc-gupload" id="ordUpload"><i class="ic ic-upload" style="font-size:15px"></i>Upload Order Excel</button>
         <span class="rc-ghint">Reads Item Code + Price List (Basic) or Basic Price + Total Ltrs from the order file.</span>
       </div>
 
@@ -350,7 +350,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="ordAddOld">+ Add row</button>
           <button class="rc-gclear" id="ordClearOld">Clear all</button>
-          <button class="rc-gupload" id="ordUploadOld"><span class="material-icons" style="font-size:15px">upload</span>Upload to Old</button>
+          <button class="rc-gupload" id="ordUploadOld"><i class="ic ic-upload" style="font-size:15px"></i>Upload to Old</button>
         </div>
         <div class="rc-sum" id="ordSumOld"></div>
       </div>
@@ -374,7 +374,7 @@
         <div class="rc-grid-actions">
           <button class="rc-gadd" id="ordAddNew">+ Add row</button>
           <button class="rc-gclear" id="ordClearNew">Clear all</button>
-          <button class="rc-gupload" id="ordUploadNew"><span class="material-icons" style="font-size:15px">upload</span>Upload to New</button>
+          <button class="rc-gupload" id="ordUploadNew"><i class="ic ic-upload" style="font-size:15px"></i>Upload to New</button>
         </div>
         <div class="rc-sum" id="ordSumNew"></div>
       </div>
@@ -383,8 +383,8 @@
       <div class="rc-cmp-vs-h">Old Order vs New Order</div>
       <div class="rc-sum" id="ordVs"></div>
       <div class="rc-grid-actions" style="margin-top:16px">
-        <button class="rc-gsave" id="ordSave"><span class="material-icons" style="font-size:15px">save</span>Save Result</button>
-        <button class="rc-gexport" id="ordExport"><span class="material-icons" style="font-size:15px">download</span>Export Excel (Old + New)</button>
+        <button class="rc-gsave" id="ordSave"><i class="ic ic-save" style="font-size:15px"></i>Save Result</button>
+        <button class="rc-gexport" id="ordExport"><i class="ic ic-download" style="font-size:15px"></i>Export Excel (Old + New)</button>
         <span class="rc-ghint">Save to the Rate List (by state) or export both orders with live formulas.</span>
       </div>
     </div>
@@ -397,7 +397,7 @@
         <span class="t">Select item</span>
         <input type="search" id="pkSearch" placeholder="Search item code / name…" autocomplete="off">
         <button class="rc-modal-clear" id="pkClear" title="Reset size / variety / search">Clear</button>
-        <button class="rc-modal-x" id="pkClose" title="Close">✕</button>
+        <button class="rc-modal-x" id="pkClose" title="Close"><i class="ic ic-x"></i></button>
       </div>
       <div class="rc-modal-body">
         <div class="rc-col" id="pkVar"></div>
@@ -487,7 +487,7 @@
       +gInput('retailer',r)+gInput('ss',r)+gInput('dm',r)+gInput('gst',r)
       +gInput('pcsbox',r)+gInput('disc',r)+gInput('boxltr',r)+gInput('scheme',r)
       +gInput('sell',r)
-      +'<td><button class="grm" title="Remove row">✕</button></td></tr>'
+      +'<td><button class="grm" title="Remove row"><i class="ic ic-x"></i></button></td></tr>'
       +'<tr class="rrow">'
       +'<td class="rc-sno"></td>'
       +'<td class="l rlab">↳ result</td>'
@@ -569,7 +569,7 @@
       +cInput('retailer',r)+cInput('ss',r)+cInput('dm',r)+cInput('gst',r)
       +cInput('pcsbox',r)+cInput('disc',r)+cInput('boxltr',r)+cInput('scheme',r)
       +cInput('sell',r)
-      +'<td><button class="crm" title="Remove row">✕</button></td></tr>'
+      +'<td><button class="crm" title="Remove row"><i class="ic ic-x"></i></button></td></tr>'
       +'<tr class="rrow">'
       +'<td class="rc-sno"></td>'
       +'<td class="l rlab">↳ result</td>'

@@ -25,7 +25,7 @@
   .ois-exp{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);font-family:inherit;font-size:12px;font-weight:700;padding:8px 13px;border-radius:10px;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ois-exp:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
   .ois-exp:disabled{opacity:.55;cursor:default}
-  .ois-exp .material-icons{font-size:16px}
+  .ois-exp .ic{font-size:16px}
 
   /* Dynamic driller — same look as the Realise dashboard's Group-by control. */
   .com-drill-box{position:relative}
@@ -136,6 +136,13 @@
         <button type="button" class="ois-tf on" data-unit="ltr">LTR</button>
         <button type="button" class="ois-tf" data-unit="pcs">PCS</button>
       </div>
+      <!-- Group the table by product family or by the individual item. The first
+           button is labelled from the active company: U_Sub_Group for oil, Variety
+           for beverages. -->
+      <div class="ois-typef" id="oisViewF" title="Group the table by">
+        <button type="button" class="ois-tf on" data-view="group">Variety</button>
+        <button type="button" class="ois-tf" data-view="item">Item Name</button>
+      </div>
       <div class="ois-fltr" id="oisMgWrap">
         <span class="ois-drill-lbl">Main Group</span>
         <div class="com-drill-box">
@@ -158,7 +165,7 @@
           </div>
         </div>
       </div>
-      <button type="button" class="ois-exp" id="oisExport"><span class="material-icons">download</span>Export Excel</button>
+      <button type="button" class="ois-exp" id="oisExport"><i class="ic ic-download"></i>Export Excel</button>
     </div>
   </div>
 
@@ -209,6 +216,37 @@
     Array.prototype.forEach.call(document.querySelectorAll('.ois-drill .com-drill-panel.open'),
       function(p){p.classList.remove('open');});
   }
+
+  // Move the mouse off a dropdown card and it shuts itself - no need to click away.
+  //
+  // Two details make it feel right instead of twitchy:
+  //   * a short delay, so brushing past the edge on the way to a checkbox does not
+  //     slam it shut; moving back inside cancels the pending close;
+  //   * it listens on the document rather than on each card, so the refine dropdowns
+  //     that are built later in JS get the same behaviour without extra wiring.
+  // Clicking outside still closes them as before - this only adds a second way out.
+  (function(){
+    var CLOSE_DELAY = 350, timer = null;
+    function cancelClose(){ if(timer){ clearTimeout(timer); timer = null; } }
+    function cardOf(el){ return (el && el.closest) ? el.closest('.com-drill-box') : null; }
+
+    document.addEventListener('mouseover', function(e){
+      if(cardOf(e.target)) cancelClose();          // pointer is back on a card
+    });
+    document.addEventListener('mouseout', function(e){
+      var card = cardOf(e.target);
+      if(!card) return;
+      // relatedTarget is where the pointer went. Still inside the same card (button ->
+      // panel -> checkbox) means it has not really left. null = it left the window.
+      if(e.relatedTarget && card.contains(e.relatedTarget)) return;
+      cancelClose();
+      timer = setTimeout(function(){
+        timer = null;
+        var panel = card.querySelector('.com-drill-panel.open');
+        if(panel) panel.classList.remove('open');
+      }, CLOSE_DELAY);
+    });
+  })();
   function num(n){return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   var EXPORT_URL = "{% url 'realise:api_export_xlsx' %}";
@@ -236,7 +274,23 @@
 
   var company='oil';          // 'oil' | 'bev'
   var DIMS=OIL_DIMS.slice(), DIM_NAME=buildDimName(OIL_DIMS), TYPES=OIL_TYPES.slice();
-  var order=['sub_group'];   // fixed card per company (oil: U_Sub_Group, beverages: Variety)
+  var order=['sub_group'];   // what the table groups by right now
+  // 'group' = the company's product family (oil U_Sub_Group / beverages Variety);
+  // 'item'  = one row per item name. The View By buttons flip between the two, and
+  // the choice survives switching company or unit.
+  var viewBy='group';
+  function groupKey(){ return company==='bev' ? 'variety' : 'sub_group'; }
+  function viewKey(){ return viewBy==='item' ? 'item' : groupKey(); }
+  // Label the first button with whatever that company actually calls the family.
+  function renderViewBtns(){
+    var box=document.getElementById('oisViewF'); if(!box) return;
+    var btns=box.querySelectorAll('.ois-tf');
+    if(btns[0]) btns[0].textContent=DIM_NAME[groupKey()]||'Variety';
+    if(btns[1]) btns[1].textContent=DIM_NAME['item']||'Item Name';
+    Array.prototype.forEach.call(btns,function(b){
+      b.classList.toggle('on', b.getAttribute('data-view')===viewBy);
+    });
+  }
   var rows=[], itemStock={}, itemStockPcs={}, whs=[], err=null, expanded={}, loaded=false;
   var NODEREG=[];   // nodes of the last render, so a row click can find its source rows
   var typeFilter='all';   // 'all' | (oil) 'premium'/'commodity' | (bev) a family key like 'DRINKS'
@@ -633,12 +687,21 @@
     typeFilter='all'; unit='ltr'; expanded={}; loaded=false; err=null;
     mgFilter.reset(); psFilter.reset();
     rows=[]; itemStock={}; itemStockPcs={}; whs=[]; closeDetail();
-    if(company==='bev'){ DIMS=BEV_DIMS.slice(); TYPES=[{key:'all',label:'All'}]; order=['variety']; }
-    else { DIMS=OIL_DIMS.slice(); TYPES=OIL_TYPES.slice(); order=['sub_group']; }
+    if(company==='bev'){ DIMS=BEV_DIMS.slice(); TYPES=[{key:'all',label:'All'}]; }
+    else { DIMS=OIL_DIMS.slice(); TYPES=OIL_TYPES.slice(); }
     DIM_NAME=buildDimName(DIMS);
+    order=[viewKey()];          // keep the user's View By choice across the company switch
     Array.prototype.forEach.call(uf.querySelectorAll('.ois-tf'),function(x){x.classList.toggle('on',x.getAttribute('data-unit')==='ltr');});
-    renderTypes(); renderUnitBtns(); render(); load();
+    renderTypes(); renderUnitBtns(); renderViewBtns(); render(); load();
   }
+  // View By: regroup the whole table. Open rows are reset because the row paths
+  // change completely between the two groupings.
+  document.getElementById('oisViewF').addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.ois-tf'):null; if(!b)return;
+    var v=b.getAttribute('data-view'); if(v===viewBy)return;
+    viewBy=v; order=[viewKey()]; expanded={}; closeDetail();
+    renderViewBtns(); render();
+  });
   document.getElementById('oisCo').addEventListener('click',function(e){
     var b=e.target&&e.target.closest?e.target.closest('.ois-cf'):null; if(!b)return;
     var c=b.getAttribute('data-co'); if(c===company)return;
@@ -833,7 +896,7 @@
   document.getElementById('oisMbd').addEventListener('click',closeDetail);
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDetail();});
 
-  renderTypes(); renderUnitBtns(); render(); load();
+  renderTypes(); renderUnitBtns(); renderViewBtns(); render(); load();
 })();
 </script>
 {% endblock %}

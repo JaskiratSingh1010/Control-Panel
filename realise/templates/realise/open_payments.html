@@ -14,10 +14,10 @@
           background:var(--rz-card);border:1px solid var(--rz-card-brd);box-shadow:var(--rz-shadow)}
   .op-kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--kpi-acc,var(--rz-acc-indigo))}
   .op-kpi .op-kpi-l{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--rz-muted);display:flex;align-items:center;gap:7px}
-  .op-kpi .op-kpi-l .material-icons{color:var(--kpi-ic,#6366f1)}
+  .op-kpi .op-kpi-l .ic{color:var(--kpi-ic,#6366f1)}
   .op-kpi .op-kpi-v{font-size:29px;font-weight:900;margin-top:8px;letter-spacing:-.5px;line-height:1;color:var(--rz-ink);font-variant-numeric:tabular-nums}
   .op-kpi .op-kpi-m{font-size:12px;font-weight:600;color:var(--rz-muted);margin-top:6px}
-  .op-kpi .material-icons.op-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
+  .op-kpi .ic.op-kpi-bg{position:absolute;right:-8px;bottom:-14px;font-size:96px;color:var(--kpi-ic,#6366f1);opacity:.08}
   .k-oa{--kpi-acc:var(--rz-acc-indigo);--kpi-ic:#6366f1}
   .k-open{--kpi-acc:var(--rz-acc-red);--kpi-ic:#e11d48}
   .k-pay{--kpi-acc:var(--rz-acc-teal);--kpi-ic:#0d9488}
@@ -30,8 +30,8 @@
   .op-bar input[type=search]{min-width:200px}
   .op-bar input[type=search]::placeholder{color:var(--rz-faint)}
   .op-bar input[type=search]:focus,.op-bar input[type=date]:focus,.op-bar select:focus{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .op-fetch{background:var(--rz-indigo);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-  .op-fetch:hover{background:var(--rz-indigo-deep)}
+  .op-fetch{background:var(--rz-soft);color:var(--rz-indigo-deep);border:1px solid var(--rz-soft-brd);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .op-fetch:hover{background:#e0e7ff;border-color:#c7d2fe}
   .op-export{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;color:#047857;cursor:pointer;font-family:inherit}
   .op-export:hover{background:#ecfdf5;border-color:#a7f3d0}
   /* Open / Total segmented control */
@@ -123,7 +123,7 @@
       </div>
     </div>
     <div class="op-fld"><span class="op-lbl">&nbsp;</span>
-      <button class="op-export" id="opExport" title="Export the current view to Excel"><span class="material-icons" style="font-size:16px">download</span>Export Excel</button>
+      <button class="op-export" id="opExport" title="Export the current view to Excel"><i class="ic ic-download" style="font-size:16px"></i>Export Excel</button>
     </div>
   </div>
 
@@ -270,15 +270,15 @@
     var a=activeRows(), custs={}, amt=0, ob=0;
     a.forEach(function(r){if(r.code)custs[r.code]=1;amt+=Number(r.amount)||0;ob+=Number(r.open_bal)||0;});
     var cards=[
-      {c:'k-open',ic:'account_balance',l:'Open Balance',v:abbr(ob),m:'Σ unapplied on account (₹)'},
-      {c:'k-oa',ic:'payments',l:'Payment on Account',v:abbr(amt),m:'Σ receipt amount (₹)'},
-      {c:'k-pay',ic:'receipt_long',l:'Payments',v:fN(a.length),m:mode==='open'?'With an open balance':'Incoming payments'},
-      {c:'k-cust',ic:'storefront',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'}
+      {c:'k-open',ic:'landmark',l:'Open Balance',v:abbr(ob),m:'Σ unapplied on account (₹)'},
+      {c:'k-oa',ic:'banknote',l:'Payment on Account',v:abbr(amt),m:'Σ receipt amount (₹)'},
+      {c:'k-pay',ic:'receipt-text',l:'Payments',v:fN(a.length),m:mode==='open'?'With an open balance':'Incoming payments'},
+      {c:'k-cust',ic:'store',l:'Customers',v:fN(Object.keys(custs).length),m:'Distinct parties'}
     ];
     document.getElementById('opKpis').innerHTML=cards.map(function(k){
-      return '<div class="op-kpi '+k.c+'"><div class="op-kpi-l"><span class="material-icons" style="font-size:15px">'+k.ic+'</span>'+k.l+'</div>'
+      return '<div class="op-kpi '+k.c+'"><div class="op-kpi-l"><i class="ic ic-'+k.ic+'" style="font-size:15px"></i>'+k.l+'</div>'
         +'<div class="op-kpi-v">'+k.v+'</div><div class="op-kpi-m">'+esc(k.m)+'</div>'
-        +'<span class="material-icons op-kpi-bg">'+k.ic+'</span></div>';
+        +'<i class="ic op-kpi-bg ic-'+k.ic+'"></i></div>';
     }).join('');
   }
 

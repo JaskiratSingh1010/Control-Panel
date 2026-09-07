@@ -4,7 +4,8 @@
 {% block extra_styles %}
 <style>
   /* Airy page with faint vertical gridlines, like the mockup. */
-  .cp-main{background:repeating-linear-gradient(90deg,rgba(15,23,42,.05) 0 1px,transparent 1px 132px),#f6f7f9 !important}
+  /* Plain background - the faint vertical stripes and the tile watermarks are gone. */
+  .cp-main{background:#f6f7f9 !important}
 
   .sa-wrap{max-width:1500px;margin:0 auto;position:relative}
   .sa-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -17,42 +18,39 @@
   .sa-kpi{border-radius:16px;padding:16px 18px;color:#fff;box-shadow:0 10px 24px rgba(15,23,42,.14)}
   .sa-kpi-l{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;opacity:.92}
   .sa-kpi-v{margin-top:7px;font-size:27px;font-weight:900;line-height:1.05;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-  .sak-tot{background:linear-gradient(135deg,#26466b,#0f1f33)}
-  .sak-prem{background:linear-gradient(135deg,#0c7a6b,#3aa05a)}
-  .sak-comm{background:linear-gradient(135deg,#7c52e6,#a78bfa)}
+  .sak-tot{background:#eef4fb;color:#26466b}
+  .sak-prem{background:#ecfdf5;color:#0c7a6b}
+  .sak-comm{background:#f3f0ff;color:#6d28d9}
   @media(max-width:720px){.sa-kpis{grid-template-columns:1fr}}
 
   .sa-toggles{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding-top:4px}
-  .sa-export{display:inline-flex;align-items:center;gap:8px;background:#15803d;color:#fff;border:0;border-radius:22px;
+  .sa-export{display:inline-flex;align-items:center;gap:8px;background:#ecfdf5;color:#15803d;border:1px solid #bbf7d0;border-radius:22px;
              padding:9px 18px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 6px 16px rgba(21,128,61,.32);transition:.15s}
-  .sa-export:hover{background:#166534;box-shadow:0 8px 20px rgba(21,128,61,.4)}
+  .sa-export:hover{background:#d1fae5;border-color:#86efac;color:#166534}
   .sa-export svg{flex-shrink:0}
   .sa-seg{display:inline-flex;background:#fff;border:1px solid #e6eaf1;border-radius:26px;padding:4px;box-shadow:0 6px 16px rgba(15,23,42,.07)}
   .sa-seg button{padding:9px 24px;border-radius:22px;font-weight:700;font-size:13px;color:#64748b;border:0;background:transparent;cursor:pointer;font-family:inherit;transition:.15s}
   .sa-seg button:hover{color:#475569}
-  .sa-seg button.active{background:#26466b;color:#fff;box-shadow:0 6px 14px rgba(38,70,107,.35)}
+  .sa-seg button.active{background:#eef4fb;color:#26466b;box-shadow:inset 0 0 0 1px #c3d5ea}
 
   .sa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:18px;margin-top:20px}
-  .sa-card{position:relative;border-radius:18px;padding:16px 16px 15px;min-height:122px;cursor:pointer;color:#fff;overflow:hidden;
+  /* Pale tiles: dark text now, plus a thin border so a tint still reads as a card. */
+  .sa-card{position:relative;border-radius:18px;padding:16px 16px 15px;min-height:122px;cursor:pointer;color:#0f172a;overflow:hidden;border:1px solid rgba(15,23,42,.08);
            box-shadow:0 12px 26px rgba(15,23,42,.16);transition:transform .16s ease,box-shadow .16s ease}
   .sa-card>*{position:relative;z-index:1}
-  .sa-motif{position:absolute;z-index:0;right:-4px;top:50%;transform:translateY(-50%);width:138px;height:138px;color:#fff;opacity:.26;pointer-events:none}
-  .sa-motif svg{width:100%;height:100%}
-  .sa-card:hover{transform:translateY(-4px) scale(1.015);box-shadow:0 22px 42px rgba(15,23,42,.26)}
-  .sa-card:hover .sa-motif{opacity:.34}
   .sa-card.active{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(38,70,107,.5),0 22px 44px rgba(15,23,42,.3);transform:translateY(-2px)}
   .sa-badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.7px;padding:3px 10px;border-radius:20px;text-transform:uppercase;
-            margin-bottom:11px;background:rgba(255,255,255,.24);color:#fff}
-  .sa-card h3{margin:0 0 7px;font-size:15px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.2px;text-shadow:0 1px 2px rgba(0,0,0,.14)}
-  .sa-card .sa-qty{font-size:26px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif;line-height:1.02;text-shadow:0 1px 3px rgba(0,0,0,.2)}
-  .sa-card .sa-sub{font-size:11px;color:rgba(255,255,255,.9);margin-top:4px;font-weight:600}
+            margin-bottom:11px;background:rgba(15,23,42,.07);color:#334155}
+  .sa-card h3{margin:0 0 7px;font-size:15px;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.2px}
+  .sa-card .sa-qty{font-size:26px;font-weight:900;color:#0f172a;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif;line-height:1.02;text-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .sa-card .sa-sub{font-size:11px;color:#475569;margin-top:4px;font-weight:600}
 
   .sa-watermark{position:fixed;right:26px;bottom:8px;font-size:30px;font-weight:800;color:rgba(15,23,42,.07);letter-spacing:-1px;pointer-events:none;z-index:0}
 
   /* Inline table panel (drops in under the clicked card's row). */
   .sa-table-card{grid-column:1 / -1;border-radius:18px;background:#fff;overflow:hidden;box-shadow:0 16px 40px rgba(15,23,42,.16);border:1px solid #e2e8f0;animation:saIn .18s ease}
   @keyframes saIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-  .sa-bar{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,#1e293b,#4338ca);color:#fff}
+  .sa-bar{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,color-mix(in srgb,#1e293b 15%,#fff),color-mix(in srgb,#4338ca 15%,#fff));color:#fff}
   .sa-bar h2{margin:0;font-size:16px;font-weight:900;letter-spacing:.3px}
   .sa-bar .sa-meta{font-size:12px;color:rgba(255,255,255,.85);margin-top:2px}
   .sa-bar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
@@ -68,7 +66,7 @@
   .sa-unitsel button.on{background:#fff;color:#0f172a}
   .sa-xls{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.4);
     border-radius:9px;font-family:inherit;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;outline:none}
-  .sa-xls:hover{background:#15803d;border-color:#15803d}
+  .sa-xls:hover{background:#ecfdf5;border-color:#bbf7d0;color:#15803d}
   .sa-xls svg{flex-shrink:0}
   /* SKU multi-select (checkbox dropdown; pop is position:fixed to escape the card's overflow) */
   .sa-ms{position:relative}
@@ -94,7 +92,7 @@
   .sa-table-wrap{overflow:auto;max-height:60vh}
   table.sa-table{width:100%;border-collapse:collapse;font-size:13px}
   table.sa-table th,table.sa-table td{padding:10px 14px;text-align:left;border-bottom:1px solid #eef2f6;white-space:nowrap}
-  table.sa-table th{position:sticky;top:0;background:#0f172a;color:#fff;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;z-index:1}
+  table.sa-table th{position:sticky;top:0;background:#f1f5f9;color:#0f172a;border-bottom:2px solid #cbd5e1;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;z-index:1}
   table.sa-table td.num,table.sa-table th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
   table.sa-table th.grp{text-align:center;border-left:2px solid rgba(255,255,255,.35)}
   table.sa-table th.sub{top:36px;font-size:10px;padding-top:4px;padding-bottom:4px;opacity:.9}
@@ -104,7 +102,7 @@
   table.sa-table tbody tr:nth-child(even) td{background:#f8fafc}
   table.sa-table tbody tr:hover td{background:#eef2ff}
   table.sa-table tbody tr.sa-total td,
-  table.sa-table tbody tr.sa-total:hover td{background:linear-gradient(135deg,#1e293b,#4338ca);color:#fcd34d;font-weight:800;position:sticky;bottom:0}
+  table.sa-table tbody tr.sa-total:hover td{background:#eef2ff;color:#4338ca;font-weight:800;position:sticky;bottom:0}
   .sa-empty{padding:34px;text-align:center;color:#6b7280;font-size:13px}
   .sa-var{display:inline-block;font-size:11px;font-weight:700;color:#3730a3;background:#eef2ff;padding:2px 8px;border-radius:6px}
 </style>
@@ -193,53 +191,53 @@
 (function(){
   // Per-product gradients (keyed TYPE|SUB so the two BLENDEDs differ), matching the theme.
   var GRAD_MAP={
-    'PREMIUM|OLIVE':'linear-gradient(135deg,#0c7a6b,#3aa05a)',
-    'PREMIUM|CANOLA':'linear-gradient(135deg,#0b94a6,#16b89c)',
-    'PREMIUM|EXTRA VIRGIN OLIVE':'linear-gradient(135deg,#9d1230,#c81e36)',
-    'PREMIUM|GROUNDNUT':'linear-gradient(135deg,#1a8f3c,#54a52b)',
-    'PREMIUM|BLENDED':'linear-gradient(135deg,#3b2f8f,#6d28d9)',
-    'PREMIUM|SESAME':'linear-gradient(135deg,#f59e0b,#fb8c3c)',
-    'PREMIUM|YELLOW MUSTARD':'linear-gradient(135deg,#2aa6df,#1fc6d6)',
-    'PREMIUM|COCONUT':'linear-gradient(135deg,#1ba24a,#5bb637)',
-    'PREMIUM|GHEE':'linear-gradient(135deg,#7c4a12,#c87f1a)',
-    'PREMIUM|SLICED OLIVE':'linear-gradient(135deg,#fb8c3c,#f59e0b)',
-    'COMMODITY|MUSTARD':'linear-gradient(135deg,#24405f,#0f1f33)',
-    'COMMODITY|RICE BRAN':'linear-gradient(135deg,#7c52e6,#a78bfa)',
-    'COMMODITY|SOYABEAN':'linear-gradient(135deg,#2563eb,#1e40af)',
-    'COMMODITY|SUNFLOWER':'linear-gradient(135deg,#38bdf8,#62dbf0)',
-    'COMMODITY|BLENDED':'linear-gradient(135deg,#fb7185,#f87171)',
-    'COMMODITY|COTTON SEED':'linear-gradient(135deg,#0f766e,#13b07e)'
+    'PREMIUM|OLIVE':'linear-gradient(135deg,color-mix(in srgb,#0c7a6b 15%,#fff),color-mix(in srgb,#3aa05a 15%,#fff))',
+    'PREMIUM|CANOLA':'linear-gradient(135deg,color-mix(in srgb,#0b94a6 15%,#fff),color-mix(in srgb,#16b89c 15%,#fff))',
+    'PREMIUM|EXTRA VIRGIN OLIVE':'linear-gradient(135deg,color-mix(in srgb,#9d1230 15%,#fff),color-mix(in srgb,#c81e36 15%,#fff))',
+    'PREMIUM|GROUNDNUT':'linear-gradient(135deg,color-mix(in srgb,#1a8f3c 15%,#fff),color-mix(in srgb,#54a52b 15%,#fff))',
+    'PREMIUM|BLENDED':'linear-gradient(135deg,color-mix(in srgb,#3b2f8f 15%,#fff),color-mix(in srgb,#6d28d9 15%,#fff))',
+    'PREMIUM|SESAME':'linear-gradient(135deg,color-mix(in srgb,#f59e0b 15%,#fff),color-mix(in srgb,#fb8c3c 15%,#fff))',
+    'PREMIUM|YELLOW MUSTARD':'linear-gradient(135deg,color-mix(in srgb,#2aa6df 15%,#fff),color-mix(in srgb,#1fc6d6 15%,#fff))',
+    'PREMIUM|COCONUT':'linear-gradient(135deg,color-mix(in srgb,#1ba24a 15%,#fff),color-mix(in srgb,#5bb637 15%,#fff))',
+    'PREMIUM|GHEE':'linear-gradient(135deg,color-mix(in srgb,#7c4a12 15%,#fff),color-mix(in srgb,#c87f1a 15%,#fff))',
+    'PREMIUM|SLICED OLIVE':'linear-gradient(135deg,color-mix(in srgb,#fb8c3c 15%,#fff),color-mix(in srgb,#f59e0b 15%,#fff))',
+    'COMMODITY|MUSTARD':'linear-gradient(135deg,color-mix(in srgb,#24405f 15%,#fff),color-mix(in srgb,#0f1f33 15%,#fff))',
+    'COMMODITY|RICE BRAN':'linear-gradient(135deg,color-mix(in srgb,#7c52e6 15%,#fff),color-mix(in srgb,#a78bfa 15%,#fff))',
+    'COMMODITY|SOYABEAN':'linear-gradient(135deg,color-mix(in srgb,#2563eb 15%,#fff),color-mix(in srgb,#1e40af 15%,#fff))',
+    'COMMODITY|SUNFLOWER':'linear-gradient(135deg,color-mix(in srgb,#38bdf8 15%,#fff),color-mix(in srgb,#62dbf0 15%,#fff))',
+    'COMMODITY|BLENDED':'linear-gradient(135deg,color-mix(in srgb,#fb7185 15%,#fff),color-mix(in srgb,#f87171 15%,#fff))',
+    'COMMODITY|COTTON SEED':'linear-gradient(135deg,color-mix(in srgb,#0f766e 15%,#fff),color-mix(in srgb,#13b07e 15%,#fff))'
   };
-  var FALLBACK_GRADS=['linear-gradient(135deg,#6366f1,#8b5cf6)','linear-gradient(135deg,#0ea5e9,#06b6d4)','linear-gradient(135deg,#10b981,#14b8a6)','linear-gradient(135deg,#f59e0b,#f97316)'];
+  var FALLBACK_GRADS=['linear-gradient(135deg,color-mix(in srgb,#6366f1 15%,#fff),color-mix(in srgb,#8b5cf6 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#0ea5e9 15%,#fff),color-mix(in srgb,#06b6d4 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#10b981 15%,#fff),color-mix(in srgb,#14b8a6 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#f59e0b 15%,#fff),color-mix(in srgb,#f97316 15%,#fff))'];
 
   // Beverage cards are coloured to match the flavour (mango→orange, apple→green,
   // blueberry→blue, cola→caramel, water→blue …). Matched by substring on the card name
   // so sugar-free / blast / healthy variants inherit the base flavour colour. Ordered
   // specific → general (e.g. MINERAL WATER before WATER).
   var BEV_FLAVORS=[
-    ['MINERAL WATER','linear-gradient(135deg,#1d7fd4,#38bdf8)'],
-    ['TONIC',        'linear-gradient(135deg,#0891b2,#22d3ee)'],
-    ['SODA',         'linear-gradient(135deg,#0284c7,#7dd3fc)'],
-    ['MANGO',        'linear-gradient(135deg,#f59e0b,#fcd34d)'],
-    ['ORANGE',       'linear-gradient(135deg,#ea580c,#fb923c)'],
-    ['APPLE',        'linear-gradient(135deg,#16a34a,#4ade80)'],
-    ['BLUEBERRY',    'linear-gradient(135deg,#4f46e5,#818cf8)'],
-    ['LEMON',        'linear-gradient(135deg,#ca8a04,#facc15)'],
-    ['SHIKANJI',     'linear-gradient(135deg,#65a30d,#bef264)'],
-    ['GINGER',       'linear-gradient(135deg,#b45309,#f59e0b)'],
-    ['COLA',         'linear-gradient(135deg,#5b2c06,#92400e)'],
-    ['MOJITO',       'linear-gradient(135deg,#059669,#34d399)'],
-    ['ROSE',         'linear-gradient(135deg,#db2777,#f472b6)'],
-    ['JEERA',        'linear-gradient(135deg,#8a5a2b,#c08a4a)'],
-    ['ENERGY',       'linear-gradient(135deg,#dc2626,#f97316)'],
-    ['COFFEE',       'linear-gradient(135deg,#4b2e2e,#7c4a12)'],
-    ['WATER',        'linear-gradient(135deg,#1d7fd4,#38bdf8)'],
-    ['IMMUNITY',     'linear-gradient(135deg,#ea580c,#f59e0b)'],
-    ['GUMMY',        'linear-gradient(135deg,#db2777,#f59e0b)'],
-    ['COMBO',        'linear-gradient(135deg,#9333ea,#ec4899)'],
-    ['GIFT',         'linear-gradient(135deg,#9333ea,#ec4899)'],
-    ['POWDER',       'linear-gradient(135deg,#0d9488,#2dd4bf)'],
-    ['DRINKS',       'linear-gradient(135deg,#6366f1,#8b5cf6)']
+    ['MINERAL WATER','linear-gradient(135deg,color-mix(in srgb,#1d7fd4 15%,#fff),color-mix(in srgb,#38bdf8 15%,#fff))'],
+    ['TONIC',        'linear-gradient(135deg,color-mix(in srgb,#0891b2 15%,#fff),color-mix(in srgb,#22d3ee 15%,#fff))'],
+    ['SODA',         'linear-gradient(135deg,color-mix(in srgb,#0284c7 15%,#fff),color-mix(in srgb,#7dd3fc 15%,#fff))'],
+    ['MANGO',        'linear-gradient(135deg,color-mix(in srgb,#f59e0b 15%,#fff),color-mix(in srgb,#fcd34d 15%,#fff))'],
+    ['ORANGE',       'linear-gradient(135deg,color-mix(in srgb,#ea580c 15%,#fff),color-mix(in srgb,#fb923c 15%,#fff))'],
+    ['APPLE',        'linear-gradient(135deg,color-mix(in srgb,#16a34a 15%,#fff),color-mix(in srgb,#4ade80 15%,#fff))'],
+    ['BLUEBERRY',    'linear-gradient(135deg,color-mix(in srgb,#4f46e5 15%,#fff),color-mix(in srgb,#818cf8 15%,#fff))'],
+    ['LEMON',        'linear-gradient(135deg,color-mix(in srgb,#ca8a04 15%,#fff),color-mix(in srgb,#facc15 15%,#fff))'],
+    ['SHIKANJI',     'linear-gradient(135deg,color-mix(in srgb,#65a30d 15%,#fff),color-mix(in srgb,#bef264 15%,#fff))'],
+    ['GINGER',       'linear-gradient(135deg,color-mix(in srgb,#b45309 15%,#fff),color-mix(in srgb,#f59e0b 15%,#fff))'],
+    ['COLA',         'linear-gradient(135deg,color-mix(in srgb,#5b2c06 15%,#fff),color-mix(in srgb,#92400e 15%,#fff))'],
+    ['MOJITO',       'linear-gradient(135deg,color-mix(in srgb,#059669 15%,#fff),color-mix(in srgb,#34d399 15%,#fff))'],
+    ['ROSE',         'linear-gradient(135deg,color-mix(in srgb,#db2777 15%,#fff),color-mix(in srgb,#f472b6 15%,#fff))'],
+    ['JEERA',        'linear-gradient(135deg,color-mix(in srgb,#8a5a2b 15%,#fff),color-mix(in srgb,#c08a4a 15%,#fff))'],
+    ['ENERGY',       'linear-gradient(135deg,color-mix(in srgb,#dc2626 15%,#fff),color-mix(in srgb,#f97316 15%,#fff))'],
+    ['COFFEE',       'linear-gradient(135deg,color-mix(in srgb,#4b2e2e 15%,#fff),color-mix(in srgb,#7c4a12 15%,#fff))'],
+    ['WATER',        'linear-gradient(135deg,color-mix(in srgb,#1d7fd4 15%,#fff),color-mix(in srgb,#38bdf8 15%,#fff))'],
+    ['IMMUNITY',     'linear-gradient(135deg,color-mix(in srgb,#ea580c 15%,#fff),color-mix(in srgb,#f59e0b 15%,#fff))'],
+    ['GUMMY',        'linear-gradient(135deg,color-mix(in srgb,#db2777 15%,#fff),color-mix(in srgb,#f59e0b 15%,#fff))'],
+    ['COMBO',        'linear-gradient(135deg,color-mix(in srgb,#9333ea 15%,#fff),color-mix(in srgb,#ec4899 15%,#fff))'],
+    ['GIFT',         'linear-gradient(135deg,color-mix(in srgb,#9333ea 15%,#fff),color-mix(in srgb,#ec4899 15%,#fff))'],
+    ['POWDER',       'linear-gradient(135deg,color-mix(in srgb,#0d9488 15%,#fff),color-mix(in srgb,#2dd4bf 15%,#fff))'],
+    ['DRINKS',       'linear-gradient(135deg,color-mix(in srgb,#6366f1 15%,#fff),color-mix(in srgb,#8b5cf6 15%,#fff))']
   ];
   function bevFlavorGrad(name){
     var s=String(name||'').toUpperCase();
@@ -249,71 +247,6 @@
   function gradFor(p,i){return GRAD_MAP[p.type+'|'+p.sub_group]||bevFlavorGrad(p.sub_group)||FALLBACK_GRADS[i%FALLBACK_GRADS.length];}
 
   // Faint product line-art on the right of each card (approximating the mockup artwork).
-  var MOTIFS={
-    olive:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<path d="M20 106C40 82 58 60 96 34"/>'
-      +'<g transform="translate(40,82) rotate(40)"><path d="M0 0Q8 -12 0 -26Q-8 -12 0 0Z"/><path d="M0 -4V-22"/></g>'
-      +'<g transform="translate(56,64) rotate(40)"><path d="M0 0Q8 -12 0 -26Q-8 -12 0 0Z"/><path d="M0 -4V-22"/></g>'
-      +'<g transform="translate(50,76) rotate(-140)"><path d="M0 0Q8 -12 0 -26Q-8 -12 0 0Z"/><path d="M0 -4V-22"/></g>'
-      +'<g transform="translate(66,58) rotate(-140)"><path d="M0 0Q8 -12 0 -26Q-8 -12 0 0Z"/><path d="M0 -4V-22"/></g>'
-      +'<ellipse cx="90" cy="36" rx="7.5" ry="10" transform="rotate(26 90 36)"/>'
-      +'<ellipse cx="79" cy="27" rx="7.5" ry="10" transform="rotate(26 79 27)"/>'
-      +'</svg>',
-    coconut:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<circle cx="60" cy="60" r="34"/>'
-      +'<circle cx="60" cy="60" r="24" stroke-width="1.4" stroke-dasharray="2 6"/>'
-      +'<circle cx="52" cy="52" r="3.4"/><circle cx="67" cy="50" r="3.4"/><circle cx="60" cy="63" r="3.4"/>'
-      +'<path d="M34 46c5 8 5 16 0 24M86 46c-5 8-5 16 0 24" stroke-width="1.4"/>'
-      +'</svg>',
-    seeds:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">'
-      +'<g><ellipse cx="36" cy="34" rx="11" ry="6" transform="rotate(-24 36 34)"/><ellipse cx="62" cy="28" rx="11" ry="6" transform="rotate(16 62 28)"/>'
-      +'<ellipse cx="84" cy="44" rx="11" ry="6" transform="rotate(-12 84 44)"/><ellipse cx="50" cy="54" rx="11" ry="6" transform="rotate(28 50 54)"/>'
-      +'<ellipse cx="78" cy="68" rx="11" ry="6" transform="rotate(-8 78 68)"/><ellipse cx="40" cy="78" rx="11" ry="6" transform="rotate(18 40 78)"/>'
-      +'<ellipse cx="66" cy="90" rx="11" ry="6" transform="rotate(-20 66 90)"/></g>'
-      +'<g stroke-width="1.1"><path d="M29 38l14-8M55 31l14 3M79 48l10-9M44 60l12-12M73 71l10-5"/></g>'
-      +'</svg>',
-    peanut:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<path d="M72 22c-16 0-23 13-18 26 3 8 3 13 0 21-5 13 2 27 18 27s23-14 18-27c-3-8-3-13 0-21 5-13-2-26-18-26Z"/>'
-      +'<path d="M55 44c11 4 23 4 34 0"/><path d="M55 72c11-4 23-4 34 0"/>'
-      +'<g stroke-width="1.1"><path d="M59 30l26 10M59 38l26 10M59 78l26-10M59 86l26-10"/></g>'
-      +'</svg>',
-    drops:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<path d="M56 22c-12 22-20 35-20 48a20 20 0 0 0 40 0c0-13-8-26-20-48Z"/>'
-      +'<path d="M48 72c0-8 3-15 9-22" stroke-width="1.5"/>'
-      +'<path d="M90 60c-6 11-10 18-10 24a10 10 0 0 0 20 0c0-6-4-13-10-24Z"/>'
-      +'</svg>',
-    sunflower:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<g>'
-      +'<ellipse cx="60" cy="22" rx="5.5" ry="13"/><ellipse cx="75" cy="26" rx="5.5" ry="13" transform="rotate(30 75 26)"/>'
-      +'<ellipse cx="86" cy="37" rx="5.5" ry="13" transform="rotate(60 86 37)"/><ellipse cx="90" cy="52" rx="5.5" ry="13" transform="rotate(90 90 52)"/>'
-      +'<ellipse cx="86" cy="67" rx="5.5" ry="13" transform="rotate(120 86 67)"/><ellipse cx="75" cy="78" rx="5.5" ry="13" transform="rotate(150 75 78)"/>'
-      +'<ellipse cx="60" cy="82" rx="5.5" ry="13" transform="rotate(180 60 82)"/><ellipse cx="45" cy="78" rx="5.5" ry="13" transform="rotate(210 45 78)"/>'
-      +'<ellipse cx="34" cy="67" rx="5.5" ry="13" transform="rotate(240 34 67)"/><ellipse cx="30" cy="52" rx="5.5" ry="13" transform="rotate(270 30 52)"/>'
-      +'<ellipse cx="34" cy="37" rx="5.5" ry="13" transform="rotate(300 34 37)"/><ellipse cx="45" cy="26" rx="5.5" ry="13" transform="rotate(330 45 26)"/>'
-      +'</g>'
-      +'<circle cx="60" cy="52" r="16"/>'
-      +'<g stroke-width="1"><path d="M49 46l22 12M71 46l-22 12M60 36v32M44 52h32"/></g>'
-      +'</svg>',
-    leaf:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<path d="M30 100C30 64 50 40 92 30C90 70 64 92 32 92Z"/>'
-      +'<path d="M34 96C50 74 70 58 88 36" stroke-width="1.5"/>'
-      +'<g stroke-width="1.1"><path d="M50 82l-9-9M62 70l-9-11M74 58l-7-11M52 84l13-2M64 72l13-2M76 60l12-3"/></g>'
-      +'</svg>',
-    bottle:'<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      +'<path d="M52 20h16v10c0 4 6 8 6 16v50a6 6 0 0 1-6 6H52a6 6 0 0 1-6-6V46c0-8 6-12 6-16V20Z"/>'
-      +'<path d="M46 56h28" stroke-width="1.4"/>'
-      +'<rect x="50" y="64" width="20" height="30" rx="3" stroke-width="1.2"/>'
-      +'<circle cx="88" cy="40" r="4" stroke-width="1.2"/><circle cx="96" cy="54" r="2.6" stroke-width="1.2"/>'
-      +'</svg>'
-  };
-  var MOTIF_MAP={
-    'OLIVE':'olive','SLICED OLIVE':'olive','EXTRA VIRGIN OLIVE':'olive','COCONUT':'coconut',
-    'CANOLA':'seeds','YELLOW MUSTARD':'seeds','MUSTARD':'seeds','RICE BRAN':'seeds','SESAME':'seeds',
-    'SUNFLOWER':'sunflower','GROUNDNUT':'peanut','GHEE':'drops','BLENDED':'drops','SOYABEAN':'leaf','COTTON SEED':'leaf',
-    // Beverage families (matched on the card's type) use a bottle motif.
-    'DRINKS':'bottle','WATER':'bottle','CAPSULES':'bottle','POWDER':'bottle','GIFT PACK':'bottle'
-  };
-  function motifFor(p){return MOTIFS[MOTIF_MAP[p.sub_group]||MOTIF_MAP[p.type]||'seeds']||'';}
 
   var DATA={warehouses:[],products:[],items:[]};
   var db='jivo_oil', typeF='', skuF=[], whF=[], selected=null, selectedGrad='';   // skuF: SKUs, whF: warehouses; [] = all
@@ -355,7 +288,6 @@
     grid.innerHTML=prods.map(function(p,i){
       var active=(selected&&selected.type===p.type&&selected.sub_group===p.sub_group)?' active':'';
       return '<div class="sa-card'+active+'" data-type="'+esc(p.type)+'" data-sub="'+esc(p.sub_group)+'" style="background:'+gradFor(p,i)+'">'
-        +'<div class="sa-motif">'+motifFor(p)+'</div>'
         +'<span class="sa-badge">'+esc(p.type)+'</span>'
         +'<h3>'+esc(p.sub_group)+'</h3>'
         +'<div class="sa-qty">'+num(p.litres)+'<span class="sa-unit"> '+esc(unitShort())+'</span></div>'
@@ -389,7 +321,7 @@
   function renderSaKpis(){
     var box=document.getElementById('saKpis'); if(!box)return;
     var tl=typeLitres(), tot=0; Object.keys(tl).forEach(function(t){tot+=tl[t];});
-    var palette=['linear-gradient(135deg,#0c7a6b,#3aa05a)','linear-gradient(135deg,#7c52e6,#a78bfa)','linear-gradient(135deg,#0b94a6,#16b89c)','linear-gradient(135deg,#f59e0b,#fb8c3c)','linear-gradient(135deg,#2563eb,#1e40af)'];
+    var palette=['linear-gradient(135deg,color-mix(in srgb,#0c7a6b 15%,#fff),color-mix(in srgb,#3aa05a 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#7c52e6 15%,#fff),color-mix(in srgb,#a78bfa 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#0b94a6 15%,#fff),color-mix(in srgb,#16b89c 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#f59e0b 15%,#fff),color-mix(in srgb,#fb8c3c 15%,#fff))','linear-gradient(135deg,color-mix(in srgb,#2563eb 15%,#fff),color-mix(in srgb,#1e40af 15%,#fff))'];
     var cards=[{l:'Total '+unitLong(),v:tot,c:'sak-tot',s:''}], pi=0;
     // Keep the band to one row (Total + top 2 metric types): Premium/Commodity for oils,
     // Water/Drinks for beverages. Smaller families stay reachable via the type toggle.
@@ -432,7 +364,7 @@
     for(var i=0;i<cards.length;i++){ if(Math.abs(cards[i].offsetTop-top)<2)lastInRow=cards[i]; }
     if(lastInRow.nextSibling)grid.insertBefore(panel,lastInRow.nextSibling); else grid.appendChild(panel);
     panel.style.display='';
-    document.getElementById('saBar').style.background=selectedGrad||'linear-gradient(135deg,#1e293b,#4338ca)';
+    document.getElementById('saBar').style.background=selectedGrad||'linear-gradient(135deg,color-mix(in srgb,#1e293b 15%,#fff),color-mix(in srgb,#4338ca 15%,#fff))';
     populateSku();
     populateWh();
     renderTable();

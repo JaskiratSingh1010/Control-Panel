@@ -15,10 +15,10 @@
   .rc-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
   .rc-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:2px 0 16px;letter-spacing:-.5px;display:flex;align-items:center;gap:11px;
     text-shadow:0 0 26px rgba(99,102,241,.55), 0 4px 14px rgba(79,70,229,.28)}   /* glowing title, no box */
-  .rc-h1 .material-icons{font-size:32px;color:var(--rz-indigo);text-shadow:0 0 20px rgba(99,102,241,.6)}
+  .rc-h1 .ic{font-size:32px;color:var(--rz-indigo);text-shadow:0 0 20px rgba(99,102,241,.6)}
   .rc-srcpill{display:inline-flex;align-items:center;gap:7px;background:var(--rz-soft);color:var(--rz-indigo-deep);
     border:1px solid var(--rz-soft-brd);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
-  .rc-srcpill .material-icons{font-size:15px;color:var(--rz-indigo)}
+  .rc-srcpill .ic{font-size:15px;color:var(--rz-indigo)}
 
   /* ── KPI cards ── */
   .rc-kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:16px}
@@ -33,7 +33,7 @@
   .rc-kpi.k-prt{--kpi-acc:var(--rz-acc-green);--kpi-ic:#16a34a}
   .rc-kpi-l{font-size:12.5px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:var(--rz-ink);
     display:flex;align-items:center;gap:6px;line-height:1.2}
-  .rc-kpi-l .material-icons{font-size:16px;color:var(--kpi-ic,#6366f1)}
+  .rc-kpi-l .ic{font-size:16px;color:var(--kpi-ic,#6366f1)}
   .rc-kpi-v{font-size:22px;font-weight:900;line-height:1.15;margin-top:6px;color:var(--rz-ink);font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
   .rc-kpi-m{font-size:10.5px;font-weight:600;color:var(--rz-muted);margin-top:3px;line-height:1.3}
   .rc-kpi-ic{position:absolute;right:-10px;bottom:-12px;font-size:78px !important;color:var(--kpi-ic,#6366f1);opacity:.08}
@@ -52,20 +52,20 @@
   .rc-search{flex:0 1 300px;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:10px 14px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-search:focus-within{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-search .material-icons{font-size:21px;color:var(--rz-faint)}
+  .rc-search .ic{font-size:21px;color:var(--rz-faint)}
   .rc-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:15px;font-weight:600;color:var(--rz-ink);background:transparent}
   .rc-search input::placeholder{color:var(--rz-faint)}
   .rc-date{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:8px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-date:focus-within{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-date .material-icons{font-size:21px;color:var(--rz-indigo)}
+  .rc-date .ic{font-size:21px;color:var(--rz-indigo)}
   .rc-date .rc-date-lbl{font-size:13px;font-weight:800;color:var(--rz-muted);letter-spacing:.3px}
   .rc-date input{border:0;outline:0;font-family:inherit;font-size:15px;font-weight:800;color:var(--rz-ink);background:transparent;cursor:pointer}
   .rc-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;color:var(--rz-indigo-deep);
     font-family:inherit;font-size:14px;font-weight:800;padding:11px 17px;border-radius:11px;cursor:pointer;
     transition:background .15s,border-color .15s,color .15s}
   .rc-btn:hover{background:var(--rz-soft);border-color:var(--rz-soft-brd)}
-  .rc-btn .material-icons{font-size:20px}
+  .rc-btn .ic{font-size:20px}
 
   /* segmented Prem/Comm filter */
   .rc-seg{display:inline-flex;background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:3px;
@@ -92,7 +92,7 @@
   .rc-lock-go:hover{background:#e0e7ff;border-color:#c7d2fe;color:var(--rz-indigo-deep)}
   .rc-lockpill{display:inline-flex;align-items:center;gap:8px;background:#ecfdf5;border:1px solid #a7f3d0;
     color:#065f46;font-size:12px;font-weight:800;padding:6px 7px 6px 12px;border-radius:11px}
-  .rc-lockpill .material-icons{font-size:16px}
+  .rc-lockpill .ic{font-size:16px}
   .rc-unlock{border:1px solid #a7f3d0;background:#fff;color:#047857;font-family:inherit;font-size:11px;font-weight:800;
     padding:5px 11px;border-radius:8px;cursor:pointer}
   .rc-unlock:hover{background:#ecfdf5}
@@ -104,7 +104,7 @@
     box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:260px}
   .rc-ms-btn:hover{border-color:var(--rz-soft-brd)}
   .rc-ms.open .rc-ms-btn{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .rc-ms-btn .material-icons{font-size:20px}
+  .rc-ms-btn .ic{font-size:20px}
   .rc-ms-btn #rcAsmLabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rc-ms-chev{margin-left:auto;color:var(--rz-faint);transition:transform .16s}
   .rc-ms.open .rc-ms-chev{transform:rotate(180deg)}
@@ -141,7 +141,7 @@
   .rc-gname{display:flex;align-items:center;gap:10px}
   .rc-tw-i{font-size:9px;color:var(--rz-muted);transition:transform .14s;width:10px;text-align:center}
   .rc-grp.open .rc-tw-i{transform:rotate(90deg)}
-  .rc-chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;color:#fff;padding:3px 11px;border-radius:999px;letter-spacing:.2px}
+  .rc-chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;padding:3px 11px;border-radius:999px;letter-spacing:.2px;border:1px solid transparent}
   .rc-cnt{font-size:11px;font-weight:700;color:var(--rz-faint)}
 
   /* party row */
@@ -213,7 +213,7 @@
 {% block content %}
 <div class="rc-wrap">
 
-  <h1 class="rc-h1"><span class="material-icons">credit_score</span>Required Credit Limit</h1>
+  <h1 class="rc-h1"><i class="ic ic-credit-card"></i>Required Credit Limit</h1>
 
   <div class="rc-kpis" id="rcKpis"></div>
 
@@ -226,9 +226,9 @@
     </div>
     <div class="rc-ms" id="rcAsm" title="Filter by ASM (select one or more)">
       <button type="button" class="rc-ms-btn" id="rcAsmBtn">
-        <span class="material-icons">badge</span>
+        <i class="ic ic-id-card"></i>
         <span id="rcAsmLabel">All ASMs</span>
-        <span class="material-icons rc-ms-chev">expand_more</span>
+        <i class="ic ic-chevron-down rc-ms-chev"></i>
       </button>
       <div class="rc-ms-pop" id="rcAsmPop">
         <div class="rc-ms-head">
@@ -239,35 +239,35 @@
       </div>
     </div>
     <label class="rc-search">
-      <span class="material-icons">search</span>
+      <i class="ic ic-search"></i>
       <input type="text" id="rcSearch" placeholder="Search party, ASM, state…" autocomplete="off">
     </label>
     <label class="rc-date" title="Ledger Amt = balance just before this date; Payment Done = receipts dated on this date">
-      <span class="material-icons">event</span>
+      <i class="ic ic-calendar"></i>
       <span class="rc-date-lbl">As of</span>
       <input type="date" id="rcAsOf">
     </label>
-    <button type="button" class="rc-btn" id="rcExpand"><span class="material-icons">unfold_more</span>Expand all</button>
-    <button type="button" class="rc-btn" id="rcCollapse"><span class="material-icons">unfold_less</span>Collapse all</button>
+    <button type="button" class="rc-btn" id="rcExpand"><i class="ic ic-chevrons-up-down"></i>Expand all</button>
+    <button type="button" class="rc-btn" id="rcCollapse"><i class="ic ic-chevrons-down-up"></i>Collapse all</button>
 
     <!-- Lock control (shown when nothing is frozen) -->
     <div class="rc-lock" id="rcLock" title="Freeze Total Outstanding &amp; Required Limit at their current values">
-      <button type="button" class="rc-btn" id="rcLockBtn"><span class="material-icons">lock</span>Lock columns</button>
+      <button type="button" class="rc-btn" id="rcLockBtn"><i class="ic ic-lock"></i>Lock columns</button>
       <div class="rc-lock-pop" id="rcLockPop">
         <div class="rc-lock-row">Freeze for
           <input type="number" id="rcLockDays" min="1" max="3650" value="30"> days</div>
         <div class="rc-lock-hint">Total Outstanding &amp; Required Limit hold their current values until the
           lock lapses. Ledger Amt, Payment Done &amp; Outstanding always follow the selected "As of" date.</div>
-        <button type="button" class="rc-btn rc-lock-go" id="rcLockGo"><span class="material-icons">lock</span>Lock now</button>
+        <button type="button" class="rc-btn rc-lock-go" id="rcLockGo"><i class="ic ic-lock"></i>Lock now</button>
       </div>
     </div>
     <!-- Active-lock status pill (shown when frozen) -->
     <span class="rc-lockpill" id="rcLockPill" style="display:none">
-      <span class="material-icons">lock</span><span id="rcLockPillTxt"></span>
+      <i class="ic ic-lock"></i><span id="rcLockPillTxt"></span>
       <button type="button" class="rc-unlock" id="rcUnlockBtn">Unlock</button>
     </span>
 
-    <button type="button" class="rc-btn rc-xl" id="rcExport"><span class="material-icons">download</span>Export Excel</button>
+    <button type="button" class="rc-btn rc-xl" id="rcExport"><i class="ic ic-download"></i>Export Excel</button>
   </div>
 
   <div class="rc-card">
@@ -396,6 +396,12 @@
     return '<span class="rc-type t-x">—</span>';
   }
 
+  /* Light chips: the name keeps its own colour, but as a pale fill with that colour
+     as the text - instead of a solid block of it. Same recipe as the rest of the panel. */
+  function chipStyle(c){
+    return 'background:color-mix(in srgb,'+c+' 13%,#fff);color:'+c+
+           ';border-color:color-mix(in srgb,'+c+' 30%,#fff)';
+  }
   var PALETTE = ['#0d9488','#4f46e5','#0891b2','#db2777','#d97706','#7c3aed','#059669','#dc2626','#2563eb','#9333ea','#c026d3','#65a30d'];
   function asmColor(i){return PALETTE[i % PALETTE.length];}
 
@@ -412,29 +418,29 @@
     });
     var collPct = out > 0 ? (pay / out * 100) : 0;
     var cards = [
-      {c:'k-asm',ic:'account_balance_wallet',l:'Total Outstanding',v:abbr(out), col:10,
+      {c:'k-asm',ic:'wallet',l:'Total Outstanding',v:abbr(out), col:10,
         m:'Total owed — OIH + Ledger'},
-      {c:'k-rev',ic:'verified_user',l:'Required Limit',v:abbr(req), col:11,
+      {c:'k-rev',ic:'shield-check',l:'Required Limit',v:abbr(req), col:11,
         m:'Credit limit needed (+2%)'},
-      {c:'k-ltr',ic:'pending_actions',l:'Net Outstanding',v:abbr(rem), col:13,
+      {c:'k-ltr',ic:'clipboard-clock',l:'Net Outstanding',v:abbr(rem), col:13,
         m:'Still to collect (after payment)'},
-      {c:'k-rev',ic:'water_drop',l:'Order-in-Hand',v:Math.round(lit).toLocaleString('en-IN')+' L', col:6,
+      {c:'k-rev',ic:'droplet',l:'Order-in-Hand',v:Math.round(lit).toLocaleString('en-IN')+' L', col:6,
         m:abbr(val)+' open pipeline'},
-      {c:'k-asm',ic:'account_balance',l:'Receivables (Ledger)',v:abbr(led), col:9,
+      {c:'k-asm',ic:'landmark',l:'Receivables (Ledger)',v:abbr(led), col:9,
         m:'Total ledger balance on the books'},
-      {c:'k-prt',ic:'savings',l:'Collection',v:abbr(pay), col:12,
+      {c:'k-prt',ic:'piggy-bank',l:'Collection',v:abbr(pay), col:12,
         m:collPct.toFixed(1)+'% of Total Outstanding'},
-      {c:'k-ltr',ic:'groups',l:'Pending Parties',v:pending+' / '+parties, col:0, act:'pending',
+      {c:'k-ltr',ic:'users',l:'Pending Parties',v:pending+' / '+parties, col:0, act:'pending',
         m:(parties-pending)+' cleared · click to view'}
     ];
     document.getElementById('rcKpis').innerHTML = cards.map(function(k){
       var on = k.act ? false : (kpiHlCol && kpiHlCol===k.col);
       return '<div class="rc-kpi '+k.c+(on?' active':'')+'" data-col="'+k.col+'"'+(k.act?' data-act="'+k.act+'"':'')+' '+
         'title="'+(k.act==='pending'?'Click to list the pending parties':(k.col?'Click to highlight its column in the table':''))+'">'+
-        '<div class="rc-kpi-l"><span class="material-icons">'+k.ic+'</span>'+k.l+'</div>'+
+        '<div class="rc-kpi-l"><i class="ic ic-'+k.ic+'"></i>'+k.l+'</div>'+
         '<div class="rc-kpi-v">'+k.v+'</div>'+
         '<div class="rc-kpi-m">'+esc(k.m)+'</div>'+
-        '<span class="material-icons rc-kpi-ic">'+k.ic+'</span></div>';
+        '<i class="ic rc-kpi-ic ic-'+k.ic+'"></i></div>';
     }).join('');
     applyKpiHighlight();
   }
@@ -497,7 +503,7 @@
             '<div class="rc-so-sub"><span class="rc-so-p">'+esc(p.asm)+'</span></div></div>'+
             '<span class="rc-so-amt">'+money(p.net)+'</span></div>';
         }).join('')
-      : '<div style="padding:16px;color:var(--rz-muted);font-weight:600">All parties are cleared 🎉</div>';
+      : '<div style="padding:16px;color:var(--rz-muted);font-weight:600">All parties are cleared <i class="ic ic-party-popper"></i></div>';
     document.getElementById('rcModal').classList.add('show');
   }
 
@@ -519,7 +525,7 @@
       html += '<tr class="rc-grp" data-gi="'+gi+'">'+
         '<td><div class="rc-gname">'+
           '<span class="rc-tw-i">▶</span>'+
-          '<span class="rc-chip" style="background:'+color+'">'+esc(g.asm)+'</span>'+
+          '<span class="rc-chip" style="'+chipStyle(color)+'">'+esc(g.asm)+'</span>'+
           '<span class="rc-cnt">'+gv.rows.length+'</span>'+
         '</div></td>'+
         '<td></td><td></td><td></td><td></td>'+

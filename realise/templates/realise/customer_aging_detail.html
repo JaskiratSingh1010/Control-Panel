@@ -18,13 +18,13 @@
   .ad-back{display:inline-flex;align-items:center;gap:6px;color:var(--rz-indigo-deep);text-decoration:none;background:var(--rz-soft);
     border:1px solid var(--rz-soft-brd);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700}
   .ad-back:hover{background:#e0e7ff}
-  .ad-back .material-icons{font-size:17px;color:var(--rz-indigo)}
+  .ad-back .ic{font-size:17px;color:var(--rz-indigo)}
 
   .ad-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:13px}
   .ad-search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:9px 13px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .ad-search:focus-within{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
-  .ad-search .material-icons{font-size:19px;color:#94a3b8}
+  .ad-search .ic{font-size:19px;color:#94a3b8}
   .ad-search input{border:0;outline:0;flex:1;font-family:inherit;font-size:13px;color:#0f172a;background:transparent}
   .ad-btn{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #e2e8f0;color:#4338ca;
     font-family:inherit;font-size:13px;font-weight:700;padding:9px 16px;border-radius:11px;cursor:pointer}
@@ -33,7 +33,7 @@
   .ad-btn.primary:hover{background:#e0e7ff;border-color:#c7d2fe}
   .ad-btn.danger{color:#dc2626}
   .ad-btn.danger:hover{background:#fef2f2;border-color:#fecaca}
-  .ad-btn .material-icons{font-size:17px}
+  .ad-btn .ic{font-size:17px}
 
   .ad-card{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:16px;overflow:hidden;box-shadow:var(--rz-shadow)}
   .ad-tw{overflow:auto;max-height:74vh}
@@ -119,8 +119,8 @@
   /* ── Expandable split breakdown (TDS / RTV / Claim …) ── */
   .ad-exp{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:0;background:transparent;cursor:pointer;color:#64748b;border-radius:6px;vertical-align:middle}
   .ad-exp:hover{background:#eef2ff;color:#4338ca}
-  .ad-exp .material-icons{font-size:18px;transition:transform .15s}
-  .ad-exp.on .material-icons{transform:rotate(90deg);color:#4338ca}
+  .ad-exp .ic{font-size:18px;transition:transform .15s}
+  .ad-exp.on .ic{transform:rotate(90deg);color:#4338ca}
   .ad-cnt{display:inline-block;min-width:16px;margin-left:3px;padding:0 5px;font-size:10px;font-weight:800;color:#4338ca;background:#e0e7ff;border-radius:999px;vertical-align:middle}
   td.ad-detcell{background:#f8fafc;padding:0;border-bottom:1px solid #e2e8f0}
   .sp-wrap{padding:12px 16px 14px}
@@ -152,13 +152,13 @@
         <h1 class="ad-h1" id="adName">Customer <span class="ad-code" id="adCode"></span></h1>
         <p class="ad-sub">Open documents behind the balance &middot; aging as of <span id="adAsOf"></span></p>
       </div>
-      <a class="ad-back" href="{% url 'realise:customer_aging' %}?as_of={{ aging_date }}"><span class="material-icons">arrow_back</span>Back to Aging</a>
+      <a class="ad-back" href="{% url 'realise:customer_aging' %}?as_of={{ aging_date }}"><i class="ic ic-arrow-left"></i>Back to Aging</a>
     </div>
   </div>
 
   <div class="ad-tools">
     <label class="ad-search">
-      <span class="material-icons">search</span>
+      <i class="ic ic-search"></i>
       <input type="text" id="adSearch" placeholder="Search doc no, remark, branch…" autocomplete="off">
     </label>
     <!-- Bulk-set the credit period: type the days, tick the P/C types, Apply → every matching invoice fills. -->
@@ -171,11 +171,11 @@
       <label class="ad-pcd"><input type="checkbox" class="pcchk" value="U"><b class="unc">U</b></label>
       <button type="button" class="ad-btn" id="adPCApply">Apply</button>
     </span>
-    <button type="button" class="ad-btn primary" id="adPivotBtn"><span class="material-icons">pivot_table_chart</span><span id="adPivotLbl">Pivot</span></button>
-    <button type="button" class="ad-btn" id="adExport"><span class="material-icons">download</span>Export Excel</button>
-    <button type="button" class="ad-btn" id="adUpload" title="Upload an Excel/CSV to bulk-update by Doc No. The Remark / Category value sets BOTH the note and the on-screen Category, allocating the document's Balance Due to it. Add an Amount column to split one balance across several categories."><span class="material-icons">upload</span>Upload Excel</button>
+    <button type="button" class="ad-btn primary" id="adPivotBtn"><i class="ic ic-table-properties"></i><span id="adPivotLbl">Pivot</span></button>
+    <button type="button" class="ad-btn" id="adExport"><i class="ic ic-download"></i>Export Excel</button>
+    <button type="button" class="ad-btn" id="adUpload" title="Upload an Excel/CSV to bulk-update by Doc No. The Remark / Category value sets BOTH the note and the on-screen Category, allocating the document's Balance Due to it. Add an Amount column to split one balance across several categories."><i class="ic ic-upload"></i>Upload Excel</button>
     <input type="file" id="adUploadFile" accept=".xlsx,.csv" style="display:none">
-    <button type="button" class="ad-btn danger" id="adClear" title="Clear all saved remarks for this customer"><span class="material-icons">backspace</span>Clear Remarks</button>
+    <button type="button" class="ad-btn danger" id="adClear" title="Clear all saved remarks for this customer"><i class="ic ic-delete"></i>Clear Remarks</button>
   </div>
 
   <div class="ad-card">
@@ -382,7 +382,7 @@
       var cdInput = '<input class="ad-cd" type="number" min="0" step="1" inputmode="numeric" data-key="'+attr(r.row_key)+'" data-i="'+i+'" '+
         'value="'+(cd==null?'':cd)+'" placeholder="'+(r.item_type==='P+C'?'set days':'days')+'" title="Credit period (days from posting) for this invoice">';
       return '<tr data-i="'+i+'" data-hay="'+attr(hay)+'">'+
-        '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><span class="material-icons">chevron_right</span></button>'+
+        '<td><button type="button" class="ad-exp" title="Split this balance into TDS / RTV / Claim …"><i class="ic ic-chevron-right"></i></button>'+
           '<span class="ad-cnt"'+(n?'':' style="display:none"')+'>'+(n||'')+'</span></td>'+
         '<td>'+esc(r.type)+'</td><td>'+esc(r.doc_no)+'</td><td>'+esc(r.posting_date)+'</td><td>'+esc(r.due_date)+'</td>'+
         '<td>'+pcBadge(r.item_type, r.type)+'</td><td>'+cdInput+'</td>'+
@@ -519,7 +519,7 @@
     }).join('');
     wrap.innerHTML =
       '<div class="sp-grid"><span class="sp-h">Category</span><span class="sp-h">Amount (₹)</span><span class="sp-h">Remark</span><span class="sp-h"></span>'+lines+'</div>'+
-      '<div class="sp-foot"><button type="button" class="sp-add"><span class="material-icons" style="font-size:16px">add</span>Add split</button>'+
+      '<div class="sp-foot"><button type="button" class="sp-add"><i class="ic ic-plus" style="font-size:16px"></i>Add split</button>'+
         '<div class="sp-rec"></div></div>';
     reconcile(i);
   }
