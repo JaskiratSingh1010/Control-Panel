@@ -1904,9 +1904,11 @@ function buildSlideTwoDrillRows(rows,dimension,groupFilter,targetNodes,oihRows){
 var sc2FlexStore={};
 function sc2FlexOn(){return cdViewMode==='flex';}
 function sc2FlexHeadCols(){return sc2FlexOn()?'<div class="sc2-tt-col">Flex TGT</div><div class="sc2-tt-col">Dent</div>':'';}
+/* name + Target/Tgt + Done/Done + OIH/OIH + Bal/Bal = 9 tracks; Flex View inserts
+   Flex TGT and Dent after Target L, making 11. */
 function sc2DynGcols(){return sc2FlexOn()
-  ?'grid-template-columns:1.6fr .8fr .7fr .7fr .8fr .8fr .8fr .8fr .9fr .9fr'
-  :'grid-template-columns:1.6fr .8fr .8fr .8fr .8fr .8fr .9fr .9fr';}
+  ?'grid-template-columns:1.4fr .7fr .62fr .62fr .8fr .66fr .8fr .74fr .8fr .7fr .8fr .8fr'
+  :'grid-template-columns:1.45fr .7fr .82fr .7fr .82fr .76fr .82fr .74fr .82fr .82fr';}
 function comGcols(){return sc2FlexOn()
   ?'grid-template-columns:1.5fr .76fr .7fr .7fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr'
   :'grid-template-columns:1.5fr .76fr .76fr .8fr .8fr .76fr .76fr .85fr .8fr .85fr';}
@@ -1930,15 +1932,31 @@ function drillCells(c,flexKey){
   // values live in sc2FlexStore even when Flex is off, so gate on sc2FlexOn() or Bal leaks them.
   var eff=(sc2FlexOn()&&flexKey&&sc2FlexStore.hasOwnProperty(flexKey))?sc2FlexStore[flexKey]:(c.target||0);
   var bal=eff-((c.done||0)+(c.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
+  /* OIH Realise and Bal Realise use exactly the formulas the channel cards use
+     (see cardCells), so a drill row and its card can never disagree:
+       OIH Realise = open-order value / open litres
+       Bal Realise = (target revenue − done revenue) / balance litres
+     Both are ₹ PER LITRE - not a litres subtraction. */
+  var oihRlz=(c.oih||0)>0?((c.oihLineTotal||0)/c.oih):NaN;
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  var balRlz=(eff>0&&bal!==0)?((eff*(c.targetRealise||0))-(c.lineTotal||0))/bal:NaN;
+  var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
   var balWo=eff-(c.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
+  /* Tgt Realise and Done Realise are stored figures, so a real zero prints as ₹0.00 -
+     never a dash. OIH Realise and Bal Realise are divisions, so they DO keep the dash
+     when there is nothing to divide by: "cannot be worked out" is not the same as zero. */
+  var tgtRlz=Number(c.targetRealise)||0;
+  var actRlz=Number(c.actualRealise)||0;
   return '<div class="sc2-drillval">'+fN(c.target||0)+'</div>'
     +(sc2FlexOn()&&flexKey?sc2FlexCells(flexKey,c):'')
+    +'<div class="sc2-drillval">₹'+fNp(tgtRlz,2)+'</div>'
     +'<div class="sc2-drillval">'+fN(c.done||0)+'</div>'
+    +'<div class="sc2-drillval">₹'+fNp(actRlz,2)+'</div>'
     +'<div class="sc2-drillval">'+fN(c.oih||0)+'</div>'
+    +'<div class="sc2-drillval">'+oihRlzStr+'</div>'
     +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-drillval sc2-balwo-cell '+balWoClass+'">'+fN(balWo)+'</div>'
-    +'<div class="sc2-drillval">'+fNp(c.targetRealise||0,2)+'</div>'
-    +'<div class="sc2-drillval">'+fNp(c.actualRealise||0,2)+'</div>';
+    +'<div class="sc2-drillval sc2-balrlz-cell">'+balRlzStr+'</div>';
 }
 function renderSlideTwoDrillTable(rows,dimension,groupFilter){
   var isPerson=dimension==='person';
@@ -1950,7 +1968,7 @@ function renderSlideTwoDrillTable(rows,dimension,groupFilter){
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div><div class="sc2-tt-col">Done L</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div>'
-      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Done Rlz</div>'
     +'</div>'
     +'<div class="sc2-drillbody">';
   if(!rows.length){
@@ -2176,7 +2194,7 @@ function renderCommodityTable(tree,tot){
     +'<div class="sc2-thead sc2-wide"'+gs+'>'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' › ')||firstCol)+'</div>'
       +'<div class="sc2-tt-col">Tgt L</div>'+sc2FlexHeadCols()+'<div class="sc2-tt-col">Tgt Rlz</div>'
-      +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Done L</div><div class="sc2-tt-col">Last Mo L</div><div class="sc2-tt-col">Done Rlz</div>'
       +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">OIH Rlz</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal Rlz</div>'
     +'</div><div class="sc2-drillbody">';
   if(!tree.length){
@@ -2190,7 +2208,7 @@ function renderCommodityTable(tree,tot){
 function buildCommodityCsvRows(tree,tot){
   function balRlz(n){var b=(n.target||0)-((n.done||0)+(n.oih||0));return ((n.target||0)>0&&b!==0)?(((n.target||0)*(n.targetRealise||0))-(n.lineTotal||0))/b:null;}
   var out=[['Sales Person',COMMODITY_PERSON],
-    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Actual Realise','OIH Ltr','OIH Realise','Bal Ltr','Bal Realise']];
+    [comOrder.map(function(k){return COM_DIM_NAME[k];}).join(' / '),'Target Ltr','Tgt Realise','Done Ltr','Last Mo Done Ltr','Done Realise','OIH Ltr','OIH Realise','Bal Ltr','Bal Realise']];
   function emit(node,level){
     var isProduct=node.dim==='product', act=node.done>0?node.lineTotal/node.done:0;
     var pad=level>0?new Array(level+1).join('  '):'';
@@ -2492,13 +2510,20 @@ function cardCells(c,isTotal){
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
   var oihRlz=(c.oih||0)>0?((c.oihLineTotal||0)/c.oih):NaN;   // ₹/L of open orders
   var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  // Tgt Realise comes off the target row; Done Realise is revenue / done litres.
+  var tgtRlz=Number(c.targetRealise)||0;
+  var tgtRlzStr=tgtRlz>0?'₹'+fNp(tgtRlz,2):'&mdash;';
+  var actRlz=(c.done||0)>0?((c.lineTotal||0)/c.done):NaN;
+  var actRlzStr=(isFinite(actRlz)&&actRlz>0)?'₹'+fNp(actRlz,2):'&mdash;';
+  void balWoClass;   // still computed above; shown in the detail drill, not here
   return '<div class="sc2-state-name">'+esc(isTotal?'TOTAL':c.name)+'</div>'
     +'<div class="sc2-state-val">'+fN(c.target||0)+'</div>'
+    +'<div class="sc2-state-val">'+tgtRlzStr+'</div>'
     +'<div class="sc2-state-val">'+fN(c.done||0)+'</div>'
+    +'<div class="sc2-state-val">'+actRlzStr+'</div>'
     +'<div class="sc2-state-val">'+fN(c.oih||0)+'</div>'
     +'<div class="sc2-state-val">'+oihRlzStr+'</div>'
     +'<div class="sc2-state-val '+balClass+'">'+fN(bal)+'</div>'
-    +'<div class="sc2-state-val '+balWoClass+'">'+fN(balWo)+'</div>'
     +'<div class="sc2-state-val">'+balRlzStr+'</div>';
 }
 function themedChannelCardHtml(item){
@@ -2526,15 +2551,19 @@ function themedChannelCardHtml(item){
       // No "GT - " style prefix: the round badge to the left already shows the code.
       +'<div class="sc2-titletext"><strong>'+esc(item.title.replace(/ Performance| Tracking| Market Trends/g,''))+'</strong><span>'+esc(item.members.join(' · '))+'</span></div>'
     +'</div>'
+    /* Column order: every litres figure is followed by its own realise, so they read
+       in pairs - Target/Tgt, Done/Act, OIH/OIH, Bal/Bal. "Bal w/o OIH" was dropped
+       from this table; it is still available in the channel-detail drill. */
     +'<div class="sc2-thead sc2-oih">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(firstColLabel)+'</div>'
-      +'<div class="sc2-tt-col">Tgt L</div>'
+      +'<div class="sc2-tt-col">Target L</div>'
+      +'<div class="sc2-tt-col">Tgt Realise</div>'
       +'<div class="sc2-tt-col">Done L</div>'
-      +'<div class="sc2-tt-col">OIH</div>'
-      +'<div class="sc2-tt-col">OIH Rlz</div>'
+      +'<div class="sc2-tt-col">Done Realise</div>'
+      +'<div class="sc2-tt-col">Order in Hand</div>'
+      +'<div class="sc2-tt-col">OIH Realise</div>'
       +'<div class="sc2-tt-col">Bal</div>'
-      +'<div class="sc2-tt-col">Bal w/o OIH</div>'
-      +'<div class="sc2-tt-col">Bal Rlz</div>'
+      +'<div class="sc2-tt-col">Bal Realise</div>'
     +'</div>'
     +'<div class="sc2-state-scroll">'+rows+'</div>'
     +(data.length?totRow:'')
@@ -2773,15 +2802,17 @@ function cdMetricCells(a,path){
   var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
   var oihRlz=(a.oih||0)>0?((a.oihLineTotal||0)/a.oih):NaN;   // ₹/L of open orders
   var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  // Done Realise sits straight after Done L, so each litres figure is next to its
+  // own realise. It used to be the last column, far from the litres it belongs to.
   return '<td>'+fN(a.target)+'</td>'
     +cdFlexCells(path,a)
     +'<td>'+fNp(a.targetRealise||0,2)+'</td>'
     +'<td class="'+doneCls+'" data-metric="done">'+fN(a.done)+'</td>'
+    +'<td>'+fNp(a.actualRealise||0,2)+'</td>'
     +'<td class="'+oihCls+'" data-metric="oih">'+fN(a.oih)+'</td>'
     +'<td>'+oihRlzStr+'</td>'
     +'<td class="cd-bal-cell '+balCls+'">'+fN(bal)+'</td>'
-    +'<td class="cd-balrlz-cell">'+balRlzStr+'</td>'
-    +'<td>'+fNp(a.actualRealise||0,2)+'</td>';
+    +'<td class="cd-balrlz-cell">'+balRlzStr+'</td>';
 }
 function cdNodeRow(node,depth){
   var meta=dimMeta(node.dim),twirl=node.leaf?'<span class="cd-twirl cd-leaf"></span>':'<span class="cd-twirl'+(cdExpanded[node.path]?' open':'')+'">&#9654;</span>';
@@ -3758,16 +3789,24 @@ function drillCellsTotal(tot){
   var tgt=Number(tot.target)||0, flexSum=sc2DynFlexTotal(tgt);
   var dent=tgt-flexSum, dCls=dent>0?'sc2-dent-pos':(dent<0?'sc2-dent-neg':'');
   var bal=flexSum-((tot.done||0)+(tot.oih||0)), balClass=bal>=0?'sc2-bal-good':'sc2-bal-bad';
-  var balWo=flexSum-(tot.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';   // Target − Done (no OIH)
+  var oihRlz=(tot.oih||0)>0?((tot.oihLineTotal||0)/tot.oih):NaN;
+  var oihRlzStr=isFinite(oihRlz)?'₹'+fNp(oihRlz,2):'&mdash;';
+  // Bal Realise measured against the FLEX target, so it tracks the Bal above it.
+  var balRlz=(flexSum>0&&bal!==0)?((flexSum*(tot.targetRealise||0))-(tot.lineTotal||0))/bal:NaN;
+  var balRlzStr=isFinite(balRlz)?'₹'+fNp(balRlz,2):'&mdash;';
+  var balWo=flexSum-(tot.done||0), balWoClass=balWo>=0?'sc2-bal-good':'sc2-bal-bad';
+  var tgtRlz=Number(tot.targetRealise)||0, actRlz=Number(tot.actualRealise)||0;
   return '<div class="sc2-drillval">'+fN(tgt)+'</div>'
     +(sc2FlexOn()?'<div class="sc2-drillval sc2-flexcol sc2-flextot">'+fN(flexSum)+'</div>'
         +'<div class="sc2-drillval sc2-flexcol cdent '+dCls+'">'+(dent!==0?fN(dent):'&mdash;')+'</div>':'')
+    +'<div class="sc2-drillval">₹'+fNp(tgtRlz,2)+'</div>'
     +'<div class="sc2-drillval">'+fN(tot.done||0)+'</div>'
+    +'<div class="sc2-drillval">₹'+fNp(actRlz,2)+'</div>'
     +'<div class="sc2-drillval">'+fN(tot.oih||0)+'</div>'
+    +'<div class="sc2-drillval">'+oihRlzStr+'</div>'
     +'<div class="sc2-drillval sc2-bal-cell '+balClass+'">'+fN(bal)+'</div>'
     +'<div class="sc2-drillval sc2-balwo-cell '+balWoClass+'">'+fN(balWo)+'</div>'
-    +'<div class="sc2-drillval">'+fNp(tot.targetRealise||0,2)+'</div>'
-    +'<div class="sc2-drillval">'+fNp(tot.actualRealise||0,2)+'</div>';
+    +'<div class="sc2-drillval sc2-balrlz-cell">'+balRlzStr+'</div>';
 }
 // Refresh just the footer's Flex/Dent/Bal in place after a per-row Flex TGT edit.
 function sc2DynRefreshTotal(){
@@ -3791,9 +3830,15 @@ function renderSc2DynTree(leaves){
   var html='<div class="sc2-drillcard sc2-drillfull">'
     +'<div class="sc2-thead sc2-wide" style="'+sc2DynGcols()+'">'
       +'<div class="sc2-tt-col" style="text-align:left">'+esc(title)+'</div>'
-      +'<div class="sc2-tt-col">Tgt L</div>'+sc2FlexHeadCols()+'<div class="sc2-tt-col">Done L</div>'
-      +'<div class="sc2-tt-col">OIH</div><div class="sc2-tt-col">Bal</div><div class="sc2-tt-col">Bal w/o OIH</div>'
-      +'<div class="sc2-tt-col">Tgt Rlz</div><div class="sc2-tt-col">Act Rlz</div>'
+      +'<div class="sc2-tt-col">Target L</div>'+sc2FlexHeadCols()
+      +'<div class="sc2-tt-col">Tgt Realise</div>'
+      +'<div class="sc2-tt-col">Done L</div>'
+      +'<div class="sc2-tt-col">Done Realise</div>'
+      +'<div class="sc2-tt-col">Order in Hand</div>'
+      +'<div class="sc2-tt-col">OIH Realise</div>'
+      +'<div class="sc2-tt-col">Bal</div>'
+      +'<div class="sc2-tt-col">Bal w/o OIH</div>'
+      +'<div class="sc2-tt-col">Bal Realise</div>'
     +'</div><div class="sc2-drillbody">';
   if(!dims.length){
     html+='<div class="sc2-state-empty">Select at least one drill dimension.</div>';
@@ -3959,7 +4004,7 @@ function csvMetricRow(label,c){
   return [label,csvInt(c.target),csvInt(c.done),csvInt(c.oih),csvInt(csvBal(c)),
     csvDec(c.targetRealise),csvDec(c.actualRealise)];
 }
-var SC2_CSV_HEADER_TAIL=['Target Ltr','Done Ltr','OIH','Bal Ltr','Target Realise','Actual Realise'];
+var SC2_CSV_HEADER_TAIL=['Target Ltr','Done Ltr','OIH','Bal Ltr','Target Realise','Done Realise'];
 function buildChannelCsvRows(layoutNames,crByName,agg,actualRealise){
   var out=[['Channel','Area'].concat(SC2_CSV_HEADER_TAIL)];
   var showAll=!!sc2Seg();

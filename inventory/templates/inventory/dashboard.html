@@ -29,12 +29,20 @@
       padding: 0
     }
 
+    /* Height of the sidebar header AND the main top bar - they must match. */
+    .inv-dashboard {
+      --hdr-h: 58px;
+      --side-w: 220px;
+      --rail-w: 76px;
+      position: relative
+    }
+
     .inv-dashboard { font-family: var(--font); background: var(--bg); color: var(--tx); display: flex; height: 100%; min-height: 100vh; overflow: hidden; font-size: 15px }
 
     /* ── SIDEBAR ── */
     .side {
-      width: 220px;
-      min-width: 220px;
+      width: var(--side-w);
+      min-width: var(--side-w);
       background: var(--side);
       border-right: 1px solid var(--bd);
       display: flex;
@@ -44,19 +52,139 @@
       flex-shrink: 0
     }
 
+    /* Collapsed is a slim RAIL, not an empty gap: the logo and the arrow stay on the
+       top line and the nav keeps its icons, so you can still see where you are and
+       click your way back open. */
     .side.collapsed {
-      width: 0;
-      min-width: 0
+      width: var(--rail-w);
+      min-width: var(--rail-w)
     }
 
+    /* !important is required, not laziness: setOilOnlyVisible() sets display on
+       .schema-badge as an INLINE style, and inline beats a stylesheet rule. */
+    .side.collapsed .side-nm,
+    .side.collapsed .cs-caret,
+    .side.collapsed .ng,
+    .side.collapsed .schema-badge,
+    .side.collapsed .cs-pop {
+      display: none !important
+    }
+
+    .side.collapsed .side-hd {
+      padding: 0 6px;
+      gap: 0;
+      justify-content: center
+    }
+
+    /* The rail is 76px wide and, with 6px of padding either side, 64px of that is
+       usable. 48px fills it properly and still leaves the logo clear of the edges.
+       It used to be 28px "so the logo and the arrow both fit on one line" - but the
+       arrow is position:absolute on the rail's edge, so it was never on that line
+       and the logo was being shrunk for no reason.
+
+       font-size needs !important: switchDivision() writes logo.style.fontSize as an
+       INLINE style (17px for Oil, 20px for Beverages) to size the expanded logo, and
+       inline beats a stylesheet rule - so without this the box would grow while the
+       letter stayed small inside it. */
+    .side.collapsed .side-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      font-size: 22px !important
+    }
+
+    /* the rail is narrower, so the line - and the arrow with it - moves left */
+    .side-toggle.is-collapsed {
+      left: var(--rail-w)
+    }
+
+    /* icons only: font-size 0 hides the label text, the icon gets its own size back */
+    .side.collapsed .ni {
+      justify-content: center;
+      gap: 0;
+      padding: 10px 0;
+      font-size: 0
+    }
+
+    .side.collapsed .ni .i {
+      font-size: 18px;
+      width: auto
+    }
+
+    /* Same height as .top, so the two bottom borders form one straight line
+       across the page. Change --hdr-h and both follow. */
     .side-hd {
-      padding: 20px 16px 16px;
+      height: var(--hdr-h);
+      padding: 0 16px;
       display: flex;
       align-items: center;
       gap: 12px;
       border-bottom: 1px solid var(--bd);
-      white-space: nowrap
+      white-space: nowrap;
+      /* The whole block is now the company switcher, so it has to look pressable. */
+      cursor: pointer;
+      position: relative;
+      transition: background .15s
     }
+
+    .side-hd:hover { background: #f7f7fb }
+    .side-hd .cs-caret { margin-left: auto; font-size: 15px; color: var(--mt); transition: transform .18s }
+    .side-hd.open .cs-caret { transform: rotate(180deg) }
+
+    /* The panel that drops out of it. */
+    .cs-pop {
+      display: none;
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      top: calc(100% - 4px);
+      z-index: 400;
+      background: #fff;
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, .16);
+      padding: 6px;
+      white-space: normal
+    }
+
+    .cs-pop.open { display: block }
+
+    .cs-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      border-radius: 9px;
+      padding: 9px 10px;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left
+    }
+
+    .cs-item:hover { background: #f3f4f6 }
+    .cs-ic {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 900
+    }
+    /* The sidebar already has `.side-hd div span { 8px, uppercase, muted }`, and the
+       popup is a div inside .side-hd - so that rule was landing on these labels and
+       shrinking both lines to tiny grey capitals. These selectors are deliberately
+       longer so they outrank it, and they reset letter-spacing and text-transform
+       explicitly rather than relying on order. */
+    .side-hd .cs-pop .cs-nm {
+      font-size: 13px; font-weight: 800; color: #000;
+      letter-spacing: 0; text-transform: none
+    }
+    .side-hd .cs-pop .cs-sub {
+      font-size: 9px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; color: var(--mt)
+    }
+    /* A tick, not a colour, marks where you already are. */
+    .cs-on { margin-left: auto; color: #16a34a; font-size: 15px; display: none }
+    .cs-item.on .cs-on { display: block }
 
     .side-logo {
       width: 38px;
@@ -117,16 +245,17 @@
       margin: 2px 0
     }
 
+    /* Light theme: the page you are on is marked by a pale tint and bolder indigo
+       text - no coloured bar down the left edge. */
     .ni:hover {
-      background: var(--side-solid);
-      color: #fff
+      background: #f1f2fe;
+      color: var(--side-solid)
     }
 
     .ni.on {
-      background: var(--side-solid);
-      color: #fff;
-      border-left: 3px solid var(--side-solid);
-      box-shadow: 0 4px 12px rgba(79, 70, 229, .12)
+      background: #eef2ff;
+      color: var(--side-solid);
+      font-weight: 800
     }
 
     .ni .i {
@@ -145,7 +274,8 @@
     }
 
     .top {
-      padding: 10px 20px;
+      min-height: var(--hdr-h);
+      padding: 8px 20px;
       background: var(--card);
       border-bottom: 1px solid var(--bd);
       display: flex;
@@ -154,25 +284,48 @@
       flex-wrap: wrap
     }
 
+    /* Round arrow, the same control the main panel's sidebar uses. It stays in the
+       top bar rather than inside the sidebar, because this sidebar collapses to zero
+       width - an arrow inside it would vanish with it and there would be no way back. */
     .side-toggle {
-      width: 30px;
-      height: 30px;
-      background: linear-gradient(135deg, color-mix(in srgb,#4f46e5 15%,#fff), color-mix(in srgb,#7c3aed 15%,#fff));
-      border: 1px solid #ddd6fe;
-      border-radius: 8px;
-      color: #5b21b6;
+      position: absolute;
+      z-index: 20;
+      left: var(--side-w);
+      top: calc(var(--hdr-h) / 2);
+      transform: translate(-50%, -50%);
+      width: 26px;
+      height: 26px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 50%;
+      color: #64748b;
       font-size: 15px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(79, 70, 229, .3);
-      transition: .2s;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, .10);
+      transition: background .15s, color .15s, border-color .15s;
       flex-shrink: 0
     }
 
     .side-toggle:hover {
-      transform: scale(1.05)
+      background: #eef2ff;
+      color: #4338ca;
+      border-color: #e0e7ff
+    }
+
+    /* Only ic-chevron-right exists in the icon set, so it is turned round to point
+       LEFT while the sidebar is open (click = close), and left as-is once collapsed
+       (click = open). */
+    .side-toggle .ic {
+      font-size: 16px;
+      transform: rotate(180deg);
+      transition: transform .2s ease
+    }
+
+    .side-toggle.is-collapsed .ic {
+      transform: rotate(0deg)
     }
 
     .top-t {
@@ -184,32 +337,36 @@
 
     .pls {
       display: flex;
-      gap: 4px;
+      gap: 7px;
       flex-wrap: wrap
     }
 
+    /* White panel with a soft shadow and dark text - the look of the reference. */
     .pl {
-      padding: 5px 13px;
+      padding: 7px 14px;
       font-size: 12px;
       font-weight: 700;
-      border: 2px solid var(--bd);
-      border-radius: 20px;
+      border: 1px solid #eef0f4;
+      border-radius: 10px;
       cursor: pointer;
-      background: transparent;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
       font-family: var(--font);
-      color: var(--mt);
+      color: var(--tx);
       transition: .15s
     }
 
-    .pl:hover {
-      border-color: var(--ac);
-      color: var(--ac)
+    .pl:hover:not(.on) {
+      background: #f8fafc;
+      border-color: #dfe3ea
     }
 
+    /* selected: a light indigo tint like the rest of the panel, not a colour block */
     .pl.on {
-      background: var(--ac);
-      border-color: var(--ac);
-      color: #fff
+      background: #eef2ff;
+      border-color: #e0e7ff;
+      color: #4338ca;
+      font-weight: 800
     }
 
     .pl.premium.on {
@@ -231,16 +388,31 @@
       flex-shrink: 0
     }
 
+    /* Refresh and the lock get the same white panel as the chips. */
     .btn {
-      padding: 5px 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
       font-size: 12px;
       font-weight: 700;
-      background: var(--tx);
-      color: #fff;
-      border: none;
+      background: #fff;
+      color: var(--tx);
+      border: 1px solid #eef0f4;
       border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
       cursor: pointer;
-      font-family: var(--font)
+      font-family: var(--font);
+      transition: background .15s, border-color .15s
+    }
+
+    .btn:hover {
+      background: #f8fafc;
+      border-color: #dfe3ea
+    }
+
+    .btn .ic {
+      font-size: 15px
     }
 
     .ct {
@@ -369,9 +541,19 @@
     /* ── CHARTS ── */
     .cg {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 16px
+    }
+
+    /* full width on its own row. Its canvas is shorter than the two above, because a
+       donut only uses the middle of the card - a tall box just adds empty space. */
+    .cb-wide {
+      grid-column: 1 / -1
+    }
+
+    .cb-wide .cw {
+      height: 210px
     }
 
     .cb {
@@ -390,7 +572,7 @@
 
     .cw {
       position: relative;
-      height: 220px
+      height: 260px
     }
 
     /* ── TABLES ── */
@@ -1040,7 +1222,7 @@
     .combo-kpi {
       border-radius: 12px;
       padding: 13px 15px;
-      color: #fff;
+      color: #0f172a;
       cursor: pointer;
       transition: .2s;
       border: 3px solid transparent
@@ -1052,8 +1234,8 @@
     }
 
     .combo-kpi.active {
-      border-color: rgba(255, 255, 255, .6);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, .2)
+      border-color: rgba(15, 23, 42, .28);
+      box-shadow: 0 0 0 3px rgba(15, 23, 42, .07)
     }
 
     .combo-kpi .ck-combo {
@@ -1064,7 +1246,7 @@
     .combo-kpi .ck-label {
       font-size: 9px;
       font-weight: 700;
-      opacity: .75;
+      opacity: .62;
       text-transform: uppercase;
       letter-spacing: .5px;
       margin-top: 2px
@@ -1078,7 +1260,7 @@
 
     .combo-kpi .ck-val {
       font-size: 11px;
-      opacity: .7;
+      opacity: .62;
       font-weight: 600
     }
 
@@ -1095,11 +1277,11 @@
     }
 
     .ck-cx {
-      background: linear-gradient(135deg, #7c3aed, #8b5cf6)
+      background: linear-gradient(135deg, color-mix(in srgb,#7c3aed 15%,#fff), color-mix(in srgb,#8b5cf6 15%,#fff))
     }
 
     .ck-cz {
-      background: linear-gradient(135deg, #6d28d9, #a78bfa)
+      background: linear-gradient(135deg, color-mix(in srgb,#6d28d9 15%,#fff), color-mix(in srgb,#a78bfa 15%,#fff))
     }
 
     .matrix-wrap {
@@ -1421,27 +1603,49 @@
   
     .schema-badge{margin:8px 8px 0;padding:8px 10px;border-radius:10px;background:#f9fafb;border:1px solid var(--bd);white-space:nowrap}
     .schema-badge label{font-size:9px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px}
-    .schema-btns{display:flex;gap:3px}
-    .schema-btn{flex:1;padding:4px 0;font-size:10px;font-weight:700;border:1.5px solid var(--bd);border-radius:7px;cursor:pointer;background:#fff;color:#6b7280;font-family:var(--font);transition:.15s;text-align:center}
-    .schema-btn:hover{border-color:var(--side-solid);color:var(--side-solid)}
-    .schema-btn.on{background:var(--side-solid);border-color:var(--side-solid);color:#fff}
+    /* Database picker as a sliding switch: one pill-shaped track, and a white
+       thumb that slides to whichever side is selected. The buttons stay real
+       buttons (so setSchema keeps working) - they just sit on top of the thumb. */
+    .schema-btns{position:relative;display:flex;gap:0;padding:3px;border-radius:999px;
+      background:#eef2f7;border:1px solid var(--bd)}
+    .schema-btns::before{content:"";position:absolute;z-index:0;top:3px;bottom:3px;left:3px;
+      width:calc(50% - 3px);border-radius:999px;background:#fff;
+      box-shadow:0 1px 3px rgba(15,23,42,.14);transition:transform .22s ease}
+    .schema-btns.at-right::before{transform:translateX(100%)}
+    @media (prefers-reduced-motion:reduce){.schema-btns::before{transition:none}}
+    .schema-btn{position:relative;z-index:1;flex:1;padding:5px 0;font-size:10px;font-weight:700;border:0;border-radius:999px;cursor:pointer;background:transparent;color:#6b7280;font-family:var(--font);transition:.15s;text-align:center}
+    .schema-btn:hover:not(.on){color:var(--side-solid)}
+    .schema-btn.on{color:var(--side-solid);font-weight:800}
     .oil-only.pls{display:none}
     .oil-only.sep{display:none}
     .oil-only{display:none}</style>
 {% endblock %}
 
 {% block content %}
-<div class="inv-dashboard" id="inventoryDashboard"><div class="side" id="sidebar">
-    <div class="side-hd">
+<div class="inv-dashboard" id="inventoryDashboard"><!-- Collapse arrow: a child of the shell, not of the sidebar, so it can straddle
+       the divider line. .side / .main both clip their own children. -->
+  <button class="side-toggle" onclick="toggleSide()" title="Close sidebar"
+          aria-label="Close or open the sidebar"><i class="ic ic-chevron-right"></i></button>
+  <div class="side" id="sidebar">
+    <div class="side-hd" id="csHead" role="button" tabindex="0" aria-haspopup="true"
+         aria-expanded="false" aria-label="Switch company">
       <div class="side-logo" id="divLogo">J</div>
-      <div>
+      <div class="side-nm">
         <h1 id="divTitle">Jivo Oil</h1><span>Inventory Control</span>
       </div>
-    </div>
-    <!-- Division Switcher -->
-    <div id="divSwitcher" style="margin: 12px 8px 4px; padding: 5px; background: #f9fafb; border: 1px solid #ebebef; border-radius: 10px; display: flex; gap: 4px;">
-      <button id="divBtnOils" style="flex:1; padding: 7px 0; background: #eef2ff; color: #4338ca; border: none; border-radius: 7px; font-size: 11px; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 8px rgba(80,70,229,0.4);" onclick="switchDivision('oils')">OILS</button>
-      <button id="divBtnBev" style="flex:1; padding: 7px 0; background: transparent; color: #6b7280; border: 1px solid transparent; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s;" onclick="switchDivision('beverages')">BEVERAGES</button>
+      <i class="ic ic-chevron-down cs-caret"></i>
+      <div class="cs-pop" id="csPop" role="menu">
+        <button type="button" class="cs-item" id="csOils" role="menuitem">
+          <span class="cs-ic" style="background:#eef2ff;color:#5b21b6">J</span>
+          <span><span class="cs-nm">Jivo Oil</span><br><span class="cs-sub">Inventory Control</span></span>
+          <i class="ic ic-check cs-on"></i>
+        </button>
+        <button type="button" class="cs-item" id="csBev" role="menuitem">
+          <span class="cs-ic" style="background:#e0f2fe;color:#0369a1"><i class="ic ic-cup-soda"></i></span>
+          <span><span class="cs-nm">Jivo Beverages</span><br><span class="cs-sub">Inventory Control</span></span>
+          <i class="ic ic-check cs-on"></i>
+        </button>
+      </div>
     </div>
     <div class="schema-badge oil-only" id="schemaBadge">
       <label>Database</label>
@@ -1460,7 +1664,7 @@
       <div class="ni" data-s="movers"><span class="i"><i class="ic ic-zap"></i></span>Moving / Non-Moving</div>
       <div class="ni" data-s="billing"><span class="i"><i class="ic ic-receipt-text"></i></span>FG Not Billed</div>
       <div class="ni" data-s="abc"><span class="i"><i class="ic ic-tag"></i></span>ABC-XYZ Analysis</div>
-      <div class="ni" data-s="aging"><span class="i">⏳</span>Aging Analysis</div>
+      <div class="ni" data-s="aging"><span class="i"><i class="ic ic-clipboard-clock"></i></span>Aging Analysis</div>
       <div class="ng">Traceability</div>
       <div class="ni" data-s="trace"><span class="i"><i class="ic ic-search"></i></span>Item Trace</div>
       <div class="ng">Planning</div>
@@ -1470,7 +1674,6 @@
 
   <div class="main">
     <div class="top">
-      <button class="side-toggle" onclick="toggleSide()"><i class="ic ic-menu"></i></button>
       <div class="top-t" id="pt">Dashboard</div>
       <div class="pls" id="cpls">
         <button class="pl on" data-c="">All</button>
@@ -1478,7 +1681,7 @@
         <button class="pl" data-c="RAW MATERIAL">Raw Material</button>
         <button class="pl" data-c="PACKAGING MATERIAL">Packaging</button>
       </div>
-      <button class="btn" onclick="load()">↻ Refresh</button>
+      <button class="btn" onclick="load()"><i class="ic ic-refresh-cw"></i>Refresh</button>
       <div class="sep"></div>
       <button class="btn" id="lockBtn" onclick="toggleLock()" title="Toggle value visibility"><i class="ic ic-lock-open"></i></button>
     </div>
@@ -1491,16 +1694,18 @@
         <div id="dN" class="note" style="display:none"></div>
         <div class="cg">
           <div class="cb">
-            <div class="ch">Inventory by Category</div>
-            <div class="cw"><canvas id="cPie"></canvas></div>
-          </div>
-          <div class="cb">
             <div class="ch">Movement Classification (30d)</div>
             <div class="cw"><canvas id="cMov"></canvas></div>
           </div>
           <div class="cb">
             <div class="ch">FG Not Billed — Risk</div>
             <div class="cw"><canvas id="cBill"></canvas></div>
+          </div>
+          <!-- The donut goes on its own line underneath, so the two value charts
+               above get half the width each and their figures have room. -->
+          <div class="cb cb-wide">
+            <div class="ch">Inventory by Category</div>
+            <div class="cw"><canvas id="cPie"></canvas></div>
           </div>
         </div>
       </div>
@@ -1843,6 +2048,9 @@
     function F(n) { if (n == null) return '–'; n = +n; if (isNaN(n)) return '–'; let s = n < 0 ? '-' : ''; n = Math.abs(n); if (n >= 1e7) return s + '₹' + (n / 1e7).toFixed(2) + ' Cr'; if (n >= 1e5) return s + '₹' + (n / 1e5).toFixed(2) + ' L'; if (n >= 1e3) return s + '₹' + (n / 1e3).toFixed(1) + 'K'; return s + '₹' + n.toLocaleString('en-IN') }
     function Fs(n) { if (!n) return '0'; n = +n; if (n >= 1e7) return (n / 1e7).toFixed(1) + 'Cr'; if (n >= 1e5) return (n / 1e5).toFixed(1) + 'L'; if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K'; return n + '' }
     function N(n) { if (n == null) return '–'; return (+n).toLocaleString('en-IN') }
+    /* Charts shorten their labels (25.7Cr) so they fit. On hover we show the whole
+       figure instead, because that is when you actually want the exact number. */
+    function Ffull(n) { return (n == null || isNaN(+n)) ? '–' : '₹' + (+n).toLocaleString('en-IN') }
     function FV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${F(n)}</span><span class="inv-lock"><i class="ic ic-lock"></i></span></span>`}
     function FsV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${Fs(n)}</span><span class="inv-lock"><i class="ic ic-lock"></i></span></span>`}
     function escHTML(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1880,7 +2088,14 @@
     function mc(i, c) { dc(i); const x = document.getElementById(i); if (!x) return; ch[i] = new Chart(x.getContext('2d'), c) }
     function oM(t) { document.getElementById('mT').textContent = t; document.getElementById('modal').classList.add('sh') }
     function xM() { document.getElementById('modal').classList.remove('sh') }
-    function toggleSide() { const s = document.getElementById('sidebar'), btn = document.querySelector('.side-toggle'); s.classList.toggle('collapsed'); btn.innerHTML = '<i class="ic ic-' + (s.classList.contains('collapsed') ? 'menu' : 'x') + '"></i>' }
+    function toggleSide() {
+      const s = document.getElementById('sidebar'), btn = document.querySelector('.side-toggle');
+      s.classList.toggle('collapsed');
+      const shut = s.classList.contains('collapsed');
+      // one icon, turned round - no swapping innerHTML
+      btn.classList.toggle('is-collapsed', shut);
+      btn.title = shut ? 'Open sidebar' : 'Close sidebar';
+    }
     function setOilOnlyVisible(show) {
       document.querySelectorAll('.oil-only').forEach(el => {
         if (!show) { el.style.display = 'none'; return; }
@@ -1895,23 +2110,74 @@
       DIVISION = div;
       const logo = document.getElementById('divLogo');
       const title = document.getElementById('divTitle');
-      const oilsBtn = document.getElementById('divBtnOils');
-      const bevBtn = document.getElementById('divBtnBev');
+      // The company is picked from the name at the top now; the old OILS / BEVERAGES
+      // pair is gone, so there are no buttons left to repaint here.
       if (div === 'oils') { setOilOnlyVisible(true);
-        logo.textContent = 'J'; logo.style.background = 'linear-gradient(135deg,#6366f1,#7c3aed)'; logo.style.fontSize = '17px';
+        logo.textContent = 'J'; logo.style.background = '#eef2ff'; logo.style.color = '#5b21b6'; logo.style.fontSize = '17px';
         title.textContent = 'Jivo Oil';
-        oilsBtn.style.background = '#5046e5'; oilsBtn.style.color = '#fff'; oilsBtn.style.boxShadow = '0 2px 8px rgba(80,70,229,0.4)'; oilsBtn.style.fontWeight = '800';
-        bevBtn.style.background = 'transparent'; bevBtn.style.color = '#6b7280'; bevBtn.style.boxShadow = 'none'; bevBtn.style.fontWeight = '700';
       } else { setOilOnlyVisible(false);
-        logo.innerHTML = '<i class="ic ic-cup-soda"></i>'; logo.style.background = 'linear-gradient(135deg,#0ea5e9,#06b6d4)'; logo.style.fontSize = '20px';
+        logo.innerHTML = '<i class="ic ic-cup-soda"></i>'; logo.style.background = '#e0f2fe'; logo.style.color = '#0369a1'; logo.style.fontSize = '20px';
         title.textContent = 'Jivo Beverages';
-        oilsBtn.style.background = 'transparent'; oilsBtn.style.color = '#6b7280'; oilsBtn.style.boxShadow = 'none'; oilsBtn.style.fontWeight = '700';
-        bevBtn.style.background = '#5046e5'; bevBtn.style.color = '#fff'; bevBtn.style.boxShadow = '0 2px 8px rgba(80,70,229,0.4)'; bevBtn.style.fontWeight = '800';
       }
+      csMark();
       if (!changed) return;
       moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; mvD_data = []; whAllData = [];
       load();
     }
+
+    /* ── Company switcher ────────────────────────────────────────────────────
+       Click the company name to drop open a short list of the companies and pick
+       one. It calls the same switchDivision() the OILS / BEVERAGES buttons use,
+       so there is one code path and the two controls can never disagree.
+       The tick is drawn from DIVISION, never from which row was clicked, so it
+       stays right even if the switch is made from somewhere else. */
+    function csMark() {
+      var oils = document.getElementById('csOils'), bev = document.getElementById('csBev');
+      if (!oils || !bev) return;
+      oils.classList.toggle('on', DIVISION === 'oils');
+      bev.classList.toggle('on', DIVISION !== 'oils');
+    }
+    function csOpen(open) {
+      var head = document.getElementById('csHead'), pop = document.getElementById('csPop');
+      if (!head || !pop) return;
+      pop.classList.toggle('open', open);
+      head.classList.toggle('open', open);
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    (function () {
+      var head = document.getElementById('csHead'), pop = document.getElementById('csPop');
+      if (!head || !pop) return;
+      head.addEventListener('click', function (e) {
+        // A click on a row inside the panel is handled by that row, not by the header.
+        if (e.target.closest('.cs-item')) return;
+        e.stopPropagation();
+        csOpen(!pop.classList.contains('open'));
+      });
+      head.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csOpen(!pop.classList.contains('open')); }
+      });
+      // On the collapsed rail the panel is hidden (there is no room for it), so a
+      // click has nothing to show. Double-click the logo there and it just flips to
+      // the other company - the same switchDivision() the panel calls, so nothing
+      // can drift apart. Only on the rail: while the sidebar is open the panel
+      // works, and a stray double-click should not change company behind your back.
+      head.addEventListener('dblclick', function (e) {
+        var side = document.getElementById('sidebar');
+        if (!side || !side.classList.contains('collapsed')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        csOpen(false);
+        switchDivision(DIVISION === 'oils' ? 'beverages' : 'oils');
+      });
+      function pick(div) {
+        return function (e) { e.stopPropagation(); csOpen(false); switchDivision(div); };
+      }
+      document.getElementById('csOils').addEventListener('click', pick('oils'));
+      document.getElementById('csBev').addEventListener('click', pick('beverages'));
+      document.addEventListener('click', function () { csOpen(false); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') csOpen(false); });
+      csMark();
+    })();
 
     document.querySelectorAll('.ni').forEach(n => n.onclick = () => {
       document.querySelectorAll('.ni').forEach(x => x.classList.remove('on')); n.classList.add('on');
@@ -1924,7 +2190,10 @@
       document.querySelectorAll('#cpls .pl').forEach(x => x.classList.remove('on')); p.classList.add('on'); C = p.dataset.c;
       moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; load()
     });
-    function setSchema(s, btn) { SCH = s; document.querySelectorAll('.schema-btn').forEach(b => b.classList.remove('on')); btn.classList.add('on'); moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; mvD_data = []; whAllData = []; load(); }
+    function setSchema(s, btn) { SCH = s; document.querySelectorAll('.schema-btn').forEach(b => b.classList.remove('on')); btn.classList.add('on');
+      // move the white thumb: 'at-right' when the second option is the live one
+      const track = btn.parentNode;
+      if (track) track.classList.toggle('at-right', btn === track.lastElementChild); moItemCache = {}; biItemCache = {}; abItemCache = {}; whItemCache = {}; mvD_data = []; whAllData = []; load(); }
     function pg(id, cb) { document.querySelectorAll(`#${id} .pl`).forEach(p => p.onclick = () => { document.querySelectorAll(`#${id} .pl`).forEach(x => x.classList.remove('on')); p.classList.add('on'); cb(p.dataset.v) }) }
     function load() { ({ dash: lD, stock: lWHStock, move: lMV, movers: lMO, billing: lBI, abc: lABCXYZ, aging: lAG, trace: lTrace, planning: lPlan })[S]?.() }
 
@@ -1955,22 +2224,55 @@
       if (b30.NotBilledSKUs > 0) ins.push(`<b>${N(b30.NotBilledSKUs)} finished goods (${FV(b30.NotBilledValue)})</b> — not invoiced in 30 days`);
       if (ins.length) { nt.style.display = ''; nt.innerHTML = '<b><i class="ic ic-triangle-alert"></i> Attention Required:</b><br>' + ins.join('<br>') } else { nt.style.display = 'none' }
       mc('cPie', {
-        type: 'doughnut', data: { labels: cat.map(c => c.Category), datasets: [{ data: cat.map(c => c.Value || 0), backgroundColor: ['#6366f1', '#f59e0b', '#06b6d4'], borderWidth: 3, borderColor: '#fff', borderRadius: 6, hoverOffset: 8 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { font: { size: 12, weight: 700, family: 'Inter' }, padding: 12, usePointStyle: true } }, datalabels: { display: true, color: '#fff', font: { weight: 800, size: 13, family: 'Inter' }, formatter: (v, c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return t > 0 ? Math.round(v / t * 100) + '%' : '' } } } }
+        type: 'doughnut', data: { labels: cat.map(c => c.Category), datasets: [{ data: cat.map(c => c.Value || 0), backgroundColor: ['#c7d2fe', '#fde68a', '#a5f3fc'], borderWidth: 3, borderColor: '#fff', borderRadius: 6, hoverOffset: 8 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { font: { size: 12, weight: 700, family: 'Inter' }, padding: 12, usePointStyle: true } }, datalabels: { display: true, color: '#334155', font: { weight: 800, size: 13, family: 'Inter' }, formatter: (v, c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return t > 0 ? Math.round(v / t * 100) + '%' : '' } },
+          tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + Ffull(c.parsed) } } } }
       });
-      const mC = { 'FAST': '#10b981', 'MEDIUM': '#6366f1', 'SLOW': '#f59e0b', 'NON-MOVING': '#ef4444' };
-      const mS = [...ms].sort((a, b) => (b.Value || 0) - (a.Value || 0));
+      // Light palette. Dot rings stay a touch stronger than a flat fill would be,
+      // otherwise a 6px circle outline disappears.
+      const mC = { 'FAST': '#6ee7b7', 'MEDIUM': '#a5b4fc', 'SLOW': '#fcd34d', 'NON-MOVING': '#fca5a5' };
+      /* Movement Classification is a LINE chart: the four statuses run along the bottom,
+         value up the side, one dot per status with its value written above it.
+         Order is the natural movement order (fast -> dead), not value order, so the line
+         always reads the same way whichever channel you are on. Anything the API sends
+         that is not in that list is appended, so nothing can be dropped silently. */
+      const MOV_ORDER = ['FAST', 'MEDIUM', 'SLOW', 'NON-MOVING'];
+      const mS = [...ms].sort((a, b) => {
+        const ia = MOV_ORDER.indexOf(a.Status), ib = MOV_ORDER.indexOf(b.Status);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
       mc('cMov', {
-        type: 'bar', data: { labels: mS.map(s => s.Status), datasets: [{ data: mS.map(s => s.Value || 0), backgroundColor: mS.map(s => mC[s.Status] || '#d1d5db'), borderRadius: 8, barThickness: 28 }] },
+        type: 'line',
+        data: {
+          labels: mS.map(s => s.Status),
+          datasets: [{
+            data: mS.map(s => s.Value || 0),
+            borderColor: '#a5b4fc', borderWidth: 3, tension: .4,
+            fill: true, backgroundColor: 'rgba(165,180,252,.16)',
+            pointBackgroundColor: '#fff',
+            pointBorderColor: mS.map(s => mC[s.Status] || '#94a3b8'),
+            pointBorderWidth: 3, pointRadius: 6, pointHoverRadius: 8
+          }]
+        },
         options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'right', color: '#374151', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) } },
-          scales: { x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Inter', size: 11, weight: 700 } } }, y: { grid: { display: false }, ticks: { font: { size: 12, weight: 800, family: 'Inter' } } } }
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 26, right: 14, left: 4 } },   // room for the value labels
+          plugins: {
+            legend: { display: false },
+            datalabels: { display: true, align: 'top', offset: 6, clip: false, color: '#334155', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) },
+            tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + Ffull(c.parsed.y) } }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { callback: v => Fs(v), font: { family: 'Inter', size: 11, weight: 700 } } },
+            x: { grid: { display: false }, ticks: { font: { size: 11, weight: 800, family: 'Inter' } } }
+          }
         }
       });
       mc('cBill', {
-        type: 'bar', data: { labels: bi.map(b => b.Period), datasets: [{ data: bi.map(b => b.NotBilledValue || 0), backgroundColor: ['#ef4444', '#f59e0b', '#6366f1'], borderRadius: 8, barThickness: 40 }] },
+        type: 'bar', data: { labels: bi.map(b => b.Period), datasets: [{ data: bi.map(b => b.NotBilledValue || 0), backgroundColor: ['#fca5a5', '#fcd34d', '#a5b4fc'], borderRadius: 8, barThickness: 40 }] },
         options: {
-          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', color: '#374151', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) } },
+          responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', color: '#374151', font: { weight: 800, size: 12, family: 'Inter' }, formatter: v => Fs(v) },
+            tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + Ffull(c.parsed.y) } } },
           scales: { y: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { callback: v => Fs(v), font: { family: 'Inter', size: 11, weight: 700 } } }, x: { grid: { display: false }, ticks: { font: { size: 12, weight: 700, family: 'Inter' } } } }
         }
       });

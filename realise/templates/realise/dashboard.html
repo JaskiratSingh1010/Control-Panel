@@ -429,7 +429,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   color:color-mix(in srgb, var(--accent-strong,#334155) 55%, #0f172a)}
 .sc2-state-scroll{flex:1;min-height:0;overflow-y:auto}
 .sc2-state-row{display:grid;grid-template-columns:1.05fr .76fr .76fr .76fr .76fr .92fr;padding:9px 16px;border-bottom:1px solid #eef2f6;font-size:13px;color:#334155;align-items:center}
-.sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1.05fr .76fr .76fr .76fr .85fr .76fr .76fr .92fr}
+/* name + Target/Tgt + Done/Act + OIH/OIH + Bal/Bal = 9 columns */
+.sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1.02fr .62fr .78fr .66fr .8fr .72fr .8fr .7fr .8fr}
+.sc2-thead.sc2-oih .sc2-tt-col{font-size:8.5px;letter-spacing:.15px}
+.sc2-state-row.sc2-oih .sc2-state-val,.sc2-state-row.sc2-oih .sc2-state-name{font-size:11.5px}
 .sc2-state-row:nth-child(even){background:rgba(248,252,255,.5)}
 .sc2-state-row:last-child{border-bottom:none}
 /* Wide table layout (Target Realise / Revenue columns) */
@@ -528,7 +531,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .sc2-card-rest{height:auto}
   .sc2-state-scroll{max-height:240px}
   .sc2-thead,.sc2-state-row{grid-template-columns:1fr .72fr .72fr .72fr .72fr .85fr;font-size:11px}
-  .sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1fr .72fr .72fr .72fr .8fr .72fr .72fr .85fr}
+  .sc2-thead.sc2-oih,.sc2-state-row.sc2-oih{grid-template-columns:1fr .6fr .74fr .64fr .76fr .7fr .76fr .68fr .76fr}
   .sc2-drillhead,.sc2-drillrow{grid-template-columns:1.4fr .85fr .85fr .85fr;font-size:12px}
 }
 </style>
@@ -630,7 +633,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
             <th class="th-inp">Tgt Rate</th>
             <th class="th-avg">Avg Realise</th>
             <th class="th-sap">Act Ltrs</th>
-            <th class="th-sap">Act Realise</th>
+            <th class="th-sap">Done Realise</th>
             <th class="th-calc">Variance</th>
             <th class="th-calc">Recovery</th>
             <th class="th-calc">Rate Impact</th>
@@ -1344,7 +1347,7 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
       <table class="cd-table">
         <thead><tr>
           <th id="cdFirstCol">State</th>
-          <th>Target L</th><th class="cd-flexcol">Flex TGT</th><th class="cd-flexcol">Dent</th><th>Tgt Realise</th><th>Done L</th><th>Order in Hand</th><th>OIH Realise</th><th>Bal</th><th>Bal Realise</th><th>Act Realise</th>
+          <th>Target L</th><th class="cd-flexcol">Flex TGT</th><th class="cd-flexcol">Dent</th><th>Tgt Realise</th><th>Done L</th><th>Done Realise</th><th>Order in Hand</th><th>OIH Realise</th><th>Bal</th><th>Bal Realise</th>
         </tr></thead>
         <tbody id="cdBody"></tbody>
       </table>
@@ -1465,5 +1468,5 @@ window.__CP = {
   the template around it is already new - which shows up as a KPI that never fills
   in. Bump this number whenever dashboard.js changes.
 {% endcomment %}
-<script src="{% static 'realise/dashboard.js' %}?v=15" defer></script>
+<script src="{% static 'realise/dashboard.js' %}?v=19" defer></script>
 {% endblock %}

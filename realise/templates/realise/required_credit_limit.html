@@ -13,9 +13,8 @@
   .rc-hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
     background:radial-gradient(circle,rgba(124,58,237,.10),transparent 70%)}
   .rc-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative;z-index:1}
-  .rc-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:2px 0 16px;letter-spacing:-.5px;display:flex;align-items:center;gap:11px;
-    text-shadow:0 0 26px rgba(99,102,241,.55), 0 4px 14px rgba(79,70,229,.28)}   /* glowing title, no box */
-  .rc-h1 .ic{font-size:32px;color:var(--rz-indigo);text-shadow:0 0 20px rgba(99,102,241,.6)}
+  .rc-h1{font-size:30px;font-weight:800;color:var(--rz-ink);margin:2px 0 16px;letter-spacing:-.5px;display:flex;align-items:center;gap:11px}
+  .rc-h1 .ic{font-size:32px;color:var(--rz-indigo)}
   .rc-srcpill{display:inline-flex;align-items:center;gap:7px;background:var(--rz-soft);color:var(--rz-indigo-deep);
     border:1px solid var(--rz-soft-brd);padding:7px 13px;border-radius:999px;font-size:11.5px;font-weight:700}
   .rc-srcpill .ic{font-size:15px;color:var(--rz-indigo)}
@@ -48,8 +47,22 @@
   .rc-tb.rc-hl6 thead th:nth-child(6),.rc-tb.rc-hl8 thead th:nth-child(8),.rc-tb.rc-hl9 thead th:nth-child(9),.rc-tb.rc-hl10 thead th:nth-child(10),.rc-tb.rc-hl11 thead th:nth-child(11),.rc-tb.rc-hl12 thead th:nth-child(12),.rc-tb.rc-hl13 thead th:nth-child(13){background:#facc15 !important;color:#713f12 !important}
 
   /* ── Toolbar ── */
-  .rc-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-  .rc-search{flex:0 1 300px;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
+  /* One line while there is room, and nothing ever hidden.
+     nowrap + sideways scrolling was wrong: on a small screen the last buttons
+     simply left the view. Wrapping keeps every button reachable.
+     The order it gives way in: the search shrinks first (down to 150px), and only
+     when that is still not enough does a button drop to a second line. */
+  /* position + z-index puts the whole toolbar, and therefore every dropdown that
+     opens from it, above the table card below. The table header is sticky (a
+     positioned element in its own right), so without this it could paint over an
+     open dropdown and hide the options. */
+  .rc-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;
+    position:relative;z-index:100}
+  /* Buttons keep their natural width so their labels stay readable... */
+  .rc-tools > *{flex-shrink:0}
+  /* ...the search is the one thing that stretches and squeezes. */
+  .rc-tools .rc-search{flex:1 1 220px;flex-shrink:1;min-width:150px}
+  .rc-search{flex:1 1 220px;min-width:150px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;
     border-radius:11px;padding:10px 14px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .rc-search:focus-within{border-color:var(--rz-indigo);box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   .rc-search .ic{font-size:21px;color:var(--rz-faint)}
@@ -80,7 +93,7 @@
 
   /* lock control + active-lock status pill */
   .rc-lock{position:relative}
-  .rc-lock-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);right:0;min-width:230px;
+  .rc-lock-pop{display:none;position:absolute;z-index:200;top:calc(100% + 6px);right:0;min-width:230px;
     background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.18);padding:12px}
   .rc-lock.open .rc-lock-pop{display:block}
   .rc-lock-row{font-size:12px;font-weight:700;color:var(--rz-body);display:flex;align-items:center;gap:7px;margin-bottom:10px}
@@ -108,7 +121,7 @@
   .rc-ms-btn #rcAsmLabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rc-ms-chev{margin-left:auto;color:var(--rz-faint);transition:transform .16s}
   .rc-ms.open .rc-ms-chev{transform:rotate(180deg)}
-  .rc-ms-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);left:0;min-width:240px;max-width:300px;
+  .rc-ms-pop{display:none;position:absolute;z-index:200;top:calc(100% + 6px);left:0;min-width:240px;max-width:300px;
     background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:var(--rz-shadow-lg);overflow:hidden}
   .rc-ms.open .rc-ms-pop{display:block}
   .rc-ms-head{display:flex;gap:8px;padding:9px 12px;border-bottom:1px solid #eef2f7;background:var(--rz-head-bg)}
@@ -247,8 +260,6 @@
       <span class="rc-date-lbl">As of</span>
       <input type="date" id="rcAsOf">
     </label>
-    <button type="button" class="rc-btn" id="rcExpand"><i class="ic ic-chevrons-up-down"></i>Expand all</button>
-    <button type="button" class="rc-btn" id="rcCollapse"><i class="ic ic-chevrons-down-up"></i>Collapse all</button>
 
     <!-- Lock control (shown when nothing is frozen) -->
     <div class="rc-lock" id="rcLock" title="Freeze Total Outstanding &amp; Required Limit at their current values">
@@ -586,7 +597,6 @@
     if(grp) grp.classList.toggle('open',open);
     document.querySelectorAll('.rc-row[data-gi="'+gi+'"]').forEach(function(r){ r.classList.toggle('show',open); });
   }
-  function setAll(open){ ASMS.forEach(function(_,gi){ setGroup(gi,open); }); }
 
   // Re-render keeping currently-open groups expanded.
   function rerenderKeepOpen(){
@@ -722,8 +732,6 @@
     document.getElementById('rcModalClose').addEventListener('click', closeSoModal);
     document.getElementById('rcModal').addEventListener('click', function(e){ if(e.target===this) closeSoModal(); });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSoModal(); });
-    document.getElementById('rcExpand').addEventListener('click',function(){ setAll(true); });
-    document.getElementById('rcCollapse').addEventListener('click',function(){ setAll(false); });
     // Export the current view (respects the Type + ASM filter) as the CLOSING SHEET xlsx.
     // Each selected type / ASM goes out as its own repeated query param.
     document.getElementById('rcExport').addEventListener('click',function(){

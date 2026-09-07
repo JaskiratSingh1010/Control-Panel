@@ -142,17 +142,23 @@
     /* The logo block lines up exactly with the sidebar below it. --cp-sbw is written
        by JS from the sidebar's real width, so this follows the sidebar through every
        state - open, collapsed rail, and the hover-peek in between - with no guessing. */
-    .cp-topbar-brand { width: var(--cp-sbw, 282px); flex-shrink: 0; height: 100%;
+    .cp-topbar-brand { width: var(--cp-sbw, 310px); flex-shrink: 0; height: 100%;
                        display: flex; align-items: center; gap: 10px; padding: 0 14px;
                        border-right: 1px solid #e5e7eb; overflow: hidden;
                        transition: width .22s ease, padding .22s ease; }
     .cp-topbar-rest { flex: 1; display: flex; align-items: center; justify-content: flex-end;
                       gap: 10px; padding: 0 20px; min-width: 0; }
     /* The arrow straddles the divider, half on each side, like a seam button. */
-    .cp-topbar .cp-sb-arrow { position: absolute; left: var(--cp-sbw, 282px); top: 50%;
+    .cp-topbar .cp-sb-arrow { position: absolute; left: var(--cp-sbw, 310px); top: 50%;
                               margin: -13px 0 0 -13px; opacity: 1; pointer-events: auto;
                               z-index: 3; transition: left .22s ease; }
     /* On the narrow rail there is only room for the logo. */
+    /* The logo reloads the page. cursor + hover say so, because nothing else
+       about a logo suggests it can be clicked. */
+    .cp-brand { cursor: pointer; border-radius: 10px; padding: 4px 6px; margin: 0 -6px;
+                transition: background .15s; }
+    .cp-brand:hover { background: #f1f5f9; }
+    .cp-brand:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
     body.cp-sb-narrow .cp-topbar-brand { padding: 0 8px; }
     body.cp-sb-narrow .cp-brand-copy { display: none; }
     .cp-userwrap { position: relative; }
@@ -203,11 +209,13 @@
        sidebar stays put while only .cp-main scrolls. align-self:flex-start stops the flex
        row from stretching it (which would break sticky); overflow-y lets a tall sidebar
        scroll on its own. */
-    /* 282px, not 240px: "Inventory & Production" needs 165px for its words and
-       at 240px there were only 132px, so it broke onto two lines. 282px leaves
-       about 9px spare, so small font-rendering differences cannot push it
-       back onto a second line. */
-    .cp-sidebar { width: 282px; background: #f8fafc; color: #334155; padding: 14px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: calc(100vh - 56px); align-self: flex-start; }
+    /* Width is set by the longest label, "Inventory & Production", which must fit
+       on one line beside its icon and chevron.
+       282px was measured against the OLD font. Switching the app to Inter made the
+       same words wider, ate the ~9px of spare room, and the label started getting
+       cut off mid-word. 310px restores a real margin - enough that a font tweak or
+       a slightly different rendering cannot clip it again. */
+    .cp-sidebar { width: 310px; background: #f8fafc; color: #334155; padding: 14px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: calc(100vh - 56px); align-self: flex-start; }
     /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
        hide all text/labels, and let the floating menu button expand it. */
     /* Smart hover sidebar: collapsed = a slim icon rail that expands on hover and PUSHES
@@ -220,7 +228,7 @@
     }
     body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek,
     body.cp-sidebar-collapsed .cp-sidebar:focus-within {
-      width: 282px; padding: 14px 14px;   /* keep the hover-out rail the same width */
+      width: 310px; padding: 14px 14px;   /* keep the hover-out rail the same width */
     }
     /* Icon-only look only while the rail is NOT peeking/focused */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label { display: none; }
@@ -233,7 +241,9 @@
        old bottom border and padding are gone and the logo is bar-height. */
     .cp-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .cp-brand-copy { min-width: 0; flex: 1; }
-    .cp-brand-logo { width: 38px; height: 38px; border-radius: 10px; background: #fff; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.12); overflow: hidden; padding: 2px; flex-shrink: 0; }
+    /* Sized to the 56px bar: 44px logo + the brand's 4px padding above and below
+       leaves 2px clear at each edge, so it fills the strip without touching it. */
+    .cp-brand-logo { width: 44px; height: 44px; border-radius: 12px; background: #fff; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.12); overflow: hidden; padding: 2px; flex-shrink: 0; }
     .cp-brand-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .cp-brand-title { font-size: 15px; font-weight: 900; color: #0f172a; letter-spacing: -.2px; white-space: nowrap; }
     .cp-brand-subtitle { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
@@ -262,8 +272,10 @@
     .cp-nav-item:hover { background: #eef2ff; color: #1e293b; }
     /* Selected page: a light indigo tint with indigo text, not a dark filled block.
        Hover is #eef2ff (one shade lighter), so the two never look the same. */
-    .cp-nav-item.active { background: #e0e7ff; color: #4338ca; }
-    .cp-nav-item.active:hover { background: #d7deff; color: #3730a3; }
+    /* No filled block behind the current page - the indigo wording and icon mark it
+       instead. Hover still tints, so the row does not feel dead under the pointer. */
+    .cp-nav-item.active { background: none; color: #4338ca; }
+    .cp-nav-item.active:hover { background: #eef2ff; color: #3730a3; }
     .cp-nav-item.active .ic { color: #4f46e5; }
     .cp-nav-item .ic { font-size: 20px; }
 
@@ -271,15 +283,23 @@
     .cp-nav-group { display: flex; flex-direction: column; }
     /* A <button> centres its text by default, an <a> does not. That is why the
        wrapped label looked pushed in while every other item lined up. */
-    .cp-nav-group-btn { width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; justify-content: space-between; text-align: left; }
+    /* The chevron used to be pinned to the far right (space-between), so the wider
+       the sidebar got, the bigger the empty gap between the words and the arrow.
+       flex-start puts it right after the label instead; the leftover width is
+       simply empty space at the end of the row, which nobody sees.
+       Bonus: the label can now shrink if it ever needs to, so a long name can
+       never shove the arrow out of view. */
+    .cp-nav-group-btn { width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; justify-content: flex-start; gap: 6px; text-align: left; }
     /* "Inventory & Production" is the only label long enough to wrap onto two
        lines. With the default line spacing those two lines sat far apart, which
        made the row look like it had a gap in front of the words. Tightening the
        spacing makes a wrapped label read as one block, level with the icon. */
     .cp-nav-group-lead { display: flex; align-items: center; gap: 11px; min-width: 0; line-height: 1.15; white-space: nowrap; }
-    /* Safety net: if a label ever outgrows the sidebar it gets trimmed with an
-       ellipsis rather than dropping onto a second line. The full text is still
-       in the title attribute, so hovering shows it. */
+    /* Safety net: if a label ever outgrows the sidebar it is trimmed with an
+       ellipsis rather than dropping onto a second line.
+       NOTE: this used to say the full text stayed in a title attribute. It does
+       not any more - browser tooltips are stripped app-wide - so a trimmed label
+       is simply unreadable. Keep the sidebar wide enough that this never fires. */
     .cp-nav-group-lead, .cp-nav-item { overflow: hidden; text-overflow: ellipsis; }
     .cp-nav-group-chev { font-size: 18px !important; color: #94a3b8; transition: transform .18s ease; }
     .cp-nav-group.open > .cp-nav-group-btn { color: #1e293b; }
@@ -353,7 +373,7 @@
   {% if user.is_authenticated %}
   <header class="cp-topbar">
     <div class="cp-topbar-brand">
-      <div class="cp-brand">
+      <div class="cp-brand" id="cpBrand" role="button" tabindex="0" aria-label="Reload this page">
         <div class="cp-brand-logo"><img src="{% static 'core/jivo-logo.jpg' %}" alt="Jivo" onerror="this.style.display='none';this.parentNode.textContent='JG';"></div>
         <div class="cp-brand-copy">
           <div class="cp-brand-title">Jivo Group</div>
@@ -705,6 +725,23 @@
   {% block extra_scripts %}{% endblock %}
   {% comment %} Last, so it also picks up anything a page's own script just built. {% endcomment %}
   <script src="{% static 'core/bkdatepicker.js' %}?v=3"></script>
+
+  <script>
+  /* ── Logo reloads the page ─────────────────────────────────────────────────
+     location.reload() re-requests the current URL with whatever filters and
+     query string are already on it, so you come back to the same view with
+     fresh figures - not to the home page. */
+  (function () {
+    var brand = document.getElementById('cpBrand');
+    if (!brand) return;
+    function reload() { window.location.reload(); }
+    brand.addEventListener('click', reload);
+    // A div is not a button, so Enter and Space have to be wired up by hand.
+    brand.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reload(); }
+    });
+  })();
+  </script>
 
   <script>
   /* ── Keep the top bar lined up with the sidebar ────────────────────────────

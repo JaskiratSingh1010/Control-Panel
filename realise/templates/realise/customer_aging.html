@@ -404,8 +404,6 @@
         <div class="ag-cond-foot"><a id="agCondClear">Clear</a><button type="button" id="agCondApply">Apply</button></div>
       </div>
     </div>
-    <button type="button" class="ag-btn" id="agExpand"><i class="ic ic-chevrons-up-down"></i>Expand all</button>
-    <button type="button" class="ag-btn" id="agCollapse"><i class="ic ic-chevrons-down-up"></i>Collapse all</button>
     <button type="button" class="ag-btn" id="agExport"><i class="ic ic-download"></i>Export Excel</button>
     <button type="button" class="ag-btn" id="agExportDetail" title="Every open document + remarks for the filtered parties, in one file"><i class="ic ic-file-text"></i><span id="agExportDetailLbl">Export Detail</span></button>
     <button type="button" class="ag-btn" id="agRawData" title="Full raw open-invoice data — Excel-like table, customizable pivot & remark upload" style="display:none"><i class="ic ic-table"></i>RAW DATA</button>
@@ -488,8 +486,6 @@
           <button type="button" data-sign="pos">Positive</button>
           <button type="button" data-sign="neg">Negative</button>
         </span>
-        <button type="button" class="agrx-btn" id="agPivExpand">Expand all</button>
-        <button type="button" class="agrx-btn" id="agPivCollapse">Collapse all</button>
       </span>
       <button type="button" class="agrx-btn" id="agRawUpload" title="Bulk-update remarks from an Excel/CSV, matched by Doc No (columns: Doc No | Remarks)">Upload Remarks</button>
       <span class="agrx-add" id="agRawClearAdd">
@@ -1021,13 +1017,6 @@
   function setGroup(gi,open){
     var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
     if(grp) grp.classList.toggle('open',open);
-    applyView();
-  }
-  function setAll(open){
-    GROUPS.forEach(function(_,gi){
-      var grp = document.querySelector('.ag-grp[data-gi="'+gi+'"]');
-      if(grp) grp.classList.toggle('open',open);
-    });
     applyView();
   }
 
@@ -1862,8 +1851,6 @@
             agiBucketCells(tBk)+'<td></td></tr>';
     document.getElementById('agiBody').innerHTML = html;
   }
-  function expandAllPiv(){ [].forEach.call(document.querySelectorAll('#agPivTable tbody tr[data-haskids="1"]'),function(tr){ pivExpanded[tr.getAttribute('data-path')]=true; }); applyPivVisibility(); }
-  function collapseAllPiv(){ pivExpanded={}; applyPivVisibility(); }
   // Dynamic multi-select drill-by: a "Drill by ▾" dropdown of checkboxes (project-standard
   // pattern). Checking adds a level in selection order; the button shows the current path.
   function renderDrill(){
@@ -2080,8 +2067,6 @@
       var gi = grp.getAttribute('data-gi');
       setGroup(gi, !grp.classList.contains('open'));
     });
-    document.getElementById('agExpand').addEventListener('click',function(){ setAll(true); });
-    document.getElementById('agCollapse').addEventListener('click',function(){ setAll(false); });
     document.getElementById('agExport').addEventListener('click', exportAgingXLSX);
     document.getElementById('agExportDetail').addEventListener('click', exportAgingDetail);
     document.getElementById('agRawData').addEventListener('click', function(){
@@ -2162,8 +2147,6 @@
     // RAW DATA workspace (Beverages) — tabs, table (search/filter/sort/CSV) + pivot (drill-by).
     document.getElementById('agRawClose').addEventListener('click', closeRaw);
     document.getElementById('agRawSearch').addEventListener('input', renderRawSoon);
-    document.getElementById('agPivExpand').addEventListener('click', expandAllPiv);
-    document.getElementById('agPivCollapse').addEventListener('click', collapseAllPiv);
     document.getElementById('agPivSign').addEventListener('click',function(e){
       var b=e.target.closest('button[data-sign]'); if(!b) return;
       pivOutSign=b.getAttribute('data-sign');
@@ -2192,7 +2175,7 @@
     document.getElementById('agPivTable').addEventListener('click',function(e){
       var tr=e.target.closest('tr[data-path]'); if(!tr) return;
       // The little arrow still expands the group; clicking anywhere else on the row
-      // opens the item drill. Expand all / Collapse all are unaffected.
+      // opens the item drill.
       if(e.target.closest('.pv-tw') && tr.getAttribute('data-haskids')==='1'){
         var p=tr.getAttribute('data-path'); pivExpanded[p]=!pivExpanded[p]; applyPivVisibility();
         return;

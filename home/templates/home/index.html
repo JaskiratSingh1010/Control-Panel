@@ -3,15 +3,33 @@
 
 {% block extra_styles %}
 <style>
-  .home-header { margin-bottom: 24px; }
-  .home-title { font-size: 34px; font-weight: 850; margin: 0 0 6px 0; color: #111827; letter-spacing: 0; }
-  .home-title span { background: linear-gradient(90deg, #2563eb, #0f766e, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .home-subtitle { color: #6b7280; font-size: 14px; margin: 0; }
+  /* ── Welcome banner ──────────────────────────────────────────────────────
+     A white card holding the greeting and today's date, with a soft wash on the
+     right. The banner is shorter now that the subtitle and figures are gone. */
+  .home-hero { position: relative; overflow: hidden; display: flex; align-items: center; gap: 20px;
+               background: #fff; border: 1px solid var(--rz-card-brd); border-radius: 18px;
+               box-shadow: var(--rz-shadow); padding: 24px 28px; margin-bottom: 24px;
+               min-height: 84px; }
+  /* The diagonal tint. ::after so it needs no extra element, and it sits behind
+     the text because everything real is lifted to z-index 1. */
+  .home-hero::after { content: ""; position: absolute; inset: 0 0 0 50%; pointer-events: none;
+                      background: linear-gradient(100deg, transparent 0 14%, #f5f3ff 14% 100%); }
+  .home-hero > * { position: relative; z-index: 1; }
+  .home-hero-copy { flex: 1; min-width: 0; }
+  .home-title { font-size: 30px; font-weight: 900; margin: 0 0 6px 0; color: #0f172a; letter-spacing: -.4px; }
+  .home-date { align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
+               background: #eef2ff; border: 1px solid #e0e7ff; color: #4338ca; border-radius: 999px;
+               padding: 6px 13px; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
+  .home-date .ic { font-size: 14px; }
+  @media (max-width: 640px) {
+    .home-hero { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; }
+    .home-hero::after { display: none; }
+    .home-title { font-size: 24px; }
+  }
   .home-period { color: #4f46e5; font-weight: 600; }
 
   .section-header { display: flex; align-items: center; gap: 10px; margin: 28px 0 14px 0; }
-  .section-title { font-size: 15px; font-weight: 850; background: linear-gradient(90deg, #111827, #2563eb, #0f766e); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 0.4px; text-transform: uppercase; margin: 0; }
-  .section-pill { padding: 2px 10px; background: #e0e7ff; color: #4338ca; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .section-title { font-size: 15px; font-weight: 850; color: #000; letter-spacing: 0.4px; text-transform: uppercase; margin: 0; }
 
   .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -79,14 +97,18 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-header">
-  <h1 class="home-title">Welcome, <span>{{ display_name }}</span></h1>
+<div class="home-hero">
+  <div class="home-hero-copy">
+    <h1 class="home-title">Welcome back, {{ display_name }}</h1>
+  </div>
+
+
+  <div class="home-date"><i class="ic ic-calendar"></i>{% now "l, j F Y" %}</div>
 </div>
 
 {# ── P&L Metrics ── #}
 <div class="section-header">
   <span class="section-title">P &amp; L Metrics</span>
-  <span class="section-pill">KPIs</span>
 </div>
 <div class="kpi-grid">
   {% if can_sales %}
@@ -110,7 +132,6 @@
 {% if can_inventory %}
 <div class="section-header">
   <span class="section-title">Balance Sheet</span>
-  <span class="section-pill">1 KPI</span>
 </div>
 <div class="kpi-grid">
   {% include "home/_kpi_card.html" with kpi=kpis.inventory is_inventory=True only %}
