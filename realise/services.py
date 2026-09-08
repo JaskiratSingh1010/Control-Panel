@@ -2488,7 +2488,6 @@ def _credit_receipts_on(as_of_date):
 
 
 # Per-date {card_code: account balance as of that date}, cached like the aging report.
-_credit_ledger_cache = {}
 
 
 def _credit_ledger_asof(as_of_date):
@@ -2499,15 +2498,15 @@ def _credit_ledger_asof(as_of_date):
     _AGING_TTL seconds. {} on any SAP error (the caller then falls back to the live balance)."""
     key = as_of_date.isoformat()
     now = time.time()
-    hit = _credit_ledger_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('creditledger', key)
+    if hit is not None:
+        return hit
     try:
         m = {}
         for r in _load_aging_rows_sap(as_of_date):
             cc = _normalize_name(r.get('code'))
             m[cc] = m.get(cc, 0.0) + float(r.get('balance_due') or 0)
-        _credit_ledger_cache[key] = (now + _AGING_TTL, m)
+        _shared_set('creditledger', key, m, _AGING_TTL)
         return m
     except Exception as exc:
         logger.error('[REQCREDIT] ledger-as-of fetch failed: %s', exc)
@@ -3557,7 +3556,6 @@ def get_compare_sales_documents(start_date, end_date, seg, filters):
 # Premium/Commodity (oil only) and Revenue vs quantity (Litres for oil, Boxes for beverages).
 # Two companies: oil (JIVO_OIL_HANADB, U_SALES_PERSON, litres=Qty×SalPackUn, hides U_ARNO T/H) and
 # beverages (JIVO_BEVERAGES_HANADB, OSLP.SlpName, boxes=Qty/SalFactor2, FINISHED goods only).
-_salescn_cache = {}          # (company, start, end) -> (expiry, payload)
 _SALESCN_TTL = 90            # seconds — matches the other live SAP report windows
 
 # Sentinel dimension labels for service claims (they have no product / item / segment).
@@ -3690,9 +3688,9 @@ def get_sales_cn_report(start_date, end_date, company='oil'):
     measure = 'Boxes' if company == 'beverages' else 'Litres'
     key = (company, str(start_date), str(end_date))
     now = time.time()
-    hit = _salescn_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('salescn', key)
+    if hit is not None:
+        return hit
     try:
         raw = (_fetch_sales_cn_bev(start_date, end_date) if company == 'beverages'
                else _fetch_sales_cn_oil(start_date, end_date))
@@ -3705,7 +3703,7 @@ def get_sales_cn_report(start_date, end_date, company='oil'):
                 'has_type': company != 'beverages', 'rows': [], 'error': str(exc),
                 'start': str(start_date), 'end': str(end_date)}
     if raw:
-        _salescn_cache[key] = (now + _SALESCN_TTL, payload)
+        _shared_set('salescn', key, payload, _SALESCN_TTL)
     return payload
 
 
@@ -3715,10 +3713,8 @@ def get_sales_cn_report(start_date, end_date, company='oil'):
 # own — one row per invoice line — so hidden sales stay auditable. Litres = Quantity × SalPackUn,
 # Value = INV1.LineTotal, Cost Center = INV1.OcrCode (holds the oil variety). Oil only. Same
 # filters as the source query: U_ARNO='H' and a DocDate range (nothing else).
-_hidden_sales_cache = {}
 _HIDDEN_SALES_TTL = 90
 
-_hidden_raw_cache = {}
 _HIDDEN_RAW_TTL = 90
 
 
@@ -3729,9 +3725,9 @@ def _fetch_hidden_raw(start_date, end_date):
     to match the normal rows. Cached per range."""
     key = (str(start_date), str(end_date))
     now = time.time()
-    hit = _hidden_raw_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('hiddenraw', key)
+    if hit is not None:
+        return hit
     S = SAP_SCHEMA
     sql = f'''
         SELECT H."DocDate" AS "DocDate", SP."SlpName" AS "U_SALES_PERSON",
@@ -3761,7 +3757,7 @@ def _fetch_hidden_raw(start_date, end_date):
         logger.error('[HIDDEN-RAW] fetch failed: %s', exc)
         rows = []
     rows = _apply_delhi_gt_remap(rows)
-    _hidden_raw_cache[key] = (now + _HIDDEN_RAW_TTL, rows)
+    _shared_set('hiddenraw', key, rows, _HIDDEN_RAW_TTL)
     return rows
 
 
@@ -3772,9 +3768,9 @@ def get_hidden_customer_sales(start_date, end_date):
     _HIDDEN_SALES_TTL seconds."""
     key = (str(start_date), str(end_date))
     now = time.time()
-    hit = _hidden_sales_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('hiddensales', key)
+    if hit is not None:
+        return hit
     S = SAP_SCHEMA
     sql = f'''
         SELECT T0."DocNum"   AS "DOCNUM", T0."DocStatus" AS "DSTATUS",
@@ -3837,7 +3833,7 @@ def get_hidden_customer_sales(start_date, end_date):
         })
     payload = {'status': 'ok', 'rows': rows, 'start': str(start_date), 'end': str(end_date)}
     if raw:
-        _hidden_sales_cache[key] = (now + _HIDDEN_SALES_TTL, payload)
+        _shared_set('hiddensales', key, payload, _HIDDEN_SALES_TTL)
     return payload
 
 
@@ -3847,7 +3843,6 @@ def get_hidden_customer_sales(start_date, end_date):
 # limit, balance and account status. GSTIN lives per-address in CRD1.GSTRegnNo (prefer the default
 # bill-to address, else any address that has one); state name via OCST; terms via OCTG; sales
 # person via OSLP. No internal SAP plumbing columns. Oil company (JIVO_OIL_HANADB).
-_customer_master_cache = {}
 _CUSTMASTER_TTL = 300   # 5 min — master data changes rarely
 
 
@@ -3857,9 +3852,9 @@ def get_customer_master():
     gstin, pan, address, city, state, pincode, sales_person, payment_terms, credit_limit, balance,
     status ('Active' | 'Frozen' | 'Inactive'). Cached _CUSTMASTER_TTL seconds."""
     now = time.time()
-    hit = _customer_master_cache.get('all')
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('custmaster', 'all')
+    if hit is not None:
+        return hit
     S = SAP_SCHEMA
     sql = f'''
         SELECT T."CardCode" AS "CODE", T."CardName" AS "NAME",
@@ -3930,7 +3925,7 @@ def get_customer_master():
         })
     payload = {'status': 'ok', 'rows': rows, 'count': len(rows)}
     if rows:
-        _customer_master_cache['all'] = (now + _CUSTMASTER_TTL, payload)
+        _shared_set('custmaster', 'all', payload, _CUSTMASTER_TTL)
     return payload
 
 
@@ -3942,7 +3937,39 @@ def get_customer_master():
 # Aging). A payment applied in full to invoices has open balance 0; a payment left on account keeps
 # its full amount open until it is applied. The frontend's Open/Total toggle decides whether to show
 # only the open (>0) rows or every payment. Oil company (JIVO_OIL_HANADB).
-_open_payments_cache = {}
+# ── Shared report cache ──────────────────────────────────────────────────────
+# These reports used to keep their answers in a module-level dict. That works with a
+# single process, but the server runs 2-8 gunicorn workers, and a dict lives inside
+# ONE of them: the same report was fetched from SAP once per worker, and your second
+# click could land on a worker that had never seen it. A restart threw the lot away.
+#
+# django.core.cache is shared by every worker and survives a restart (file-backed
+# today, Redis by setting DJANGO_CACHE_URL). Same keys, same TTLs, same control flow -
+# only where the answer is kept has changed.
+#
+# One thing to know: the shared cache stores a SERIALISED copy, so each caller gets its
+# own object rather than the one everybody else is holding. For these reports that is
+# simply safer - nobody can accidentally alter another request's cached answer.
+def _shared_key(name, key):
+    """A stable cache key. Tuples are flattened so ('2026-09-01','2026-09-08') and the
+    string '2026-09-01|2026-09-08' can never collide with each other."""
+    if isinstance(key, (tuple, list)):
+        key = '|'.join(str(k) for k in key)
+    return 'rz:%s:%s' % (name, key)
+
+
+def _shared_get(name, key):
+    """The cached answer, or None. Shaped like the old dicts: callers treat a miss the
+    same way they always did."""
+    from django.core.cache import cache
+    return cache.get(_shared_key(name, key))
+
+
+def _shared_set(name, key, value, ttl):
+    from django.core.cache import cache
+    cache.set(_shared_key(name, key), value, ttl)
+
+
 _OPEN_PAYMENTS_TTL = 90
 
 
@@ -3969,9 +3996,9 @@ def get_open_payments(start_date, end_date):
         sd, ed = ed, sd
     key = (sd.isoformat(), ed.isoformat())
     now = time.time()
-    hit = _open_payments_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('openpay', key)
+    if hit is not None:
+        return hit
 
     S = SAP_SCHEMA
     next_day = ed + timedelta(days=1)           # half-open range: correct for date or timestamp DocDate
@@ -4019,7 +4046,7 @@ def get_open_payments(start_date, end_date):
     payload = {'status': 'ok', 'rows': rows, 'count': len(rows),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if rows:
-        _open_payments_cache[key] = (now + _OPEN_PAYMENTS_TTL, payload)
+        _shared_set('openpay', key, payload, _OPEN_PAYMENTS_TTL)
     return payload
 
 
@@ -4028,7 +4055,6 @@ def get_open_payments(start_date, end_date):
 # date, transporter, vehicle no and driver mobile — for the Oil company (Jivo Wellness). These
 # are the header custom fields keyed on the SAP A/R Invoice's right-hand panel. The columns may
 # be absent on a schema that never defined them, so the query is retried without them.
-_dispatch_details_cache = {}
 _DISPATCH_DETAILS_TTL = 90
 
 
@@ -4047,9 +4073,9 @@ def get_dispatch_details(start_date, end_date):
         sd, ed = ed, sd
     key = (sd.isoformat(), ed.isoformat())
     now = time.time()
-    hit = _dispatch_details_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('dispatch', key)
+    if hit is not None:
+        return hit
 
     S = SAP_SCHEMA
     next_day = ed + timedelta(days=1)           # half-open range: correct for date or timestamp DocDate
@@ -4101,7 +4127,7 @@ def get_dispatch_details(start_date, end_date):
     payload = {'status': 'ok', 'rows': rows, 'count': len(rows),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if rows:
-        _dispatch_details_cache[key] = (now + _DISPATCH_DETAILS_TTL, payload)
+        _shared_set('dispatch', key, payload, _DISPATCH_DETAILS_TTL)
     return payload
 
 
@@ -4111,7 +4137,6 @@ def get_dispatch_details(start_date, end_date):
 #   ₹/Box   = LineTotal ÷ (Quantity ÷ OITM.SalFactor2)  — pieces per box
 # Net of returns: OINV/INV1 add (sign +1), ORIN/RIN1 subtract (sign −1). Hidden invoices
 # (U_ARNO IN 'T','H') are excluded to match the dashboard's "Done". Cancelled docs dropped.
-_realise_calc_cache = {}
 _REALISE_CALC_TTL = 90        # seconds
 
 _REALISE_CALC_SQL = '''
@@ -4146,9 +4171,9 @@ def get_realise_calculator(start_date, end_date):
         sd, ed = ed, sd
     key = (sd.isoformat(), ed.isoformat())
     now = time.time()
-    hit = _realise_calc_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('realisecalc', key)
+    if hit is not None:
+        return hit
 
     S = SAP_SCHEMA
     next_day = ed + timedelta(days=1)          # half-open range: correct for date or timestamp DocDate
@@ -4209,7 +4234,7 @@ def get_realise_calculator(start_date, end_date):
     payload = {'status': 'ok', 'rows': rows, 'totals': totals, 'count': len(rows),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if rows:
-        _realise_calc_cache[key] = (now + _REALISE_CALC_TTL, payload)
+        _shared_set('realisecalc', key, payload, _REALISE_CALC_TTL)
     return payload
 
 
@@ -4227,7 +4252,6 @@ def get_realise_calculator(start_date, end_date):
 # Litres use _done_sales_litexpr (the REPORT_SALES_COGS formula the dashboard's Done runs
 # on), NOT Quantity x SalPackUn: the naive form ignores combo/BOM expansion, the
 # NoInvtryMv='Y' zeroing and the MTS bulk conversion, and inflates litres several-fold.
-_done_item_cache = {}
 _DONE_ITEM_TTL = 90               # seconds
 
 _DONE_ITEM_SQL = '''
@@ -4300,7 +4324,6 @@ def _done_finalize(bucket):
     return bucket
 
 
-_fg_types_cache = {}
 _FG_TYPES_TTL = 600               # seconds — the item master barely moves
 
 
@@ -4311,8 +4334,8 @@ def get_fg_item_types():
     just what sold, because a planned item with no sale this month still has to be filterable.
     Cached _FG_TYPES_TTL seconds; {} on any SAP error."""
     now = time.time()
-    hit = _fg_types_cache.get('v')
-    if hit is not None and _fg_types_cache.get('t', 0) > now:
+    hit = _shared_get('fgtypes', 'v')
+    if hit is not None:
         return hit
     sql = f'''SELECT COALESCE(TRIM(I."ItemCode"), '') AS "CODE",
                      COALESCE(TRIM(I."U_TYPE"), '')   AS "UTYPE"
@@ -4324,7 +4347,7 @@ def get_fg_item_types():
         return {}
     out = {(r.get('CODE') or '').strip().upper(): (r.get('UTYPE') or '').strip().upper()
            for r in rows if (r.get('CODE') or '').strip()}
-    _fg_types_cache['v'], _fg_types_cache['t'] = out, now + _FG_TYPES_TTL
+    _shared_set('fgtypes', 'v', out, _FG_TYPES_TTL)
     return out
 
 
@@ -4384,9 +4407,9 @@ def get_done_by_item(start_date, end_date):
         sd, ed = ed, sd
     key = (sd.isoformat(), ed.isoformat())
     now = time.time()
-    hit = _done_item_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('doneitem', key)
+    if hit is not None:
+        return hit
 
     S = SAP_SCHEMA
     next_day = ed + timedelta(days=1)          # half-open: safe for date or timestamp DocDate
@@ -4440,11 +4463,10 @@ def get_done_by_item(start_date, end_date):
                'item_types': get_fg_item_types(),
                'start': sd.isoformat(), 'end': ed.isoformat()}
     if agg:
-        _done_item_cache[key] = (now + _DONE_ITEM_TTL, payload)
+        _shared_set('doneitem', key, payload, _DONE_ITEM_TTL)
     return payload
 
 
-_done_docs_cache = {}
 _DONE_DOCS_TTL = 90               # seconds
 
 _DONE_DOCS_SQL = '''
@@ -4488,9 +4510,9 @@ def get_done_item_documents(item_code, start_date, end_date, state=None, channel
         sd, ed = ed, sd
     key = (code, sd.isoformat(), ed.isoformat(), want_state, want_chan)
     now = time.time()
-    hit = _done_docs_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('donedocs', key)
+    if hit is not None:
+        return hit
 
     S = SAP_SCHEMA
     next_day = ed + timedelta(days=1)
@@ -4536,11 +4558,10 @@ def get_done_item_documents(item_code, start_date, end_date, state=None, channel
                           'revenue': round(t_val, 2),
                           'realise_l': round(t_val / t_lit, 2) if t_lit else 0.0},
                'start': sd.isoformat(), 'end': ed.isoformat()}
-    _done_docs_cache[key] = (now + _DONE_DOCS_TTL, payload)
+    _shared_set('donedocs', key, payload, _DONE_DOCS_TTL)
     return payload
 
 
-_realise_calc_items_cache = {}     # {'t': expiry, 'v': items}
 _REALISE_CALC_ITEMS_TTL = 600      # seconds — the item master barely changes
 
 def get_realise_calc_items():
@@ -4550,8 +4571,8 @@ def get_realise_calc_items():
     used to auto-fill the grid's Litres/Pack). Sellable Premium/Commodity items only.
     Cached _REALISE_CALC_ITEMS_TTL seconds; [] on any SAP error."""
     now = time.time()
-    hit = _realise_calc_items_cache.get('v')
-    if hit is not None and _realise_calc_items_cache.get('t', 0) > now:
+    hit = _shared_get('calcitems', 'v')
+    if hit is not None:
         return {'status': 'ok', 'items': hit}
 
     S = SAP_SCHEMA
@@ -4567,7 +4588,7 @@ def get_realise_calc_items():
         WHERE I."SellItem" = 'Y'
           AND UPPER(COALESCE(TRIM(I."U_TYPE"), '')) IN ('PREMIUM', 'COMMODITY')
           AND COALESCE(TRIM(I."ItemName"), '') <> ''
-        ORDER BY "VARIETY", "SKU", "NAME"
+        ORDER BY "VARIETY", "SKU", "NAME", "CODE"   -- CODE breaks ties so the order never wobbles
     '''
     try:
         raw = sap_connector.execute_query(sql)
@@ -4590,8 +4611,7 @@ def get_realise_calc_items():
             'pcs_per_box': ppb,
             'box_litres': round(lpp * ppb, 3),            # litres in one box
         })
-    _realise_calc_items_cache['v'] = items
-    _realise_calc_items_cache['t'] = now + _REALISE_CALC_ITEMS_TTL
+    _shared_set('calcitems', 'v', items, _REALISE_CALC_ITEMS_TTL)
     return {'status': 'ok', 'items': items}
 
 
@@ -4601,7 +4621,6 @@ def get_realise_calc_items():
 # cancelled + hidden, matching Done). Each invoice line is traced to its Sales Order — directly
 # (INV1.BaseType=17) or via a Delivery (BaseType=15 → DLN1.BaseType=17) — and each order line to
 # its Quotation (RDR1.BaseType=23 → OQUT). Litres = Quantity × SalPackUn.
-_sales_flow_cache = {}
 _SALES_FLOW_TTL = 90
 
 
@@ -4632,9 +4651,9 @@ def get_sales_document_flow(start_date, end_date, company='oil'):
     measure = 'Boxes' if company == 'beverages' else 'Litres'
     key = (company, str(start_date), str(end_date))
     now = time.time()
-    hit = _sales_flow_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('salesflow', key)
+    if hit is not None:
+        return hit
     if company == 'beverages':
         S = BEVERAGES_SCHEMA
         qty = 'L."Quantity" / NULLIF(I."SalFactor2", 0)'
@@ -4713,7 +4732,7 @@ def get_sales_document_flow(start_date, end_date, company='oil'):
     payload = {'status': 'ok', 'company': company, 'measure': measure, 'rows': rows,
                'start': str(start_date), 'end': str(end_date)}
     if raw:
-        _sales_flow_cache[key] = (now + _SALES_FLOW_TTL, payload)
+        _shared_set('salesflow', key, payload, _SALES_FLOW_TTL)
     return payload
 
 
@@ -5308,7 +5327,6 @@ AGING_BUCKETS = [
 ]
 _BUCKET_KEYS = [b['key'] for b in AGING_BUCKETS]
 
-_aging_cache = {}        # aging-date ISO string → (expires_at, payload)
 _AGING_TTL = 90          # seconds, same window as the sales proc cache
 
 
@@ -5633,9 +5651,9 @@ def get_customer_aging(aging_date=None):
         aging_date = date.today()
     key = aging_date.isoformat()
     now = time.time()
-    hit = _aging_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('oilaging', key)
+    if hit is not None:
+        return hit
 
     try:
         payload = _build_aging_payload(_load_aging_rows_sap(aging_date))
@@ -5645,7 +5663,7 @@ def get_customer_aging(aging_date=None):
                 'kpis': {}, 'aging_date': key, 'error': str(e)}
 
     payload['aging_date'] = key
-    _aging_cache[key] = (now + _AGING_TTL, payload)
+    _shared_set('oilaging', key, payload, _AGING_TTL)
     return payload
 
 
@@ -5654,10 +5672,6 @@ def get_customer_aging(aging_date=None):
 # invoices (OINV, DocStatus 'O') directly: InDaysDifference = days from DocDate to the aging
 # date, bucketed the same way. We return the RAW per-invoice rows; the client pivots them by
 # Sales Person → Customer, offers a per-day multi-select, and an Excel-like raw drill.
-_bev_aging_cache = {}
-_mart_aging_cache = {}
-_oil_ar_cache = {}       # oil open-invoice RAW DATA (same shape as beverages; separate namespace)
-_bev_ar_cache = {}       # beverages open-invoice RAW DATA (the workspace; aging pivot is reconciliation)
 
 
 def _bev_cell(v):
@@ -5763,7 +5777,7 @@ def _clean_salesperson(name):
     return _SALESPERSON_CANON.get(s, s)
 
 
-def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache):
+def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, ns):
     """Open A/R invoice aging for one company schema (Beverages / Mart). Returns raw invoice
     rows (Sales Person, Customer, Days, Balance Due, Outstanding, dispatch/bilty fields, …),
     each carrying its manual `remark`. The client pivots by Sales Person → Customer with the
@@ -5774,9 +5788,9 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
         aging_date = date.today()
     key = aging_date.isoformat()
     now = time.time()
-    hit = cache.get(key)
-    if hit and hit[0] > now:
-        return _ar_attach_remarks(hit[1], doc_prefix, sp_prefix)
+    hit = _shared_get(ns, key)
+    if hit is not None:
+        return _ar_attach_remarks(hit, doc_prefix, sp_prefix)
 
     ag, B = _aging_date_literal(aging_date), schema
     # Optional dispatch/bilty custom fields — present on Beverages, retried-without elsewhere.
@@ -5848,7 +5862,7 @@ def _customer_aging_ar(aging_date, schema, company, doc_prefix, sp_prefix, cache
             'outstanding': _aging_num(r.get('outstanding')),
         })
     payload = {'company': company, 'rows': rows, 'aging_date': key, 'error': None}
-    cache[key] = (now + _AGING_TTL, payload)
+    _shared_set(ns, key, payload, _AGING_TTL)
     return _ar_attach_remarks(payload, doc_prefix, sp_prefix)
 
 
@@ -5862,9 +5876,9 @@ def get_customer_aging_beverages(aging_date=None):
         aging_date = date.today()
     key = aging_date.isoformat()
     now = time.time()
-    hit = _bev_aging_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('bevaging', key)
+    if hit is not None:
+        return hit
     try:
         rows = _load_aging_rows_sap(aging_date, schema=BEVERAGES_SCHEMA,
                                     apply_oil_filters=False, group_by='salesperson')
@@ -5884,7 +5898,7 @@ def get_customer_aging_beverages(aging_date=None):
                 'kpis': {}, 'aging_date': key, 'error': str(e)}
     payload['company'] = 'bev'
     payload['aging_date'] = key
-    _bev_aging_cache[key] = (now + _AGING_TTL, payload)
+    _shared_set('bevaging', key, payload, _AGING_TTL)
     return payload
 
 
@@ -5961,7 +5975,7 @@ def get_customer_aging_oil_ar(aging_date=None):
     it is invoice-grained (open OINV) and is a separate view from the oil aging pivot (which is
     B1 journal reconciliation), so the two need not tie exactly. Its own OILDOC:/OILSP: remark
     namespace keeps oil raw-invoice remarks apart from the per-document aging-detail remarks."""
-    return _customer_aging_ar(aging_date, SAP_SCHEMA, 'oil', 'OILDOC:', 'OILSP:', _oil_ar_cache)
+    return _customer_aging_ar(aging_date, SAP_SCHEMA, 'oil', 'OILDOC:', 'OILSP:', 'oilar')
 
 
 def get_customer_aging_beverages_ar(aging_date=None):
@@ -5970,7 +5984,7 @@ def get_customer_aging_beverages_ar(aging_date=None):
     DATA workspace. Invoice-grained; a separate view from the Beverages aging pivot (which is B1
     reconciliation), so the two need not tie. Its BEVDOC:/BEVSP: remark namespace is unchanged, so
     remarks saved before the aging pivot moved to reconciliation are still shown here."""
-    return _customer_aging_ar(aging_date, BEVERAGES_SCHEMA, 'bev', 'BEVDOC:', 'BEVSP:', _bev_ar_cache)
+    return _customer_aging_ar(aging_date, BEVERAGES_SCHEMA, 'bev', 'BEVDOC:', 'BEVSP:', 'bevar')
 
 
 def get_customer_aging_mart(aging_date=None):
@@ -5982,9 +5996,9 @@ def get_customer_aging_mart(aging_date=None):
         aging_date = date.today()
     key = aging_date.isoformat()
     now = time.time()
-    hit = _mart_aging_cache.get(key)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('martaging', key)
+    if hit is not None:
+        return hit
 
     try:
         payload = _build_aging_payload(
@@ -5996,7 +6010,7 @@ def get_customer_aging_mart(aging_date=None):
 
     payload['company'] = 'mart'
     payload['aging_date'] = key
-    _mart_aging_cache[key] = (now + _AGING_TTL, payload)
+    _shared_set('martaging', key, payload, _AGING_TTL)
     return payload
 
 
@@ -6600,7 +6614,6 @@ def bulk_update_oil_ar_remarks(aging_date, entries):
 # A manually-maintained claim register (see the Claim model). Nothing here is read from SAP as
 # report data — SAP only feeds the entry pickers: customers (party → main group) and product/item
 # masters. Every claim row is entered and edited by a reviewer and persisted via the CRUD helpers.
-_claim_masters_cache = {}
 _CLAIM_MASTERS_TTL = 300   # 5 min — master data changes rarely
 
 
@@ -6609,9 +6622,9 @@ def get_claim_masters():
     [{code, name, main_group}] from the customer master; picking a party fills its Main Group.
     Cached _CLAIM_MASTERS_TTL seconds. (Product/Item pickers were removed from the form.)"""
     now = time.time()
-    hit = _claim_masters_cache.get('all')
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _shared_get('claimmasters', 'all')
+    if hit is not None:
+        return hit
 
     # Customers — reuse the (cached) customer master, trimmed to what the picker needs.
     try:
@@ -6625,7 +6638,7 @@ def get_claim_masters():
 
     payload = {'status': 'ok', 'customers': customers}
     if customers:
-        _claim_masters_cache['all'] = (now + _CLAIM_MASTERS_TTL, payload)
+        _shared_set('claimmasters', 'all', payload, _CLAIM_MASTERS_TTL)
     return payload
 
 
