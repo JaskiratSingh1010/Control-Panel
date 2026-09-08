@@ -3346,7 +3346,10 @@ else oihInitDrillPanel();
 /* ===== Done / Balance breakdown windows (Premium / Commodity / Total) =====
    The Done Ltr and Bal Ltr KPIs open a drill tree, mirroring the OIH window. Built
    entirely from slide-2 data already in memory:
-     done    = +done litres (split Premium/Commodity by U_TYPE).
+     done    = +done litres (split Premium/Commodity by U_TYPE). Litres whose item
+               carries no U_TYPE in SAP belong to neither column, so they get their own
+               "Other" column - otherwise they landed in Total only and the row did not
+               add up. The column is hidden when there are none.
      balance = target − done − OIH. Done/OIH split by U_TYPE. Targets mirror the
                dashboard's own views: the Premium column uses channel target nodes
                (segment PREMIUM or untagged), the Commodity column uses the per-product
@@ -3381,20 +3384,20 @@ async function openMetricWindow(metric){
 function closeMetricWindow(){document.getElementById('mbModal').classList.remove('show');}
 function buildMetricGranular(metric,targetNodes,oihRows){
   var g=[], rows=sc2Rows||[];
-  function add(rawG,st,person,sub,item,cust,prem,comm,total,sku){
-    g.push({main_group:rawG||'—',state:st||'—',person:person||'—',sub_group:sub||'—',item:item||'—',customer:cust||'—',sku:sku||'—',prem:prem,comm:comm,total:total});
+  function add(rawG,st,person,sub,item,cust,prem,comm,total,sku,other){
+    g.push({main_group:rawG||'—',state:st||'—',person:person||'—',sub_group:sub||'—',item:item||'—',customer:cust||'—',sku:sku||'—',prem:prem,comm:comm,total:total,other:other||0});
   }
   var dSign=(metric==='balance')?-1:1;   // done is subtracted when computing balance
   for(var i=0;i<rows.length;i++){
     var r=rows[i], grp=String(r.u_main_group||'').trim().toUpperCase()||'—', st=String(r.state||'').trim().toUpperCase()||'—';
     var ut=String(r.u_type||'').toUpperCase(), v=(Number(r.liter)||0)*dSign;
-    add(grp,st,assignedPerson(grp,st)||'—',String(r.u_sub_group||'').trim().toUpperCase(),String(r.item_name||'').trim().toUpperCase(),String(r.card_name||'').trim().toUpperCase(),ut==='PREMIUM'?v:0,ut==='COMMODITY'?v:0,v,String(r.sku||'').trim().toUpperCase());
+    add(grp,st,assignedPerson(grp,st)||'—',String(r.u_sub_group||'').trim().toUpperCase(),String(r.item_name||'').trim().toUpperCase(),String(r.card_name||'').trim().toUpperCase(),ut==='PREMIUM'?v:0,ut==='COMMODITY'?v:0,v,String(r.sku||'').trim().toUpperCase(),(ut==='PREMIUM'||ut==='COMMODITY')?0:v);
   }
   if(metric==='balance'){
     for(var o=0;o<(oihRows||[]).length;o++){
       var x=oihRows[o], xg=String(x.main_group||'').trim().toUpperCase()||'—', xst=String(x.state||'').trim().toUpperCase()||'—';
       var xut=String(x.u_type||'').toUpperCase(), q=-(Number(x.open_qty)||0);
-      add(xg,xst,String(x.sales_person||'').trim().toUpperCase()||assignedPerson(xg,xst)||'—',String(x.u_sub_group||'').trim().toUpperCase(),String(x.item_name||'').trim().toUpperCase(),String(x.card_name||'').trim().toUpperCase(),xut==='PREMIUM'?q:0,xut==='COMMODITY'?q:0,q,String(x.sku||'').trim().toUpperCase());
+      add(xg,xst,String(x.sales_person||'').trim().toUpperCase()||assignedPerson(xg,xst)||'—',String(x.u_sub_group||'').trim().toUpperCase(),String(x.item_name||'').trim().toUpperCase(),String(x.card_name||'').trim().toUpperCase(),xut==='PREMIUM'?q:0,xut==='COMMODITY'?q:0,q,String(x.sku||'').trim().toUpperCase(),(xut==='PREMIUM'||xut==='COMMODITY')?0:q);
     }
     // Channel target nodes feed the Premium column (segment-tagged PREMIUM or untagged,
     // mirroring the dashboard's Premium view) and count once toward Total. Commodity is
@@ -3421,18 +3424,22 @@ function buildMbTree(rows,order){
     if(level>=order.length)return null;
     var dim=order[level],map={};
     for(var i=0;i<subset.length;i++){var r=subset[i],v=r[dim]||'—';
-      if(!map[v])map[v]={name:v,dim:dim,prem:0,comm:0,total:0,_rows:[]};
-      map[v].prem+=r.prem||0;map[v].comm+=r.comm||0;map[v].total+=r.total||0;map[v]._rows.push(r);}
+      if(!map[v])map[v]={name:v,dim:dim,prem:0,comm:0,other:0,total:0,_rows:[]};
+      map[v].prem+=r.prem||0;map[v].comm+=r.comm||0;map[v].other+=r.other||0;map[v].total+=r.total||0;map[v]._rows.push(r);}
     return Object.keys(map).map(function(k){var n=map[k];n.kids=group(n._rows,level+1);delete n._rows;return n;})
       .sort(function(a,b){return b.total-a.total||String(a.name).localeCompare(String(b.name));});
   }
   return group(rows,0)||[];
 }
 function mbNum(v){var s=fN(v||0);return ((v||0)<0)?'<span class="sc2-bal-bad">'+s+'</span>':s;}
+// Shown only when some litres really are untagged, so the usual view is unchanged.
+var mbShowOther=false;
 function mbColCells(n,seg){
   if(seg==='PREMIUM')return '<td class="num">'+mbNum(n.prem)+'</td>';
   if(seg==='COMMODITY')return '<td class="num">'+mbNum(n.comm)+'</td>';
-  return '<td class="num">'+mbNum(n.prem)+'</td><td class="num">'+mbNum(n.comm)+'</td><td class="num">'+mbNum(n.total)+'</td>';
+  return '<td class="num">'+mbNum(n.prem)+'</td><td class="num">'+mbNum(n.comm)+'</td>'
+        +(mbShowOther?'<td class="num">'+mbNum(n.other)+'</td>':'')
+        +'<td class="num">'+mbNum(n.total)+'</td>';
 }
 function mbTreeRows(nodes,level,seg,prefix){
   var html='';
@@ -3453,19 +3460,29 @@ function renderMetricBreakdown(){
   var label=mbOrder.map(mbDimLabel).join(' › ')||'Dimension';
   mbRefine.sync();
   var frows=mbRows();
-  var tp=0,tc=0,tt=0; for(var i=0;i<frows.length;i++){tp+=frows[i].prem||0;tc+=frows[i].comm||0;tt+=frows[i].total||0;}
-  tp=Math.round(tp*100)/100;tc=Math.round(tc*100)/100;tt=Math.round(tt*100)/100;
+  var tp=0,tc=0,to=0,tt=0; for(var i=0;i<frows.length;i++){tp+=frows[i].prem||0;tc+=frows[i].comm||0;to+=frows[i].other||0;tt+=frows[i].total||0;}
+  tp=Math.round(tp*100)/100;tc=Math.round(tc*100)/100;to=Math.round(to*100)/100;tt=Math.round(tt*100)/100;
+  // Only shown when some litres really are untagged, so a clean month looks exactly as it
+  // did before. Done only: the Balance metric counts targets in Total on purpose (see the
+  // note above buildMetricGranular), so its columns never reconciled anyway.
+  mbShowOther=(seg==='')&&(mbMetric==='done')&&(to!==0);
+  var otherTip='Litres whose item has no U_TYPE set in SAP, so they are neither Premium nor Commodity. '
+              +'They were always inside Total - this column just shows them, so the row adds up.';
   if(seg==='PREMIUM')sum.innerHTML=oihKpiBox('Premium '+metricL+' (L)',tp);
   else if(seg==='COMMODITY')sum.innerHTML=oihKpiBox('Commodity '+metricL+' (L)',tc);
-  else sum.innerHTML=oihKpiBox('Premium '+metricL+' (L)',tp)+oihKpiBox('Commodity '+metricL+' (L)',tc)+oihKpiBox('Total '+metricL+' (L)',tt);
+  else sum.innerHTML=oihKpiBox('Premium '+metricL+' (L)',tp)+oihKpiBox('Commodity '+metricL+' (L)',tc)
+                    +(mbShowOther?oihKpiBox('Other — no type (L)',to):'')
+                    +oihKpiBox('Total '+metricL+' (L)',tt);
   if(seg==='PREMIUM')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th>';
   else if(seg==='COMMODITY')head.innerHTML='<th>'+esc(label)+'</th><th class="num">Commodity (L)</th>';
-  else head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th><th class="num">Total (L)</th>';
-  var span=seg?2:4;
+  else head.innerHTML='<th>'+esc(label)+'</th><th class="num">Premium (L)</th><th class="num">Commodity (L)</th>'
+                     +(mbShowOther?'<th class="num" title="'+esc(otherTip)+'">Other (L)</th>':'')
+                     +'<th class="num">Total (L)</th>';
+  var span=seg?2:(mbShowOther?5:4);
   var tree=buildMbTree(frows,mbOrder);
   var rowsHtml=mbTreeRows(tree,0,seg,'');
   if(!rowsHtml){ body.innerHTML='<tr><td colspan="'+span+'" class="cd-empty">No data in this selection.</td></tr>'; return; }
-  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+mbColCells({prem:tp,comm:tc,total:tt},seg)+'</tr>';
+  rowsHtml+='<tr class="cd-total"><td>TOTAL</td>'+mbColCells({prem:tp,comm:tc,other:to,total:tt},seg)+'</tr>';
   body.innerHTML=rowsHtml;
 }
 document.addEventListener('click',function(e){
@@ -3480,10 +3497,15 @@ function exportMetricCSV(){
   var head=[label];
   if(seg==='PREMIUM')head.push('Premium (L)');
   else if(seg==='COMMODITY')head.push('Commodity (L)');
-  else head.push('Premium (L)','Commodity (L)','Total (L)');
+  else head.push.apply(head,mbShowOther?['Premium (L)','Commodity (L)','Other — no type (L)','Total (L)']
+                                       :['Premium (L)','Commodity (L)','Total (L)']);
   var lines=[head.map(csvEscapeCell).join(',')];
   var frows=mbRows();
-  function cols(n){return seg==='PREMIUM'?[n.prem||0]:(seg==='COMMODITY'?[n.comm||0]:[n.prem||0,n.comm||0,n.total||0]);}
+  function cols(n){
+    if(seg==='PREMIUM')return [n.prem||0];
+    if(seg==='COMMODITY')return [n.comm||0];
+    return mbShowOther?[n.prem||0,n.comm||0,n.other||0,n.total||0]:[n.prem||0,n.comm||0,n.total||0];
+  }
   (function walk(nodes,depth){
     for(var i=0;i<nodes.length;i++){var n=nodes[i];
       lines.push([ (depth?new Array(depth+1).join('  '):'')+n.name ].concat(cols(n)).map(csvEscapeCell).join(','));
