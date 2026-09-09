@@ -58,11 +58,9 @@ urlpatterns = [
 
 for path_name, view_name in _ENDPOINTS:
     urlpatterns.append(path(f'oils/api/{path_name}/', getattr(views, f'oils_api_{view_name}'), name=f'oils_api_{view_name}'))
-urlpatterns.append(path('oils/api/chat/', views.oils_api_chat, name='oils_api_chat'))
 
 for path_name, view_name in _ENDPOINTS:
     urlpatterns.append(path(f'beverages/api/{path_name}/', getattr(views, f'beverages_api_{view_name}'), name=f'beverages_api_{view_name}'))
 urlpatterns += [
-    path('beverages/api/chat/', views.beverages_api_chat, name='beverages_api_chat'),
     path('beverages/api/debug/rm-pm/', views.beverages_api_debug_rm_pm, name='beverages_api_debug_rm_pm'),
 ]

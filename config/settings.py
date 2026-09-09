@@ -214,7 +214,6 @@ SAP_HANA = {
     'PASSWORD': env('SAP_HANA_PASSWORD', 'Jivo@1989'),
 }
 
-GROQ_API_KEY = env('GROQ_API_KEY', '')
 
 # ---------------------------------------------------------------------------
 # Logging

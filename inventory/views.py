@@ -10,7 +10,6 @@ from django.views.decorators.http import require_http_methods
 
 from core.decorators import permission_flag_required
 from .services import beverages, oils, reconciliation
-from .services.chat import chat
 
 logger = logging.getLogger(__name__)
 
@@ -312,26 +311,6 @@ def daily_production_data(request):
         return JsonResponse({'status': 'error', 'error': 'Could not read production orders from SAP.',
                              'rows': [], 'warehouses': []})
     return JsonResponse({'status': 'ok', **data})
-
-
-@permission_flag_required('inventory_can_edit', json_response=True)
-@require_http_methods(['POST'])
-def oils_api_chat(request):
-    try:
-        body = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        body = {}
-    return JsonResponse(chat('oils', body.get('message', ''), body.get('context', '')))
-
-
-@permission_flag_required('inventory_can_edit', json_response=True)
-@require_http_methods(['POST'])
-def beverages_api_chat(request):
-    try:
-        body = json.loads(request.body or '{}')
-    except json.JSONDecodeError:
-        body = {}
-    return JsonResponse(chat('beverages', body.get('message', ''), body.get('context', '')))
 
 
 oils_api_kpi = _create_inventory_view(oils.get_kpi)

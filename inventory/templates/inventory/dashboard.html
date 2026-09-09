@@ -990,139 +990,12 @@
     }
 
     /* ── CHAT ── */
-    .cf {
-      position: fixed;
-      bottom: 18px;
-      right: 18px;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, color-mix(in srgb,#4f46e5 15%,#fff), color-mix(in srgb,#7c3aed 15%,#fff));
-      color: #fff;
-      border: none;
-      font-size: 19px;
-      cursor: pointer;
-      box-shadow: 0 4px 20px rgba(80, 70, 229, .35);
-      z-index: 90;
-      transition: .2s
-    }
-
     .cf:hover {
       transform: scale(1.1)
     }
 
-    .cp {
-      display: none;
-      position: fixed;
-      bottom: 72px;
-      right: 18px;
-      width: 360px;
-      max-height: 460px;
-      background: var(--card);
-      border-radius: 18px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, .12);
-      z-index: 91;
-      flex-direction: column;
-      overflow: hidden;
-      border: 1px solid var(--bd)
-    }
-
-    .cp.op {
-      display: flex
-    }
-
-    .cp-h {
-      padding: 12px 16px;
-      background: var(--side-solid);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
-      border-radius: 18px 18px 0 0
-    }
-
-    .cp-h span {
-      flex: 1
-    }
-
-    .cp-x {
-      background: none;
-      border: none;
-      color: rgba(255, 255, 255, .3);
-      font-size: 14px;
-      cursor: pointer
-    }
-
-    .cp-b {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px 12px;
-      max-height: 310px;
-      min-height: 140px
-    }
-
-    .cm {
-      margin-bottom: 7px;
-      font-size: 13px;
-      line-height: 1.5;
-      font-weight: 500
-    }
-
-    .cm.u {
-      text-align: right
-    }
-
-    .cm.u .bl {
-      background: var(--ac);
-      color: #fff;
-      display: inline-block;
-      padding: 5px 11px;
-      border-radius: 11px 11px 2px 11px;
-      max-width: 82%
-    }
-
-    .cm.a .bl {
-      background: #f4f4f5;
-      display: inline-block;
-      padding: 7px 11px;
-      border-radius: 11px 11px 11px 2px;
-      max-width: 88%;
-      text-align: left
-    }
-
-    .cp-i {
-      display: flex;
-      border-top: 1px solid var(--bd);
-      padding: 7px
-    }
-
-    .cp-i input {
-      flex: 1;
-      border: 2px solid var(--bd);
-      border-radius: 9px;
-      padding: 7px 10px;
-      font-size: 13px;
-      font-family: var(--font);
-      font-weight: 500;
-      outline: none;
-      background: var(--bg)
-    }
-
     .cp-i input:focus {
       border-color: var(--ac)
-    }
-
-    .cp-i button {
-      margin-left: 5px;
-      padding: 7px 14px;
-      background: var(--ac);
-      color: #fff;
-      border: none;
-      border-radius: 9px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: var(--font)
     }
 
     .ld {
@@ -1963,16 +1836,8 @@
             style="padding:5px 12px;border:2px solid var(--bd);border-radius:18px;font-size:12px;font-family:var(--font);font-weight:700;outline:none;background:#fff;color:var(--mt);cursor:pointer">
             <option value="">All Categories</option>
           </select>
-          <button class="chat-only" onclick="planAI()"
-            style="padding:5px 14px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:var(--font)"><i class="ic ic-brain"></i>
-            AI Analysis</button>
         </div>
         <div id="planKPIs"></div>
-        <div id="planAIBox"
-          style="display:none;background:var(--card);border-radius:var(--r);border:1px solid var(--bd);padding:16px 20px;margin-bottom:14px">
-          <div style="font-size:13px;font-weight:800;margin-bottom:10px"><i class="ic ic-brain"></i> AI Inventory Analysis</div>
-          <div id="planAIText" style="font-size:13px;line-height:1.7;color:var(--tx2)">Generating...</div>
-        </div>
         <div class="tc">
           <div class="tb">
             <h3>30-Day Inventory Plan</h3>
@@ -2000,16 +1865,6 @@
       </div>
     </div>
   </div>
-  {% if inventory_can_edit %}<button class="cf" onclick="tc()">AI</button><div class="cp" id="cP">
-    <div class="cp-h"><span>AI Assistant</span><button class="cp-x" onclick="tc()"><i class="ic ic-x"></i></button></div>
-    <div class="cp-b" id="cB">
-      <div class="cm a">
-        <div class="bl">Ask about inventory, planning, or any analysis.</div>
-      </div>
-    </div>
-    <div class="cp-i"><input id="cI" placeholder="Ask..." onkeydown="if(event.key==='Enter')sC()"><button
-        onclick="sC()">Send</button></div>
-  </div>{% endif %}
 </div>
 {% endblock %}
 
@@ -2021,10 +1876,6 @@
     // (~200ms) instead of on every keystroke. Keyed by function name.
     var _idbT = {};
     function _idbDeb(fn){ clearTimeout(_idbT[fn.name]); _idbT[fn.name] = setTimeout(fn, 200); }
-    window.inventoryUser.can_chat = !!(
-      window.inventoryUser.inventory_can_edit ||
-      (window.inventoryUser.permissions && window.inventoryUser.permissions.inventory_can_edit)
-    );
     window.inventoryUser.can_manage = !!(
       window.inventoryUser.inventory_can_edit ||
       (window.inventoryUser.permissions && window.inventoryUser.permissions.inventory_can_edit)
@@ -2053,13 +1904,6 @@
     function Ffull(n) { return (n == null || isNaN(+n)) ? '–' : '₹' + (+n).toLocaleString('en-IN') }
     function FV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${F(n)}</span><span class="inv-lock"><i class="ic ic-lock"></i></span></span>`}
     function FsV(n){return`<span class="inv-val-wrap" onclick="showLockedMessage()"><span class="inv-val">${Fs(n)}</span><span class="inv-lock"><i class="ic ic-lock"></i></span></span>`}
-    function escHTML(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-    function renderAIText(text) {
-      return escHTML(text)
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-    }
-
     const RECLASSIFY_RULES = [
       { keyword: 'YELLOW MUSTARD', type: 'PREMIUM' }, { keyword: 'EXTRA VIRGIN COCONUT', type: 'PREMIUM' },
       { keyword: 'EXTRA VIRGIN', type: 'PREMIUM' }, { keyword: 'SLICED OLIVE', type: 'PREMIUM' },
@@ -3112,50 +2956,6 @@
         }).join('') + '</tbody></table>';
     }
 
-    async function planAI() { if (!window.inventoryUser.can_chat) return;
-      const box = document.getElementById('planAIBox'); const txt = document.getElementById('planAIText');
-      box.style.display = 'block'; txt.innerHTML = '<span style="color:var(--mt)">⏳ Generating AI analysis...</span>';
-      const critical = plD.filter(r => r.DaysOfStockLeft >= 0 && r.DaysOfStockLeft < 7).slice(0, 10);
-      const warning = plD.filter(r => r.DaysOfStockLeft >= 7 && r.DaysOfStockLeft < 30).slice(0, 10);
-      const nonMoving = plD.filter(r => r.DaysOfStockLeft === -1 && r.TotalOnHand > 0).slice(0, 5);
-      const rising = plD.filter(r => r.Trend === 'RISING').slice(0, 5);
-      const prompt = `You are an inventory planning analyst for Jivo Beverages India, a beverage manufacturer.
-Analyse this inventory data and provide 5-7 actionable bullet-point recommendations.
-Use ₹ for currency and Indian number formatting.
-CRITICAL (< 7 days): ${JSON.stringify(critical.map(r => ({ code: r.ItemCode, name: r.ItemName, daysLeft: r.DaysOfStockLeft, onHand: r.TotalOnHand })))}
-WARNING (7-30 days): ${JSON.stringify(warning.map(r => ({ code: r.ItemCode, name: r.ItemName, daysLeft: r.DaysOfStockLeft })))}
-RISING demand: ${JSON.stringify(rising.map(r => ({ code: r.ItemCode, name: r.ItemName, avgDailyOut: r.AvgDailyOut })))}
-ZERO movement: ${JSON.stringify(nonMoving.map(r => ({ code: r.ItemCode, name: r.ItemName, onHand: r.TotalOnHand, value: r.StockValue })))}
-Total SKUs: ${plD.length}. Format each point as: • [Priority] Action — Reasoning`;
-      try {
-        const res = await fetch('/inventory/' + DIVISION + '/api/chat/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() }, body: JSON.stringify({ message: prompt, context: '' }) });
-        const data = await res.json();
-        txt.innerHTML = renderAIText(data.reply || 'No response').replace(/•/g, '<br>•');
-      } catch (e) { txt.innerHTML = '<span style="color:#dc2626"><i class="ic ic-triangle-alert"></i> Could not connect to AI.</span>' }
-    }
-
-    // ════ CHAT ════
-    function tc() { if (!window.inventoryUser.can_chat) return; document.getElementById('cP').classList.toggle('op') }
-    async function sC() { if (!window.inventoryUser.can_chat) return;
-      const inp = document.getElementById('cI'); const q = inp.value.trim(); if (!q) return;
-      inp.value = '';
-      const cb = document.getElementById('cB');
-      cb.innerHTML += `<div class="cm u"><div class="bl">${escHTML(q)}</div></div>`;
-      cb.scrollTop = cb.scrollHeight;
-      const ctx = `Current view: ${S}. Category filter: ${C || 'All'}. Planning SKUs: ${plD.length}.`;
-      cb.innerHTML += `<div class="cm a" id="aiStreaming"><div class="bl">⏳ Thinking...</div></div>`;
-      cb.scrollTop = cb.scrollHeight;
-      try {
-        const res = await fetch('/inventory/' + DIVISION + '/api/chat/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() }, body: JSON.stringify({ message: q, context: ctx }) });
-        const data = await res.json();
-        const text = data.reply || 'Sorry, no response.';
-        document.getElementById('aiStreaming').outerHTML = `<div class="cm a"><div class="bl">${renderAIText(text)}</div></div>`;
-      } catch (e) {
-        document.getElementById('aiStreaming').outerHTML = `<div class="cm a"><div class="bl" style="color:#dc2626"><i class="ic ic-triangle-alert"></i> Connection error.</div></div>`;
-      }
-      cb.scrollTop = cb.scrollHeight;
-    }
-
     // ── DATE HELPERS ──
     function moApplyDate() {
       moDateFrom = document.getElementById('moDateFrom').value;
@@ -3276,10 +3076,6 @@ Total SKUs: ${plD.length}. Format each point as: • [Priority] Action — Reaso
     }
     switchDivision(DIVISION);
     applyPermissionLock();
-    if (!window.inventoryUser.can_chat) {
-      document.querySelectorAll('.chat-only').forEach(el => el.style.display = 'none');
-    }
-
     // ── INIT ──
     load();
   </script>
