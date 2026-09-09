@@ -354,18 +354,24 @@ function bevStartAutoRefresh(){
 bevStartAutoRefresh();
 
 // -- Live mode (always on) ---------------------------------------------------
-// The dashboard keeps itself current with NO clicking. Every AR_PULSE_MS it asks the server
-// for a TINY "pulse" fingerprint of the data (invoice counts/sums + open-order counts/qty -
-// not the heavy proc, ~15ms and cached 10s server-side). Only when that fingerprint CHANGES
-// does it do a real fresh pull, so an idle hour costs almost nothing. A heavy pull runs at
-// most once per AR_HEAVY_MS, so a billing burst cannot hammer SAP.
+// The dashboard keeps itself current with NO clicking and NO waiting. Every AR_PULSE_MS it
+// asks the server for a TINY "pulse" fingerprint of the data (invoice counts/sums + open-order
+// counts/qty - not the heavy proc, ~15ms and cached 2s server-side). Only when that fingerprint
+// CHANGES does it do a real fresh pull, so an idle hour still costs almost nothing.
+//
+// There is NO throttle on the fresh pull (AR_HEAVY_MS=0): the moment the fingerprint moves, the
+// new data is on screen. What stops a billing burst from stacking pulls is arPulseBusy - one
+// beat cannot start while the previous pull is still running, so SAP sees at most one pull at a
+// time per tab. If SAP ever feels the load, set AR_HEAVY_MS to 10000 and nothing else changes.
 //
 // It is ON from the moment the page opens. The pill in the header is a STATUS light, not a
 // switch you have to find: it says whether live is running, when the data last changed, and -
 // this is the part that used to be missing - WHY it is holding back when it is (unsaved target
-// edits, tab in the background, or the products slide). Clicking it pauses/resumes.
+// edits, tab in the background, or a pull already running). Clicking it pauses/resumes.
 var AR_KEY='cp:realise:live:v2';      // v2: v1 stored an OFF that would otherwise stick forever
-var arTimer=null, AR_PULSE_MS=15000, AR_HEAVY_MS=60000, AR_PRIME_MS=1500;
+var arTimer=null, AR_PULSE_MS=3000,  // how often we ask 'did anything change?'
+    AR_HEAVY_MS=0,                   // 0 = no throttle: refresh the instant it changed
+    AR_PRIME_MS=400;                 // first check straight after the page opens
 var arLastPulse=null, arLastHeavy=0, arPulseBusy=false, arLastUpdate=null;
 var arPaused=false, arHold='';        // arHold = plain-English reason we are holding back
 function arFmtAgo(ms){ var s=Math.round(ms/1000); if(s<5)return 'just now'; if(s<60)return s+'s ago';
@@ -427,7 +433,6 @@ function arPrime(){ arFetchPulse().then(function(fp){ if(fp) arLastPulse=fp; }).
 // Why are we not refreshing right now? Empty string = no reason, we are live.
 function arHoldReason(){
   if(document.hidden)        return 'tab in background';
-  if(currentSlide!==1)       return 'products slide';
   if(isDirty)                return 'unsaved target edits';
   if(sc2Loading||bevLoading) return 'loading...';
   return '';
@@ -2008,6 +2013,24 @@ function commodityTargetTotal(){
   var subs=commoditySubGroups(), t=0;
   for(var i=0;i<subs.length;i++)t+=Number(getDefTS('COMMODITY',subs[i]))||0;
   return t;
+}
+/* The litres-weighted target realise of the COMMODITY sub-group targets.
+   Returns {sum, w} so a caller can fold it into the channel-target weighting and
+   divide once. Weighting matches buildCardRows: a rate with no litres still counts
+   once (wt=1) so it is not silently dropped.
+
+   Why this exists: Target Ltr adds commodityTargetTotal() on top of the channel
+   targets, but the target REALISE used to be weighted over the channel targets only.
+   With no channel targets saved that left "no target realise" showing under a
+   non-zero Target Ltr. */
+function commodityTargetRealiseParts(){
+  var subs=commoditySubGroups(), sum=0, w=0;
+  for(var i=0;i<subs.length;i++){
+    var tl=Number(getDefTS('COMMODITY',subs[i]))||0;
+    var tr=Number(getDefTR('COMMODITY',subs[i]))||0;
+    if(tr>0){ var wt=tl>0?tl:1; sum+=tr*wt; w+=wt; }
+  }
+  return {sum:sum, w:w};
 }
 function comDimValue(r,dim){
   if(dim==='product')return String(r.u_sub_group||'').trim().toUpperCase();
@@ -3602,9 +3625,13 @@ async function renderSlideTwo(){
     await loadFlexTargets(period.month,period.year);   // load saved Flex TGT before render + KPI
     grid.innerHTML=renderSc2DynTree(leaves);           // builds sc2DynTree + sc2DynTotalAgg
     var dKpiTarget=dt.target+(sc2Seg()===''?commodityTargetTotal():0);
+    // same fold-in as the card view, so the KPI strip agrees in both modes
+    var dTrSum=(Number(dt.targetRealise)||0)*(Number(dt.target)||0), dTrW=Number(dt.target)||0;
+    if(sc2Seg()===''){ var dcp=commodityTargetRealiseParts(); dTrSum+=dcp.sum; dTrW+=dcp.w; }
+    var dKpiTargetRealise=dTrW>0?dTrSum/dTrW:0;
     // Bal Ltr KPI = the TOTAL row's "Bal" = flex-adjusted target − Done − OIH (so it matches).
     var dBal=sc2DynFlexTotal(dt.target)-((dt.done||0)+(dt.oih||0));
-    setSlideTwoKpis(dKpiTarget,dt.done,dt.targetRealise,sc2Realise(rows),dt.oih,dBal,
+    setSlideTwoKpis(dKpiTarget,dt.done,dKpiTargetRealise,sc2Realise(rows),dt.oih,dBal,
                     (dt.oih||0)>0?((dt.oihLineTotal||0)/dt.oih):0);
     sc2CsvRows=sc2DynCsvRows(sc2DynTree,dt);
     sc2DynFitHeight();                         // grow the body to fill the slide
@@ -3635,7 +3662,11 @@ async function renderSlideTwo(){
       rowsData:cr
     });
   }
-  var kpiTargetRealise=agg.trW>0?agg.trWsum/agg.trW:0;
+  /* Weight the target realise over the SAME litres the Target Ltr card shows -
+     channel targets plus, when no segment is picked, the commodity targets. */
+  var trSum=agg.trWsum, trW=agg.trW;
+  if(sc2Seg()===''){ var cp=commodityTargetRealiseParts(); trSum+=cp.sum; trW+=cp.w; }
+  var kpiTargetRealise=trW>0?trSum/trW:0;
   var kpiTarget=agg.target+(sc2Seg()===''?commodityTargetTotal():0);
   // balLtr stays undefined on purpose so it keeps defaulting to Target - Done - OIH.
   setSlideTwoKpis(kpiTarget,agg.done,kpiTargetRealise,sc2Realise(rows),agg.oih,undefined,

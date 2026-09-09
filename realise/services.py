@@ -558,9 +558,52 @@ def get_sales_data(start_date, end_date):
 # thread refreshes them — so no user ever waits on a cold proc again (except the very
 # first ever pull of a range, which startup pre-warming handles). The manual "Refresh
 # from SAP" path passes force=True for a synchronous fresh pull.
+# The in-process dict below is only the FAST tier. It is emptied by every restart, and
+# each worker has its own, so on its own it means a user can still land on a cold copy
+# and sit through the blocking 'Fetching from SAP HANA...' overlay. So every pull is
+# ALSO written to the shared cache (file-backed, or Redis when DJANGO_CACHE_URL is set),
+# which survives restarts and is visible to every worker. Reading 9,000 raw rows back
+# from it measures ~0.08s against ~2.5s for the proc itself.
 _SALES_CACHE = {}                 # 'start|end' -> {'exp', 'val', 'refreshing'}
 _SALES_CACHE_TTL = 1800           # 30 min — historical SAP data drifts slowly; bg-refreshed
+# The shared copy is kept four times longer on purpose: handing back a slightly stale
+# answer instantly and refreshing it behind the user always beats blocking on the proc.
+_SALES_SHARED_TTL = _SALES_CACHE_TTL * 4
 _SALES_CACHE_LOCK = threading.Lock()
+
+
+def _sales_shared_store(key, value):
+    """Mirror one pull into the shared cache. Never let a cache problem break a request -
+    the in-process copy above is already good, this is only the backup."""
+    try:
+        _shared_set('salesdata', key, {'v': value, 't': time.time()}, _SALES_SHARED_TTL)
+    except Exception:
+        logger.exception('sales-data shared-cache write failed for %s', key)
+
+
+def _sales_shared_load(key, start_date, end_date):
+    """Adopt a copy another process (or this one, before a restart) already fetched.
+    Returns the value, or None when there is nothing usable to adopt. A copy that is
+    already past the normal TTL is still served - instantly - and refreshed behind the
+    user, which is the same stale-while-revalidate promise the in-process tier makes."""
+    try:
+        hit = _shared_get('salesdata', key)
+    except Exception:
+        logger.exception('sales-data shared-cache read failed for %s', key)
+        return None
+    if not hit or not hit.get('v') or not hit['v'][1]:
+        return None
+    value = hit['v']
+    age = time.time() - (hit.get('t') or 0)
+    stale = age >= _SALES_CACHE_TTL
+    with _SALES_CACHE_LOCK:
+        _SALES_CACHE[key] = {'exp': time.time() + max(0.0, _SALES_CACHE_TTL - age),
+                             'val': value,
+                             'refreshing': stale}   # True stops a second thread starting
+    if stale:
+        threading.Thread(target=_sales_fetch_and_store,
+                         args=(key, start_date, end_date), daemon=True).start()
+    return value
 
 
 def _sales_fetch_and_store(key, start_date, end_date):
@@ -580,6 +623,9 @@ def _sales_fetch_and_store(key, start_date, end_date):
                 _SALES_CACHE.pop(k, None)   # evict long-dead entries
         elif key in _SALES_CACHE:
             _SALES_CACHE[key]['refreshing'] = False   # keep stale value on failure
+    # Outside the lock: writing 5 MB to the shared cache must not hold up other threads.
+    if value and value[1]:
+        _sales_shared_store(key, value)
     return value
 
 
@@ -597,18 +643,28 @@ def get_sales_data_cached(start_date, end_date, force=False):
                 threading.Thread(target=_sales_fetch_and_store,
                                  args=(key, start_date, end_date), daemon=True).start()
             return entry['val']
-    # Cold (never cached) or forced refresh → fetch synchronously.
+    # Nothing in this process. Before making the user watch the 'Fetching from SAP HANA...'
+    # overlay, see whether a restart-surviving copy is sitting in the shared cache.
+    if not force:
+        shared = _sales_shared_load(key, start_date, end_date)
+        if shared is not None:
+            return shared
+    # Genuinely cold, or a forced refresh → fetch synchronously.
     return _sales_fetch_and_store(key, start_date, end_date)
 
 
 # ── Live "heartbeat" pulse ──────────────────────────────────────────────────
 # A tiny fingerprint of the data the dashboard shows, so the client can poll it cheaply every
-# 30s and only trigger a (heavy) fresh pull when something ACTUALLY changed. It moves when an
-# invoice in the window is added / edited / cancelled (OINV, + ORIN credit notes for oils) or an
-# open order is added or (partly) delivered (ORDR / RDR1). Header/line aggregates only — orders
-# of magnitude cheaper than REPORT_SALES_ANALYSIS — cached ~10s so many tabs can poll for free.
+# few seconds and only trigger a (heavy) fresh pull when something ACTUALLY changed. It moves
+# when an invoice in the window is added / edited / cancelled (OINV, + ORIN credit notes for
+# oils) or an open order is added or (partly) delivered (ORDR / RDR1). Header/line aggregates
+# only - orders of magnitude cheaper than REPORT_SALES_ANALYSIS.
+#
+# The TTL is what decides how fresh "real time" can be: a change cannot show up faster than
+# this, because every tab reads the cached answer. 2s keeps the dashboard genuinely live while
+# still collapsing many tabs polling at once into one SAP round-trip.
 _PULSE_CACHE = {}          # (dataset, start, end) -> (expires_at, pulse_string)
-_PULSE_TTL = 10
+_PULSE_TTL = 2
 
 
 def get_sales_pulse(dataset, start_date, end_date):

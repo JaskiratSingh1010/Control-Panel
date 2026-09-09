@@ -2158,7 +2158,7 @@ def api_order_in_hand_rows(request):
 @require_http_methods(['GET'])
 def api_sales_pulse(request):
     """Tiny data fingerprint for the dashboard 'live' heartbeat (see services.get_sales_pulse).
-    The client polls this cheaply every ~30s and only forces a fresh pull when it changes."""
+    The client polls this every few seconds and forces a fresh pull the moment it changes."""
     dataset = (request.GET.get('dataset') or 'oils').strip().lower()
     start = (request.GET.get('start') or '').strip()
     end = (request.GET.get('end') or '').strip()
