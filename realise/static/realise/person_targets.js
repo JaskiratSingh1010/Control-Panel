@@ -16,6 +16,20 @@ const {
    APIs). SEED stays empty — only a pre-load placeholder. */
 const SEED = [];
 
+/* The panel's own Lucide icon set instead of emoji: <i class="ic ic-NAME"> takes the
+   surrounding text colour and size, so it sits in a line of text the way an emoji did
+   but matches every other screen. Returns a Fragment - one value - so it is safe in a
+   child list, an object property or a ternary branch alike. */
+function Ico(name, text) {
+  return React.createElement(
+    React.Fragment, null,
+    React.createElement("i", { className: "ic ic-" + name, "aria-hidden": "true" }),
+    text ? " " + text : null
+  );
+}
+
+
+
 /* Known channels get curated colors; any NEW channel gets an auto colour. */
 const KNOWN = {
   GT: {
@@ -293,7 +307,7 @@ function ChipPicker({
     className: "lbl"
   }, label, " ", custom && /*#__PURE__*/React.createElement("span", {
     className: "new-badge"
-  }, "\u2726 NEW")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("sparkles", "NEW"))), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick"
   }, options.map(o => {
     const ac = accentFor ? accentFor(o) : '#4f46e5';
@@ -384,7 +398,7 @@ function StatePicker({
     className: "lbl"
   }, "State ", custom && /*#__PURE__*/React.createElement("span", {
     className: "new-badge"
-  }, "\u2726 NEW")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("sparkles", "NEW"))), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick"
   }, PRIORITY_STATES.map(s => /*#__PURE__*/React.createElement("button", {
     key: s,
@@ -427,7 +441,7 @@ function StatePicker({
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
     className: "modal-hd"
-  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCCD All States & Union Territories"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("h3", null, Ico("map-pin", "All States & Union Territories")), /*#__PURE__*/React.createElement("button", {
     className: "modal-x",
     onClick: () => setOpen(false)
   }, "\xD7")), /*#__PURE__*/React.createElement("input", {
@@ -517,7 +531,7 @@ function ChannelPicker({
     className: "lbl"
   }, "Channel ", custom && /*#__PURE__*/React.createElement("span", {
     className: "new-badge"
-  }, "\u2726 NEW")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("sparkles", "NEW"))), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick"
   }, PRIORITY_CHANNELS.map(c => /*#__PURE__*/React.createElement("button", {
     key: c,
@@ -560,7 +574,7 @@ function ChannelPicker({
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
     className: "modal-hd"
-  }, /*#__PURE__*/React.createElement("h3", null, "\uD83C\uDFF7\uFE0F All Channels"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("h3", null, Ico("tag", "All Channels")), /*#__PURE__*/React.createElement("button", {
     className: "modal-x",
     onClick: () => setOpen(false)
   }, "\xD7")), /*#__PURE__*/React.createElement("input", {
@@ -653,7 +667,7 @@ function CityPicker({
   }, value, " \u2715"), /*#__PURE__*/React.createElement("button", {
     className: "pick more",
     onClick: () => setOpen(true)
-  }, "\uD83D\uDCCD ", norm(value) ? 'Change' : 'Choose', " city / district (", list.length, ")"), open && /*#__PURE__*/React.createElement("div", {
+  }, Ico("map-pin"), norm(value) ? 'Change' : 'Choose', " city / district (", list.length, ")"), open && /*#__PURE__*/React.createElement("div", {
     className: "modal-overlay",
     onClick: () => setOpen(false)
   }, /*#__PURE__*/React.createElement("div", {
@@ -661,7 +675,7 @@ function CityPicker({
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
     className: "modal-hd"
-  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCCD ", norm(state), " \u2014 City / District"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("h3", null, Ico("map-pin"), norm(state), " \u2014 City / District"), /*#__PURE__*/React.createElement("button", {
     className: "modal-x",
     onClick: () => setOpen(false)
   }, "\xD7")), /*#__PURE__*/React.createElement("input", {
@@ -742,7 +756,7 @@ function CascadeBuilder({
   }, o))));
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "panel-hint"
-  }, "\uD83E\uDDED Pick ", /*#__PURE__*/React.createElement("b", null, "any"), " criteria in ", /*#__PURE__*/React.createElement("b", null, "any"), " order \u2014 choose a channel and it narrows the states & people; choose a person and it shows their territory. Then type a target."), /*#__PURE__*/React.createElement("div", {
+  }, Ico("compass", "Pick "), /*#__PURE__*/React.createElement("b", null, "any"), " criteria in ", /*#__PURE__*/React.createElement("b", null, "any"), " order \u2014 choose a channel and it narrows the states & people; choose a person and it shows their territory. Then type a target."), /*#__PURE__*/React.createElement("div", {
     className: "cascade-grid"
   }, /*#__PURE__*/React.createElement(Sel, {
     dim: "channel",
@@ -1157,7 +1171,7 @@ function DrillCards({
             style: neg ? {
               background: 'rgba(220,38,38,.5)'
             } : undefined
-          }, "\uD83D\uDED2 Last mo sold: ", /*#__PURE__*/React.createElement("b", {
+          }, Ico("store", "Last mo sold: "), /*#__PURE__*/React.createElement("b", {
             style: neg ? {
               color: '#fee2e2'
             } : undefined
@@ -1222,7 +1236,7 @@ function DrillCards({
         alignItems: 'center',
         gap: 8
       }
-    }, "\uD83C\uDFAF Targets \u2014 ", /*#__PURE__*/React.createElement(ChannelChip, {
+    }, Ico("target", "Targets \u2014 "), /*#__PURE__*/React.createElement(ChannelChip, {
       ch: editProd.channel
     }), " ", editProd.state), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -1285,7 +1299,7 @@ function DrillCards({
       className: "ms-cell"
     }, /*#__PURE__*/React.createElement("span", {
       className: "ms-l"
-    }, "\uD83D\uDED2 Last mo sold"), /*#__PURE__*/React.createElement("b", {
+    }, Ico("store", "Last mo sold")), /*#__PURE__*/React.createElement("b", {
       style: {
         color: 'var(--ac)'
       }
@@ -1309,7 +1323,7 @@ function DrillCards({
       onClick: () => {
         if (confirm('Clear ALL targets for ' + editProd.state + '?')) clearCell(editProd.channel, editProd.state);
       }
-    }, "\uD83D\uDDD1 Clear all"), /*#__PURE__*/React.createElement("div", {
+    }, Ico("trash-2", "Clear all")), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1
       }
@@ -1519,7 +1533,7 @@ function DrillCards({
       onClick: () => {
         if (confirm('Clear all item targets for ' + editItem.name + ' in ' + editItem.state + '?')) clearVarietyItems(editItem.channel, editItem.state, editItem.type, editItem.name);
       }
-    }, "🗑 Clear items"), /*#__PURE__*/React.createElement("div", {
+    }, Ico("trash-2", "Clear items")), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1
       }
@@ -1747,7 +1761,7 @@ function DrillCards({
           width: '100%'
         },
         onClick: () => openProd(r.channel, r.state)
-      }, "\uD83C\uDFAF Set product targets")));
+      }, Ico("target", "Set product targets"))));
     };
     return /*#__PURE__*/React.createElement("div", {
       className: "modal-overlay",
@@ -1769,7 +1783,7 @@ function DrillCards({
         alignItems: 'center',
         gap: 8
       }
-    }, "\uD83C\uDFAF Targets \u2014 ", /*#__PURE__*/React.createElement(ChannelChip, {
+    }, Ico("target", "Targets \u2014 "), /*#__PURE__*/React.createElement(ChannelChip, {
       ch: editCh
     }), " ", cm.full), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -1785,10 +1799,10 @@ function DrillCards({
     }, "Channel"), /*#__PURE__*/React.createElement("button", {
       className: 'seg-b' + (chTab === 'state' ? ' on' : ''),
       onClick: () => setChTab('state')
-    }, "\uD83D\uDCCD State (", chStates.length, ")"), /*#__PURE__*/React.createElement("button", {
+    }, Ico("map-pin", "State ("), chStates.length, ")"), /*#__PURE__*/React.createElement("button", {
       className: 'seg-b' + (chTab === 'person' ? ' on' : ''),
       onClick: () => setChTab('person')
-    }, "\uD83D\uDC64 Person (", asmCount, ")")), /*#__PURE__*/React.createElement("button", {
+    }, Ico("user", "Person ("), asmCount, ")")), /*#__PURE__*/React.createElement("button", {
       className: "modal-x",
       onClick: () => setEditCh(null)
     }, "\xD7"))), chTab === 'channel' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
@@ -1871,7 +1885,7 @@ function DrillCards({
           setChField(editCh, 'commodity_realise', '');
         }
       }
-    }, "\uD83D\uDDD1 Clear"), /*#__PURE__*/React.createElement("div", {
+    }, Ico("trash-2", "Clear")), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1
       }
@@ -1919,7 +1933,7 @@ function Matrix({
   const grand = states.reduce((s, st) => s + rowTotal(st), 0);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "panel-hint"
-  }, "\uD83D\uDCCA The classic management view: ", /*#__PURE__*/React.createElement("b", null, "states \xD7 channels"), ". Each filled cell is an owned territory \u2014 type a target and the cell heats up. Totals roll up live."), /*#__PURE__*/React.createElement("div", {
+  }, Ico("chart-column", "The classic management view: "), /*#__PURE__*/React.createElement("b", null, "states \xD7 channels"), ". Each filled cell is an owned territory \u2014 type a target and the cell heats up. Totals roll up live."), /*#__PURE__*/React.createElement("div", {
     style: {
       overflowX: 'auto'
     }
@@ -2004,7 +2018,7 @@ function Tree({
   const chTotal = ch => rows.filter(r => r.channel === ch).reduce((s, r) => s + (+targets[keyOf(ch, r.state)] || 0), 0);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "panel-hint"
-  }, "\uD83C\uDF33 Roll-up ownership: ", /*#__PURE__*/React.createElement("b", null, "Channel \u2192 Salesperson \u2192 State"), ". Great for \u201Cwho owns what\u201D conversations, with subtotals at every level."), channels.map(ch => {
+  }, Ico("network", "Roll-up ownership: "), /*#__PURE__*/React.createElement("b", null, "Channel \u2192 Salesperson \u2192 State"), ". Great for \u201Cwho owns what\u201D conversations, with subtotals at every level."), channels.map(ch => {
     const people = distinct(rows.filter(r => r.channel === ch).map(r => r.person));
     return /*#__PURE__*/React.createElement("div", {
       key: ch
@@ -2062,7 +2076,7 @@ function Tree({
         style: {
           fontSize: 13.5
         }
-      }, "\uD83D\uDCCD ", r.state), /*#__PURE__*/React.createElement(TargetInput, {
+      }, Ico("map-pin"), r.state), /*#__PURE__*/React.createElement(TargetInput, {
         value: targets[keyOf(ch, r.state)],
         onChange: val => setTarget(ch, r.state, val)
       })))));
@@ -2080,7 +2094,7 @@ function Board({
 }) {
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "panel-hint"
-  }, "\uD83E\uDDF1 A planning board \u2014 one column per ", /*#__PURE__*/React.createElement("b", null, "channel"), ", one card per ", /*#__PURE__*/React.createElement("b", null, "salesperson"), ", a target per state, with live column totals. The \u201Cwhiteboard\u201D management can sign off on."), /*#__PURE__*/React.createElement("div", {
+  }, Ico("layers", "A planning board \u2014 one column per "), /*#__PURE__*/React.createElement("b", null, "channel"), ", one card per ", /*#__PURE__*/React.createElement("b", null, "salesperson"), ", a target per state, with live column totals. The \u201Cwhiteboard\u201D management can sign off on."), /*#__PURE__*/React.createElement("div", {
     className: "board"
   }, channels.map(ch => {
     const people = distinct(rows.filter(r => r.channel === ch).map(r => r.person));
@@ -2401,7 +2415,7 @@ function MappingCards({
       gap: 6,
       flexWrap: 'wrap'
     }
-  }, editMode ? sel.length === 2 ? /*#__PURE__*/React.createElement(React.Fragment, null, "\u270F\uFE0F Swap ", /*#__PURE__*/React.createElement("b", {
+  }, editMode ? sel.length === 2 ? /*#__PURE__*/React.createElement(React.Fragment, null, Ico("pencil", "Swap "), /*#__PURE__*/React.createElement("b", {
     style: {
       color: 'var(--ac)'
     }
@@ -2409,11 +2423,11 @@ function MappingCards({
     style: {
       color: 'var(--ac)'
     }
-  }, rowLabel(sel[1])), " \u2014 click ", /*#__PURE__*/React.createElement("b", null, "Change"), ".") : /*#__PURE__*/React.createElement(React.Fragment, null, "\u270F\uFE0F ", /*#__PURE__*/React.createElement("b", {
+  }, rowLabel(sel[1])), " \u2014 click ", /*#__PURE__*/React.createElement("b", null, "Change"), ".") : /*#__PURE__*/React.createElement(React.Fragment, null, Ico("pencil"), /*#__PURE__*/React.createElement("b", {
     style: {
       color: 'var(--ac)'
     }
-  }, "Edit mode"), " \u2014 ", /*#__PURE__*/React.createElement("b", null, "drag"), " to move/swap, or click ", /*#__PURE__*/React.createElement("b", null, "two rows"), " (", sel.length, "/2) then ", /*#__PURE__*/React.createElement("b", null, "Change"), ". Use ", /*#__PURE__*/React.createElement("b", null, "+ / \xD7"), " to add/remove.") : /*#__PURE__*/React.createElement(React.Fragment, null, "\uD83D\uDC41\uFE0F ", /*#__PURE__*/React.createElement("b", {
+  }, "Edit mode"), " \u2014 ", /*#__PURE__*/React.createElement("b", null, "drag"), " to move/swap, or click ", /*#__PURE__*/React.createElement("b", null, "two rows"), " (", sel.length, "/2) then ", /*#__PURE__*/React.createElement("b", null, "Change"), ". Use ", /*#__PURE__*/React.createElement("b", null, "+ / \xD7"), " to add/remove.") : /*#__PURE__*/React.createElement(React.Fragment, null, Ico("eye"), /*#__PURE__*/React.createElement("b", {
     style: {
       color: 'var(--ac)'
     }
@@ -2421,7 +2435,7 @@ function MappingCards({
     style: {
       color: '#b45309'
     }
-  }, "blank state"), " to assign an ASM, or ", /*#__PURE__*/React.createElement("b", null, "\u270F\uFE0F Edit"), " to move, swap, add or remove.")), /*#__PURE__*/React.createElement("div", {
+  }, "blank state"), " to assign an ASM, or ", /*#__PURE__*/React.createElement("b", null, Ico("pencil", "Edit")), " to move, swap, add or remove.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -2431,13 +2445,13 @@ function MappingCards({
     className: "btn btn-primary",
     disabled: sel.length !== 2,
     onClick: doChange
-  }, "\uD83D\uDD04 Change"), /*#__PURE__*/React.createElement("button", {
+  }, Ico("refresh-cw", "Change")), /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: closeEdit
   }, "\u2716 Close")) : /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: () => setEditMode(true)
-  }, "\u270F\uFE0F Edit"))), view === 'so' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, Ico("pencil", "Edit")))), view === 'so' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "add-card",
     style: showAdd ? null : {
       display: 'none'
@@ -2448,7 +2462,7 @@ function MappingCards({
     className: "lbl"
   }, "Step 1 \xB7 SO name ", norm(soName) && /*#__PURE__*/React.createElement("span", {
     className: "new-badge"
-  }, "\u2726 NEW")), /*#__PURE__*/React.createElement("input", {
+  }, Ico("sparkles", "NEW"))), /*#__PURE__*/React.createElement("input", {
     className: "combo",
     style: {
       maxWidth: 300
@@ -2599,7 +2613,7 @@ function MappingCards({
     }
   }, "SO"), /*#__PURE__*/React.createElement(ChannelChip, {
     ch: norm(soCh)
-  }), /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCD ", norm(soSt), norm(soCity) ? ' · ' + norm(soCity) : ''), /*#__PURE__*/React.createElement("span", {
+  }), /*#__PURE__*/React.createElement("span", null, Ico("map-pin"), norm(soSt), norm(soCity) ? ' · ' + norm(soCity) : ''), /*#__PURE__*/React.createElement("span", {
     className: "muted"
   }, "\u2192"), /*#__PURE__*/React.createElement(Avatar, {
     name: soAsm,
@@ -2620,7 +2634,7 @@ function MappingCards({
       fontSize: 13.5,
       padding: '8px 2px'
     }
-  }, "No SOs yet \u2014 click ", /*#__PURE__*/React.createElement("b", null, "\u2795 Add SO"), " above. Each SO reports to the ASM who owns its channel + state, and also shows under that territory in the ", /*#__PURE__*/React.createElement("b", null, "ASM"), " view.") : /*#__PURE__*/React.createElement("div", {
+  }, "No SOs yet \u2014 click ", /*#__PURE__*/React.createElement("b", null, Ico("plus", "Add SO")), " above. Each SO reports to the ASM who owns its channel + state, and also shows under that territory in the ", /*#__PURE__*/React.createElement("b", null, "ASM"), " view.") : /*#__PURE__*/React.createElement("div", {
     className: "map-grid"
   }, Object.keys(soByAsm).sort().map(asm => /*#__PURE__*/React.createElement("div", {
     className: "map-card",
@@ -2926,7 +2940,7 @@ function MappingCards({
       alignItems: 'center',
       gap: 8
     }
-  }, addTo.mode === 'fill' ? '🎯 Assign' : '➕ Add to', addTo.mode === 'asm' ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Avatar, {
+  }, addTo.mode === 'fill' ? Ico("target", 'Assign') : Ico("plus", 'Add to'), addTo.mode === 'asm' ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Avatar, {
     name: addTo.value,
     size: 22
   }), /*#__PURE__*/React.createElement("span", {
@@ -2956,7 +2970,7 @@ function MappingCards({
     className: "lbl"
   }, addTo.mode === 'fill' ? 'Pick an ASM for this slot' : 'Step 1 · ASM', " ", customAp && /*#__PURE__*/React.createElement("span", {
     className: "new-badge"
-  }, "\u2726 NEW")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("sparkles", "NEW"))), /*#__PURE__*/React.createElement("div", {
     className: "chip-pick",
     style: {
       marginBottom: 18
@@ -3138,7 +3152,7 @@ function ProductManager({
     style: {
       marginBottom: 14
     }
-  }, "\uD83D\uDCE6 The ", /*#__PURE__*/React.createElement("b", null, "product master"), " \u2014 these appear when you set product-level targets in the Data View. (A product can sit in both lists, e.g. ", /*#__PURE__*/React.createElement("b", null, "Blended"), ".)"), section('P', 'Premium', '#0d9488'), section('C', 'Commodity', '#d97706'));
+  }, Ico("package", "The "), /*#__PURE__*/React.createElement("b", null, "product master"), " \u2014 these appear when you set product-level targets in the Data View. (A product can sit in both lists, e.g. ", /*#__PURE__*/React.createElement("b", null, "Blended"), ".)"), section('P', 'Premium', '#0d9488'), section('C', 'Commodity', '#d97706'));
 }
 
 /* ─── TAB 6 — Manage / Add (the data-management screen) ────────────────────── */
@@ -3204,16 +3218,16 @@ function ManageData({
       setView('asm');
       setShowAdd(false);
     }
-  }, "\uD83D\uDC64 ASM"), /*#__PURE__*/React.createElement("button", {
+  }, Ico("user", "ASM")), /*#__PURE__*/React.createElement("button", {
     className: 'seg-b' + (view === 'so' ? ' on' : ''),
     onClick: () => {
       setView('so');
       setShowAdd(false);
     }
-  }, "\uD83E\uDDD1\u200D\uD83D\uDCBC SO")), /*#__PURE__*/React.createElement("button", {
+  }, Ico("briefcase", "SO"))), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-green",
     onClick: () => setShowAdd(s => !s)
-  }, showAdd ? '✕ Close' : view === 'asm' ? '➕ Add ASM' : '➕ Add SO')), view === 'asm' && showAdd && /*#__PURE__*/React.createElement("div", {
+  }, showAdd ? Ico("x", 'Close') : view === 'asm' ? Ico("plus", 'Add ASM') : Ico("plus", 'Add SO'))), view === 'asm' && showAdd && /*#__PURE__*/React.createElement("div", {
     className: "add-card"
   }, /*#__PURE__*/React.createElement(ChipPicker, {
     label: "ASM (Area Sales Manager)",
@@ -3276,9 +3290,9 @@ function ManageData({
     size: 28
   }), /*#__PURE__*/React.createElement("b", null, norm(form.person)), /*#__PURE__*/React.createElement(ChannelChip, {
     ch: norm(form.channel)
-  }), /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCCD ", norm(form.state))), dupOwner && dupOwner !== norm(form.person) && /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("span", null, Ico("map-pin"), norm(form.state))), dupOwner && dupOwner !== norm(form.person) && /*#__PURE__*/React.createElement("div", {
     className: "warn"
-  }, "\u26A0\uFE0F ", norm(form.channel), " \xB7 ", norm(form.state), " is currently owned by ", /*#__PURE__*/React.createElement("b", {
+  }, Ico("triangle-alert"), norm(form.channel), " \xB7 ", norm(form.state), " is currently owned by ", /*#__PURE__*/React.createElement("b", {
     style: {
       margin: '0 4px'
     }
@@ -3304,7 +3318,7 @@ function ManageData({
 /* ─── APP shell ───────────────────────────────────────────────────────────── */
 const TABS = [{
   id: 'cards',
-  label: '📊 Data View'
+  label: Ico("chart-column", 'Data View')
 }];
 function App() {
   const BOOT = typeof window !== 'undefined' && window.__PT_BOOT__ || {
@@ -3920,7 +3934,7 @@ function App() {
     className: "pt-back",
     href: BOOT.dashboardUrl || '/realise/#slide2',
     target: "_top"
-  }, "\u2190 Back to Dashboard"), /*#__PURE__*/React.createElement("h1", null, "\uD83C\uDFAF Sales Target Assignment")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("arrow-left", "Back to Dashboard")), /*#__PURE__*/React.createElement("h1", null, Ico("target", "Sales Target Assignment"))), /*#__PURE__*/React.createElement("div", {
     className: "kpi"
   }, /*#__PURE__*/React.createElement("div", {
     className: "kpi-card"
@@ -3969,7 +3983,7 @@ function App() {
   }, t.label)), /*#__PURE__*/React.createElement("button", {
     className: 'tab add' + (onManage ? ' active' : ''),
     onClick: () => setTab('manage')
-  }, "\u2699\uFE0F Manage People")), /*#__PURE__*/React.createElement("div", {
+  }, Ico("settings", "Manage People"))), /*#__PURE__*/React.createElement("div", {
     className: "actions"
   }, /*#__PURE__*/React.createElement("span", {
     className: "lbl",
@@ -4021,9 +4035,9 @@ function App() {
       background: note.kind === 'ok' ? 'var(--green-light)' : 'var(--red-light)',
       color: note.kind === 'ok' ? '#047857' : '#b91c1c'
     }
-  }, note.kind === 'ok' ? '✓' : '⚠️', " ", note.text), !admin && /*#__PURE__*/React.createElement("div", {
+  }, note.kind === 'ok' ? Ico("check") : Ico("triangle-alert"), " ", note.text), !admin && /*#__PURE__*/React.createElement("div", {
     className: "warn"
-  }, "\uD83D\uDC41\uFE0F View-only \u2014 you don't have edit rights."), /*#__PURE__*/React.createElement("div", {
+  }, Ico("eye", "View-only \u2014 you don't have edit rights.")), /*#__PURE__*/React.createElement("div", {
     className: "panel"
   }, loading ? /*#__PURE__*/React.createElement("div", {
     className: "muted",

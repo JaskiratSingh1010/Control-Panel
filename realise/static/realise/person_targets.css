@@ -1,12 +1,17 @@
 
   :root{
     --bg:#f1f5f9;--card:#ffffff;--border:#e2e8f0;--ac:#4f46e5;--ac2:#7c3aed;
-    --ac-light:#eef2ff;--tx:#0f172a;--tx2:#334155;--tx3:#94a3b8;
+    --ac-light:#eef2ff;--ac-brd:#e0e7ff;--ac-deep:#4338ca;
+    --tx:#0f172a;--tx2:#334155;--tx3:#94a3b8;
     --green:#10b981;--green-light:#d1fae5;--amber:#f59e0b;--amber-light:#fef3c7;
     --red:#ef4444;--red-light:#fee2e2;--rose:#ec4899;--purple:#8b5cf6;
     --font:'Inter',sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  /* Lucide defaults to 24px because it is normally used as a standalone button icon.
+     Here the icons sit inside a line of text, so they take the text's own size instead. */
+  .ic{font-size:1em;vertical-align:-.12em}
+
   body{font-family:var(--font);background:var(--bg);color:var(--tx);font-size:15px;-webkit-font-smoothing:antialiased}
   .app{max-width:none;margin:0;padding:22px 26px 50px}
 
@@ -15,28 +20,34 @@
   /* In-app header (scrolls with the content) — single compact title + back button */
   .pt-toprow{display:flex;align-items:center;gap:14px;margin-bottom:16px}
   .pt-toprow h1{font-size:19px;font-weight:800;letter-spacing:-.3px}
-  .pt-back{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#4f46e5,#7c3aed);text-decoration:none;transition:filter .15s,transform .15s;white-space:nowrap}
-  .pt-back:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  /* Soft fill rather than a solid gradient: this is a way back, not the main action on
+     the page, and it sat louder than the title beside it. Matches the chips used on the
+     realise dashboard (--rz-soft / --rz-indigo-deep). */
+  .pt-back{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13.5px;font-weight:700;color:var(--ac-deep);background:var(--ac-light);border:1px solid var(--ac-brd);text-decoration:none;transition:background .15s,transform .15s;white-space:nowrap}
+  .pt-back:hover{background:var(--ac-brd);transform:translateY(-1px)}
 
   .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:14px;margin:22px 0}
   .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
   .kpi-card .v{font-size:22px;font-weight:800;letter-spacing:-.5px}
   .kpi-card .l{font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
-  .kpi-card.accent{background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;color:#fff}
-  .kpi-card.accent .l{color:rgba(255,255,255,.85)}
+  /* The total card still reads as the important one, but through a tint and a coloured
+     figure instead of a solid block that fought the white cards beside it. */
+  .kpi-card.accent{background:var(--ac-light);border:1px solid var(--ac-brd);color:var(--tx)}
+  .kpi-card.accent .v{color:var(--ac-deep)}
+  .kpi-card.accent .l{color:var(--ac-deep);opacity:.75}
 
   .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
   .tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:6px;flex-wrap:wrap}
   .tab{padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;color:var(--tx2);cursor:pointer;border:none;background:transparent;transition:.15s;white-space:nowrap}
   .tab:hover{background:var(--ac-light);color:var(--ac)}
-  .tab.active{background:var(--ac);color:#fff;box-shadow:0 4px 12px rgba(79,70,229,.3)}
+  .tab.active{background:var(--ac-light);color:var(--ac-deep);border:1px solid var(--ac-brd)}
   .tab.add{color:var(--green)}
-  .tab.add.active{background:var(--green);color:#fff;box-shadow:0 4px 12px rgba(16,185,129,.3)}
+  .tab.add.active{background:var(--green-light);color:#047857;border:1px solid #a7f3d0}
   .actions{display:flex;gap:8px}
   .btn{padding:9px 15px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--tx2);transition:.15s}
   .btn:hover{border-color:var(--ac);color:var(--ac)}
-  .btn-primary{background:var(--ac);color:#fff;border-color:var(--ac)}
-  .btn-primary:hover{background:#4338ca;color:#fff}
+  .btn-primary{background:var(--ac-light);color:var(--ac-deep);border-color:var(--ac-brd)}
+  .btn-primary:hover{background:var(--ac-brd);color:var(--ac-deep)}
   .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
   .btn-green:hover{background:#059669;color:#fff}
   .btn:disabled{opacity:.45;cursor:not-allowed}

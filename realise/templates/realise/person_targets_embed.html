@@ -7,6 +7,9 @@
 <link href="{% static 'vendor/css/inter.css' %}" rel="stylesheet">
 <link href="{% static 'vendor/css/archivo.css' %}" rel="stylesheet">
 <link href="{% static 'vendor/css/caveat.css' %}" rel="stylesheet">
+<!-- The panel's own icon set. This page renders in an iframe, so it has to pull the
+     stylesheet itself - it does not inherit the parent document's. -->
+<link href="{% static 'vendor/css/lucide.css' %}" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'realise/person_targets.css' %}?v={{ asset_ver }}">
   {% include 'core/_numerals.html' %}
   <style>body{font-family:'CPNum','Inter',system-ui,sans-serif;}</style>
