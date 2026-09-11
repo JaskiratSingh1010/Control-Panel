@@ -217,6 +217,9 @@ var bevRows=[], bevFetched=false, bevLoading=false, bevExpanded={}, bevTree=[];
 var bevDocState={}, bevNodeFilters={}, bevRangeStart='', bevRangeEnd='';
 var bevTodayBoxes=0, bevYestBoxes=0;
 var bevBrand='', bevTodayItems=[], bevYestItems=[], bevTodayDate='', bevYestDate='';
+// The same day span one calendar month back (01-11 Sep -> 01-11 Aug), shown in the
+// 'Last Month' card so the selected range has something to be compared against.
+var bevPrevBoxes=0, bevPrevItems=[], bevPrevStart='', bevPrevEnd='';
 var bevMode='range';   // 'range' = From/To dates, 'months' = last-N-months
 var bevMonth='';       // selected YYYY-MM in month-wise view ('' = all months)
 var bevCustomerRows=[], bevMonthRows=[], bevTopCustList=[], bevTopMonthList=[];
@@ -262,6 +265,7 @@ function ensureBevDates(){
 function bevSnapshot(){
   return {rows:bevRows, todayBoxes:bevTodayBoxes, yestBoxes:bevYestBoxes,
     todayItems:bevTodayItems, yestItems:bevYestItems, todayDate:bevTodayDate, yestDate:bevYestDate,
+    prevBoxes:bevPrevBoxes, prevItems:bevPrevItems, prevStart:bevPrevStart, prevEnd:bevPrevEnd,
     customerRows:bevCustomerRows, monthRows:bevMonthRows, oihRows:bevOihRows,
     fetched:bevFetched, brand:bevBrand, month:bevMonth, expanded:bevExpanded,
     rangeStart:bevRangeStart, rangeEnd:bevRangeEnd};
@@ -269,6 +273,7 @@ function bevSnapshot(){
 function bevRestore(e){
   bevRows=e.rows; bevTodayBoxes=e.todayBoxes; bevYestBoxes=e.yestBoxes;
   bevTodayItems=e.todayItems; bevYestItems=e.yestItems; bevTodayDate=e.todayDate; bevYestDate=e.yestDate;
+  bevPrevBoxes=e.prevBoxes||0; bevPrevItems=e.prevItems||[]; bevPrevStart=e.prevStart||''; bevPrevEnd=e.prevEnd||'';
   bevCustomerRows=e.customerRows; bevMonthRows=e.monthRows; bevOihRows=e.oihRows||[];
   bevFetched=e.fetched; bevBrand=e.brand; bevMonth=e.month; bevExpanded=e.expanded;
   bevRangeStart=e.rangeStart||''; bevRangeEnd=e.rangeEnd||''; bevDocState={};
@@ -276,6 +281,7 @@ function bevRestore(e){
 function bevResetData(){
   bevRows=[]; bevTodayBoxes=0; bevYestBoxes=0; bevTodayItems=[]; bevYestItems=[];
   bevTodayDate=''; bevYestDate=''; bevCustomerRows=[]; bevMonthRows=[]; bevOihRows=[];
+  bevPrevBoxes=0; bevPrevItems=[]; bevPrevStart=''; bevPrevEnd='';
   bevFetched=false; bevBrand=''; bevMonth=''; bevExpanded={};
   bevRangeStart=''; bevRangeEnd=''; bevDocState={};
 }
@@ -322,7 +328,7 @@ async function loadBeverages(opts){
   var fb=document.getElementById('bevFetchBtn'); if(fb&&!silent){fb.disabled=true;fb.textContent='Loading...';}
   if(!silent)document.getElementById('ov').classList.add('show');
   try{
-    var res=await fetch(API+'/api/beverages-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed})});
+    var res=await fetch(API+'/api/beverages-data/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},body:JSON.stringify({start_date:sd,end_date:ed,prev:bevMode!=='months'})});
     if(!res.ok){var e=await res.json();throw new Error(e.detail||e.error||'Server error');}
     var result=await res.json();
     bevRows=result.data||[]; bevFetched=true; bevRangeStart=sd; bevRangeEnd=ed;
@@ -330,6 +336,8 @@ async function loadBeverages(opts){
     bevTodayBoxes=result.today_boxes||0; bevYestBoxes=result.yesterday_boxes||0;
     bevTodayItems=result.today_items||[]; bevYestItems=result.yesterday_items||[];
     bevTodayDate=result.today_date||''; bevYestDate=result.yesterday_date||'';
+    bevPrevBoxes=result.prev_boxes||0; bevPrevItems=result.prev_items||[];
+    bevPrevStart=result.prev_start||''; bevPrevEnd=result.prev_end||'';
     bevCustomerRows=result.customer_rows||[]; bevMonthRows=result.month_rows||[];
     bevOihRows=result.oih_rows||[];
     bevPopulateBrands();
@@ -569,6 +577,26 @@ function bevActiveRows(){
 }
 // Box total of a day's item list, honouring the brand filter.
 function bevDayBoxes(items,brand){var t=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand)t+=a[i].boxes||0;}return Math.round(t*100)/100;}
+/* Realise for one of the day / last-month item lists: invoiced value over boxes, the same
+   formula the box table uses. Honours the Brand filter, so the rate always describes the
+   boxes shown right above it. Returns 0 when there is nothing to divide by. */
+function bevDayRealise(items,brand){
+  var v=0,b=0,a=items||[];
+  for(var i=0;i<a.length;i++){
+    if(brand&&a[i].brand!==brand)continue;
+    v+=Number(a[i].value)||0; b+=Number(a[i].boxes)||0;
+  }
+  return b?(v/b):0;
+}
+// Paints the small "₹x / box" line under a KPI figure. Blank when there is no rate, so a
+// card with no sales shows nothing rather than a misleading zero.
+function bevSetRealiseLine(id,items,brand){
+  var el=document.getElementById(id); if(!el)return;
+  var b=bevDayBoxes(items,brand), r=bevDayRealise(items,brand);
+  // Blank only when there are no boxes at all. Boxes that earned nothing show 0.00.
+  el.innerHTML=b?('₹'+fNp(r,2)+' <span class="u">realise / box</span>'):'';
+  el.title=r?'Invoiced value divided by boxes sold - the same formula as the Total Boxes card':'';
+}
 // View selector → swap the drill order to a preset (Main / Sales Person).
 function bevSetView(view){
   bevOrder=(BEV_VIEWS[view]||BEV_VIEWS.customer).slice();
@@ -587,6 +615,115 @@ function bevSyncViewSelect(){
   }
   sel.value='custom';
 }
+/* ── Boxes and realise per pack size ─────────────────────────────
+   Realise = invoiced value / boxes sold. That is the same number as
+   (unit price x case pack): boxes are quantity / case pack, so the case pack
+   cancels and only value / boxes is left - one division instead of two, and no
+   rounding of a per-piece price along the way.
+
+   Every pack size that sold gets a line, biggest seller first, so the TOTAL row
+   is the same figure the separate Total Boxes card used to show. */
+function bevSkuLabel(sku){
+  var raw=String(sku||'').trim().toUpperCase();
+  if(!raw||raw==='\u2014')return 'NO SIZE';        // SAP item with U_SKU left blank
+  // SAP writes the unit inconsistently - '250 MLS', '250 ML', '250ML', '1 LTRS'.
+  // Normalise so the same size is never split across two lines.
+  var m=raw.replace(/[^0-9A-Z.]/g,'').match(/^(\d+(?:\.\d+)?)(ML|MLS|L|LTR|LTRS|LITRE|LITER)$/);
+  if(!m)return raw;
+  return m[1]+' '+((m[2]==='ML'||m[2]==='MLS')?'ML':'LTR');
+}
+/* Collapsed by default: the totals only, so the card is the same height as its
+   neighbours. Click it to see the per-size breakdown, click again to close. */
+var bevBoxData=null;
+function bevRenderBoxTable(rows){
+  var acc={};
+  for(var i=0;i<rows.length;i++){
+    var k=bevSkuLabel(rows[i].sku);
+    if(!acc[k])acc[k]={box:0,val:0};
+    acc[k].box+=Number(rows[i].boxes)||0;
+    acc[k].val+=Number(rows[i].value)||0;
+  }
+  // Biggest seller first, which also puts the odd small sizes at the bottom.
+  var list=Object.keys(acc).map(function(k){return {name:k,box:acc[k].box,val:acc[k].val};})
+                 .filter(function(r){return r.box!==0||r.val!==0;})
+                 .sort(function(a,b){return b.box-a.box||String(a.name).localeCompare(String(b.name));});
+  var tb=0,tv=0;
+  for(var j=0;j<list.length;j++){ tb+=list[j].box; tv+=list[j].val; }
+  bevBoxData={list:list, boxes:tb, value:tv, rows:rows.slice()};
+  bevPaintBoxCard();
+}
+function bevPaintBoxCard(){
+  var el=document.getElementById('bevKpiBoxTable');
+  if(!el)return;
+  var d=bevBoxData;
+  if(!d||!d.list.length){
+    el.innerHTML='<div class="sl">Total Boxes</div><div class="sv">—</div>';
+    return;
+  }
+  /* The realise has to be WEIGHTED - total value over total boxes - not the mean of the
+     per-size rates. 250 ML sells far more boxes than 1 LTR, so a plain mean would quietly
+     overweight the smallest seller and report a realise nobody actually earned. */
+  var avg=d.boxes?(d.value/d.boxes):0;
+  el.innerHTML='<div class="sl">Total Boxes</div>'
+    +'<div class="sv" title="'+esc(fN(Math.round(d.boxes*100)/100)+' boxes in this selection')+'">'
+    +fN(Math.round(d.boxes))+'</div>'
+    +'<div class="bev-bx-sub" title="'+esc('Realise = '+fNp(d.value,2)+' over '
+      +fN(Math.round(d.boxes*100)/100)+' boxes. Weighted, not the mean of the per-size rates.')+'">'
+    // Guard on BOXES: boxes that earned nothing have a real realise of 0.00, and a dash
+    // is reserved for "no boxes, so no rate exists".
+    +(d.boxes?('₹'+fNp(avg,2)+' <span class="u">realise / box</span>'):'—')+'</div>';
+}
+/* The Total Boxes card opens the same kind of window as the day cards: the pack-size
+   split first, then every item behind it. Built from the rows already on screen, so the
+   totals can never disagree with the card. */
+function bevBoxRealiseCell(val,box){
+  return '<td class="num" title="'+esc(fNp(val||0,2)+' over '+fN(Math.round((box||0)*100)/100)+' boxes')+'">'
+        +(box?('₹'+fNp((val||0)/box,2)):'—')+'</td>';
+}
+function openBevBoxes(){
+  if(!bevFetched){showToast('Fetch beverages first','info');return;}
+  var d=bevBoxData;
+  if(!d||!d.list.length){showToast('Nothing to show yet','info');return;}
+
+  document.getElementById('bevBoxTitle').textContent='Boxes & Realise'+(bevBrand?(' — '+bevBrand):'');
+  var f=(document.getElementById('bevFrom')||{}).value, t=(document.getElementById('bevTo')||{}).value;
+  var avg=d.boxes?(d.value/d.boxes):0;
+  document.getElementById('bevBoxSub').textContent=
+    (f&&t?bevFmtRange(f,t)+' · ':'')+fN(Math.round(d.boxes*100)/100)+' boxes · '
+    +(d.boxes?('₹'+fNp(avg,2)+' realise / box'):'no realise');
+
+  // Roll the on-screen rows up to item / brand / SKU.
+  var im={},order=[];
+  for(var j=0;j<d.rows.length;j++){
+    var w=d.rows[j], key=(w.item||'—')+'|'+(w.brand||'—')+'|'+(w.sku||'—');
+    if(!im[key]){im[key]={item:w.item||'—',brand:w.brand||'—',sku:w.sku||'—',
+                          qty:0,box:0,val:0};order.push(key);}
+    im[key].qty+=Number(w.quantity)||0;
+    im[key].box+=Number(w.boxes)||0;
+    im[key].val+=Number(w.value)||0;
+  }
+  var items=order.map(function(k){return im[k];})
+                 .filter(function(x){return x.qty||x.box||x.val;})
+                 .sort(function(a,b){return b.box-a.box;});
+  var tq=0,tb=0,tv=0,html='';
+  for(var k2=0;k2<items.length;k2++){
+    var it=items[k2];
+    tq+=it.qty; tb+=it.box; tv+=it.val;
+    html+='<tr><td>'+esc(it.item)+'</td><td>'+esc(it.brand)+'</td><td>'+esc(it.sku)+'</td>'
+         +'<td class="num">'+fN(Math.round(it.qty*100)/100)+'</td>'
+         +'<td class="num">'+fN(Math.round(it.box*100)/100)+'</td>'
+         +bevBoxRealiseCell(it.val,it.box)+'</tr>';
+  }
+  if(!items.length){
+    html='<tr><td colspan="6" style="padding:34px;text-align:center;color:#7b8794">No items in this selection.</td></tr>';
+  }else{
+    html+='<tr class="cd-total"><td colspan="3">TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td>'
+         +'<td class="num">'+fN(Math.round(tb*100)/100)+'</td>'+bevBoxRealiseCell(tv,tb)+'</tr>';
+  }
+  document.getElementById('bevBoxItemBody').innerHTML=html;
+  document.getElementById('bevBoxModal').classList.add('show');
+}
+function closeBevBoxes(){document.getElementById('bevBoxModal').classList.remove('show');}
 function renderBeverages(){
   var body=document.getElementById('bevBody');
   var label=bevOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
@@ -597,17 +734,25 @@ function renderBeverages(){
   var tq=0,tb=0,toih=0; for(var i=0;i<rows.length;i++){tq+=rows[i].quantity||0;tb+=rows[i].boxes||0;toih+=rows[i].oih||0;}
   tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100; toih=Math.round(toih*100)/100;
   document.getElementById('bevKpiQty').textContent=fN(tq);
-  document.getElementById('bevKpiBox').textContent=fN(tb);
   document.getElementById('bevKpiOih').textContent=fN(toih);
+  // Same filtered rows as the KPIs above, so the table's TOTAL always matches them.
+  bevRenderBoxTable(rows);
   document.getElementById('bevKpiToday').textContent=fN(bevDayBoxes(bevTodayItems,bevBrand));
-  document.getElementById('bevKpiYest').textContent=fN(bevDayBoxes(bevYestItems,bevBrand));
+  document.getElementById('bevKpiPrev').textContent=fN(bevDayBoxes(bevPrevItems,bevBrand));
+  bevSetRealiseLine('bevRzPrev',bevPrevItems,bevBrand);
   var lt=document.getElementById('bevLblToday'); if(lt)lt.textContent="Today's Sales"+(bevTodayDate?(' · '+bevFmtDate(bevTodayDate)):'');
-  var ly=document.getElementById('bevLblYest'); if(ly)ly.textContent="Yesterday's Sales"+(bevYestDate?(' · '+bevFmtDate(bevYestDate)):'');
+  var lp=document.getElementById('bevLblPrev');
+  if(lp)lp.textContent='Last Month'+(bevPrevStart?(' · '+bevFmtRange(bevPrevStart,bevPrevEnd)):'');
   bevTopCustList=bevAggTop(bevCustomerRows,'customer',bevBrand,bevMonth);
   bevTopMonthList=bevAggTop(bevMonthRows,'ym',bevBrand,bevMonth);
   if(!bevFetched){
-    document.getElementById('bevKpiQty').textContent='—'; document.getElementById('bevKpiBox').textContent='—'; document.getElementById('bevKpiOih').textContent='—';
-    document.getElementById('bevKpiToday').textContent='—'; document.getElementById('bevKpiYest').textContent='—';
+    document.getElementById('bevKpiQty').textContent='—'; document.getElementById('bevKpiOih').textContent='—';
+    // Nothing fetched yet: same shape as the filled card, just with dashes.
+    bevBoxData=null;
+    var bxEl=document.getElementById('bevKpiBoxTable');
+    if(bxEl)bxEl.innerHTML='<div class="sl">Total Boxes</div><div class="sv">—</div>';
+    document.getElementById('bevKpiToday').textContent='—'; document.getElementById('bevKpiPrev').textContent='—';
+    var rzp=document.getElementById('bevRzPrev'); if(rzp)rzp.innerHTML='';
     body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevMode==='months'?'Enter a number of months and click Fetch to load beverages.':'Pick a date range and click Fetch to load beverages.')+'</td></tr>';return;}
   if(!bevOrder.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
   if(!rows.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevBrand?('No rows for brand "'+esc(bevBrand)+'".'):'No beverage rows in this range.')+'</td></tr>';return;}
@@ -641,22 +786,37 @@ function bevPopulateMonths(){
 function onBevMonthChange(){ bevMonth=document.getElementById('bevMonthFilter').value; bevExpanded={}; bevDocState={}; renderBeverages(); }
 function openBevSold(which){
   if(!bevFetched){showToast('Fetch beverages first','info');return;}
-  var items=(which==='today'?bevTodayItems:bevYestItems)||[];
-  var dstr=which==='today'?bevTodayDate:bevYestDate;
+  var prev=(which==='prev');
+  var items=(which==='today'?bevTodayItems:(prev?bevPrevItems:bevYestItems))||[];
+  var dstr=which==='today'?bevFmtDate(bevTodayDate)
+          :(prev?bevFmtRange(bevPrevStart,bevPrevEnd):bevFmtDate(bevYestDate));
   if(bevBrand)items=items.filter(function(it){return it.brand===bevBrand;});
   items=items.slice().sort(function(a,b){return (b.boxes||0)-(a.boxes||0);});
-  document.getElementById('bevSoldTitle').textContent=(which==='today'?"Today's Sales":"Yesterday's Sales")+(bevBrand?(' — '+bevBrand):'');
-  var tq=0,tb=0; for(var i=0;i<items.length;i++){tq+=items[i].quantity||0;tb+=items[i].boxes||0;}
+  document.getElementById('bevSoldTitle').textContent=(which==='today'?"Today's Sales"
+    :(prev?"Last Month's Sales":"Yesterday's Sales"))+(bevBrand?(' — '+bevBrand):'');
+  var tq=0,tb=0,tv=0;
+  for(var i=0;i<items.length;i++){tq+=items[i].quantity||0;tb+=items[i].boxes||0;tv+=items[i].value||0;}
   document.getElementById('bevSoldSub').textContent=(dstr?dstr+' · ':'')+items.length+' item(s) · '+fN(Math.round(tb*100)/100)+' boxes';
   var body=document.getElementById('bevSoldBody');
   if(!items.length){
-    body.innerHTML='<tr><td colspan="5" style="padding:34px;text-align:center;color:#7b8794">Nothing sold '+(which==='today'?'today':'yesterday')+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+' yet.</td></tr>';
+    body.innerHTML='<tr><td colspan="6" style="padding:34px;text-align:center;color:#7b8794">Nothing sold '+(which==='today'?'today':(prev?'in these dates last month':'yesterday'))+(bevBrand?(' for "'+esc(bevBrand)+'"'):'')+'.</td></tr>';
   }else{
     var html='';
     for(var k=0;k<items.length;k++){var it=items[k];
-      html+='<tr><td>'+esc(it.item||'—')+'</td><td>'+esc(it.brand||'—')+'</td><td>'+esc(it.sku||'—')+'</td><td class="num">'+fN(Math.round((it.quantity||0)*100)/100)+'</td><td class="num">'+fN(Math.round((it.boxes||0)*100)/100)+'</td></tr>';
+      // Realise = invoiced value / boxes, the same formula the Total Boxes card uses.
+      // Guard on BOXES, not on the rate: an item given away free has 0 value and a real
+      // realise of 0.00. A dash is reserved for "no boxes, so no rate exists".
+      var rz=(it.boxes?((it.value||0)/it.boxes):null);
+      html+='<tr><td>'+esc(it.item||'—')+'</td><td>'+esc(it.brand||'—')+'</td><td>'+esc(it.sku||'—')+'</td><td class="num">'+fN(Math.round((it.quantity||0)*100)/100)+'</td><td class="num">'+fN(Math.round((it.boxes||0)*100)/100)+'</td>'
+           +'<td class="num" title="'+esc(fNp(it.value||0,2)+' over '+fN(Math.round((it.boxes||0)*100)/100)+' boxes')+'">'
+           +(rz===null?'—':('₹'+fNp(rz,2)))+'</td></tr>';
     }
-    html+='<tr class="cd-total"><td colspan="3">TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td><td class="num">'+fN(Math.round(tb*100)/100)+'</td></tr>';
+    /* The total realise is WEIGHTED - all the value over all the boxes - not the mean of the
+       rates above, which would let a three-box line count as much as a 13,000-box one. */
+    var avg=tb?(tv/tb):0;
+    html+='<tr class="cd-total"><td colspan="3">TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td><td class="num">'+fN(Math.round(tb*100)/100)+'</td>'
+         +'<td class="num" title="'+esc(fNp(tv,2)+' over '+fN(Math.round(tb*100)/100)+' boxes — weighted, not the mean of the rates above')+'">'
+         +(tb?('₹'+fNp(avg,2)):'—')+'</td></tr>';
     body.innerHTML=html;
   }
   document.getElementById('bevSoldModal').classList.add('show');
@@ -667,6 +827,17 @@ function bevFmtDate(iso){
   if(!iso)return '';
   var p=String(iso).split('-'); if(p.length!==3)return iso;
   return parseInt(p[2],10)+' '+(BEV_MON[parseInt(p[1],10)-1]||p[1])+' '+p[0];
+}
+// "1–11 Aug 2026" when both ends share a month, "15 Jul – 14 Aug 2026" when they do not.
+function bevFmtRange(a,b){
+  if(!a)return '';
+  if(!b||b===a)return bevFmtDate(a);
+  var p=String(a).split('-'), q=String(b).split('-');
+  if(p.length!==3||q.length!==3)return bevFmtDate(a)+' – '+bevFmtDate(b);
+  var mA=BEV_MON[parseInt(p[1],10)-1]||p[1], mB=BEV_MON[parseInt(q[1],10)-1]||q[1];
+  if(p[0]===q[0]&&p[1]===q[1])return parseInt(p[2],10)+'–'+parseInt(q[2],10)+' '+mB+' '+q[0];
+  if(p[0]===q[0])return parseInt(p[2],10)+' '+mA+' – '+parseInt(q[2],10)+' '+mB+' '+q[0];
+  return bevFmtDate(a)+' – '+bevFmtDate(b);
 }
 // Sum quantity & boxes of a (brand-filtered) day item list.
 function bevDayTotals(items,brand){var q=0,b=0,a=items||[];for(var i=0;i<a.length;i++){if(!brand||a[i].brand===brand){q+=a[i].quantity||0;b+=a[i].boxes||0;}}return {qty:Math.round(q*100)/100,boxes:Math.round(b*100)/100};}

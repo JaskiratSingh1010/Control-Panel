@@ -881,19 +881,28 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-mode-btn:hover{border-color:var(--blue);color:var(--blue)}
   .bev-mode-btn.active{background:var(--rz-soft);color:var(--rz-indigo-deep);border-color:var(--rz-soft-brd);box-shadow:0 1px 2px rgba(15,23,42,.08)}
   .bev-input-grp{display:flex;gap:14px;align-items:flex-end}
-  .bev-sum{display:flex;gap:14px;margin:0 0 14px}
-  .bev-sum .scard{flex:0 0 230px;background:#fff;border:1px solid #d9e5ee;box-shadow:0 1px 3px rgba(15,23,42,.06);padding:14px 18px}
+  /* One row, always. The cards used to be a fixed 230px each, so on anything narrower
+     than the full set they ran off the edge and the last one was cut in half. They now
+     share the width instead (flex:1 1 0, and min-width:0 so a flex item is actually
+     allowed to shrink below its content). Type is clamped rather than fixed, so the
+     figures scale down with the cards instead of overflowing them. */
+  .bev-sum{display:flex;gap:14px;margin:0 0 14px;flex-wrap:nowrap;align-items:stretch}
+  .bev-sum .scard{flex:1 1 0;min-width:0;background:#fff;border:1px solid #d9e5ee;box-shadow:0 1px 3px rgba(15,23,42,.06);padding:14px clamp(10px,1.05vw,18px)}
   /* Bigger, bolder KPI readouts. */
-  .bev-sum .scard .sl{font-size:11px;letter-spacing:.7px;color:var(--text2)}
-  .bev-sum .scard .sv{font-size:30px;font-weight:800;line-height:1.1}
+  .bev-sum .scard .sl{font-size:clamp(9px,.72vw,11px);letter-spacing:.5px;color:var(--text2);
+                      overflow-wrap:anywhere}   /* long labels wrap instead of clipping */
+  /* nowrap, never overflow-wrap: a figure like 6,65,379 must shrink, not break across
+     two lines mid-number. The clamp is what keeps it inside the card. */
+  .bev-sum .scard .sv{font-size:clamp(15px,1.5vw,30px);font-weight:800;line-height:1.1;
+                      white-space:nowrap}
   /* Day-sales KPIs drill into "what was sold" — flag them as interactive. */
   .bev-sum .scard.bev-kpi-click{cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
   .bev-sum .scard.bev-kpi-click:hover{border-color:var(--blue);box-shadow:0 6px 16px rgba(37,99,235,.16);transform:translateY(-1px)}
   .bev-sum .scard.bev-kpi-click .sv{color:var(--blue)}
   .bev-sum .scard.bev-kpi-click::after{content:'\25B8 view';display:block;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--blue);margin-top:4px;text-transform:uppercase}
   /* Top Customers / Top Months cards (month-wise view) — header only; click to open the full ranking. */
-  .bev-sum .scard.bev-top-card{flex:0 0 230px;display:flex;flex-direction:column;justify-content:center}
-  .bev-top-title{font-size:22px;font-weight:800;color:var(--text);line-height:1.2}
+  .bev-sum .scard.bev-top-card{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center}
+  .bev-top-title{font-size:clamp(14px,1.3vw,22px);font-weight:800;color:var(--text);line-height:1.2}
   /* Gradient KPI cards (matches the control-panel home tab). White text on a 135° gradient. */
   .bev-sum .scard.kpi-grad{position:relative;overflow:hidden;background:var(--rz-card);border:1px solid var(--rz-card-brd);color:var(--rz-ink);box-shadow:var(--rz-shadow)}
   .bev-sum .scard.kpi-grad::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--rz-acc-indigo)}
@@ -917,6 +926,29 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-sum .scard.kpi-g-teal::before{background:var(--rz-acc-teal)}
   .bev-sum .scard.kpi-g-teal .sv,.bev-sum .scard.kpi-g-teal .bev-top-title{color:var(--rz-teal)}
   .bev-sum .scard.kpi-g-teal.bev-kpi-click::after{color:var(--rz-teal)}
+  /* Boxes + realise in one small table: pack size, how many boxes, what a box fetched.
+     They were two cards; the question is always "how many of this size, and at what rate",
+     so they read better together. Takes a larger share of the row (2.2 against 1) and still
+     shrinks with everything else. */
+  /* A normal one-figure card: the detail lives in the window it opens, like the day cards. */
+  .bev-sum .scard.bev-bx-card{flex:1 1 0}
+  /* The realise line under the figure. */
+  .bev-bx-sub{margin-top:3px;font-size:clamp(11px,.92vw,14px);font-weight:800;color:#0e7490;
+              white-space:nowrap;font-variant-numeric:tabular-nums;
+              font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .bev-bx-sub .u{font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--rz-muted);
+                 font-family:inherit}
+  /* On a coloured day card the cyan would fight the card's own accent, so the realise line
+     there is neutral. Empty when there is no rate, and then it takes up no room. */
+  .bev-day-rz{color:var(--text2)}
+  .bev-day-rz:empty{display:none}
+  /* Below this width the cards stop being readable however much they shrink, so the strip
+     scrolls sideways instead — still one line, just swipeable. */
+  @media (max-width:1100px){
+    .bev-sum{overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:thin}
+    .bev-sum .scard{flex:0 0 190px}
+    .bev-sum .scard .sv{font-size:24px}
+  }
   .bev-sum .scard.kpi-g-red::before{background:var(--rz-acc-red)}
   .bev-sum .scard.kpi-g-red .sv,.bev-sum .scard.kpi-g-red .bev-top-title{color:var(--rz-neg)}
   .bev-sum .scard.kpi-g-red.bev-kpi-click::after{color:var(--rz-neg)}
@@ -1033,10 +1065,18 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   </div>
   <div class="bev-sum">
     <div class="scard kpi-grad kpi-g-blue"><div class="sl">Total Quantity</div><div class="sv" id="bevKpiQty">&mdash;</div></div>
-    <div class="scard kpi-grad kpi-g-indigo"><div class="sl">Total Boxes</div><div class="sv" id="bevKpiBox">&mdash;</div></div>
+    <!-- Boxes and realise per pack size, in one card. The two used to be separate, but the
+         question is always "how many boxes of this size, and what did they fetch" - so they
+         belong in one small table. The TOTAL row is the figure the old Total Boxes card showed. -->
+    <div class="scard kpi-grad kpi-g-indigo bev-bx-card bev-kpi-click" onclick="openBevBoxes()"
+         title="Total boxes and what a box fetched &mdash; click to see it by pack size and by item">
+      <div class="bev-bx-body" id="bevKpiBoxTable">
+        <div class="sl">Total Boxes</div><div class="sv">&mdash;</div>
+      </div>
+    </div>
     <div class="scard kpi-grad kpi-g-orange bev-kpi-click" onclick="openBevOih()" title="Order in Hand — open orders (drill by variety)"><div class="sl">OIH (Boxes)</div><div class="sv" id="bevKpiOih">&mdash;</div></div>
     <div class="scard kpi-grad kpi-g-green bev-kpi-click bev-day-card" onclick="openBevSold('today')" title="See what was sold today"><div class="sl" id="bevLblToday">Today's Sales (Boxes)</div><div class="sv" id="bevKpiToday">&mdash;</div></div>
-    <div class="scard kpi-grad kpi-g-purple bev-kpi-click bev-day-card" onclick="openBevSold('yesterday')" title="See what was sold yesterday"><div class="sl" id="bevLblYest">Yesterday's Sales (Boxes)</div><div class="sv" id="bevKpiYest">&mdash;</div></div>
+    <div class="scard kpi-grad kpi-g-purple bev-kpi-click bev-day-card" onclick="openBevSold('prev')" title="The same dates one month back — click to see what was sold"><div class="sl" id="bevLblPrev">Last Month (Boxes)</div><div class="sv" id="bevKpiPrev">&mdash;</div><div class="bev-bx-sub bev-day-rz" id="bevRzPrev"></div></div>
     <div class="scard kpi-grad kpi-g-teal bev-kpi-click bev-top-card" onclick="openBevTop('customers')" title="See all customers (descending)" style="display:none"><div class="bev-top-title">Top Customers</div></div>
     <div class="scard kpi-grad kpi-g-red bev-kpi-click bev-top-card" onclick="openBevTop('months')" title="See all months (descending)" style="display:none"><div class="bev-top-title">Top Months</div></div>
   </div>
@@ -1063,8 +1103,28 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     </div>
     <div class="bev-sold-wrap">
       <table class="bev-table">
-        <thead><tr><th>Item</th><th>Brand</th><th>SKU</th><th class="num">Quantity</th><th class="num">Boxes</th></tr></thead>
+        <thead><tr><th>Item</th><th>Brand</th><th>SKU</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num" title="Invoiced value &divide; boxes &mdash; the same formula as the Total Boxes card">Realise</th></tr></thead>
         <tbody id="bevSoldBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Total Boxes detail, opened from the KPI card. Two tables: the pack-size summary first
+     (the question is usually "which size, and at what rate"), then every item behind it. -->
+<div class="modal-overlay" id="bevBoxModal" onclick="if(event.target===this)closeBevBoxes()">
+  <div class="modal-box bev-sold-box">
+    <div class="cd-header">
+      <div>
+        <h3 id="bevBoxTitle">Boxes &amp; Realise</h3>
+        <p id="bevBoxSub"></p>
+      </div>
+      <button type="button" class="bev-sold-close" onclick="closeBevBoxes()" aria-label="Close">&times;</button>
+    </div>
+    <div class="bev-sold-wrap">
+      <table class="bev-table">
+        <thead><tr><th>Item</th><th>Brand</th><th>SKU</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num" title="Invoiced value &divide; boxes">Realise</th></tr></thead>
+        <tbody id="bevBoxItemBody"></tbody>
       </table>
     </div>
   </div>
@@ -1468,5 +1528,5 @@ window.__CP = {
   the template around it is already new - which shows up as a KPI that never fills
   in. Bump this number whenever dashboard.js changes.
 {% endcomment %}
-<script src="{% static 'realise/dashboard.js' %}?v=23" defer></script>
+<script src="{% static 'realise/dashboard.js' %}?v=24" defer></script>
 {% endblock %}

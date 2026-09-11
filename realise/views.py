@@ -1976,14 +1976,18 @@ def api_beverages_data(request):
     body = _parse_body(request)
     start_date = body.get('start_date', '')
     end_date   = body.get('end_date', '')
+    # The client asks for the 'Last Month' card only in date-range mode - it is a second
+    # SAP round-trip, and month-wise mode has no meaningful "same dates last month".
+    want_prev  = bool(body.get('prev'))
     if not start_date or not end_date:
         return JsonResponse({'status': 'error', 'error': 'start_date and end_date required'}, status=400)
     try:
-        data = services.get_beverages_rows_cached(start_date, end_date)
+        data = services.get_beverages_rows_cached(start_date, end_date, want_prev=want_prev)
     except Exception as e:
         logger.error('[BEVERAGES] fetch error: %s', e)
         return JsonResponse({'status': 'ok', 'data': [], 'count': 0, 'today_boxes': 0, 'yesterday_boxes': 0,
                              'today_items': [], 'yesterday_items': [], 'today_date': '', 'yesterday_date': '',
+                             'prev_boxes': 0, 'prev_items': [], 'prev_start': '', 'prev_end': '',
                              'customer_rows': [], 'month_rows': [], 'oih_rows': []})
     is_dict = isinstance(data, dict)
     rows = data.get('rows', []) if is_dict else (data or [])
@@ -1994,6 +1998,10 @@ def api_beverages_data(request):
                          'yesterday_items': data.get('yesterday_items', []) if is_dict else [],
                          'today_date': data.get('today_date', '') if is_dict else '',
                          'yesterday_date': data.get('yesterday_date', '') if is_dict else '',
+                         'prev_boxes': data.get('prev_boxes', 0) if is_dict else 0,
+                         'prev_items': data.get('prev_items', []) if is_dict else [],
+                         'prev_start': data.get('prev_start', '') if is_dict else '',
+                         'prev_end': data.get('prev_end', '') if is_dict else '',
                          'customer_rows': data.get('customer_rows', []) if is_dict else [],
                          'month_rows': data.get('month_rows', []) if is_dict else [],
                          'oih_rows': data.get('oih_rows', []) if is_dict else []})
