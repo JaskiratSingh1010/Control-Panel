@@ -652,10 +652,40 @@ function bevRenderBoxTable(rows){
   bevBoxData={list:list, boxes:tb, value:tv, rows:rows.slice()};
   bevPaintBoxCard();
 }
+/* Pack sizes across: one column per size, boxes above realise, TOTAL set apart at the
+   end. Reads as a comparison between sizes, which stacked rows make harder. */
+function bevRenderSizeStrip(){
+  var el=document.getElementById('bevSizeStrip');
+  if(!el)return;
+  var d=bevBoxData;
+  if(!d||!d.list.length){ el.innerHTML=''; return; }   // :empty hides the whole block
+  var avg=d.boxes?(d.value/d.boxes):0;
+  var head='<tr><th>Box</th>', boxes='<tr><td class="bev-sz-lbl">Total Boxes</td>',
+      rz='<tr><td class="bev-sz-lbl">Realise</td>';
+  for(var i=0;i<d.list.length;i++){
+    var r=d.list[i], rate=r.box?(r.val/r.box):0;
+    var tip=r.name+': '+fNp(r.val,2)+' over '+fN(Math.round(r.box*100)/100)+' boxes';
+    head+='<th title="'+esc(tip)+'">'+esc(r.name)+'</th>';
+    boxes+='<td class="bev-sz-b" title="'+esc(tip)+'">'+fN(Math.round(r.box))+'</td>';
+    // Guard on BOXES: boxes that earned nothing have a real realise of 0.00; a dash is
+    // reserved for "no boxes, so no rate exists".
+    rz+='<td class="bev-sz-v" title="'+esc(tip)+'">'+(r.box?('₹'+fNp(rate,2)):'—')+'</td>';
+  }
+  /* TOTAL is WEIGHTED - all value over all boxes - never the mean of the size rates, which
+     would let a one-box size count as much as a 12,000-box one. */
+  var ttip='All sizes: '+fNp(d.value,2)+' over '+fN(Math.round(d.boxes*100)/100)
+          +' boxes. Weighted, not the mean of the rates.';
+  head+='<th class="is-total">Total</th></tr>';
+  boxes+='<td class="bev-sz-b is-total" title="'+esc(ttip)+'">'+fN(Math.round(d.boxes))+'</td></tr>';
+  rz+='<td class="bev-sz-v is-total" title="'+esc(ttip)+'">'
+     +(d.boxes?('₹'+fNp(avg,2)):'—')+'</td></tr>';
+  el.innerHTML='<table><thead>'+head+'</thead><tbody>'+boxes+rz+'</tbody></table>';
+}
 function bevPaintBoxCard(){
   var el=document.getElementById('bevKpiBoxTable');
   if(!el)return;
   var d=bevBoxData;
+  bevRenderSizeStrip();   // same data, so the strip can never disagree with the card
   if(!d||!d.list.length){
     el.innerHTML='<div class="sl">Total Boxes</div><div class="sv">—</div>';
     return;
@@ -762,17 +792,40 @@ function renderBeverages(){
   html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td><td class="num">'+fN(toih)+'</td></tr>';
   body.innerHTML=html;
 }
+/* Brand switch: "Both" plus one button per brand actually present (JIVO / SANO today).
+   Built from the data so a new brand needs no code change. bevBrand='' means both, and
+   every figure on the page already filters on it - the KPI cards, the size strip, the
+   customer table and the drill windows - so one button moves all of them together. */
 function bevPopulateBrands(){
-  var sel=document.getElementById('bevBrandFilter'); if(!sel)return;
+  var box=document.getElementById('bevBrandBtns'); if(!box)return;
   var seen={}, list=[];
-  for(var i=0;i<bevRows.length;i++){var b=bevRows[i].brand||'—'; if(!seen[b]){seen[b]=1;list.push(b);}}
+  for(var i=0;i<bevRows.length;i++){
+    var b=bevRows[i].brand||'';
+    if(b&&b!=='—'&&!seen[b]){seen[b]=1;list.push(b);}
+  }
   list.sort(function(a,b){return String(a).localeCompare(String(b));});
-  var html='<option value="">All Brands</option>';
-  for(var j=0;j<list.length;j++)html+='<option value="'+esc(list[j])+'">'+esc(list[j])+'</option>';
-  sel.innerHTML=html;
-  if(bevBrand && list.indexOf(bevBrand)!==-1)sel.value=bevBrand; else { bevBrand=''; sel.value=''; }
+  // A brand that vanished with the date range must not stay selected, or the page would
+  // silently show nothing.
+  if(bevBrand&&list.indexOf(bevBrand)===-1)bevBrand='';
+  // Built as real elements with listeners, not an onclick string: a brand name is SAP text
+  // and could carry a quote, which would break an inline attribute.
+  box.innerHTML='';
+  [''].concat(list).forEach(function(b){
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.className='bev-brand-btn'+(bevBrand===b?' active':'');
+    btn.textContent=b||'Both';
+    btn.title=b?('Show '+b+' only'):'Show every brand together';
+    btn.addEventListener('click',function(){setBevBrand(b);});
+    box.appendChild(btn);
+  });
 }
-function onBevBrandChange(){ bevBrand=document.getElementById('bevBrandFilter').value; bevExpanded={}; bevDocState={}; renderBeverages(); }
+function setBevBrand(b){
+  bevBrand=b||'';
+  bevExpanded={}; bevDocState={};
+  bevPopulateBrands();     // repaint so the pressed button shows as active
+  renderBeverages();
+}
 function bevPopulateMonths(){
   var sel=document.getElementById('bevMonthFilter'); if(!sel)return;
   var labels={}, list=[];

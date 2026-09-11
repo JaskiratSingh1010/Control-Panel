@@ -980,6 +980,35 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
   .bev-cmp-card .cmp-unit{font-size:12px;color:var(--text3);margin-top:6px;font-weight:600}
   .cmp-chg{font-weight:800;font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--text3)}
   .cmp-chg.pos{color:var(--green)}.cmp-chg.neg{color:var(--red)}
+  /* Brand switch. Same look as the Date Range / Month-Wise pair so the page reads as one. */
+  .bev-brand-btns{display:flex;gap:6px}
+  .bev-brand-btn{border:1px solid var(--border);background:#fff;color:var(--text2);font-size:12px;
+                 font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;
+                 font-family:inherit;transition:all .15s;white-space:nowrap}
+  .bev-brand-btn:hover{border-color:var(--rz-soft-brd);background:var(--rz-soft)}
+  .bev-brand-btn.active{background:var(--rz-soft);color:var(--rz-indigo-deep);
+                        border-color:var(--rz-soft-brd);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  /* Pack sizes laid out across. One row of size columns, then Boxes and Realise beneath
+     each. Scrolls sideways on a narrow screen rather than wrapping, so a size's boxes and
+     its realise always stay in the same column. */
+  .bev-sizes{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;
+             box-shadow:var(--rz-shadow);margin:0 0 14px;padding:12px 16px;overflow-x:auto}
+  .bev-sizes:empty{display:none}
+  .bev-sizes table{border-collapse:collapse;width:100%}
+  .bev-sizes th,.bev-sizes td{padding:6px 14px;text-align:right;white-space:nowrap}
+  .bev-sizes th:first-child,.bev-sizes td:first-child{
+    text-align:left;padding-left:0;position:sticky;left:0;background:var(--rz-card);z-index:1}
+  .bev-sizes thead th{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+                      color:var(--rz-muted);border-bottom:1px solid var(--rz-card-brd)}
+  .bev-sz-lbl{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+              color:var(--rz-muted)}
+  .bev-sz-b{font-size:15px;font-weight:800;color:var(--rz-ink);font-variant-numeric:tabular-nums;
+            font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .bev-sz-v{font-size:15px;font-weight:800;color:#0e7490;font-variant-numeric:tabular-nums;
+            font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  /* The TOTAL column is the same figure as the Total Boxes card, so it is set apart. */
+  .bev-sizes .is-total{border-left:1px solid var(--rz-card-brd);background:rgba(99,102,241,.05)}
+  .bev-sizes thead th.is-total{color:var(--rz-indigo-deep)}
   .bev-tablewrap{background:var(--rz-card);border:1px solid var(--rz-card-brd);border-radius:14px;box-shadow:var(--rz-shadow);overflow:auto}
   table.bev-table{width:100%;border-collapse:collapse;font-size:13px}
   table.bev-table thead th{position:sticky;top:0;z-index:2;background:var(--rz-head-bg);color:var(--rz-head-ink);border-bottom:1px solid var(--rz-line);text-align:left;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:12px 16px}
@@ -1052,7 +1081,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     </div>
     <div class="sep"></div>
     <div class="cg"><label>Brand</label>
-      <select id="bevBrandFilter" onchange="onBevBrandChange()" style="min-width:160px"><option value="">All Brands</option></select>
+      <!-- Buttons rather than a dropdown: there are only ever a couple of brands, and this
+           way the current one is visible without opening anything. Built from the data, so a
+           new brand appears on its own. "Both" is the default. -->
+      <div class="bev-brand-btns" id="bevBrandBtns" role="group" aria-label="Brand"></div>
     </div>
     <div class="sep" id="bevMonthSep" style="display:none"></div>
     <div class="cg" id="bevMonthFilterCg" style="display:none"><label>Month</label>
@@ -1080,6 +1112,10 @@ td.ecell input.locked{background:var(--surface2);color:var(--text3);cursor:not-a
     <div class="scard kpi-grad kpi-g-teal bev-kpi-click bev-top-card" onclick="openBevTop('customers')" title="See all customers (descending)" style="display:none"><div class="bev-top-title">Top Customers</div></div>
     <div class="scard kpi-grad kpi-g-red bev-kpi-click bev-top-card" onclick="openBevTop('months')" title="See all months (descending)" style="display:none"><div class="bev-top-title">Top Months</div></div>
   </div>
+  <!-- Pack sizes across, not down: boxes and realise read as a comparison between sizes,
+       which is easier side by side than stacked. Follows the Brand buttons like everything
+       else on the page, and the TOTAL column matches the Total Boxes card. -->
+  <div class="bev-sizes" id="bevSizeStrip"></div>
   <div class="bev-tablewrap">
     <table class="bev-table">
       <thead><tr><th id="bevFirstCol">Customer</th><th class="num">Quantity</th><th class="num">Boxes</th><th class="num">OIH</th></tr></thead>
@@ -1528,5 +1564,5 @@ window.__CP = {
   the template around it is already new - which shows up as a KPI that never fills
   in. Bump this number whenever dashboard.js changes.
 {% endcomment %}
-<script src="{% static 'realise/dashboard.js' %}?v=24" defer></script>
+<script src="{% static 'realise/dashboard.js' %}?v=25" defer></script>
 {% endblock %}
