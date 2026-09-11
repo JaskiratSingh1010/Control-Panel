@@ -51,6 +51,7 @@ urlpatterns = [
     path('production/api/feasibility/', views.production_feasibility_data, name='production_feasibility_data'),
     path('production/api/fg-list/', views.production_fg_list, name='production_fg_list'),
     path('production/api/plan/', views.production_plan_data, name='production_plan_data'),
+    path('production/api/plan-upload/', views.production_plan_upload, name='production_plan_upload'),
     path('production/api/warehouses/', views.production_warehouses, name='production_warehouses'),
     path('daily-production/', views.daily_production, name='daily_production'),
     path('daily-production/api/data/', views.daily_production_data, name='daily_production_data'),

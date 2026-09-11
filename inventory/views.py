@@ -1,6 +1,7 @@
 import inspect
 import json
 import logging
+import re
 
 from datetime import date
 
@@ -246,6 +247,99 @@ def production_fg_list(request):
         logger.exception('[inventory] FG list failed')
         return JsonResponse({'status': 'error', 'data': []})
     return JsonResponse({'status': 'ok', 'data': data})
+
+
+_PF_CODE_RE = re.compile(r'^[A-Za-z]{1,4}\d{3,}$')      # FG0000030, SF0000002, RM0000015 …
+
+
+def _pf_cell(v):
+    """A cell as trimmed text. Excel hands back 5000.0 for a whole number, and '5000.0'
+    would never match an item code, so whole floats lose the .0 first."""
+    if v is None:
+        return ''
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
+def _pf_qty(v):
+    """A cell as a positive number, or 0. Accepts '1,200' and ' 1200 '."""
+    if v is None:
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v) if v > 0 else 0.0
+    try:
+        n = float(str(v).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return 0.0
+    return n if n > 0 else 0.0
+
+
+def _parse_production_upload(f):
+    """Read an uploaded .xlsx into [{'code', 'qty'}] for the production plan.
+
+    Deliberately forgiving about layout, because the sheets people actually have are not
+    laid out the same way: any sheet, with or without a header row. For each row it takes
+    the first cell that looks like an item code, then the first positive number to the
+    RIGHT of it as the quantity. Rows with no code (titles, blanks, TOTAL lines) are
+    skipped rather than failing the whole file. Repeated codes are added together, so a
+    sheet listing the same product twice does not silently produce two plan rows.
+    """
+    import openpyxl
+    from io import BytesIO
+
+    wb = openpyxl.load_workbook(BytesIO(f.read()), data_only=True, read_only=True)
+    out, seen = [], {}
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            if not row:
+                continue
+            code, qty = '', 0.0
+            for ci, raw in enumerate(row):
+                cell = _pf_cell(raw)
+                if not code:
+                    if _PF_CODE_RE.match(cell):
+                        code = cell.upper()
+                    continue
+                qty = _pf_qty(raw)          # first positive number after the code
+                if qty:
+                    break
+            if not code:
+                continue
+            if code in seen:
+                seen[code]['qty'] += qty
+            else:
+                seen[code] = {'code': code, 'qty': qty}
+                out.append(seen[code])
+        if out:
+            break                            # first sheet that yielded rows wins
+    return out
+
+
+@permission_flag_required('can_production', json_response=True)
+@require_http_methods(['POST'])
+def production_plan_upload(request):
+    """Turn an uploaded .xlsx of item codes (+ quantities) into plan rows for the
+    Production Feasibility screen. Multipart: field 'file'. Codes are returned as they
+    were read - the page matches them against the FG list it already holds, so a typo
+    shows up there rather than being silently dropped here."""
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'status': 'error', 'error': 'No file uploaded.'}, status=400)
+    if not str(getattr(f, 'name', '')).lower().endswith(('.xlsx', '.xlsm')):
+        return JsonResponse({'status': 'error',
+                             'error': 'Please upload an .xlsx file (not .xls or .csv).'}, status=400)
+    try:
+        rows = _parse_production_upload(f)
+    except Exception:
+        logger.exception('[inventory] production plan upload failed')
+        return JsonResponse({'status': 'error', 'error': 'Could not read that Excel file.'}, status=400)
+    if not rows:
+        return JsonResponse({'status': 'error',
+                             'error': 'No item codes found. Put the FG code in one column '
+                                      'and the quantity in a column to its right.'}, status=400)
+    no_qty = sum(1 for r in rows if not r['qty'])
+    return JsonResponse({'status': 'ok', 'rows': rows, 'count': len(rows), 'no_qty': no_qty})
 
 
 @permission_flag_required('can_production', json_response=True)

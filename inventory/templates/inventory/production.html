@@ -164,6 +164,11 @@
           <input id="pfCode" placeholder="Type code, or click Browse →" autocomplete="off" style="flex:1">
           <select id="pfSkuFilter" class="pf-skufilter" title="Pick a SKU to filter Browse"><option value="">SKU: All</option></select>
           <button type="button" class="pf-browse" onclick="pfOpenPicker()"><i class="ic ic-folder-open"></i> Browse</button>
+          <!-- A sheet holds many products, which a single item cannot, so uploading here
+               switches to the plan tab and fills it. Offered on this tab because this is
+               where people arrive first and look for it. -->
+          <button type="button" class="pf-browse" onclick="pfPickFile()"
+                  title="Load an .xlsx of products — opens the Production plan tab"><i class="ic ic-upload"></i> Upload Excel</button>
         </div>
       </div>
       <div class="pf-field"><label>Quantity to make</label><input id="pfQty" type="number" min="0" placeholder="e.g. 5000"></div>
@@ -176,6 +181,9 @@
       <div id="pfPlanRows"></div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="pf-addrow" onclick="pfAddRow()">＋ Add product</button>
+        <button type="button" class="pf-addrow pf-upload" onclick="pfPickFile()"
+                title="Load an .xlsx: FG code in one column, quantity in a column to its right"><i class="ic ic-upload"></i> Upload Excel</button>
+        <span class="pf-usedin" id="pfUpNote"></span>
         <div style="flex:1"></div>
         <button id="pfPlanBtn" onclick="pfCalcPlan()"><i class="ic ic-search"></i> Calculate plan</button>
       </div>
@@ -426,6 +434,55 @@
     ci._name=nm; ci.addEventListener('change',function(){ pfRowName(ci); });
     div.appendChild(ci); div.appendChild(br); div.appendChild(nm); div.appendChild(qi); div.appendChild(rm);
     rows.appendChild(div); pfRowName(ci);
+  }
+  /* ── Fill the plan from an .xlsx ────────────────────────────────────────────
+     The file is parsed on the server (openpyxl is already a dependency) rather than in
+     the browser, so no spreadsheet library has to be shipped to the page. The sheet only
+     has to hold an item code in one column and a quantity somewhere to its right. */
+  var _pfFile=null;
+  function pfPickFile(){
+    if(!_pfFile){
+      _pfFile=document.createElement('input');
+      _pfFile.type='file'; _pfFile.accept='.xlsx,.xlsm'; _pfFile.style.display='none';
+      _pfFile.addEventListener('change',function(){
+        var f=_pfFile.files&&_pfFile.files[0];
+        if(f)pfUploadPlan(f);
+      });
+      document.body.appendChild(_pfFile);
+    }
+    _pfFile.value='';        // so picking the SAME file twice still fires change
+    _pfFile.click();
+  }
+  function pfUpNote(txt,bad){
+    var el=document.getElementById('pfUpNote');
+    if(!el)return;
+    el.textContent=txt||'';
+    el.style.color=bad?'#b91c1c':'#64748b';
+  }
+  async function pfUploadPlan(file){
+    pfSetMode('plan');                       // a sheet means many products, so switch tabs
+    pfUpNote('Reading '+file.name+'…');
+    pfMsg('');
+    var fd=new FormData(); fd.append('file',file);
+    var tok=document.querySelector('meta[name=csrf-token]');
+    try{
+      var res=await fetch('/inventory/production/api/plan-upload/',
+        {method:'POST',headers:{'X-CSRFToken':tok?tok.content:''},body:fd});
+      var p=await res.json().catch(function(){ return {status:'error',error:'Server error (HTTP '+res.status+')'}; });
+      if(!p||p.status!=='ok'||!(p.rows&&p.rows.length)){
+        pfUpNote((p&&p.error)||'Could not read that file.',true);
+        return;
+      }
+      // Replace what is there rather than appending: the sheet IS the plan, and appending
+      // to the two blank starter rows would leave them in the middle of it.
+      document.getElementById('pfPlanRows').innerHTML='';
+      p.rows.forEach(function(r){ pfAddRow(r.code, r.qty||''); });
+      var msg=p.count+' product'+(p.count===1?'':'s')+' loaded from '+file.name;
+      if(p.no_qty)msg+=' — '+p.no_qty+' without a quantity, type those in';
+      pfUpNote(msg, !!p.no_qty);
+    }catch(e){
+      pfUpNote('Upload failed.',true);
+    }
   }
   async function pfCalcPlan(){
     var items=[];
