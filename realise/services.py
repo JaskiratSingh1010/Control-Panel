@@ -1,3 +1,4 @@
+import calendar
 import logging
 import threading
 import time
@@ -243,6 +244,23 @@ def _bev_date(value):
     return None
 
 
+def _shift_back_one_month(d):
+    """One calendar month earlier, keeping the day number. A day the earlier month does
+    not have is clamped to its last day, so 31 Mar becomes 28 Feb (29 in a leap year)."""
+    y, m = (d.year - 1, 12) if d.month == 1 else (d.year, d.month - 1)
+    return date(y, m, min(d.day, calendar.monthrange(y, m)[1]))
+
+
+def _bev_prev_month_range(start_date, end_date):
+    """The SAME day-of-month span, one calendar month back: 01-11 Sep -> 01-11 Aug.
+    Both ends shift, so a range that straddles a month boundary keeps its shape.
+    Returns ('', '') when either date cannot be read."""
+    a, b = _bev_date(start_date), _bev_date(end_date)
+    if not a or not b:
+        return '', ''
+    return _shift_back_one_month(a).isoformat(), _shift_back_one_month(b).isoformat()
+
+
 _BEV_MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -265,17 +283,20 @@ def _bev_month_key(r, dd):
     return None, None
 
 
-def _bev_accum_item(store, item, sku, brand, qty, box):
+def _bev_accum_item(store, item, sku, brand, qty, box, val=0.0):
     """Accumulate a single day's sale into a per-item bucket (keyed by item/SKU/brand)
-    for the day-specific 'what was sold' drill-downs."""
-    cell = store.setdefault((item, sku, brand), {'quantity': 0.0, 'boxes': 0.0})
+    for the day-specific 'what was sold' drill-downs. `val` is the invoiced value, which
+    the KPI cards divide by boxes to show the realise."""
+    cell = store.setdefault((item, sku, brand), {'quantity': 0.0, 'boxes': 0.0, 'value': 0.0})
     cell['quantity'] += qty
     cell['boxes'] += box
+    cell['value'] += val
 
 
 def _bev_items_list(store):
     out = [{'item': k[0], 'sku': k[1], 'brand': k[2],
-            'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2)}
+            'quantity': round(v['quantity'], 2), 'boxes': round(v['boxes'], 2),
+            'value': round(v.get('value', 0.0), 2)}
            for k, v in store.items()]
     out.sort(key=lambda x: x['boxes'], reverse=True)
     return out
@@ -293,12 +314,17 @@ def _bev_salesperson(r):
     return _BEV_SALESPERSON_ALIAS.get(sp, sp)
 
 
-def get_beverages_rows(start_date, end_date):
+def get_beverages_rows(start_date, end_date, want_prev=False):
     """Beverage sales rows aggregated by (Variety, Sub_Group, SKU, Item, Main Group, State,
     Brand, Chain, Month) with Quantity (PCS) and Boxes, plus today's & yesterday's box
     totals, a per-item breakdown for each of those days, and customer/month aggregates.
     The client nests the rows into any drill order, filters by Brand/Month, and opens the
-    day & top breakdowns from the KPIs."""
+    day & top breakdowns from the KPIs.
+
+    want_prev also totals the SAME day span one calendar month back (01-11 Sep ->
+    01-11 Aug) for the 'Last Month' KPI card. It is a second SAP round-trip, so the
+    caller asks for it only in date-range mode - a 120-month range has no useful
+    'same dates last month'."""
     raw = _fetch_raw_beverages(start_date, end_date)
     agg = {}
     # Use the project timezone (Asia/Kolkata, USE_TZ=True) for the "today"/"yesterday"
@@ -325,13 +351,18 @@ def get_beverages_rows(start_date, end_date):
         sales_person = _bev_salesperson(r)
         qty = _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'Quantity', 'QUANTITY', 'Qty', 'quantity'))
         box = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Box', 'BOX', 'Boxes', 'box'))
+        # Invoiced value of the line. Needed for realise (value / boxes = the rate a box
+        # actually sold for). Same number as unit price x case pack, because
+        # boxes = quantity / case pack - the division just cancels out.
+        val = _bev_num(_bev_pick(r, 'Sales_Value', 'SALES_VALUE', 'LineTotal', 'LINETOTAL'))
         dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
         ym, mlabel = _bev_month_key(r, dd)
         ymk = ym or ''   # carried on each row so the client can filter to a single month
         key = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, customer, ymk)
-        cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0})
+        cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0, 'value': 0.0})
         cell['quantity'] += qty
         cell['boxes'] += box
+        cell['value'] += val
         cc = cust_agg.setdefault((customer, brand, ymk), {'quantity': 0.0, 'boxes': 0.0})
         cc['quantity'] += qty; cc['boxes'] += box
         if ym:
@@ -339,10 +370,31 @@ def get_beverages_rows(start_date, end_date):
             mc['quantity'] += qty; mc['boxes'] += box
         if dd == today:
             today_boxes += box
-            _bev_accum_item(today_items, item, sku, brand, qty, box)
+            _bev_accum_item(today_items, item, sku, brand, qty, box, val)
         elif dd == yesterday:
             yest_boxes += box
-            _bev_accum_item(yest_items, item, sku, brand, qty, box)
+            _bev_accum_item(yest_items, item, sku, brand, qty, box, val)
+
+    # ── Same dates, one month back ─────────────────────────────────
+    # Its own range, so its rows are NOT in `raw` above - a separate pull is needed.
+    # Goes through the 90s raw cache: last month's figures barely move, and the live
+    # heartbeat re-runs this function often, so re-querying every time is waste.
+    prev_start, prev_end = ('', '')
+    prev_items, prev_boxes = {}, 0.0
+    if want_prev:
+        prev_start, prev_end = _bev_prev_month_range(start_date, end_date)
+        if prev_start and prev_end:
+            for r in _bev_raw_cached(prev_start, prev_end, 'sales') or []:
+                pbox = _bev_num(_bev_pick(r, 'Boxes_Sold', 'BOXES_SOLD', 'Box', 'BOX', 'Boxes', 'box'))
+                prev_boxes += pbox
+                _bev_accum_item(
+                    prev_items,
+                    _normalize_name(_bev_pick(r, 'ItemName', 'ITEMNAME', 'Item_Name', 'item_name')) or '—',
+                    _normalize_name(_bev_pick(r, 'SKU', 'U_SKU', 'Sku', 'sku')) or '—',
+                    _normalize_name(_bev_pick(r, 'Brand', 'BRAND', 'U_Brand', 'U_BRAND', 'brand')) or '—',
+                    _bev_num(_bev_pick(r, 'PCS_Sold', 'PCS_SOLD', 'Quantity', 'QUANTITY', 'Qty', 'quantity')),
+                    pbox,
+                    _bev_num(_bev_pick(r, 'Sales_Value', 'SALES_VALUE', 'LineTotal', 'LINETOTAL')))
 
     # ── Order in Hand (open sales orders) ────────────────────────────────────
     # oih_main: boxes keyed by the same dims as sales rows (merged in as the 'oih' column).
@@ -379,6 +431,7 @@ def get_beverages_rows(start_date, end_date):
                      'sales_person': k[8], 'customer': k[9], 'ym': k[10],
                      'quantity': round(v['quantity'], 2) if v else 0.0,
                      'boxes': round(v['boxes'], 2) if v else 0.0,
+                     'value': round(v.get('value', 0.0), 2) if v else 0.0,
                      'oih': round(oih_main.get(k, 0.0), 2)})
     oih_rows = [{'variety': k[0], 'sub_group': k[1], 'item': k[2], 'customer': k[3],
                  'brand': k[4], 'ym': k[5],
@@ -395,16 +448,20 @@ def get_beverages_rows(start_date, end_date):
             'today_items': _bev_items_list(today_items),
             'yesterday_items': _bev_items_list(yest_items),
             'today_date': today.isoformat(), 'yesterday_date': yesterday.isoformat(),
+            'prev_boxes': round(prev_boxes, 2), 'prev_items': _bev_items_list(prev_items),
+            'prev_start': prev_start, 'prev_end': prev_end,
             'customer_rows': customer_rows, 'month_rows': month_rows, 'oih_rows': oih_rows}
 
 
-def get_beverages_rows_cached(start_date, end_date):
-    key = f'{start_date}|{end_date}'
+def get_beverages_rows_cached(start_date, end_date, want_prev=False):
+    # want_prev is in the key: a payload fetched without the previous-month totals
+    # must not be handed to a caller that asked for them.
+    key = f'{start_date}|{end_date}|{1 if want_prev else 0}'
     now = time.time()
     hit = _BEV_CACHE.get(key)
     if hit and hit[0] > now:
         return hit[1]
-    data = get_beverages_rows(start_date, end_date)
+    data = get_beverages_rows(start_date, end_date, want_prev=want_prev)
     if data and data.get('rows'):
         _BEV_CACHE[key] = (now + _BEV_CACHE_TTL, data)
         for k in [k for k, v in _BEV_CACHE.items() if v[0] <= now]:
