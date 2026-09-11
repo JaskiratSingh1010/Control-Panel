@@ -32,6 +32,15 @@
   .pf-addrow{padding:10px 16px;border:1.5px dashed #c7d2fe;border-radius:10px;background:#fff;color:#4338ca;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
   .pf-addrow:hover{background:#eef2ff}
   .pf-usedin{font-size:11px;color:#64748b}
+  /* Litres are a readout, not an input - quieter than the box they sit beside. */
+  .pf-prow-ltr,.pf-qty-ltr{font-size:12px;font-weight:700;color:#4338ca;white-space:nowrap;
+    font-variant-numeric:tabular-nums;font-family:'CPNum',system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .pf-prow-ltr{min-width:104px;text-align:right}
+  .pf-qty-ltr{display:block;margin-top:5px}
+  .pf-prow-ltr:empty,.pf-qty-ltr:empty{display:none}
+  /* A material measured in litres gets its unit on the number, so it is not mistaken
+     for a count of drums or caps two columns away. */
+  .pf-unit{font-size:10.5px;font-weight:700;color:#94a3b8;margin-left:3px}
   /* warehouse selector */
   .pf-whbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:12px}
   .pf-whbar-l{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#475569}
@@ -171,7 +180,7 @@
                   title="Load an .xlsx of products — opens the Production plan tab"><i class="ic ic-upload"></i> Upload Excel</button>
         </div>
       </div>
-      <div class="pf-field"><label>Quantity to make</label><input id="pfQty" type="number" min="0" placeholder="e.g. 5000"></div>
+      <div class="pf-field"><label>Quantity to make (units)</label><input id="pfQty" type="number" min="0" placeholder="e.g. 5000"><span class="pf-qty-ltr" id="pfQtyLtr"></span></div>
       <button id="pfBtn" onclick="pfCalc()"><i class="ic ic-search"></i> Calculate</button>
     </div>
   </div>
@@ -286,9 +295,9 @@
           +'<td>'+c.code+'</td>'
           +'<td class="pf-desc" title="'+(c.name||'').replace(/"/g,"&quot;")+'">'+(c.name||'')+pfNameStock(c)+'</td>'
           +'<td>'+pfNum2(c.per_fg)+'</td>'
-          +'<td><b>'+pfNum2(c.required)+'</b></td>'
-          +'<td><b>'+pfNum2(c.available)+'</b></td>'
-          +'<td class="'+(c.short?'pf-neg':'pf-pos')+'">'+(c.balance>=0?'+':'')+pfNum2(c.balance)+'</td>'
+          +'<td><b>'+pfQtyCell(c.required,c.uom)+'</b></td>'
+          +'<td><b>'+pfQtyCell(c.available,c.uom)+'</b></td>'
+          +'<td class="'+(c.short?'pf-neg':'pf-pos')+'">'+(c.balance>=0?'+':'')+pfQtyCell(c.balance,c.uom)+'</td>'
           +'<td>'+(c.max_fg!=null?pfNum(c.max_fg):'—')+'</td>'
           +'<td>'+(c.uom||'')+'</td>'
           +'<td class="pf-whcell">'+pfWhPillsHtml(c)+'</td>';
@@ -299,6 +308,16 @@
   }
   document.getElementById('pfCode').addEventListener('keydown',function(e){ if(e.key==='Enter')document.getElementById('pfQty').focus(); });
   document.getElementById('pfQty').addEventListener('keydown',function(e){ if(e.key==='Enter')pfCalc(); });
+  /* Litres beside the single-item quantity, kept in step with BOTH boxes - the litres
+     per unit come from the code, the total from the quantity. */
+  function pfSingleLtr(){
+    var el=document.getElementById('pfQtyLtr');
+    if(el)el.textContent=pfLtrText(document.getElementById('pfCode').value,
+                                   document.getElementById('pfQty').value);
+  }
+  document.getElementById('pfQty').addEventListener('input',pfSingleLtr);
+  document.getElementById('pfCode').addEventListener('input',pfSingleLtr);
+  document.getElementById('pfCode').addEventListener('change',pfSingleLtr);
 
   /* ===== FG drill-down picker (Type → Sub-group → Variety → SKU → item) ===== */
   var pfFgAll=null, pfLoaded=false, pfLoading=false, pfLoadCbs=[], pfTypeFilter='', pfSkuLock='', pfSel={sub:'',vry:'',sku:''}, pfPickTarget=null;
@@ -383,7 +402,9 @@
   function pfPick(code){
     var tgt = pfPickTarget || document.getElementById('pfCode');
     tgt.value=code;
-    if(tgt.classList&&tgt.classList.contains('pf-prow-code')) pfRowName(tgt);
+    // set from code, so no input event fires - refresh the readouts by hand
+    if(tgt.classList&&tgt.classList.contains('pf-prow-code')){ pfRowName(tgt); if(tgt._ltr)tgt._ltr(); }
+    else if(tgt.id==='pfCode') pfSingleLtr();
     pfClosePicker();
     if(tgt.id==='pfCode'){ var q=document.getElementById('pfQty'); if(q.value){ pfCalc(); } else { q.focus(); } }
   }
@@ -422,6 +443,19 @@
       pfEnsureFgList();
     }
   }
+  /* Litres are shown, never entered: the BOM is exploded per UNIT, so the number typed
+     stays units and only a readout is added. SalPackUn is the litres in one unit (200 for
+     a 200 LTR drum, 5 for a 5 LTR can), so litres = units x SalPackUn. When SAP has no
+     SalPackUn for an item nothing is shown, rather than a made-up figure. */
+  function pfLtrPer(code){
+    var hit=(pfFgAll||[]).find(function(x){return x.code===String(code||'').trim().toUpperCase();});
+    return hit?(Number(hit.ltr)||0):0;
+  }
+  function pfLtrText(code,qty){
+    var per=pfLtrPer(code), q=parseFloat(qty)||0;
+    if(!per||!q)return '';
+    return '= '+pfNum2(per*q)+' L';
+  }
   function pfRowName(ci){ var nm=ci._name; if(!nm)return; var code=(ci.value||'').trim().toUpperCase(); var hit=(pfFgAll||[]).find(function(x){return x.code===code;}); nm.textContent=hit?hit.name:''; }
   function pfAddRow(code,qty){
     var rows=document.getElementById('pfPlanRows');
@@ -429,11 +463,17 @@
     var ci=document.createElement('input'); ci.className='pf-prow-code'; ci.placeholder='FG code'; ci.autocomplete='off'; if(code)ci.value=code;
     var br=document.createElement('button'); br.type='button'; br.className='pf-browse'; br.innerHTML='<i class="ic ic-folder-open"></i>'; br.title='Browse'; br.onclick=function(){ pfOpenPicker(ci); };
     var nm=document.createElement('span'); nm.className='pf-prow-name';
-    var qi=document.createElement('input'); qi.className='pf-prow-qty'; qi.type='number'; qi.min='0'; qi.placeholder='Qty'; if(qty)qi.value=qty;
+    var qi=document.createElement('input'); qi.className='pf-prow-qty'; qi.type='number'; qi.min='0'; qi.placeholder='Qty (units)'; if(qty)qi.value=qty;
+    var lt=document.createElement('span'); lt.className='pf-prow-ltr';
+    function showLtr(){ lt.textContent=pfLtrText(ci.value,qi.value); }
+    qi.addEventListener('input',showLtr);
     var rm=document.createElement('button'); rm.type='button'; rm.className='pf-prow-rm'; rm.textContent='×'; rm.title='Remove'; rm.onclick=function(){ div.remove(); };
-    ci._name=nm; ci.addEventListener('change',function(){ pfRowName(ci); });
-    div.appendChild(ci); div.appendChild(br); div.appendChild(nm); div.appendChild(qi); div.appendChild(rm);
-    rows.appendChild(div); pfRowName(ci);
+    ci._name=nm; ci._ltr=showLtr;      // so the Browse picker can refresh it too
+    ci.addEventListener('change',function(){ pfRowName(ci); showLtr(); });
+    ci.addEventListener('input',showLtr);
+    div.appendChild(ci); div.appendChild(br); div.appendChild(nm);
+    div.appendChild(qi); div.appendChild(lt); div.appendChild(rm);
+    rows.appendChild(div); pfRowName(ci); showLtr();
   }
   /* ── Fill the plan from an .xlsx ────────────────────────────────────────────
      The file is parsed on the server (openpyxl is already a dependency) rather than in
@@ -477,12 +517,24 @@
       // to the two blank starter rows would leave them in the middle of it.
       document.getElementById('pfPlanRows').innerHTML='';
       p.rows.forEach(function(r){ pfAddRow(r.code, r.qty||''); });
+      // The item master may still be loading, and without it there is no litres-per-unit
+      // and no product name - so refresh both once it arrives.
+      pfEnsureFgList(pfRefreshRows);
       var msg=p.count+' product'+(p.count===1?'':'s')+' loaded from '+file.name;
       if(p.no_qty)msg+=' — '+p.no_qty+' without a quantity, type those in';
       pfUpNote(msg, !!p.no_qty);
     }catch(e){
       pfUpNote('Upload failed.',true);
     }
+  }
+  /* Re-fill every plan row's product name and litres from the item master. */
+  function pfRefreshRows(){
+    document.querySelectorAll('#pfPlanRows .pf-planrow').forEach(function(r){
+      var ci=r.querySelector('.pf-prow-code');
+      if(!ci)return;
+      pfRowName(ci);
+      if(ci._ltr)ci._ltr();
+    });
   }
   async function pfCalcPlan(){
     var items=[];
@@ -518,9 +570,9 @@
         +'<td><span class="pf-badge pf-'+kind.toLowerCase()+'">'+kind+'</span></td>'
         +'<td>'+m.code+'</td>'
         +'<td class="pf-desc" title="'+(m.name||'').replace(/"/g,"&quot;")+'">'+(m.name||'')+pfNameStock(m)+'</td>'
-        +'<td><b>'+pfNum2(m.required)+'</b></td>'
-        +'<td><b>'+pfNum2(m.available)+'</b></td>'
-        +'<td class="'+(m.short?'pf-neg':'pf-pos')+'">'+(m.balance>=0?'+':'')+pfNum2(m.balance)+'</td>'
+        +'<td><b>'+pfQtyCell(m.required,m.uom)+'</b></td>'
+        +'<td><b>'+pfQtyCell(m.available,m.uom)+'</b></td>'
+        +'<td class="'+(m.short?'pf-neg':'pf-pos')+'">'+(m.balance>=0?'+':'')+pfQtyCell(m.balance,m.uom)+'</td>'
         +'<td>'+(m.uom||'')+'</td>'
         +'<td class="pf-whcell"><span class="pf-usedin">'+(m.used_in||[]).join(', ')+'</span></td>'
         +'<td class="pf-whcell">'+pfWhPillsHtml(m)+'</td>';
@@ -576,6 +628,14 @@
     return html;
   }
   // stock value shown right under the item name
+  /* A material measured in litres gets its unit on the figure itself. The value is
+     already in litres - SAP holds the BOM line in the material's own unit - so nothing is
+     converted here; this only stops a litre figure being read as a count of drums or caps.
+     Pieces are left bare, the way they were. */
+  function pfIsLtr(u){ return /^(L|LT|LTR|LTRS|LITRE|LITER|LITRES|LITERS)$/i.test(String(u||'').trim()); }
+  function pfQtyCell(v,uom){
+    return pfNum2(v)+(pfIsLtr(uom)?'<span class="pf-unit">L</span>':'');
+  }
   function pfNameStock(c){ return '<div class="pf-namestock'+(c.short?' short':'')+'"><i class="ic ic-package"></i> in stock: '+pfNum2(c.available)+(c.uom?(' '+c.uom):'')+'</div>'; }
   // Apply the warehouse selection → close panel + re-run the current calculation
   function pfWhApply(){

@@ -152,7 +152,10 @@ def get_fg_list():
     rows = sap_connector.execute_query(
         'SELECT m."ItemCode" AS CODE, m."ItemName" AS NAME, '
         '  COALESCE(m."U_TYPE", \'\') AS TYP, COALESCE(m."U_Sub_Group", \'\') AS SUBG, '
-        '  COALESCE(m."U_Variety", \'\') AS VAR, COALESCE(m."U_SKU", \'\') AS SKU '
+        '  COALESCE(m."U_Variety", \'\') AS VAR, COALESCE(m."U_SKU", \'\') AS SKU, '
+        # SalPackUn is the litres in one sellable unit - 200 for a 200 LTR drum, 5 for a
+        # 5 LTR can. The plan is entered in units, so this is what turns it into litres.
+        '  COALESCE(m."SalPackUn", 0) AS LTR '
         'FROM "%s"."OITM" m '
         'WHERE m."ItmsGrpCod" = 102 AND m."ItemCode" IN (SELECT "Code" FROM "%s"."OITT") '
         'ORDER BY m."U_TYPE", m."U_Sub_Group", m."U_Variety", m."U_SKU", m."ItemName"'
@@ -165,6 +168,9 @@ def get_fg_list():
             'sub_group': (r['SUBG'] or '').strip().upper() or '—',
             'variety': (r['VAR'] or '').strip().upper() or '—',
             'sku': (r['SKU'] or '').strip().upper() or '—',
+            # Litres in one unit. 0 when SAP has none, and the page then shows no litres
+            # at all rather than inventing a figure.
+            'ltr': round(float(r['LTR'] or 0), 3),
         })
     return out
 
