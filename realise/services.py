@@ -137,7 +137,11 @@ def _fetch_raw_beverages(start_date, end_date):
         SUM(T1."Quantity") AS "PCS_Sold",
         MAX(T2."SalFactor2") AS "PCS_Per_Box",
         ROUND(SUM(T1."Quantity" / NULLIF(T2."SalFactor2",0)), 2) AS "Boxes_Sold",
-        SUM(T1."LineTotal") AS "Sales_Value"
+        SUM(T1."LineTotal") AS "Sales_Value",
+        -- GST on the line. There is no single rate to assume: this month alone the
+        -- beverages book carries 5% and 40% lines, so the tax has to be summed, never
+        -- worked out as a percentage of the net.
+        SUM(T1."VatSum") AS "Vat_Value"
     FROM {BEVERAGES_SCHEMA}.OINV T0
     INNER JOIN {BEVERAGES_SCHEMA}.INV1 T1 ON T0."DocEntry" = T1."DocEntry"
     INNER JOIN {BEVERAGES_SCHEMA}.OITM T2 ON T1."ItemCode" = T2."ItemCode"
@@ -355,14 +359,16 @@ def get_beverages_rows(start_date, end_date, want_prev=False):
         # actually sold for). Same number as unit price x case pack, because
         # boxes = quantity / case pack - the division just cancels out.
         val = _bev_num(_bev_pick(r, 'Sales_Value', 'SALES_VALUE', 'LineTotal', 'LINETOTAL'))
+        vat = _bev_num(_bev_pick(r, 'Vat_Value', 'VAT_VALUE', 'VatSum', 'VATSUM'))
         dd = _bev_date(_bev_pick(r, 'DocDate', 'DOCDATE', 'Doc_Date', 'doc_date'))
         ym, mlabel = _bev_month_key(r, dd)
         ymk = ym or ''   # carried on each row so the client can filter to a single month
         key = (variety, sub, sku, item, main_group, state, brand, chain, sales_person, customer, ymk)
-        cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0, 'value': 0.0})
+        cell = agg.setdefault(key, {'quantity': 0.0, 'boxes': 0.0, 'value': 0.0, 'vat': 0.0})
         cell['quantity'] += qty
         cell['boxes'] += box
         cell['value'] += val
+        cell['vat'] += vat
         cc = cust_agg.setdefault((customer, brand, ymk), {'quantity': 0.0, 'boxes': 0.0})
         cc['quantity'] += qty; cc['boxes'] += box
         if ym:
@@ -432,6 +438,7 @@ def get_beverages_rows(start_date, end_date, want_prev=False):
                      'quantity': round(v['quantity'], 2) if v else 0.0,
                      'boxes': round(v['boxes'], 2) if v else 0.0,
                      'value': round(v.get('value', 0.0), 2) if v else 0.0,
+                     'vat': round(v.get('vat', 0.0), 2) if v else 0.0,
                      'oih': round(oih_main.get(k, 0.0), 2)})
     oih_rows = [{'variety': k[0], 'sub_group': k[1], 'item': k[2], 'customer': k[3],
                  'brand': k[4], 'ym': k[5],

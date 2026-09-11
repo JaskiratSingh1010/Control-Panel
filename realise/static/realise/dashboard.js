@@ -346,7 +346,7 @@ async function loadBeverages(opts){
     renderBeverages();
     arMarkUpdated();        // stamp the freshness indicator (manual or silent auto-refresh)
     showToast((silent?'Auto-refreshed · ':'')+bevRows.length+(silent?' rows':' beverage rows loaded'), silent?'info':'ok');
-  }catch(e){ if(!silent){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="4" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; } }
+  }catch(e){ if(!silent){ showToast('Error: '+e.message,'err'); document.getElementById('bevBody').innerHTML='<tr><td colspan="6" style="padding:30px;text-align:center;color:#b91c1c">Error: '+esc(e.message)+'</td></tr>'; } }
   finally{ bevLoading=false; if(fb&&!silent){fb.disabled=false;fb.innerHTML='&#9654; Fetch Data';} if(!silent)document.getElementById('ov').classList.remove('show'); }
 }
 // Auto-refresh the active beverages view every 30 minutes (only while it's visible and
@@ -489,13 +489,36 @@ function buildBevTree(rows,order,depth,prefix,pfilters){
   if(depth>=order.length)return [];
   var dim=order[depth], map={};
   for(var i=0;i<rows.length;i++){var r=rows[i],v=r[dim]||'—';
-    if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,oih:0,_rows:[]};
-    map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v].oih+=r.oih||0; map[v]._rows.push(r);
+    if(!map[v])map[v]={name:v,dim:dim,quantity:0,boxes:0,value:0,vat:0,oih:0,_rows:[]};
+    map[v].quantity+=r.quantity||0; map[v].boxes+=r.boxes||0; map[v].oih+=r.oih||0;
+    map[v].value+=r.value||0;       // summed so each node can divide it by its own boxes
+    map[v].vat+=r.vat||0;           // the GST on those same lines, kept apart from it
+    map[v]._rows.push(r);
   }
   return Object.keys(map).map(function(k){var n=map[k];var path=prefix+'>'+dim+':'+n.name;n.path=path;
       var nf={}; for(var fk in (pfilters||{}))nf[fk]=pfilters[fk]; nf[dim]=n.name; n.filters=nf; bevNodeFilters[path]=nf;
       n.kids=buildBevTree(n._rows,order,depth+1,path,nf);delete n._rows;n.leaf=!n.kids.length;return n;})
     .sort(function(a,b){return b.quantity-a.quantity||String(a.name).localeCompare(String(b.name));});
+}
+/* Money over boxes, drawn the same way everywhere. avg=true marks a figure that is a
+   weighted average of several things rather than one item's own rate. A dash means there
+   were no boxes at all - not a rate of zero, which is a real and different answer. */
+function bevRateCell(value,boxes,avg){
+  var b=Number(boxes)||0, v=Number(value)||0;
+  if(b<=0)return '<span class="bev-rate is-none" title="No boxes in this range, so there is no rate">&mdash;</span>';
+  var tip=(avg?'Average rate across everything below: ':'Rate: ')
+         +fNp(v,2)+' over '+fN(Math.round(b*100)/100)+' boxes';
+  return '<span class="bev-rate'+(avg?' is-avg':'')+'" title="'+esc(tip)+'">₹'+fNp(v/b,2)+'</span>';
+}
+/* The same rate WITH GST. The tax is SUMMED from the invoice lines, never taken as a
+   percentage of the net: the beverages book carries more than one GST rate (5% and 40%
+   this month), so any flat percentage would be wrong for part of the range. */
+function bevRateGstCell(value,vat,boxes,avg){
+  var b=Number(boxes)||0, v=Number(value)||0, g=Number(vat)||0;
+  if(b<=0)return '<span class="bev-rate is-none" title="No boxes in this range, so there is no rate">&mdash;</span>';
+  var tip=(avg?'Average rate with GST across everything below: ':'Rate with GST: ')
+         +fNp(v+g,2)+' over '+fN(Math.round(b*100)/100)+' boxes · GST '+fNp(g,2);
+  return '<span class="bev-rate is-gst'+(avg?' is-avg':'')+'" title="'+esc(tip)+'">₹'+fNp((v+g)/b,2)+'</span>';
 }
 function bevTreeRows(nodes,level){
   var html='';
@@ -509,7 +532,14 @@ function bevTreeRows(nodes,level){
     var qv='<span class="bev-docval'+(sOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="sales" title="Show invoices">'+fN(n.quantity)+'</span>';
     var bv='<span class="bev-docval'+(sOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="sales" title="Show invoices">'+fN(n.boxes)+'</span>';
     var ov=(n.oih>0)?('<span class="bev-docval'+(oOpen?' open':'')+'" data-bevpath="'+esc(n.path)+'" data-metric="oih" title="Show open SOs">'+fN(n.oih||0)+'</span>'):fN(n.oih||0);
-    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+qv+'</td><td class="num">'+bv+'</td><td class="num">'+ov+'</td></tr>';
+    // Rate = money over boxes. One formula, two readings: on a row that opens up it is the
+    // weighted average of everything underneath (a 2,000-box item pulls it far harder than a
+    // 250-box one); on a leaf there is nothing underneath, so it IS that item's own rate.
+    // Set quieter on a parent so an average is never mistaken for an exact price.
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(n.name)+'</td><td class="num">'+qv+'</td><td class="num">'+bv+'</td>'
+       +'<td class="num">'+bevRateCell(n.value,n.boxes,hasKids)+'</td>'
+       +'<td class="num">'+bevRateGstCell(n.value,n.vat,n.boxes,hasKids)+'</td>'
+       +'<td class="num">'+ov+'</td></tr>';
     html+=bevDocRows(n.path,'sales',level)+bevDocRows(n.path,'oih',level);
     if(hasKids&&open)html+=bevTreeRows(n.kids,level+1);
   }
@@ -523,16 +553,18 @@ function bevDocRows(path,metric,level){
   var st=bevDocState[path+'|'+metric];
   if(!st||!st.open)return '';
   var pad=12+(level+1)*18, noun=(metric==='oih'?'open SOs':'invoices');
-  if(st.loading)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">Loading&hellip;</td><td></td><td></td><td></td></tr>';
-  if(st.err)return '<tr class="bev-doc-row bev-doc-err"><td style="padding-left:'+pad+'px">Could not load.</td><td></td><td></td><td></td></tr>';
+  if(st.loading)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">Loading&hellip;</td><td></td><td></td><td></td><td></td><td></td></tr>';
+  if(st.err)return '<tr class="bev-doc-row bev-doc-err"><td style="padding-left:'+pad+'px">Could not load.</td><td></td><td></td><td></td><td></td><td></td></tr>';
   var docs=st.docs||[];
   var pinnedCust=(bevNodeFilters[path]||{}).customer;
-  if(!docs.length)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">No '+(pinnedCust?noun:'customers')+' in range.</td><td></td><td></td><td></td></tr>';
+  if(!docs.length)return '<tr class="bev-doc-row"><td style="padding-left:'+pad+'px">No '+(pinnedCust?noun:'customers')+' in range.</td><td></td><td></td><td></td><td></td><td></td></tr>';
   if(!pinnedCust)return bevCustRows(docs,pad);
   var html='', lbl=(metric==='oih'?'SO':'INV');
   for(var i=0;i<docs.length;i++){var d=docs[i];
     html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">'+lbl+'</span>'+esc(d.doc_num||'—')+' &middot; '+esc(d.doc_date||'—')+'</td>'
-      +'<td class="num">'+fN(d.quantity||0)+'</td><td class="num">'+fN(d.boxes||0)+'</td><td class="num"></td></tr>';
+      // No money on a document row, so Rate stays blank - better than a made-up number.
+      +'<td class="num">'+fN(d.quantity||0)+'</td><td class="num">'+fN(d.boxes||0)+'</td>'
+      +'<td class="num"></td><td class="num"></td><td class="num"></td></tr>';
   }
   return html;
 }
@@ -548,7 +580,8 @@ function bevCustRows(docs,pad){
   var html='';
   for(var j=0;j<groups.length;j++){var g=groups[j];
     html+='<tr class="bev-doc-row"><td style="padding-left:'+pad+'px"><span class="bev-doc-tag">CUST</span>'+esc(g.name)+'</td>'
-      +'<td class="num">'+fN(g.quantity)+'</td><td class="num">'+fN(g.boxes)+'</td><td class="num"></td></tr>';
+      +'<td class="num">'+fN(g.quantity)+'</td><td class="num">'+fN(g.boxes)+'</td>'
+      +'<td class="num"></td><td class="num"></td><td class="num"></td></tr>';
   }
   return html;
 }
@@ -639,17 +672,18 @@ function bevRenderBoxTable(rows){
   var acc={};
   for(var i=0;i<rows.length;i++){
     var k=bevSkuLabel(rows[i].sku);
-    if(!acc[k])acc[k]={box:0,val:0};
+    if(!acc[k])acc[k]={box:0,val:0,vat:0};
     acc[k].box+=Number(rows[i].boxes)||0;
     acc[k].val+=Number(rows[i].value)||0;
+    acc[k].vat+=Number(rows[i].vat)||0;
   }
   // Biggest seller first, which also puts the odd small sizes at the bottom.
-  var list=Object.keys(acc).map(function(k){return {name:k,box:acc[k].box,val:acc[k].val};})
+  var list=Object.keys(acc).map(function(k){return {name:k,box:acc[k].box,val:acc[k].val,vat:acc[k].vat};})
                  .filter(function(r){return r.box!==0||r.val!==0;})
                  .sort(function(a,b){return b.box-a.box||String(a.name).localeCompare(String(b.name));});
-  var tb=0,tv=0;
-  for(var j=0;j<list.length;j++){ tb+=list[j].box; tv+=list[j].val; }
-  bevBoxData={list:list, boxes:tb, value:tv, rows:rows.slice()};
+  var tb=0,tv=0,tg=0;
+  for(var j=0;j<list.length;j++){ tb+=list[j].box; tv+=list[j].val; tg+=list[j].vat; }
+  bevBoxData={list:list, boxes:tb, value:tv, vat:tg, rows:rows.slice()};
   bevPaintBoxCard();
 }
 /* Pack sizes across: one column per size, boxes above realise, TOTAL set apart at the
@@ -661,7 +695,11 @@ function bevRenderSizeStrip(){
   if(!d||!d.list.length){ el.innerHTML=''; return; }   // :empty hides the whole block
   var avg=d.boxes?(d.value/d.boxes):0;
   var head='<tr><th>Box</th>', boxes='<tr><td class="bev-sz-lbl">Total Boxes</td>',
-      rz='<tr><td class="bev-sz-lbl">Realise</td>';
+      rz='<tr><td class="bev-sz-lbl">Realise</td>',
+      /* Realise WITH GST. The tax is summed from the invoice lines, never taken as a
+         percentage: the beverages book carries more than one rate (5% and 40% this
+         month), so any flat percentage would be wrong for part of the range. */
+      rzg='<tr><td class="bev-sz-lbl">Realise + GST</td>';
   for(var i=0;i<d.list.length;i++){
     var r=d.list[i], rate=r.box?(r.val/r.box):0;
     var tip=r.name+': '+fNp(r.val,2)+' over '+fN(Math.round(r.box*100)/100)+' boxes';
@@ -670,6 +708,10 @@ function bevRenderSizeStrip(){
     // Guard on BOXES: boxes that earned nothing have a real realise of 0.00; a dash is
     // reserved for "no boxes, so no rate exists".
     rz+='<td class="bev-sz-v" title="'+esc(tip)+'">'+(r.box?('₹'+fNp(rate,2)):'—')+'</td>';
+    var gross=r.box?((r.val+(r.vat||0))/r.box):0;
+    var gtip=r.name+' with GST: '+fNp(r.val+(r.vat||0),2)+' over '
+            +fN(Math.round(r.box*100)/100)+' boxes (GST '+fNp(r.vat||0,2)+')';
+    rzg+='<td class="bev-sz-g" title="'+esc(gtip)+'">'+(r.box?('₹'+fNp(gross,2)):'—')+'</td>';
   }
   /* TOTAL is WEIGHTED - all value over all boxes - never the mean of the size rates, which
      would let a one-box size count as much as a 12,000-box one. */
@@ -679,7 +721,12 @@ function bevRenderSizeStrip(){
   boxes+='<td class="bev-sz-b is-total" title="'+esc(ttip)+'">'+fN(Math.round(d.boxes))+'</td></tr>';
   rz+='<td class="bev-sz-v is-total" title="'+esc(ttip)+'">'
      +(d.boxes?('₹'+fNp(avg,2)):'—')+'</td></tr>';
-  el.innerHTML='<table><thead>'+head+'</thead><tbody>'+boxes+rz+'</tbody></table>';
+  var gvat=Number(d.vat)||0, gavg=d.boxes?((d.value+gvat)/d.boxes):0;
+  var gttip='All sizes with GST: '+fNp(d.value+gvat,2)+' over '+fN(Math.round(d.boxes*100)/100)
+           +' boxes. GST '+fNp(gvat,2)+', summed from the invoice lines, not a flat rate.';
+  rzg+='<td class="bev-sz-g is-total" title="'+esc(gttip)+'">'
+      +(d.boxes?('₹'+fNp(gavg,2)):'—')+'</td></tr>';
+  el.innerHTML='<table><thead>'+head+'</thead><tbody>'+boxes+rz+rzg+'</tbody></table>';
 }
 function bevPaintBoxCard(){
   var el=document.getElementById('bevKpiBoxTable');
@@ -710,6 +757,108 @@ function bevBoxRealiseCell(val,box){
   return '<td class="num" title="'+esc(fNp(val||0,2)+' over '+fN(Math.round((box||0)*100)/100)+' boxes')+'">'
         +(box?('₹'+fNp((val||0)/box,2)):'—')+'</td>';
 }
+/* The Boxes & Realise popup has its own Drill Order, separate from the one on the page
+   behind it: changing the grouping inside the popup must not re-shuffle the table the user
+   will go back to. Starts on Item Name, which is how the popup always used to be grouped. */
+var bevBoxOrder=['item'], bevBoxChosen=['item'], bevBoxExpanded={}, bevBoxRows=[];
+function bevBoxRenderDpList(){
+  var list=document.getElementById('bevBoxDpList'); if(!list)return; list.innerHTML='';
+  BEV_DIMS.forEach(function(d){
+    var pos=bevBoxChosen.indexOf(d.key);
+    var item=document.createElement('label');
+    item.className='com-dp-item'+(pos!==-1?' checked':'');
+    item.innerHTML='<input type="checkbox" '+(pos!==-1?'checked':'')+'><span class="com-dp-name">'
+                  +d.label+'</span><span class="com-pos">'+(pos!==-1?pos+1:'')+'</span>';
+    item.querySelector('input').addEventListener('change',function(){
+      var i=bevBoxChosen.indexOf(d.key);
+      if(this.checked){ if(i===-1)bevBoxChosen.push(d.key); } else if(i!==-1)bevBoxChosen.splice(i,1);
+      bevBoxRenderDpList();
+    });
+    list.appendChild(item);
+  });
+}
+function bevBoxInitDrill(){
+  var btn=document.getElementById('bevBoxDrillBtn'), panel=document.getElementById('bevBoxDrillPanel');
+  if(!btn||!panel)return;
+  btn.addEventListener('click',function(e){ e.stopPropagation(); bevBoxChosen=bevBoxOrder.slice();
+    bevBoxRenderDpList(); panel.classList.toggle('open'); });
+  panel.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.addEventListener('click',function(){ panel.classList.remove('open'); });
+  document.getElementById('bevBoxSelAll').addEventListener('click',function(){
+    bevBoxChosen=BEV_DIMS.map(function(d){return d.key;}); bevBoxRenderDpList(); });
+  document.getElementById('bevBoxClrAll').addEventListener('click',function(){
+    bevBoxChosen=[]; bevBoxRenderDpList(); });
+  document.getElementById('bevBoxApply').addEventListener('click',function(){
+    if(!bevBoxChosen.length){ showToast('Pick at least one dimension','info'); return; }
+    bevBoxOrder=bevBoxChosen.slice(); bevBoxExpanded={};
+    panel.classList.remove('open'); bevBoxRenderTree();
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bevBoxInitDrill);
+else bevBoxInitDrill();
+// Expand / collapse inside the popup, on its own state so the page behind is untouched.
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var tw=e.target.closest('#bevBoxItemBody .bev-tw'); if(!tw)return;
+  var path=tw.getAttribute('data-boxpath');
+  bevBoxExpanded[path]=!bevBoxExpanded[path]; bevBoxRenderTree();
+});
+function bevBoxTreeRows(nodes,level){
+  var html='';
+  for(var i=0;i<nodes.length;i++){
+    var nd=nodes[i], hasKids=nd.kids&&nd.kids.length>0, open=!!bevBoxExpanded[nd.path];
+    var tw=hasKids?('<span class="bev-tw'+(open?' open':'')+'" data-boxpath="'+esc(nd.path)+'">&#9654;</span>')
+                  :'<span class="bev-tw-empty"></span>';
+    var tag='<span class="cd-tag">'+esc(BEV_DIM_NAME[nd.dim]||nd.dim)+'</span>';
+    html+='<tr><td style="padding-left:'+(12+level*18)+'px">'+tw+tag+esc(nd.name)+'</td>'
+       +'<td class="num">'+fN(Math.round((nd.quantity||0)*100)/100)+'</td>'
+       +'<td class="num">'+fN(Math.round((nd.boxes||0)*100)/100)+'</td>'
+       +bevBoxRealiseCell(nd.value,nd.boxes)
+       +bevBoxRealiseGstCell(nd.value,nd.vat,nd.boxes)+'</tr>';
+    if(hasKids&&open)html+=bevBoxTreeRows(nd.kids,level+1);
+  }
+  return html;
+}
+/* Group the popup's rows by whatever Drill Order is set and paint the table. Split out of
+   openBevBoxes so Apply and a twirl can repaint without re-opening the popup. */
+function bevBoxRenderTree(){
+  var body=document.getElementById('bevBoxItemBody'); if(!body)return;
+  var lbl=document.getElementById('bevBoxDrillLabel');
+  if(lbl)lbl.textContent=bevBoxOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
+  var head=document.getElementById('bevBoxNameCol');
+  if(head)head.textContent=bevBoxOrder.map(function(k){return BEV_DIM_NAME[k];}).join(' › ')||'Dimension';
+  if(!bevBoxOrder.length){
+    body.innerHTML='<tr><td colspan="5" style="padding:34px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';
+    return;
+  }
+  // buildBevTree writes into the shared bevNodeFilters, which the PAGE's document drill
+  // reads. Park it while the popup builds, so the popup can never rewrite those filters.
+  var saved=bevNodeFilters; bevNodeFilters={};
+  var tree=buildBevTree(bevBoxRows,bevBoxOrder,0,'',{});
+  bevNodeFilters=saved;
+  var tq=0,tb=0,tv=0,tg=0;
+  for(var i=0;i<bevBoxRows.length;i++){
+    tq+=Number(bevBoxRows[i].quantity)||0; tb+=Number(bevBoxRows[i].boxes)||0;
+    tv+=Number(bevBoxRows[i].value)||0;    tg+=Number(bevBoxRows[i].vat)||0;
+  }
+  if(!tree.length){
+    body.innerHTML='<tr><td colspan="5" style="padding:34px;text-align:center;color:#7b8794">No items in this selection.</td></tr>';
+    return;
+  }
+  body.innerHTML=bevBoxTreeRows(tree,0)
+    +'<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td>'
+    +'<td class="num">'+fN(Math.round(tb*100)/100)+'</td>'
+    +bevBoxRealiseCell(tv,tb)+bevBoxRealiseGstCell(tv,tg,tb)+'</tr>';
+}
+/* Realise WITH GST for the popup. The tax is SUMMED from the invoice lines, never taken
+   as a percentage of the net - this book carries more than one GST rate (5% and 40% this
+   month), so a flat percentage would be wrong for part of the range. */
+function bevBoxRealiseGstCell(val,vat,box){
+  var b=Number(box)||0, v=Number(val)||0, g=Number(vat)||0;
+  return '<td class="num"><span class="bev-rate is-gst" title="'
+        +esc(fNp(v+g,2)+' over '+fN(Math.round(b*100)/100)+' boxes · GST '+fNp(g,2))+'">'
+        +(b?('₹'+fNp((v+g)/b,2)):'—')+'</span></td>';
+}
 function openBevBoxes(){
   if(!bevFetched){showToast('Fetch beverages first','info');return;}
   var d=bevBoxData;
@@ -722,35 +871,11 @@ function openBevBoxes(){
     (f&&t?bevFmtRange(f,t)+' · ':'')+fN(Math.round(d.boxes*100)/100)+' boxes · '
     +(d.boxes?('₹'+fNp(avg,2)+' realise / box'):'no realise');
 
-  // Roll the on-screen rows up to item / brand / SKU.
-  var im={},order=[];
-  for(var j=0;j<d.rows.length;j++){
-    var w=d.rows[j], key=(w.item||'—')+'|'+(w.brand||'—')+'|'+(w.sku||'—');
-    if(!im[key]){im[key]={item:w.item||'—',brand:w.brand||'—',sku:w.sku||'—',
-                          qty:0,box:0,val:0};order.push(key);}
-    im[key].qty+=Number(w.quantity)||0;
-    im[key].box+=Number(w.boxes)||0;
-    im[key].val+=Number(w.value)||0;
-  }
-  var items=order.map(function(k){return im[k];})
-                 .filter(function(x){return x.qty||x.box||x.val;})
-                 .sort(function(a,b){return b.box-a.box;});
-  var tq=0,tb=0,tv=0,html='';
-  for(var k2=0;k2<items.length;k2++){
-    var it=items[k2];
-    tq+=it.qty; tb+=it.box; tv+=it.val;
-    html+='<tr><td>'+esc(it.item)+'</td><td>'+esc(it.brand)+'</td><td>'+esc(it.sku)+'</td>'
-         +'<td class="num">'+fN(Math.round(it.qty*100)/100)+'</td>'
-         +'<td class="num">'+fN(Math.round(it.box*100)/100)+'</td>'
-         +bevBoxRealiseCell(it.val,it.box)+'</tr>';
-  }
-  if(!items.length){
-    html='<tr><td colspan="6" style="padding:34px;text-align:center;color:#7b8794">No items in this selection.</td></tr>';
-  }else{
-    html+='<tr class="cd-total"><td colspan="3">TOTAL</td><td class="num">'+fN(Math.round(tq*100)/100)+'</td>'
-         +'<td class="num">'+fN(Math.round(tb*100)/100)+'</td>'+bevBoxRealiseCell(tv,tb)+'</tr>';
-  }
-  document.getElementById('bevBoxItemBody').innerHTML=html;
+  // Whatever Drill Order the popup is on paints the table; the rows are the same
+  // brand/month-filtered ones the card totals were built from.
+  bevBoxRows=d.rows||[];
+  bevBoxExpanded={};
+  bevBoxRenderTree();
   document.getElementById('bevBoxModal').classList.add('show');
 }
 function closeBevBoxes(){document.getElementById('bevBoxModal').classList.remove('show');}
@@ -761,7 +886,9 @@ function renderBeverages(){
   var lbl=document.getElementById('bevDrillLabel'); if(lbl)lbl.textContent=label||'— none —';
   bevSyncViewSelect();
   var rows=bevActiveRows();
-  var tq=0,tb=0,toih=0; for(var i=0;i<rows.length;i++){tq+=rows[i].quantity||0;tb+=rows[i].boxes||0;toih+=rows[i].oih||0;}
+  var tq=0,tb=0,toih=0,tv=0,tg=0;
+  for(var i=0;i<rows.length;i++){tq+=rows[i].quantity||0;tb+=rows[i].boxes||0;toih+=rows[i].oih||0;
+    tv+=rows[i].value||0; tg+=rows[i].vat||0;}
   tq=Math.round(tq*100)/100; tb=Math.round(tb*100)/100; toih=Math.round(toih*100)/100;
   document.getElementById('bevKpiQty').textContent=fN(tq);
   document.getElementById('bevKpiOih').textContent=fN(toih);
@@ -783,13 +910,17 @@ function renderBeverages(){
     if(bxEl)bxEl.innerHTML='<div class="sl">Total Boxes</div><div class="sv">—</div>';
     document.getElementById('bevKpiToday').textContent='—'; document.getElementById('bevKpiPrev').textContent='—';
     var rzp=document.getElementById('bevRzPrev'); if(rzp)rzp.innerHTML='';
-    body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevMode==='months'?'Enter a number of months and click Fetch to load beverages.':'Pick a date range and click Fetch to load beverages.')+'</td></tr>';return;}
-  if(!bevOrder.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
-  if(!rows.length){body.innerHTML='<tr><td colspan="4" style="padding:40px;text-align:center;color:#7b8794">'+(bevBrand?('No rows for brand "'+esc(bevBrand)+'".'):'No beverage rows in this range.')+'</td></tr>';return;}
+    body.innerHTML='<tr><td colspan="6" style="padding:40px;text-align:center;color:#7b8794">'+(bevMode==='months'?'Enter a number of months and click Fetch to load beverages.':'Pick a date range and click Fetch to load beverages.')+'</td></tr>';return;}
+  if(!bevOrder.length){body.innerHTML='<tr><td colspan="6" style="padding:40px;text-align:center;color:#7b8794">Select at least one drill dimension.</td></tr>';return;}
+  if(!rows.length){body.innerHTML='<tr><td colspan="6" style="padding:40px;text-align:center;color:#7b8794">'+(bevBrand?('No rows for brand "'+esc(bevBrand)+'".'):'No beverage rows in this range.')+'</td></tr>';return;}
   bevNodeFilters={};
   bevTree=buildBevTree(rows,bevOrder,0,'',{});
   var html=bevTreeRows(bevTree,0);
-  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td><td class="num">'+fN(toih)+'</td></tr>';
+  // Weighted - all money over all boxes - so TOTAL matches the Total Boxes card's realise.
+  html+='<tr class="cd-total"><td>TOTAL</td><td class="num">'+fN(tq)+'</td><td class="num">'+fN(tb)+'</td>'
+     +'<td class="num">'+bevRateCell(tv,tb,true)+'</td>'
+     +'<td class="num">'+bevRateGstCell(tv,tg,tb,true)+'</td>'
+     +'<td class="num">'+fN(toih)+'</td></tr>';
   body.innerHTML=html;
 }
 /* Brand switch: "Both" plus one button per brand actually present (JIVO / SANO today).
