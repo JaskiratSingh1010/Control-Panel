@@ -52,3 +52,8 @@ claude-chat-history.md
 
 # Local cache directory (file-backed Django cache)
 .django-cache/
+
+# TLS material for the LAN/HTTPS server. The private key must never be committed -
+# anyone holding it can impersonate the panel. Generate per machine with
+# deploy/make_cert.sh; the .crt is handed to users to trust, the .key stays here.
+certs/
