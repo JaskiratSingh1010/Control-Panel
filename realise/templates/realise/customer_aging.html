@@ -71,7 +71,10 @@
   /* Conditions popup */
   .ag-cond{position:relative}
   .ag-cond.open .ag-cond-pop{display:block}
-  .ag-cond-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);left:0;width:260px;background:#fff;
+  /* Anchored to the button's RIGHT edge, not its left. Conditions is the last control
+     on the filter row, so a 260px panel hung off the left corner ran past the edge of
+     the window and was cut in half. Opening leftwards keeps it on screen at any width. */
+  .ag-cond-pop{display:none;position:absolute;z-index:50;top:calc(100% + 6px);right:0;left:auto;width:260px;background:#fff;
     border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 16px 40px rgba(15,23,42,.18);padding:12px}
   .ag-cond-row{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#64748b;margin-bottom:7px}
   .ag-cond-pop select,.ag-cond-pop input{width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;
@@ -1256,7 +1259,7 @@
     var parties = filteredCustomers().map(function(x){ return {code:x.c.code, name:x.c.name, format:x.format}; });
     if(!parties.length){ alert('No parties match the current filters.'); return; }
     var btn=document.getElementById('agExportDetail'), lbl=document.getElementById('agExportDetailLbl');
-    var old=lbl?lbl.textContent:''; if(btn)btn.disabled=true; if(lbl)lbl.textContent='Preparing… ('+parties.length+')';
+    var old='Export Detail';          // fixed, so a stuck label cannot perpetuate itself if(btn)btn.disabled=true; if(lbl)lbl.textContent='Preparing… ('+parties.length+')';
     var fn='Customer Aging Detail '+(document.getElementById('agAsOf').value||'')+'.xlsx';
     fetch(DETAIL_EXPORT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
       body:JSON.stringify({as_of:document.getElementById('agAsOf').value, parties:parties})})
@@ -1267,7 +1270,8 @@
         setTimeout(function(){URL.revokeObjectURL(url);},1500);
       })
       .catch(function(err){ alert('Could not export detail: '+((err&&err.message)||err)); })
-      .then(function(){ if(btn)btn.disabled=false; if(lbl)lbl.textContent=old; });
+      // .finally so the label always comes back, even if the alert path throws.
+      .finally(function(){ if(btn)btn.disabled=false; if(lbl)lbl.textContent=old; });
   }
 
   // The book to export = exactly what the active filters show: each format keeps only the
@@ -1387,7 +1391,8 @@
         setTimeout(function(){URL.revokeObjectURL(url);},1500);
       })
       .catch(function(){ exportAgingCSV(); })       // fallback: plain CSV
-      .then(function(){ if(btn)btn.disabled=false; });
+      // .finally so a throw inside the CSV fallback cannot leave the button disabled.
+      .finally(function(){ if(btn)btn.disabled=false; });
   }
 
   // ── Raw invoices drill (Beverages) — Excel-like sortable/filterable table ──
@@ -1868,7 +1873,11 @@
   function exportRawExcel(){
     var rows = rawFilteredRows();
     if(!rows.length){ showToast('Nothing to export','err'); return; }
-    var btn = document.getElementById('agRawExport'), label = btn.textContent;
+    var btn = document.getElementById('agRawExport');
+    // A FIXED label, not whatever the button currently reads. Capturing the live text
+    // meant that once it was stuck mid-build, every later export restored it to that
+    // same stuck text, so the button could never recover on its own.
+    var label = 'Export Excel';
     btn.disabled = true; btn.textContent = 'Building\u2026';
     var cols = RAW_COLS.slice();
     var nc = cols.length, numFlag = cols.map(isNumCol);   // hoisted out of the per-row loop
@@ -1918,7 +1927,10 @@
         showToast('Excel export failed (' + err.message + ') \u2014 sending CSV instead', 'err');
         exportPivotCSV();
       })
-      .then(function(){ btn.disabled = false; btn.textContent = label; });
+      // .finally, not .then: the .catch above calls exportPivotCSV(), and if THAT threw,
+      // the chain stayed rejected and a trailing .then never ran - which is exactly how
+      // the button was left disabled, still reading "Building...", for good.
+      .finally(function(){ btn.disabled = false; btn.textContent = label; });
   }
   function exportPivotCSV(){
     var root=buildPivotTree();
