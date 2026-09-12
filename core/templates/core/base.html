@@ -16,7 +16,7 @@
   <link href="{% static 'vendor/css/lucide.css' %}" rel="stylesheet">
   
   {% comment %}
-    Inter = everything. Archivo = big headings. Caveat = handwriting accent.
+    Inter = everything. A system serif = big headings. Caveat = handwriting accent.
     Spline Sans Mono handles the digits (see core/_numerals.html). All served
     from our own /static/, so no page waits on Google.
     NOTE: {# #} only works on ONE line - across lines Django prints it as text.
@@ -30,13 +30,15 @@
     /* The browser paints the <html> element before it knows about <body>.
        Without a colour here that moment is plain white - the flash you see
        between pages. Same grey as the body, so there is nothing to notice. */
-    html { background: #f3f4f6; }
-    body { margin: 0; font-family: 'CPNum', 'Inter', sans-serif; background: #f3f4f6; color: #1f2937; }
+    html { background: #f7f7f9; }
+    body { margin: 0; font-family: 'CPNum', 'Inter', sans-serif; background: var(--rz-bg, #f7f7f9);
+           color: var(--rz-body, #4a4a61); -webkit-font-smoothing: antialiased; }
 
-    /* Archivo on the big headings, the way the E-Commerce app uses it.
-       Plain h1/h2 selectors, so any page that sets its own heading font still
-       wins - this only fills in where nothing else was specified. */
-    h1, h2 { font-family: var(--font-display); }
+    /* The serif display face on the big headings. Plain h1/h2 selectors, so any page
+       that sets its own heading font still wins - this only fills in where nothing
+       else was specified. */
+    h1, h2 { font-family: var(--font-display); color: var(--rz-ink); font-weight: 400;
+             letter-spacing: -.01em; }
 
     /* Cross-fade from the old page to the new one instead of cutting to blank.
        Browsers that do not support this just navigate the old way - nothing
@@ -55,28 +57,53 @@
        dashboard: white cards, thin colour accents, soft shadows, dark-on-light text.
        Tweak here to re-tone every page at once. */
     :root {
-      --rz-bg:        #f4f6fb;   /* page background                       */
+      /* Surfaces: a very light, slightly cool page behind white cards with a thin
+         border. Depth comes from the border, not from shadow. */
+      --rz-bg:        #f7f7f9;   /* page background                       */
       --rz-card:      #ffffff;   /* card / panel surface                  */
-      --rz-card-brd:  #ecebf5;   /* subtle card border                    */
-      --rz-shadow:    0 4px 14px rgba(15,23,42,.05);   /* soft card shadow */
-      --rz-shadow-lg: 0 8px 24px rgba(15,23,42,.07);   /* hero / raised    */
-      --rz-ink:       #0f172a;   /* primary heading / value text          */
-      --rz-body:      #334155;   /* body text                             */
-      --rz-muted:     #64748b;   /* muted labels                          */
-      --rz-faint:     #94a3b8;   /* faint / placeholder                   */
-      --rz-line:      #e5e7eb;   /* hairline / divider                    */
-      --rz-indigo:    #6366f1;   /* primary accent                        */
-      --rz-indigo-deep:#4338ca;  /* accent text on soft bg                */
-      --rz-soft:      #eef2ff;   /* soft accent fill (active chips)       */
-      --rz-soft-brd:  #e0e7ff;   /* soft accent border                    */
-      --rz-head-bg:   #f8fafc;   /* table header background (light)       */
-      --rz-head-ink:  #475569;   /* table header text                     */
-      --rz-total-bg:  #f1f5f9;   /* grand-total row background            */
-      --rz-total-brd: #e2e8f0;   /* grand-total row top border            */
-      --rz-pos:       #16a34a;   /* positive / green                      */
-      --rz-neg:       #e11d48;   /* negative / red                        */
-      --rz-amber:     #d97706;   /* amber accent                          */
-      --rz-teal:      #0d9488;   /* teal accent                           */
+      --rz-card-brd:  #e7e7ec;   /* subtle card border                    */
+      --rz-shadow:    0 4px 14px rgba(30,30,50,.06);   /* soft card shadow */
+      --rz-shadow-lg: 0 10px 28px rgba(30,30,50,.09);  /* hero / raised    */
+      /* Text: dark navy-charcoal down to a muted lavender-grey, never pure black
+         and never a cold slate. */
+      --rz-ink:       #29283a;   /* primary heading / value text          */
+      --rz-body:      #4a4a61;   /* body text                             */
+      --rz-muted:     #8585a3;   /* muted labels                          */
+      --rz-faint:     #a3a3bb;   /* faint / placeholder                   */
+      --rz-line:      #e7e7ec;   /* hairline / divider                    */
+      --rz-indigo:    #5865f2;   /* primary accent                        */
+      --rz-indigo-deep:#4049c9;  /* accent text on soft bg                */
+      --rz-soft:      #eef1ff;   /* soft accent fill (active chips)       */
+      --rz-soft-brd:  #dde2ff;   /* soft accent border                    */
+      --rz-head-bg:   #fafafc;   /* table header background (light)       */
+      --rz-head-ink:  #8585a3;   /* table header text                     */
+      --rz-total-bg:  #f7f7f9;   /* grand-total row background            */
+      --rz-total-brd: #e7e7ec;   /* grand-total row top border            */
+      --rz-pos:       #00a878;   /* positive / green                      */
+      --rz-neg:       #e5484d;   /* negative / red                        */
+      --rz-amber:     #f59e0b;   /* amber accent                          */
+      --rz-teal:      #00afa5;   /* teal accent                           */
+      /* ── Status tints ────────────────────────────────────────────────────
+         Every badge and soft-filled chip pairs a colour above with the matching
+         tint here, so a "done" green looks the same on every screen. */
+      --rz-pos-soft:   #eafbf5;  /* green tint   - completed / positive   */
+      --rz-pos-brd:    #bdeedd;
+      --rz-teal-soft:  #e8faf8;  /* teal tint    - categories             */
+      --rz-teal-brd:   #bfeeeb;
+      --rz-amber-soft: #fff7e6;  /* amber tint   - in progress            */
+      --rz-amber-brd:  #fbe2b4;
+      --rz-indigo-soft:#eef1ff;  /* indigo tint  - pending / info         */
+      --rz-indigo-brd: #dde2ff;
+      --rz-neg-soft:   #fff0f1;  /* red tint     - short / negative       */
+      --rz-neg-brd:    #fbd0d2;
+      /* ── Radius scale ────────────────────────────────────────────────────
+         Four steps only. Mixing more than this is what makes an interface look
+         assembled from unrelated parts. */
+      --r-card:   15px;
+      --r-btn:    10px;
+      --r-input:  10px;
+      --r-badge:   7px;
+      --r-avatar: 10px;
       /* Numeric font: the same face the Jivo E-Commerce app uses for every figure, so
          numbers look identical across both products. Spline Sans Mono is a monospace, so
          every digit is the same width and columns line up. Change this one line to
@@ -84,25 +111,34 @@
       --rz-num: 'CPNum', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       /* The four faces, matching the Jivo E-Commerce app.
            --font-body    Inter    everything: text, tables, buttons, labels
-           --font-display Archivo  big headings
+           --font-display serif    big headings (system stack, no download)
            --font-hand    Caveat   handwriting accent (declared, not yet used)
            --rz-num       Spline Sans Mono, digits only (see _numerals.html)
          A font is only downloaded when something actually uses it, so
          declaring Caveat here costs nothing until you put it on an element. */
       --font-body:    'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
-      --font-display: 'Archivo', 'Inter', system-ui, sans-serif;
+      /* Page titles and big figures are set in a serif, which is what gives the
+         interface its character against the plain sans everything else uses.
+         This is a SYSTEM stack on purpose - Georgia ships on Windows and macOS, so
+         it costs no download and works with no internet, which the panel requires.
+         Swap in a webfont here (vendored under core/static/vendor) if an exact
+         face is ever wanted; nothing else has to change. */
+      --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua',
+                      'Times New Roman', serif;
       --font-hand:    'Caveat', 'Inter', cursive;
       /* Big headline figures (the KPI stat cards) do NOT use the mono face. The
          Spline Sans Mono subset only ships one weight, so a 900-weight KPI value
          came out looking thin. This plain sans stack is what the live server uses,
          and it honours font-weight properly.                                       */
       --rz-num-plain: system-ui, "Segoe UI", Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif;
-      /* KPI accent bars (thin top strip on white stat cards) */
-      --rz-acc-indigo: linear-gradient(90deg,#6366f1,#7c3aed);
-      --rz-acc-green:  linear-gradient(90deg,#059669,#16a34a);
-      --rz-acc-red:    linear-gradient(90deg,#e11d48,#f43f5e);
-      --rz-acc-amber:  linear-gradient(90deg,#d97706,#f59e0b);
-      --rz-acc-teal:   linear-gradient(90deg,#0d9488,#14b8a6);
+      /* KPI accent bars (thin top strip on white stat cards). Flat colour, not a
+         gradient: at 3px tall a gradient reads as a muddy smear, and a single clean
+         colour is what ties the strip to the badge of the same meaning. */
+      --rz-acc-indigo: #5865f2;
+      --rz-acc-green:  #00a878;
+      --rz-acc-red:    #e5484d;
+      --rz-acc-amber:  #f59e0b;
+      --rz-acc-teal:   #00afa5;
     }
 
     /* ── Numeric values: subtle, upright figures across every report ───────────
@@ -142,14 +178,14 @@
     /* The logo block lines up exactly with the sidebar below it. --cp-sbw is written
        by JS from the sidebar's real width, so this follows the sidebar through every
        state - open, collapsed rail, and the hover-peek in between - with no guessing. */
-    .cp-topbar-brand { width: var(--cp-sbw, 310px); flex-shrink: 0; height: 100%;
+    .cp-topbar-brand { width: var(--cp-sbw, 244px); flex-shrink: 0; height: 100%;
                        display: flex; align-items: center; gap: 10px; padding: 0 14px;
                        border-right: 1px solid #e5e7eb; overflow: hidden;
                        transition: width .22s ease, padding .22s ease; }
     .cp-topbar-rest { flex: 1; display: flex; align-items: center; justify-content: flex-end;
                       gap: 10px; padding: 0 20px; min-width: 0; }
     /* The arrow straddles the divider, half on each side, like a seam button. */
-    .cp-topbar .cp-sb-arrow { position: absolute; left: var(--cp-sbw, 310px); top: 50%;
+    .cp-topbar .cp-sb-arrow { position: absolute; left: var(--cp-sbw, 244px); top: 50%;
                               margin: -13px 0 0 -13px; opacity: 1; pointer-events: auto;
                               z-index: 3; transition: left .22s ease; }
     /* On the narrow rail there is only room for the logo. */
@@ -215,7 +251,7 @@
        same words wider, ate the ~9px of spare room, and the label started getting
        cut off mid-word. 310px restores a real margin - enough that a font tweak or
        a slightly different rendering cannot clip it again. */
-    .cp-sidebar { width: 310px; background: #f8fafc; color: #334155; padding: 14px 14px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #e5e7eb; transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: calc(100vh - 56px); align-self: flex-start; }
+    .cp-sidebar { width: 244px; background: var(--rz-card); color: var(--rz-body); padding: 14px 10px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; border-right: 1px solid var(--rz-card-brd); transition: width .22s ease, padding .22s ease; position: sticky; top: 0; height: calc(100vh - 56px); align-self: flex-start; }
     /* Collapsed = a slim icon rail (not empty space): keep the nav icons,
        hide all text/labels, and let the floating menu button expand it. */
     /* Smart hover sidebar: collapsed = a slim icon rail that expands on hover and PUSHES
@@ -228,7 +264,7 @@
     }
     body.cp-sidebar-collapsed .cp-sidebar.cp-sb-peek,
     body.cp-sidebar-collapsed .cp-sidebar:focus-within {
-      width: 310px; padding: 14px 14px;   /* keep the hover-out rail the same width */
+      width: 244px; padding: 14px 10px;   /* keep the hover-out rail the same width */
     }
     /* Icon-only look only while the rail is NOT peeking/focused */
     body.cp-sidebar-collapsed .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label { display: none; }
@@ -263,20 +299,22 @@
        (click = open). */
     .cp-sb-arrow .ic { font-size: 16px; transform: rotate(180deg); transition: transform .2s ease; }
     body.cp-sidebar-collapsed .cp-sb-arrow .ic { transform: rotate(0deg); }
-    .cp-section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.9px; color: #64748b; margin: 16px 6px 6px 6px; text-transform: uppercase; }
+    .cp-section-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--rz-faint); margin: 16px 6px 6px 6px; text-transform: uppercase; }
     /* The 16px above each label separated it from the block before it. The first one
        now sits at the very top of the sidebar, so it needs no gap of its own. */
     .cp-section-label:first-child { margin-top: 0; }
     .cp-nav { display: flex; flex-direction: column; gap: 3px; }
-    .cp-nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 10px; border-radius: 10px; color: #334155; text-decoration: none; font-size: 14.5px; font-weight: 800; transition: background .15s, color .15s, box-shadow .15s; }
-    .cp-nav-item:hover { background: #eef2ff; color: #1e293b; }
+    .cp-nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 8px; border-radius: var(--r-btn); color: var(--rz-body); text-decoration: none; font-size: 14px; font-weight: 600; transition: background .15s, color .15s; }
+    .cp-nav-item:hover { background: var(--rz-bg); color: var(--rz-ink); }
     /* Selected page: a light indigo tint with indigo text, not a dark filled block.
        Hover is #eef2ff (one shade lighter), so the two never look the same. */
     /* No filled block behind the current page - the indigo wording and icon mark it
        instead. Hover still tints, so the row does not feel dead under the pointer. */
-    .cp-nav-item.active { background: none; color: #4338ca; }
-    .cp-nav-item.active:hover { background: #eef2ff; color: #3730a3; }
-    .cp-nav-item.active .ic { color: #4f46e5; }
+    /* The current page is the one solid block of colour in the whole sidebar - that is
+       what makes it findable at a glance without any other item shouting. */
+    .cp-nav-item.active { background: var(--rz-ink); color: #fff; font-weight: 600; }
+    .cp-nav-item.active:hover { background: #1f1e2c; color: #fff; }
+    .cp-nav-item.active .ic { color: #fff; }
     .cp-nav-item .ic { font-size: 20px; }
 
     /* ── Collapsible nav group (e.g. Analytical Reports) ── */
@@ -294,7 +332,7 @@
        lines. With the default line spacing those two lines sat far apart, which
        made the row look like it had a gap in front of the words. Tightening the
        spacing makes a wrapped label read as one block, level with the icon. */
-    .cp-nav-group-lead { display: flex; align-items: center; gap: 11px; min-width: 0; line-height: 1.15; white-space: nowrap; }
+    .cp-nav-group-lead { display: flex; align-items: center; gap: 9px; min-width: 0; line-height: 1.15; white-space: nowrap; }
     /* Safety net: if a label ever outgrows the sidebar it is trimmed with an
        ellipsis rather than dropping onto a second line.
        NOTE: this used to say the full text stayed in a title attribute. It does
@@ -309,7 +347,9 @@
     .cp-nav-sub .cp-nav-item { font-size: 12.5px; padding: 8px 11px; }
 
     /* ── Avatar + sign-out button (used by the top bar profile menu) ── */
-    .cp-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; box-shadow: 0 3px 9px rgba(99,102,241,0.4); }
+    /* A quiet rounded square rather than a bright circle: initials are a label, not a
+       thing to look at first. */
+    .cp-avatar { width: 32px; height: 32px; border-radius: var(--r-avatar); background: var(--rz-bg); border: 1px solid var(--rz-card-brd); color: var(--rz-ink); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; letter-spacing: .3px; flex-shrink: 0; }
     .cp-logout-btn { width: 100%; padding: 9px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 9px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; transition: background .15s, color .15s, border-color .15s; }
     .cp-logout-btn:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
 
@@ -344,6 +384,168 @@
        each page renders directly inside .cp-main). Higher specificity than the page's own
        ".x-wrap{max-width:…}" rule, so this wins without !important. */
     .cp-main > div[class*="-wrap"] { max-width: none; }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       SHARED UI PRIMITIVES
+       One definition per thing, used by every page. Before this, each report
+       styled its own buttons, inputs, cards and badges, which is why the same
+       control looked slightly different on every screen. Build new UI from these
+       classes; retune here to move the whole panel at once.
+       ══════════════════════════════════════════════════════════════════════════ */
+
+    /* ── Page heading ──────────────────────────────────────────────────────── */
+    .ui-title { font-family: var(--font-display); font-weight: 400; font-size: 30px;
+                line-height: 1.15; letter-spacing: -.015em; color: var(--rz-ink); margin: 0; }
+    .ui-subtitle { font-size: 13px; color: var(--rz-muted); margin-top: 6px; font-weight: 500; }
+    /* Small, wide-tracked, muted: the pattern for every label that sits above or
+       below a value rather than being the value itself. */
+    .ui-label { font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
+                text-transform: uppercase; color: var(--rz-faint); }
+    .ui-head { display: flex; align-items: flex-end; justify-content: space-between;
+               gap: 18px; flex-wrap: wrap; margin-bottom: 22px; }
+    .ui-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .ui-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+              height: 40px; padding: 0 16px; border-radius: var(--r-btn);
+              border: 1px solid var(--rz-card-brd); background: var(--rz-card);
+              color: var(--rz-body); font-family: var(--font-body); font-size: 13.5px;
+              font-weight: 600; cursor: pointer; white-space: nowrap;
+              transition: background .15s, border-color .15s, color .15s; }
+    .ui-btn:hover { background: var(--rz-bg); color: var(--rz-ink); }
+    .ui-btn .ic { font-size: 16px; }
+    .ui-btn:disabled { opacity: .5; cursor: not-allowed; }
+    /* Dark = the main action on the screen. Only ever one per view. */
+    .ui-btn-primary { background: var(--rz-ink); border-color: var(--rz-ink); color: #fff; }
+    .ui-btn-primary:hover { background: #1f1e2c; border-color: #1f1e2c; color: #fff; }
+    /* Green = adds or confirms something. */
+    .ui-btn-green { background: var(--rz-pos); border-color: var(--rz-pos); color: #fff; }
+    .ui-btn-green:hover { background: #00926a; border-color: #00926a; color: #fff; }
+    .ui-btn-soft { background: var(--rz-soft); border-color: var(--rz-soft-brd);
+                   color: var(--rz-indigo-deep); }
+    .ui-btn-soft:hover { background: var(--rz-soft-brd); color: var(--rz-indigo-deep); }
+    .ui-btn-danger { background: var(--rz-neg-soft); border-color: var(--rz-neg-brd);
+                     color: var(--rz-neg); }
+
+    /* ── Inputs & selects ──────────────────────────────────────────────────── */
+    .ui-input, .ui-select { height: 40px; padding: 0 12px; border-radius: var(--r-input);
+              border: 1px solid var(--rz-card-brd); background: var(--rz-card);
+              color: var(--rz-ink); font-family: var(--font-body); font-size: 13.5px;
+              font-weight: 500; outline: none;
+              transition: border-color .15s, box-shadow .15s; }
+    .ui-input::placeholder { color: var(--rz-faint); }
+    .ui-input:focus, .ui-select:focus { border-color: var(--rz-indigo);
+              box-shadow: 0 0 0 3px rgba(88,101,242,.14); }
+    .ui-select { padding-right: 32px; cursor: pointer; }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    .ui-card { background: var(--rz-card); border: 1px solid var(--rz-card-brd);
+               border-radius: var(--r-card); box-shadow: var(--rz-shadow); padding: 20px 22px; }
+    /* Stat card: a big serif figure over a small muted label, with a thin colour
+       strip on top that matches the badge of the same meaning. */
+    .ui-stat { position: relative; overflow: hidden; background: var(--rz-card);
+               border: 1px solid var(--rz-card-brd); border-radius: var(--r-card);
+               box-shadow: var(--rz-shadow); padding: 20px 22px 18px; }
+    .ui-stat::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+               background: var(--rz-acc-indigo); }
+    .ui-stat.is-green::before  { background: var(--rz-acc-green); }
+    .ui-stat.is-amber::before  { background: var(--rz-acc-amber); }
+    .ui-stat.is-teal::before   { background: var(--rz-acc-teal); }
+    .ui-stat.is-red::before    { background: var(--rz-acc-red); }
+    /* Sans, tabular, lining - see the note on headline figures in the normaliser. */
+    .ui-stat-v { font-family: var(--rz-num-plain); font-weight: 600; font-size: 32px;
+               line-height: 1.1; color: var(--rz-ink);
+               font-variant-numeric: tabular-nums lining-nums;
+               font-feature-settings: "tnum" 1, "lnum" 1; letter-spacing: -.01em; }
+    .ui-stat-l { font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
+               text-transform: uppercase; color: var(--rz-faint); margin-top: 8px; }
+    .ui-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+               gap: 16px; }
+
+    /* ── Badges ────────────────────────────────────────────────────────────── */
+    /* Compact and quiet. A badge labels a row; it should never outweigh the row. */
+    .ui-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+                border-radius: var(--r-badge); font-size: 11.5px; font-weight: 600;
+                line-height: 1.5; white-space: nowrap; border: 1px solid transparent; }
+    .ui-badge-green  { color: var(--rz-pos);   background: var(--rz-pos-soft);    border-color: var(--rz-pos-brd); }
+    .ui-badge-amber  { color: #b4780a;         background: var(--rz-amber-soft);  border-color: var(--rz-amber-brd); }
+    .ui-badge-indigo { color: var(--rz-indigo-deep); background: var(--rz-indigo-soft); border-color: var(--rz-indigo-brd); }
+    .ui-badge-teal   { color: #00847c;         background: var(--rz-teal-soft);   border-color: var(--rz-teal-brd); }
+    .ui-badge-red    { color: var(--rz-neg);   background: var(--rz-neg-soft);    border-color: var(--rz-neg-brd); }
+    .ui-badge-grey   { color: var(--rz-muted); background: var(--rz-bg);          border-color: var(--rz-card-brd); }
+
+    /* ── Lists & tables ────────────────────────────────────────────────────── */
+    /* Hairline separators and roomy rows, not ruled boxes. */
+    .ui-panel { background: var(--rz-card); border: 1px solid var(--rz-card-brd);
+                border-radius: var(--r-card); box-shadow: var(--rz-shadow); overflow: hidden; }
+    .ui-panel-head { padding: 15px 22px; border-bottom: 1px solid var(--rz-card-brd);
+                background: var(--rz-head-bg); font-size: 11px; font-weight: 700;
+                letter-spacing: .07em; text-transform: uppercase; color: var(--rz-muted); }
+    .ui-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .ui-table th { padding: 13px 18px; text-align: left; background: var(--rz-head-bg);
+                color: var(--rz-head-ink); font-size: 10.5px; font-weight: 700;
+                letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
+                border-bottom: 1px solid var(--rz-card-brd); }
+    .ui-table td { padding: 15px 18px; border-bottom: 1px solid var(--rz-line);
+                color: var(--rz-ink); vertical-align: middle; }
+    .ui-table tbody tr:last-child td { border-bottom: 0; }
+    .ui-table tbody tr:hover { background: var(--rz-head-bg); }
+    .ui-table .num, .ui-table td.num, .ui-table th.num { text-align: right;
+                font-variant-numeric: tabular-nums; }
+    /* The line under a row's title: who, when, how long. */
+    .ui-meta { font-size: 12px; color: var(--rz-muted); margin-top: 3px; font-weight: 500; }
+
+    /* ── Tablet & phone: the sidebar becomes a rail, then a drawer ────────────
+       The shell is a two-column flex with a 310px sidebar, which on a phone left
+       the content a sliver wide. Rather than a second navigation mechanism, this
+       reuses the icon rail the collapse button already produces.
+
+       Under 1024px the rail is forced on, so content gets the width back.
+       Under 760px the rail lifts out of the flow entirely and slides over the
+       content when opened, because 64px out of a 390px screen is still a lot. */
+    @media (max-width: 1024px) {
+      .cp-sidebar { width: 64px; padding: 16px 8px; }
+      .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-section-label,
+      .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-sub,
+      .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-group-chev { display: none; }
+      .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item {
+        justify-content: center; gap: 0; padding: 11px 0; font-size: 0; }
+      .cp-sidebar:not(.cp-sb-peek):not(:focus-within) .cp-nav-item .ic { font-size: 22px; }
+      /* Peeking must not shove the page sideways on a small screen, so the expanded
+         rail floats above the content instead of pushing it. */
+      .cp-sidebar.cp-sb-peek, .cp-sidebar:focus-within {
+        width: 244px; padding: 14px 10px;
+        position: fixed; left: 0; top: 56px; bottom: 0; height: auto; z-index: 60;
+        box-shadow: var(--rz-shadow-lg); }
+      .cp-topbar-brand { width: 64px !important; }
+      .cp-topbar .cp-sb-arrow { left: 64px !important; }
+    }
+    @media (max-width: 760px) {
+      /* Off-canvas: the rail itself slides away, and the arrow button brings it back. */
+      .cp-sidebar { position: fixed; left: 0; top: 56px; bottom: 0; z-index: 60;
+                    transform: translateX(-100%); transition: transform .2s ease;
+                    box-shadow: var(--rz-shadow-lg); }
+      .cp-sidebar.cp-sb-peek, .cp-sidebar:focus-within { transform: translateX(0); }
+      .cp-topbar-brand { width: auto !important; padding-right: 12px; }
+      .cp-topbar .cp-sb-arrow { left: auto !important; right: 56px;
+                                position: absolute; transform: none; }
+    }
+
+    /* ── Small screens ─────────────────────────────────────────────────────── */
+    @media (max-width: 760px) {
+      .cp-main { padding: 18px 14px; }
+      .ui-title { font-size: 24px; }
+      .ui-stat-v { font-size: 28px; }
+      .ui-head { align-items: stretch; }
+      .ui-head-actions { width: 100%; }
+      /* A control that is the only thing on its line should fill it rather than
+         leaving a ragged edge. */
+      .ui-head-actions > .ui-btn, .ui-head-actions > .ui-input,
+      .ui-head-actions > .ui-select { flex: 1 1 auto; }
+      .ui-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+      .ui-card, .ui-stat { padding: 16px 16px 14px; }
+      .ui-table th, .ui-table td { padding: 12px 12px; }
+    }
   </style>
   {% comment %}
     bkdatepicker - our own calendar for every <input type="date"/"month"> and our
@@ -353,6 +555,148 @@
   {% comment %} ?v= forces browsers to fetch a fresh copy - bump it on every change. {% endcomment %}
   <link href="{% static 'core/bkdatepicker.css' %}?v=3" rel="stylesheet">
   {% block extra_styles %}{% endblock %}
+
+  {% comment %}
+    DESIGN-SYSTEM NORMALISER - deliberately last in <head>.
+
+    Every report page carries its own inline <style>, written before there was a shared
+    system, so each one re-styled the same furniture slightly differently: its own hero
+    gradient, its own KPI number font, its own radii. Rewriting nine thousand lines of
+    page CSS to fix that would be a large, risky diff for a purely visual change.
+
+    Loading AFTER {% block extra_styles %} means these rules win at equal specificity,
+    so one block re-tones every page at once. Keep it to cross-cutting corrections -
+    anything page-specific belongs in that page.
+  {% endcomment %}
+  <style>
+    /* ── Headline figures ─────────────────────────────────────────────────────
+       Set in a clean sans, NOT the serif. Georgia and most system serifs ship
+       old-style figures, where 3 4 5 7 9 hang below the baseline - in a column of
+       money that reads as a zig-zag. Tabular, lining figures keep every digit the
+       same width and sitting on one line, so decimal points line up down a column.
+       The serif stays where it belongs: titles and headings, which are words. */
+    .kpi-value, .kpi-card .kpi-value, .pf-kpi-v, .sc2-kpi-val, .sc2-kpi-val > span,
+    .rc-chip-v, .pd-kpi-v, .rl-kpi-v, .oih-kpi-box b, .bev-sum .scard .sv, .scard .sv,
+    .ag-kpi-v, .cd-kpi-v, .ui-stat-v, .rc-kpi-v, .nm-kpi-v, .sa-kpi-v, .st-kpi-v,
+    .inv-val, .kc-v, .kvalue, .amount, .cmp-big {
+      font-family: var(--rz-num-plain) !important;
+      font-weight: 600 !important;
+      font-variant-numeric: tabular-nums lining-nums !important;
+      font-feature-settings: "tnum" 1, "lnum" 1 !important;
+      letter-spacing: -.01em;
+      color: var(--rz-ink);
+    }
+
+    /* ── Flat surfaces ────────────────────────────────────────────────────────
+       Page headers and "accent" cards were tinted with lavender gradients. The
+       reference gets its calm from flat white against a light page, so the tint
+       goes and the thin border does the work. */
+    .cd-header, .doc-header, .ag-hero, .rz-hero, .hero-band, .pf-hero, .sc2-titlebar {
+      background: var(--rz-card) !important;
+    }
+    .pd-kpi.acc, .rl-kpi.acc, .rc-chip.acc {
+      background: var(--rz-soft) !important;
+      border-color: var(--rz-soft-brd) !important;
+    }
+    /* Table rows were tinted with a left-to-right wash; a hairline and a flat hover
+       read more calmly and keep the figures legible. */
+    tr.ag-grp { background: var(--rz-card) !important; }
+    tr.ag-grp:hover { background: var(--rz-head-bg) !important; }
+
+    /* ── Expenses / Salaries ──────────────────────────────────────────────────
+       These two arrived with a different visual language: a violet dotted page and
+       saturated gradient cards with white text. Folded into the system - flat page,
+       white cards, a coloured strip on top like every other stat card. */
+    .dash-page { background: var(--rz-bg) !important; background-image: none !important;
+                 color: var(--rz-ink) !important; }
+    .kcard { background: var(--rz-card) !important; color: var(--rz-ink) !important;
+             border: 1px solid var(--rz-card-brd) !important;
+             border-radius: var(--r-card) !important;
+             box-shadow: var(--rz-shadow) !important; min-height: 0 !important;
+             padding: 20px 22px !important; }
+    /* the two decorative bubbles that sat behind the white text */
+    .kcard:before, .kcard:after { display: none !important; }
+    /* the gradient becomes a 3px strip, same idiom as the other stat cards */
+    .kcard { position: relative; overflow: hidden; }
+    .kcard > .kstrip { display: none; }
+    .k-purple::before, .k-indigo::before, .k-teal::before, .k-blue::before {
+      display: block !important; content: "" !important; position: absolute !important;
+      inset: 0 0 auto 0 !important; width: auto !important; height: 3px !important;
+      border-radius: 0 !important; background: var(--rz-acc-indigo) !important; }
+    .k-teal::before  { background: var(--rz-acc-teal) !important; }
+    .k-blue::before  { background: var(--rz-acc-indigo) !important; }
+    .k-purple::before{ background: var(--rz-acc-amber) !important; }
+    .klabel { color: var(--rz-faint) !important; font-size: 10.5px !important;
+              font-weight: 700 !important; letter-spacing: .08em !important; }
+    .ksub { color: var(--rz-muted) !important; opacity: 1 !important;
+            border-top-color: var(--rz-line) !important; }
+    .panel { background: var(--rz-card) !important; border-color: var(--rz-card-brd) !important;
+             border-radius: var(--r-card) !important; box-shadow: var(--rz-shadow) !important; }
+    .panel-head { border-bottom-color: var(--rz-card-brd) !important; }
+    .panel-head h2 { font-size: 17px !important; }
+    .group { border-bottom-color: var(--rz-line) !important; }
+    .rows { background: var(--rz-head-bg) !important; }
+    .gmeta, .metric { color: var(--rz-muted) !important; }
+    .hint { color: var(--rz-muted) !important; }
+
+    /* ── Radius discipline ────────────────────────────────────────────────────
+       Pages had picked 8, 12, 13, 14, 16 and 18px for the same kinds of thing. */
+    .kpi-card, .ui-card, .ui-stat, .scard, .pf-kpi, .ag-kpi, .cd-box,
+    .bev-tablewrap, .pf-table-wrap, .ui-panel { border-radius: var(--r-card); }
+
+    /* ── Section headings between cards ───────────────────────────────────────
+       These were dark and bold enough to compete with the page title. A section
+       label is signposting, so it should be small, tracked and muted. */
+    .sec-title, .section-title, .cp-sec-title {
+      font-family: var(--font-body) !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: .09em !important;
+      text-transform: uppercase;
+      color: var(--rz-faint) !important;
+    }
+
+    /* ── Controls ─────────────────────────────────────────────────────────────
+       Inputs and selects across the reports get one height, one radius and one
+       focus ring, whatever class each page happened to give them. */
+    .cp-main input[type="text"], .cp-main input[type="search"], .cp-main input[type="date"],
+    .cp-main input[type="number"], .cp-main input[type="month"], .cp-main select {
+      border-radius: var(--r-input);
+      border: 1px solid var(--rz-card-brd);
+      background: var(--rz-card);
+      color: var(--rz-ink);
+      font-family: var(--font-body);
+    }
+    .cp-main input:focus, .cp-main select:focus {
+      outline: none;
+      border-color: var(--rz-indigo);
+      box-shadow: 0 0 0 3px rgba(88,101,242,.14);
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────────
+       The main action on a screen is dark charcoal, not saturated indigo with a
+       drop shadow. One height and one radius so buttons line up with the inputs
+       they sit beside. */
+    .cp-main .btn.btn-primary, .cp-main button.btn-primary {
+      background: var(--rz-ink) !important;
+      border: 1px solid var(--rz-ink) !important;
+      color: #fff !important;
+      border-radius: var(--r-btn) !important;
+      box-shadow: none !important;
+      font-weight: 600 !important;
+    }
+    .cp-main .btn.btn-primary:hover, .cp-main button.btn-primary:hover {
+      background: #1f1e2c !important; border-color: #1f1e2c !important;
+    }
+    .cogs-inline-form button {
+      background: var(--rz-ink) !important; border-color: var(--rz-ink) !important;
+      border-radius: var(--r-btn) !important;
+    }
+
+    /* The welcome panel carried a diagonal violet wash across its right half. The
+       page already reads as calm white on light grey; the wash only added noise. */
+    .home-hero::after { display: none !important; }
+  </style>
 </head>
 <body>
 <script>
